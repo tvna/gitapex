@@ -22,31 +22,31 @@ Which parts of SkillOpt (Yang et al., "SkillOpt: Executive Strategy for Self-Evo
 
 SkillOpt's eq. (1) defines a run as `(tau(s), r(s)) = h(M, x, s)` with a scalar score `r(s) in [0,1]` for target model `M`, harness `h`, task `x`, and skill `s`. Eq. (2)-(3) select the skill that maximizes the mean score on the selection split `D_sel` from the candidates generated on the train split `D_tr`, and report final performance only on the test split `D_test`.
 
-What this skill adapts: the requirement that a scorer produce a repeatable number in `[0,1]`, and the three-way disjoint split where the train split supplies edit evidence, the selection split gates acceptance, and the test split is read only for a final report. This is the precondition gate and step 1 of the skill's procedure. A skill with no such scorer does not qualify -- that is the whole point of the precondition.
+What this skill adapts: the requirement that a scorer produce a repeatable number in `[0,1]`, and the three-way disjoint split where the train split supplies edit evidence, the selection split gates acceptance, and the test split is read only for a final report. This is the precondition gate and step 2 of the skill's procedure. A skill with no such scorer does not qualify -- that is the whole point of the precondition.
 
 ### 3.4 Bounded Text Updates: the edit budget
 
 SkillOpt's learning-rate analogue is the edit budget `L_t`: the optimizer ranks the merged edit pool by expected utility and clips it to the top `L_t` edits per step. Patch mode applies localized append / insert / replace / delete operations; rewrite mode conditions a full rewrite on a few suggestions. The paper argues bounded updates preserve continuity while still letting the skill acquire new procedures, whereas unbounded rewrites can erase useful rules or overfit to a local failure.
 
-What this skill adapts: the per-iteration edit cap and the strong preference for localized patches over wholesale rewrites (procedure step 2). The skill does not implement the utility-ranking or the schedule machinery; a human caps and picks edits by judgement.
+What this skill adapts: the per-iteration edit cap and the strong preference for localized patches over wholesale rewrites (procedure step 3). The skill does not implement the utility-ranking or the schedule machinery; a human caps and picks edits by judgement.
 
 ### 3.5 Validation Gate and Rejected-Edit Buffer
 
 Every candidate skill is scored on `D_sel` with the same frozen target model and harness. If it improves the current selection score it becomes the new current skill; if it also exceeds the best score so far it becomes `best_skill.md`; otherwise it is rejected. A tie does not improve, so a tie is rejected. The rejected-edit buffer is an epoch-local record of observed failure patterns and, for rejected steps, the edits tried and the score drop they caused, fed back into later reflection so the loop does not repeat failed edits -- negative feedback at no inference-time cost.
 
-What this skill adapts: strict improve-or-reject with ties rejected (procedure step 3) and the rejected-edit log as negative feedback (procedure step 4). These are the load-bearing invariants of the skill. The predeclared pruning-only context-cost gate is a local, correctness-first extension rather than a claim about SkillOpt; `SKILL.md` owns its exact acceptance rule, while ordinary scalar ties remain rejected here.
+What this skill adapts: strict improve-or-reject with ties rejected (procedure step 4) and the rejected-edit log as negative feedback (procedure step 5). These are the load-bearing invariants of the skill. The predeclared pruning-only context-cost gate is a local, correctness-first extension rather than a claim about SkillOpt; `SKILL.md` owns its exact acceptance rule, while ordinary scalar ties remain rejected here.
 
 ### Appendix B: the precondition and the transfer caution
 
 Appendix B (Limitations) states the loop "relies on scored trajectories and a held-out selection split, so it is most directly applicable when the target task has automatic verifiers, exact-match metrics, executable checks, or otherwise reliable feedback signals. For open-ended domains where success is subjective, multi-dimensional, or costly to judge, the validation gate may require stronger human or model-based evaluation." It also cautions that optimized skills encode training-distribution heuristics, so held-out evaluation is needed before transferring to different models, harnesses, or tasks.
 
-What this skill adapts: the automatic-verifier precondition becomes the skill's opening STOP gate, and the transfer caution becomes the transfer-check step (procedure step 5). The named "human or model-based evaluation" substitute is why procedure step 6 requires an adversarial verification pass around any LLM judge.
+What this skill adapts: the automatic-verifier precondition becomes the skill's opening STOP gate, and the transfer caution becomes the transfer-check step (procedure step 6). The named "human or model-based evaluation" substitute is why procedure step 4's Conditional branch requires an adversarial verification pass around any LLM judge.
 
 ### Appendix C: the default split and the accept rule
 
 Appendix C (Experimental Protocol) records the default `2:1:7` train/selection/test split when no benchmark-specific split is stated, and restates the accept rule: the candidate "is accepted only if it improves the current selection score; the best accepted skill is exported as `best_skill.md`." The student model, backend, harness, and evaluator stay fixed during optimization.
 
-What this skill adapts: the default split ratio as guidance (procedure step 1) and the accept-only-if-improves rule (procedure step 3). The skill notes that with only a handful of hand-authored fixtures the ratio is aspirational, and the minimal groundwork is a larger corpus.
+What this skill adapts: the default split ratio as guidance (procedure step 2) and the accept-only-if-improves rule (procedure step 4). The skill notes that with only a handful of hand-authored fixtures the ratio is aspirational, and the minimal groundwork is a larger corpus.
 
 ## Not adapted, with reasons
 
