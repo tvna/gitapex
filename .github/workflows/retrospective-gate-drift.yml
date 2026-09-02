@@ -64,6 +64,31 @@ jobs:
             --owner tvna --repo gitapex --ref HEAD --threshold 20 \
             | tee -a "$GITHUB_STEP_SUMMARY"
 
+      # Issue #1653: the two-signal check above audits already-CLOSED
+      # gate-proposal issues, but never verifies an OPEN
+      # gate-proposal-umbrella issue's own stated `Consolidates: #a, #b,
+      # ...` claim (that every named source issue is actually closed as
+      # its duplicate). #1566-#1575 (10 umbrella issues, 32 referenced
+      # source issues total) sat with that claim unverified for roughly a
+      # day before a human caught it and closed them by hand -- this step
+      # closes that gap. Sibling script, not a third pass in the scan
+      # above (see that script's own module docstring for why); runs
+      # regardless of the scan step's own outcome (`if: ${{ !cancelled()
+      # }}`, matching the GPRR step below) since this is an independent
+      # concern from that step's own threshold/two-signal result.
+      # Informational, like every other pass in this workflow: no
+      # continue-on-error, so a red result here still fails this job, but
+      # nothing beyond that -- it does not block any PR.
+      - name: Scan gate-proposal-umbrella consolidation claims for drift
+        if: ${{ !cancelled() }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          uv run --frozen python3 .github/scripts/gitapex_scan_gate_proposal_consolidation_drift.py \
+            --owner tvna --repo gitapex \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
       # Issue #726: reports the Gate-Preventable Repair Rate (GPRR) --
       # what share of classified retrospective repairs were
       # missing-deterministic-gate, trended by week -- as an inspectable

@@ -1885,6 +1885,27 @@
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
+    },
+    {
+      "id": "gate-proposal-consolidation-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_gate_proposal_consolidation_drift.py",
+      "rule": "For every OPEN gate-proposal-labelled issue whose body carries a `Consolidates: #a, #b, ...` line, verifies via the GitHub GraphQL API that each referenced issue number is CLOSED with stateReason DUPLICATE and duplicateOf.number pointing back to that same umbrella issue; fails loudly, naming every umbrella and its unverified referenced issue(s), never a silent pass. Issue #1653: closes the gap where the existing two-signal check (retrospective-gate-drift-scan) only audits already-CLOSED gate-proposal issues, never an OPEN issue's own Consolidates: claim -- #1566-#1575 (10 umbrella issues, 32 referenced source issues) sat with that claim unverified for roughly a day before a human closed the referenced issues by hand. Sibling script to gitapex_scan_retrospective_gate_drift.py (imports label_exists/list_labelled_issue_records directly from it, the same cross-import precedent gitapex_compute_gprr.py already uses), not a third pass inside it, since this check needs a GraphQL POST call (_gitapex_github_http.graphql_call) that script's own pure-REST design deliberately never made -- GitHub's REST API documents no read-side field naming which issue a closed issue is a duplicate of, only GraphQL Issue.duplicateOf does. Informational (not PR-blocking), same daily cadence as the sibling scan.",
+      "planes": ["ci"],
+      "local_exclusion": "Queries the GitHub issues and GraphQL APIs for every OPEN gate-proposal-labelled issue and each Consolidates:-referenced issue's live duplicate-closure state; there is no offline equivalent.",
+      "trigger": ".github/workflows/retrospective-gate-drift.yml, daily cron 07:00 UTC + workflow_dispatch",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 1653,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "runtime-resolved-reference", "ref": "GitHub API GET /repos/{owner}/{repo}/issues?labels=gate-proposal&state=open (list_labelled_issue_records, reused from gitapex_scan_retrospective_gate_drift.py) -- every OPEN gate-proposal issue's own body, scanned for a Consolidates: line"},
+        {"kind": "runtime-resolved-reference", "ref": "GitHub GraphQL API POST https://api.github.com/graphql (graphql_call, reused from _gitapex_github_http.py) -- repository.issue(number).{state,stateReason,duplicateOf.number} per referenced issue"},
+        {"kind": "workflow-event", "ref": "retrospective-gate-drift.yml:schedule"},
+        {"kind": "workflow-event", "ref": "retrospective-gate-drift.yml:workflow_dispatch"}
+      ]
     }
   ],
   "clusters": {
