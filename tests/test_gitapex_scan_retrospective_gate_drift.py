@@ -246,6 +246,13 @@ def test_format_closed_integrity_report_never_mentions_reopening():
     assert pass_report.count("reopen") == 0
 
 
+def test_format_missing_label_error_names_label_and_repo():
+    message = gate.format_missing_label_error("tvna", "gitapex", "gate-proposal")
+    assert "gate-proposal" in message
+    assert "tvna/gitapex" in message
+    assert "does not exist" in message
+
+
 # ---------------------------------------------------------------------------
 # label_exists (the label-liveness guard both passes require)
 # ---------------------------------------------------------------------------
@@ -303,13 +310,6 @@ def test_label_exists_quotes_a_label_name_with_special_characters():
     )
     assert "a/b" not in captured["url"]
     assert "a%2Fb" in captured["url"]
-
-
-def test_format_missing_label_error_names_label_and_repo():
-    message = gate.format_missing_label_error("gate-proposal", "tvna", "gitapex")
-    assert "gate-proposal" in message
-    assert "tvna/gitapex" in message
-    assert "does not exist" in message
 
 
 # ---------------------------------------------------------------------------
@@ -733,7 +733,7 @@ def test_main_fails_loudly_when_label_does_not_exist(monkeypatch, capsys):
     # main prints exactly the shared format_missing_label_error text, not a
     # locally re-derived copy of it -- this is the touched call site's own
     # test, not merely a substring check.
-    assert stderr.strip() == gate.format_missing_label_error("gate-proposal", "tvna", "gitapex")
+    assert stderr.strip() == gate.format_missing_label_error("tvna", "gitapex", "gate-proposal")
 
 
 def test_main_does_not_fetch_issues_when_label_missing(monkeypatch):

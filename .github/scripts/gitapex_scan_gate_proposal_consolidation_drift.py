@@ -361,7 +361,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if not gate_drift.label_exists(args.owner, args.repo, args.label, token):
-            print(gate_drift.format_missing_label_error(args.label, args.owner, args.repo), file=sys.stderr)
+            print(gate_drift.format_missing_label_error(args.owner, args.repo, args.label), file=sys.stderr)
             return 1
         open_records = gate_drift.list_labelled_issue_records(args.owner, args.repo, args.label, token, state="open")
 
