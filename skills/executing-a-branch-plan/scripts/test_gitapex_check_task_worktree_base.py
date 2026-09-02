@@ -219,6 +219,14 @@ def test_stale_base_is_NOT_detected_when_the_worktree_was_created_from_a_remote_
     _commit(origin, "a.txt", "c1")
     main_root = tmp_path / "main"
     _run(["git", "clone", "-q", str(origin), str(main_root)], tmp_path)
+    # `git clone` does not carry over `origin`'s own local `user.*` config
+    # (`_init_repo` sets it per-repo, not globally) -- this clone needs its
+    # own identity before it can commit. Live-confirmed: this test passed
+    # locally (an ambient global git identity papered over the gap) but
+    # failed in CI with `git commit` exit 128 ("unable to auto-detect
+    # email address") on a runner with no global identity configured.
+    _run(["git", "config", "user.email", "test@example.com"], main_root)
+    _run(["git", "config", "user.name", "Test"], main_root)
 
     # The shared plan branch, forked from main and then advanced -- the
     # real wave-dispatch shape this backstop is built for.
