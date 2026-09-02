@@ -42,3 +42,13 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1558"
       summary: "Step 6's per-task screening dispatches screening-a-low-trust-contribution's checks 2-8 to the new agents/review-persona.md subagent type (tools: Read, Grep, Glob) instead of reasoning about the task's own diff directly in the main thread, which at that point holds mcp__github write access, git push, and unrestricted Bash. Isolates tool privilege only -- the separate calling-context-contamination axis is disclosed in review-persona.md's own Limits section, not resolved here."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/1676"
+      summary: "Mixed-portability re-graded vs. rubric.md's new Mixed-portability substitute (verification-only). Both gating conditions met (D5 exemption granted; Claude-Code mechanics confirmed every-use). All three positive requirements unmet: no heading isolation, an incomplete Notes declaration, no porting-boundary-map file. Stays an open finding; closing it is separate follow-up, out of this issue's scope. Not re-verified against the rubric's later dimension-5 relocation; substance believed unchanged."
+      outcome:
+        verdict: open
+        condition_1_dimension5_exemption: met
+        condition_2_every_use_independently_verified: met
+        requirement_1_distinct_headings: not_met
+        requirement_2_notes_declaration: not_met
+        requirement_3_porting_boundary_map_file: not_met
