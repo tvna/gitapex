@@ -4649,11 +4649,11 @@ additive and independently gated. Refs #1662.
 
 Went through `scorer-gated-skill-edits`'s own held-out gate: 1 new
 selection fixture added to `split.json`'s split (42 total selection,
-35:42:18). One isolated dispatch pair against the new selection fixture
-(`sequential-pipeline-body-cap-exception-selection.yaml`, a target skill
-whose cohesion check is given as already-confirmed sequential and whose
-three mandatory reference files are stipulated to total 640 lines over
-the 500-line cap) moved **0.666667 -> 1.000000, KEEP**. The before-edit
+35:42:18): `sequential-pipeline-body-cap-exception-selection.yaml`'s own
+target skill, whose cohesion check is given as already-confirmed
+sequential and whose three mandatory reference files are stipulated to
+total 640 lines over the 500-line cap. One isolated dispatch pair against
+it moved **0.666667 -> 1.000000, KEEP**. The before-edit
 dispatch correctly reasoned to Fail by quoting the pre-edit rubric's own
 Fail sentence verbatim (the common case needs three files open); the
 after-edit dispatch correctly reasoned to Pass once the new exception
