@@ -241,6 +241,42 @@ def test_parse_registry_succeeds_with_new_optional_gate_fields():
     assert gate.bypass_review_status == "not-yet-reviewed"
 
 
+def test_a_gate_carrying_preconditions_validates_against_both_layers(tmp_path):
+    """Issue #1566: a gate carrying preconditions (both optional sub-keys
+    together, schema-valid) must validate against the raw JSON Schema AND
+    parse into a typed Gate with the expected nested field values -- the
+    same two-layer proof pattern as fail_mode/target above, applied to the
+    new preconditions field this task introduces."""
+    instance = json.loads(json.dumps(_VALID_INSTANCE))
+    instance["gates"][0]["preconditions"] = {
+        "requires_full_history": True,
+        "requires_python_packages": ["pydantic"],
+    }
+    instance_path = _write_instance(tmp_path, instance)
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+    registry = drift._parse_registry(instance)
+    assert registry is not None
+    gate = registry.gates[0]
+    assert gate.preconditions is not None
+    assert gate.preconditions.requires_full_history is True
+    assert gate.preconditions.requires_python_packages == ["pydantic"]
+
+
+def test_a_gate_with_an_unrecognized_precondition_sub_key_is_rejected_by_both_layers(tmp_path):
+    """Defeat test for the above: an unrecognized sub-key under
+    preconditions must be rejected by the raw JSON-Schema check
+    (additionalProperties: false, matching every other object in this
+    schema) AND fail the pydantic parse (GatePreconditions' own
+    extra='forbid') -- the same two-layer proof pattern as
+    test_an_unrecognized_target_kind_is_rejected_by_both_layers above."""
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    bad["gates"][0]["preconditions"] = {"requires_something_undocumented": True}
+    instance_path = _write_instance(tmp_path, bad)
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    assert any(f.startswith("schema:") for f in findings), findings
+    assert drift._parse_registry(bad) is None
+
+
 def test_script_drift_still_caught_when_gate_carries_new_fields(tmp_path):
     """Defeat test (refactor-and-review-gate.md's own mandatory step 8
     requirement, constructed here at task time since it exercises this

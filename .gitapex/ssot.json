@@ -1,6 +1,6 @@
 {
   "meta": {
-    "schema_version": "1.4.0",
+    "schema_version": "1.5.0",
     "tracking_issue": 123,
     "status": "active",
     "phase": "phase-0"
@@ -236,6 +236,7 @@
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
+      "preconditions": {"requires_python_packages": ["pydantic"]},
       "target": [
         {"kind": "mcp-tool", "ref": "mcp__github__create_pull_request"},
         {"kind": "mcp-tool", "ref": "mcp__github__update_pull_request"},
@@ -1198,6 +1199,7 @@
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
+      "preconditions": {"requires_full_history": true},
       "target": [
         {"kind": "file-glob", "ref": ".github/actions/harden-checkout/action.yml"},
         {"kind": "file-glob", "ref": ".github/workflows/*.yml"},

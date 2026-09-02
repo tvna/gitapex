@@ -189,6 +189,23 @@
         "bypass_review_status": {
           "enum": ["not-yet-reviewed", "reviewed-none-found"],
           "description": "Whether this gate's known-bypass surface has been reviewed at all, independent of what was found. Backfilled to 'not-yet-reviewed' for every currently-registered gate as part of issue #1231: a mechanical, zero-judgment default, not a claim that no gate has been reviewed for bypasses in some other, undocumented sense. Deliberately excludes 'reviewed-found-listed-below' (issue #1232, adversarial review): that value would name a known_bypasses array that is not yet a field in this schema at all, so a schema-valid gate could claim its bypasses are listed with nowhere for them to actually be -- a misleading claim additionalProperties: false cannot catch on its own. Re-add the value in the same change that adds known_bypasses and a regression test proving both ship together, not before."
+        },
+        "preconditions": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Environment/repo-state conditions this gate needs before it can run correctly -- checked, and where possible auto-established (e.g. an unshallow fetch), before this gate runs. Closes issue #1566's own consolidated root cause: no shared mechanism previously established these preconditions, so a gate could fail on an environment/repo-state gap unrelated to the policy it actually enforces. Absent means no known precondition beyond an ordinary checkout.",
+          "properties": {
+            "requires_full_history": {
+              "type": "boolean",
+              "description": "This gate needs full git history -- e.g. to resolve a file's true last-touching commit via git log -- not a shallow clone's boundary artifact."
+            },
+            "requires_python_packages": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 },
+              "description": "These Python packages must be importable before this gate's own script can run."
+            }
+          }
         }
       },
       "allOf": [
