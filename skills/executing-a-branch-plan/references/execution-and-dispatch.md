@@ -16,6 +16,7 @@ violation of it.
 
 - [Primary path: one Workflow run per wave](#primary-path-one-workflow-run-per-wave)
 - [Git worktree isolation for parallel task execution](#git-worktree-isolation-for-parallel-task-execution)
+- [Worktree-base precondition backstop](#worktree-base-precondition-backstop)
 - [Sequential fallback](#sequential-fallback)
 
 ## Primary path: one Workflow run per wave
@@ -106,6 +107,98 @@ state what happens to a worktree that DID accumulate changes (every task
 worktree, by definition) after its own merge-back completes. Verify this
 directly against the actual runtime behavior in the target deployment
 before relying on automatic cleanup, rather than assuming it.
+
+## Worktree-base precondition backstop
+
+A wave's worktree is forked from the shared plan branch's own tip at
+dispatch time (above); nothing previously re-checked, from inside that
+worktree, whether the shared branch had since advanced past the
+worktree's own fork point -- a concurrent sibling task's own wave merging
+and pushing before this one returns, or a stale worktree reused across
+waves, could both leave a task working from (and reporting complete
+against) a base that no longer reflects the shared branch's own current
+state. Issue `#1508` (consolidated into issue `#1566`'s own
+gate-preconditions-mechanism umbrella) closes this:
+`scripts/gitapex_check_task_worktree_base.py`, chained into
+`check_task_bash_safety.sh`'s own existing `PreToolUse` "Bash" hook as a
+second sibling classifier call (the identical pattern that script already
+uses to invoke `gitapex_check_task_bash_safety.py`), re-asserts on every
+Bash call that the shared plan branch's own current tip is still an
+ancestor of the task's own worktree HEAD -- in git terms, that
+`git merge-base HEAD SHARED_BRANCH` still equals `git rev-parse
+SHARED_BRANCH`.
+
+**Piggybacks on the task's own first Bash call, not a true "before any
+tool call at all, including a non-Bash one" gate.** Claude Code has no
+`SubagentStart`-equivalent hook event -- confirmed directly against Claude
+Code's own hooks documentation (only `SubagentStop` exists, already used
+for Decision 20's own exit condition below, a different purpose from a
+PRE-dispatch check). The `branch-plan-task` agent type's own embedded
+`PreToolUse` "Bash" hook is therefore the earliest deterministic
+enforcement point actually available, so this backstop only fires once
+the task issues its own FIRST Bash tool call -- any Read/Edit/Write/
+Grep/Glob work a task does before its first Bash call is not covered by
+it at all. This is an explicitly disclosed, asymmetric-strength residual,
+matching this skill's own established disclosure convention (Decision
+17's own two-variant asymmetry) rather than overclaiming full coverage;
+see
+[threat-model-and-authorization.md](threat-model-and-authorization.md#worktree-base-precondition-backstop)
+for the full accounting.
+
+**Resolving the shared plan branch's own name, without threading a new
+value in from the main thread.** Nothing in this skill's own dispatch
+mechanism today passes a task an explicit env var, a file, or any other
+signal naming the shared plan branch (confirmed directly against this
+file and SKILL.md before this mechanism was built, not assumed). Since a
+worktree shares refs/objects with the main checkout it was created from,
+`gitapex_check_task_worktree_base.py` resolves the name purely from local
+git state instead: the worktree's own branch reflog records a
+`"branch: Created from <name>"` entry at creation time -- git's own
+standard behavior for `git branch <new> <startpoint>`,
+`git checkout -b <new> <startpoint>`,
+and `git worktree add -b <new> <path> <startpoint>` alike, live-verified
+against a real worktree fixture during this mechanism's own authoring
+pass -- and `<name>` is then verified to resolve to an EXISTING LOCAL
+branch before being trusted as the shared plan branch. See
+`gitapex_check_task_worktree_base.py`'s own module docstring for the full
+mechanism, including a deliberately narrower alternative considered and
+rejected as unsafe (walking the
+worktree's own `.git` file back to the main checkout and reading ITS
+currently checked-out branch) -- that heuristic false-positives for ANY
+linked worktree whatsoever, not only one this skill's own Workflow-tool
+dispatch created, confirmed live against exactly such an unrelated
+worktree during authoring.
+
+**Disclosed, unverified assumption.** This resolution mechanism assumes
+the Workflow tool's own `isolation: 'worktree'` implementation creates
+each task's worktree via a `-b <new-branch> <shared-branch-name>`-shaped
+operation naming the shared branch as a literal startpoint -- the same
+"Open item, not resolved here" territory this file already flags above
+for this exact tool's own worktree-creation internals (its cleanup-on-
+merge-back behavior). If the real implementation instead uses a detached-
+HEAD checkout, or passes a raw commit SHA rather than the branch's own
+name as the startpoint, this backstop's own resolution fails cleanly and
+it silently no-ops for that dispatch -- see the fail-open paragraph next.
+
+**Fail-open by design, the opposite default from
+`gitapex_check_task_bash_safety.py`'s own fail-closed classifier.** This
+backstop denies ONLY on a clean, confirmed mismatch (the shared branch's
+own current tip genuinely not an ancestor of the worktree's HEAD); every
+other outcome -- the branch name cannot be resolved at all (no worktree,
+a detached HEAD, an unrelated worktree's own reflog, a malformed hook
+payload), or even a crash inside the classifier itself -- fails OPEN,
+silently letting the Bash call proceed to the existing Bash-safety
+classifier unchanged. This is deliberate: this backstop must never
+interfere with the sequential fallback below (no worktree, no wave),
+which this same `branch-plan-task` agent type also runs under, per design
+doc Decision 4's own portability answer -- and a false DENY here would be
+strictly worse than a missed detection, since it would stop a task's own
+legitimate work over a precondition check this mechanism cannot always
+resolve with confidence. See
+[threat-model-and-authorization.md](threat-model-and-authorization.md#worktree-base-precondition-backstop)
+for the two-variant asymmetry (this mechanism exists only in the
+project-local variant, which alone carries the embedded `PreToolUse`
+hook) and the full disclosed-residual accounting.
 
 ## Sequential fallback
 
