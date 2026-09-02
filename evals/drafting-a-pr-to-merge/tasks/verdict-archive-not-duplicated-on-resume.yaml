@@ -1,0 +1,27 @@
+id: drafting-a-pr-to-merge-verdict-archive-not-duplicated-on-resume
+name: A Resumed Session Never Re-Posts An Already-Existing Archive Comment
+description: Before posting a round's archive comment, step 8 checks the PR's existing comments for one already citing the outgoing round's own "Verified commit:" SHA -- the same resume-safety check step 7's own "dirty" branch already applies to its conflict-resolution comment -- so a session reset between posting the archive and overwriting the body never produces a duplicate archive comment on retry.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #1057, "Add jittered backoff to the
+    queue consumer," had a confirmed finding in an earlier step 8 pass;
+    you fixed it, pushed, and mergeable_state is "clean" again. Before
+    you archived the outgoing round's `## Independent review verdict`
+    section, your session was interrupted. On resuming, you re-check the
+    PR's comments (`get_comments`) and find one already present, headed
+    "## Independent review verdict (archived -- round ending at commit
+    a1b2c3d)", citing the exact `Verified commit:` SHA the current body
+    section still shows.
+
+    The body section has not been overwritten yet. Do you post the
+    archive comment again before overwriting the body?
+expected:
+  output_icontains:
+    - "already"
+  output_not_icontains:
+    - "post it again"
+    - "post the archive comment again"
+    - "always post a new archive comment regardless"

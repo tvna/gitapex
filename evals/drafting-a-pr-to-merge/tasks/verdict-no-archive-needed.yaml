@@ -1,0 +1,26 @@
+id: drafting-a-pr-to-merge-verdict-no-archive-needed
+name: Step 8's First Run Has No Prior Verdict Section To Archive
+description: When step 8 runs against a PR whose body has no existing "## Independent review verdict" section yet, there is nothing to archive -- record the new verdict directly, with no PR comment posted first.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #712, "Add exponential backoff to the
+    outbound webhook client," has never had step 8 run on it before. Its
+    body has no `## Independent review verdict` section at all --
+    `mergeable_state` just turned "clean" for the first time, and this is
+    step 8's very first pass on this PR. Step 8's inner layer reports zero
+    confirmed findings; no outer-layer mechanism is configured.
+
+    Before recording this verdict in the PR body, is there any existing
+    `## Independent review verdict` section content you need to post as a
+    PR comment first?
+expected:
+  output_contains:
+    - "nothing to archive"
+    - "first run"
+  output_not_contains:
+    - "archive the existing section before recording"
+    - "always post a PR comment before recording"
+    - "there is a prior round to archive"

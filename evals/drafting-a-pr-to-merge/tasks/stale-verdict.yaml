@@ -16,6 +16,10 @@ inputs:
     Is yesterday's clean verdict still good enough to establish the
     DRAFT terminal state, or is something else required first?
 expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
+  # this fixture's own scenario is exactly the cited Stop-boundary bullet.
+  exercises:
+    - "Step 8: never carry forward a stale verdict, treat an errored/inconclusive or Step-0-deferring `reviewing-an-artifact` run as clean, silently fold an `unconfirmed-concern` finding into a CLEAN verdict, or promote either layer's raw response to the spec without independent validation -- Markdown fencing alone does not satisfy this, and outer-layer absence must be disclosed, not equated with both layers having run."
   output_contains:
     - "stale"
     - "re-run"
