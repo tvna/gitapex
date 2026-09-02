@@ -74,4 +74,7 @@ spec:
     - kind: elision
       anchor: "https://github.com/tvna/gitapex/issues/1648"
       summary: "declined two further restructurings, by the repository owner's own direction: (a) arguing threat-model-and-authorization.md is a rubric self-guard exemption -- round 5 called this the repository owner's own rubric-process call, not a single session's; (b) merging all three files into one -- risks failing dimension 5 from the opposite direction (a 1700+-line file). Standing open gap, disclosed alongside this skill's other residuals."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1662"
+      summary: "Split events-and-review-gate.md's failure/resume-only content (loss/absence, freshness/hang, failure dispatch, rollback) into new failure-and-recovery.md, never read on a clean run. Four files now, but the typical request still opens three (threat-model, decomposition-and-dispatch, events-and-review-gate). Real progressive-disclosure gain; does not itself close dimension 5's three-file reading -- open pending issue/1662's rubric fix (a Fable dispatch found no satisfiable clause for this shape)."
 

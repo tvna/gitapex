@@ -235,8 +235,8 @@ first, not skimmed.
    at step 9's success path; see the domain events reference's own
    `StageDeviated` entry for why a label left standing past either
    dispatch is a deadlock, not a harmless leftover. Full dispatch table:
-   [domain events and failure-handling
-   reference](references/events-and-review-gate.md#failure-dispatch-step-7).
+   [failure and recovery
+   reference](references/failure-and-recovery.md#failure-dispatch-step-7).
 8. **Refactor and adversarially review the accumulated diff** (Decision
    12, mandatory, non-skippable). Two separate fresh subagent dispatches
    over the full diff -- a refactor/simplify pass (behavior-preserving

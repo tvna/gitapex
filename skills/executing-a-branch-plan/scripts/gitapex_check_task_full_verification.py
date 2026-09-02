@@ -59,7 +59,7 @@ built-in bound on how many times the subagent may retry before a human
 notices -- this gate does not implement a retry ceiling or circuit
 breaker of its own. `drafting-a-pr-to-merge`'s own Step 10 freshness/hang
 check (see
-skills/executing-a-branch-plan/references/events-and-review-gate.md#freshness-and-hang-detection)
+skills/executing-a-branch-plan/references/failure-and-recovery.md#freshness-and-hang-detection)
 is the existing backstop for a wave that never returns for this reason,
 named here rather than assumed away.
 """

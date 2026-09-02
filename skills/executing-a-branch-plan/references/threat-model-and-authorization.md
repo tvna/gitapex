@@ -515,7 +515,7 @@ missing from PATH -- denies every stop attempt, with nothing in this hook
 enforcing a retry ceiling or circuit breaker of its own; the subagent may
 spend many turns retrying before a human notices. This is a deliberate,
 disclosed choice, not an oversight: this skill's own [Freshness and hang
-detection](events-and-review-gate.md#freshness-and-hang-detection)
+detection](failure-and-recovery.md#freshness-and-hang-detection)
 already exists specifically to catch a wave that never returns for
 whatever reason, and inventing a second, narrower circuit breaker inside
 this one hook would duplicate that existing backstop rather than close a
