@@ -253,7 +253,26 @@ if [ "$base_is_explicit" = "yes" ] && [ -n "$repo_root" ] && [ -f "$full_gate" ]
     # usage error, either of which this block would otherwise read as "no
     # missing packages" and silently skip the new deny path.
     precondition_json=$(python3 "$precondition_script" -- "${required_packages[@]}" 2>/dev/null) || true
-    if ! missing_packages=$(printf '%s' "$precondition_json" | jq -r '.missing // [] | join(", ")' 2>/dev/null); then
+    # The filter must PROVE the output is the expected `{"missing": [...]}`
+    # object, not merely fail to contradict it. Found by issue #1566's own
+    # step-8 adversarial review: the previous `jq -r '.missing // [] |
+    # join(", ")'` returned empty output and exit 0 for an EMPTY stdout
+    # (jq's documented behavior when its input contains no values), which
+    # is exactly what a crashed, missing-interpreter, or syntactically
+    # broken precondition script produces. That made `missing_packages`
+    # empty, skipped the Warning below, and skipped the deny -- a
+    # completely silent no-op of this whole block, i.e. the same silent
+    # degrade to tier 2 that #1547(a) exists to eliminate, reintroduced
+    # through this check's own failure path. `-e` plus the explicit
+    # type check turns every one of those shapes (empty input, invalid
+    # JSON, a bare `null`/array, an object without a `missing` array) into
+    # a non-zero exit that reaches the Warning instead.
+    if ! missing_packages=$(printf '%s' "$precondition_json" | jq -er '
+        if type == "object" and (.missing | type) == "array"
+        then (.missing | join(", "))
+        else error("unexpected precondition output shape")
+        end
+      ' 2>/dev/null); then
       # The precondition subprocess produced no parseable JSON (crashed,
       # timed out, or was rejected by argparse) -- matching this file's
       # own established convention of an explicit Warning: line on every

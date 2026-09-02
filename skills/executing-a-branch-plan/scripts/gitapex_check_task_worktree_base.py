@@ -70,14 +70,44 @@ have produced a false, actively-blast-radius-widening DENY. The reflog-
 based resolution above is narrowly tied to how THIS SPECIFIC worktree's
 OWN branch came to exist, not to whatever the main checkout happens to be
 on right now -- so it only ever resolves a name at all when a real git
-operation actually created this worktree's branch FROM that named
-startpoint, which is exactly the invariant a genuine branch-plan-task wave
-dispatch is expected to establish, and which an unrelated worktree
-naturally fails to satisfy (its own reflog names whatever ITS OWN true
-startpoint was, e.g. `origin/main` or a raw SHA, essentially never a name
-that also happens to resolve to an existing local branch by coincidence).
+operation actually created this worktree's branch FROM a named startpoint
+that is itself an existing local branch.
 
-**Disclosed, unverified assumption.** This resolution mechanism assumes
+**KNOWN LIMITATION, live-confirmed: for this repository's own observed
+dispatch shape, this backstop does not fire at all.** An earlier revision
+of this docstring inferred that a startpoint which is NOT an existing
+local branch (`origin/main`, a raw SHA) signals an UNRELATED worktree --
+"essentially never" a genuine wave dispatch. The premise is sound (such a
+startpoint genuinely is not a resolvable shared plan branch); the
+conclusion drawn from it was wrong. Issue #1566's own step-8 adversarial
+review found a REAL `branch-plan-task` worktree in this repository whose
+own branch reflog read exactly `branch: Created from origin/main`, sitting
+at the plan branch's merge-base with every one of that branch's commits
+missing -- precisely issue #1508's own defect shape. This module returned
+`warn` (fail open) for it: the stale base went undetected, and the
+dispatched agent had to notice and `git reset --hard` by hand.
+
+The assumption below is therefore no longer merely unverified -- for at
+least one real dispatcher it is verified FALSE, and this backstop is a
+no-op whenever that dispatcher creates the worktree. Pinned as a
+regression test (`test_stale_base_is_NOT_detected_when_the_worktree_was_
+created_from_a_remote_tracking_ref`) so the limitation cannot be silently
+widened or forgotten, and disclosed in
+references/execution-and-dispatch.md and
+references/threat-model-and-authorization.md rather than papered over.
+
+Resolving `refs/remotes/origin/main` instead would NOT fix this: `main` is
+not the shared plan branch, so that comparison would deny every
+legitimately-based task worktree the moment `main` advanced -- exactly the
+false, actively-blast-radius-widening DENY the paragraph above rejects the
+main-checkout heuristic for. A real fix needs the shared plan branch's own
+name threaded in from the dispatching thread (e.g. an env var this skill's
+own dispatch step sets), which is a change to that dispatch step, not to
+this module -- named here as the open follow-up this limitation earns,
+not attempted here.
+
+**Disclosed assumption, now verified false for at least one dispatcher
+(see the limitation above).** This resolution mechanism assumes
 the Workflow tool's own `isolation: 'worktree'` implementation creates
 each task's worktree via a `-b <new-branch> <shared-branch-name>`-shaped
 operation, naming the shared branch as a literal startpoint argument (the
@@ -228,7 +258,13 @@ def _verify_local_branch(name: str, cwd: Path) -> str | None:
     unrelated startpoint was (often a remote-tracking ref like
     `origin/main`, which this check deliberately does NOT resolve as a
     local branch), so this verification step is what turns that mismatch
-    into a clean 'cannot resolve' rather than a false positive."""
+    into a clean 'cannot resolve' rather than a false positive.
+
+    The cost of that safety is the KNOWN LIMITATION in this module's own
+    docstring: a GENUINE wave-dispatch worktree created from `origin/main`
+    lands in this same 'cannot resolve' bucket and gets no protection at
+    all. Avoiding a false deny is the right trade here, but it is a
+    trade, not a free win."""
     code, out = _run_git(["rev-parse", "--verify", "--quiet", f"refs/heads/{name}"], cwd)
     if code != 0:
         return None
@@ -281,8 +317,13 @@ def check_worktree_base(cwd: Path) -> dict[str, object]:
                 f"from '{candidate}', but '{candidate}' does not resolve to an "
                 "existing local branch -- not trusted as the shared plan "
                 "branch. Skipping the worktree-base precondition check and "
-                "failing open. Expected when this worktree was created for a "
-                "purpose unrelated to this skill's own wave dispatch."
+                "failing open. This covers BOTH a worktree created for a "
+                "purpose unrelated to this skill's own wave dispatch AND a "
+                "genuine wave-dispatched worktree forked from a remote-tracking "
+                "ref such as 'origin/main' -- in that second case this backstop "
+                "gives no protection at all, so verify this worktree's own base "
+                "against the shared plan branch by hand. See this script's own "
+                "KNOWN LIMITATION docstring section."
             ),
         }
     code, out = _run_git(["merge-base", "HEAD", f"refs/heads/{candidate}"], cwd)

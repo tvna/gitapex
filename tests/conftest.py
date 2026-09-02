@@ -362,3 +362,29 @@ def shallow_clone(origin: pathlib.Path, dest: pathlib.Path) -> pathlib.Path:
     detect and repair."""
     run_git(["git", "clone", "-q", "--depth", "1", f"file://{origin}", str(dest)], dest.parent)
     return dest
+
+
+def shallow_clone_of_a_shallow_origin(tmp_path: pathlib.Path) -> pathlib.Path:
+    """A shallow clone whose own `origin` is ITSELF a shallow clone -- the
+    shape in which `git fetch --unshallow` exits **0** and the repository
+    is **still shallow** afterward.
+
+    Live-verified during the step-8 adversarial review of issue #1566, not
+    assumed: git propagates the source repository's own shallow boundary
+    to the fetching clone, so `--unshallow` deepens as far as the source
+    can offer and then stops, reporting success. A caller that treats a
+    zero exit from `ensure_full_history` as proof of full history is
+    therefore wrong -- the same "never trust the fetch's exit code alone"
+    discipline `_gitapex_base_ref.py`'s own docstring already establishes
+    for its sibling `fetch_destination_refspec`/`peeled_ref_exists` pair.
+
+    Shared by the two suites that pin that defeat case (the helper-level
+    one in `test__gitapex_preconditions.py` and the runner-level one in
+    `test_gitapex_gate_local_preflight.py`), same rationale as
+    `bare_origin_with_two_commits` above.
+    """
+    origin = bare_origin_with_two_commits(tmp_path)
+    intermediate = shallow_clone(origin, tmp_path / "shallow-origin")
+    leaf = tmp_path / "shallow-leaf"
+    run_git(["git", "clone", "-q", "--depth", "1", f"file://{intermediate}", str(leaf)], tmp_path)
+    return leaf

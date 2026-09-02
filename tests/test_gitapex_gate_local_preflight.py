@@ -35,7 +35,7 @@ import gitapex_gate_local_preflight
 import gitapex_scan_ssot_schema
 import pytest
 import yaml
-from conftest import bare_origin_with_two_commits, shallow_clone
+from conftest import bare_origin_with_two_commits, shallow_clone, shallow_clone_of_a_shallow_origin
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -613,7 +613,14 @@ def test_fetch_runs_exactly_once_when_the_repo_is_shallow(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     calls: list[str] = []
-    monkeypatch.setattr(_gitapex_preconditions, "is_shallow_clone", lambda *_a, **_k: True)
+    # Models a genuinely successful unshallow: shallow before the fetch,
+    # non-shallow after it. A stub that reported "shallow" both times would
+    # describe a fetch that exited 0 without unshallowing -- a real git
+    # behavior, but one this function must now ABORT on rather than
+    # proceed through (see
+    # test_abort_when_the_fetch_exits_zero_but_the_repo_is_still_shallow).
+    probe_answers = iter([True, False])
+    monkeypatch.setattr(_gitapex_preconditions, "is_shallow_clone", lambda *_a, **_k: next(probe_answers))
     monkeypatch.setattr(_gitapex_preconditions, "ensure_full_history", lambda *_a, **_k: calls.append("fetch"))
 
     ssot = _write_ssot(
@@ -681,6 +688,154 @@ def test_abort_message_and_exit_code_when_the_fetch_itself_fails(
     checks = gitapex_gate_local_preflight.load_local_checks(ssot)
     assert gitapex_gate_local_preflight.ensure_wired_gate_preconditions(checks, tmp_path) == 1
     assert "boom: fetch failed" in capsys.readouterr().err
+
+
+def test_abort_when_the_fetch_exits_zero_but_the_repo_is_still_shallow(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**Defeat case (step-8 adversarial review, issue #1566).** A zero exit
+    from ``git fetch --unshallow`` is not proof of full history -- see
+    ``tests/test__gitapex_preconditions.py``'s own live-verified pin for
+    the git behavior (a shallow ``origin`` propagates its own shallow
+    boundary, so the fetch succeeds and the clone stays shallow).
+
+    Without the post-fetch re-probe, this function returned ``None``
+    ("safe to proceed") and the ``requires_full_history`` gate then ran
+    against a still-shallow repo -- surfacing the failure reactively as
+    that one gate's own confusing mid-run error, the exact outcome
+    #1489 asked to replace with a single clean top-line abort.
+
+    Probe order is asserted, not just the exit code: the second
+    ``is_shallow_clone`` call must happen AFTER the fetch, so a fix that
+    merely re-read a cached first answer would not satisfy this test."""
+    calls: list[str] = []
+
+    def _always_shallow(*_args: object, **_kwargs: object) -> bool:
+        calls.append("is_shallow_clone")
+        return True
+
+    def _fetch_that_exits_zero_without_unshallowing(*_args: object, **_kwargs: object) -> None:
+        calls.append("ensure_full_history")
+
+    monkeypatch.setattr(_gitapex_preconditions, "is_shallow_clone", _always_shallow)
+    monkeypatch.setattr(_gitapex_preconditions, "ensure_full_history", _fetch_that_exits_zero_without_unshallowing)
+
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate(
+                "needs-history",
+                planes=["local"],
+                local_invocation=["true"],
+                preconditions={"requires_full_history": True},
+            )
+        ],
+    )
+    checks = gitapex_gate_local_preflight.load_local_checks(ssot)
+
+    assert gitapex_gate_local_preflight.ensure_wired_gate_preconditions(checks, tmp_path) == 1
+    assert calls == ["is_shallow_clone", "ensure_full_history", "is_shallow_clone"]
+    assert "still reports as shallow" in capsys.readouterr().err
+
+
+def test_no_second_probe_when_the_repo_was_never_shallow(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The post-fetch re-probe above must not become a second unconditional
+    subprocess on the ordinary, already-full-history path -- the wasted-call
+    concern #1546 raised for the fetch applies to the probe too."""
+    calls: list[str] = []
+
+    def _not_shallow(*_args: object, **_kwargs: object) -> bool:
+        calls.append("is_shallow_clone")
+        return False
+
+    monkeypatch.setattr(_gitapex_preconditions, "is_shallow_clone", _not_shallow)
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate(
+                "needs-history",
+                planes=["local"],
+                local_invocation=["true"],
+                preconditions={"requires_full_history": True},
+            )
+        ],
+    )
+    checks = gitapex_gate_local_preflight.load_local_checks(ssot)
+
+    assert gitapex_gate_local_preflight.ensure_wired_gate_preconditions(checks, tmp_path) is None
+    assert calls == ["is_shallow_clone"]
+
+
+def test_second_probe_failing_to_answer_also_aborts(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The re-probe is subject to the same "never a silent not-shallow"
+    rule as the first one: if it cannot answer at all, the run aborts
+    rather than proceeding on an unverified assumption."""
+    answers = [True]
+
+    def _probe(*_args: object, **_kwargs: object) -> bool:
+        if answers:
+            return answers.pop()
+        raise _gitapex_preconditions.PreconditionsError("boom: cannot re-check")
+
+    monkeypatch.setattr(_gitapex_preconditions, "is_shallow_clone", _probe)
+    monkeypatch.setattr(_gitapex_preconditions, "ensure_full_history", lambda *_a, **_k: None)
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate(
+                "needs-history",
+                planes=["local"],
+                local_invocation=["true"],
+                preconditions={"requires_full_history": True},
+            )
+        ],
+    )
+    checks = gitapex_gate_local_preflight.load_local_checks(ssot)
+
+    assert gitapex_gate_local_preflight.ensure_wired_gate_preconditions(checks, tmp_path) == 1
+    assert "boom: cannot re-check" in capsys.readouterr().err
+
+
+@pytest.mark.slow
+def test_main_aborts_before_any_wired_gate_runs_when_the_repo_stays_shallow(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The same defeat case end-to-end through ``main()``, against a real
+    git fixture rather than monkeypatched helpers: a shallow clone whose
+    own origin is itself shallow. ``git fetch --unshallow`` really does
+    exit 0 here and really does leave the clone shallow, so nothing is
+    stubbed -- the wired gate must never start, and the operator must get
+    one clear top-line message instead of that gate's own mid-run error."""
+    shallow = shallow_clone_of_a_shallow_origin(tmp_path)
+    marker = tmp_path / "PWNED.txt"
+    script = _write_script(
+        tmp_path,
+        "would_touch.py",
+        f"import pathlib\npathlib.Path({str(marker)!r}).touch()\n",
+    )
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate(
+                "fake-harden-checkout-pin-drift",
+                planes=["local"],
+                local_invocation=[sys.executable, str(script)],
+                preconditions={"requires_full_history": True},
+            )
+        ],
+    )
+
+    exit_code = gitapex_gate_local_preflight.main(["--ssot-path", str(ssot), "--repo-root", str(shallow)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert not marker.exists(), "the wired gate ran against a still-shallow repo"
+    assert "still reports as shallow" in captured.err
+    assert "local preflight: running" not in captured.out, "no wired gate must start running before the abort"
 
 
 @pytest.mark.slow

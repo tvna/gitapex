@@ -382,7 +382,26 @@ def ensure_wired_gate_preconditions(checks: list[LocalCheck], repo_root: pathlib
     network call this function can make -- runs only when that probe
     confirms the repo actually is shallow (#1546's own disclosed residual
     risk: no wasted network call on the ordinary, already-full-history
-    case)."""
+    case).
+
+    **A zero exit from the fetch is never taken as proof of full
+    history.** ``git fetch --unshallow`` exits 0, with empty stderr, and
+    leaves the repository STILL shallow when ``origin`` is itself a
+    shallow clone -- git propagates the source's own shallow boundary,
+    deepens as far as the source can offer, and reports success
+    (live-verified during issue #1566's own step-8 adversarial review, not
+    assumed; pinned in ``tests/test__gitapex_preconditions.py``). Without
+    the re-probe below, that case returned "safe to proceed" and the
+    ``requires_full_history`` gate then failed reactively, mid-run, with
+    its own confusing error -- precisely the outcome #1489 asked to
+    replace with one clean top-line abort. This is the same "never trust
+    the fetch's exit code alone" discipline ``_gitapex_base_ref.py``
+    already establishes for its sibling
+    ``fetch_destination_refspec``/``peeled_ref_exists`` pair, where the
+    post-fetch verification is likewise the caller's job, not the fetch
+    helper's. The re-probe runs only on the path that actually fetched, so
+    the ordinary already-full-history run still makes exactly one git
+    call."""
     if not any(check.requires_full_history for check in checks):
         return None
     try:
@@ -403,6 +422,25 @@ def ensure_wired_gate_preconditions(checks: list[LocalCheck], repo_root: pathlib
         print(
             f"error: a wired gate needs full git history, and {repo_root} is a shallow clone "
             f"that could not be given full history: {error}",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        still_shallow = _gitapex_preconditions.is_shallow_clone(repo_root)
+    except _gitapex_preconditions.PreconditionsError as error:
+        print(
+            f"error: a wired gate needs full git history, and could not confirm whether "
+            f"{repo_root} is still a shallow clone after the unshallow fetch: {error}",
+            file=sys.stderr,
+        )
+        return 1
+    if still_shallow:
+        print(
+            f"error: a wired gate needs full git history; 'git fetch --unshallow' reported success "
+            f"in {repo_root}, but the repository still reports as shallow. The most common cause is "
+            f"an 'origin' that is itself a shallow clone, whose own shallow boundary the fetch "
+            f"cannot reach past. Re-clone with full history (or fetch from a full-history remote) "
+            f"before running the local preflight.",
             file=sys.stderr,
         )
         return 1

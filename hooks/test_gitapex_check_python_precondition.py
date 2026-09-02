@@ -15,7 +15,10 @@ from __future__ import annotations
 
 import io
 import json
+import pathlib
+import subprocess
 import sys
+import time
 
 import gitapex_check_python_precondition as checker
 import pytest
@@ -60,6 +63,100 @@ def test_is_importable_false_and_warns_when_the_interpreter_cannot_launch(
     captured = capsys.readouterr()
     assert "could not launch" in captured.err
     assert "/nonexistent/not-a-real-interpreter" in captured.err
+
+
+def test_is_importable_is_bounded_when_a_modules_import_blocks(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**Defeat case (step-8 adversarial review, issue #1566).** The exact
+    condition this probe exists to catch -- a declared package `python3`
+    cannot actually use -- reshaped to fall just outside the probe's own
+    `returncode == 0` heuristic: a module that neither imports nor fails,
+    because its own import-time code blocks (a network call, a lock, a
+    `time.sleep`).
+
+    Before this bound existed, `subprocess.run` was called with no
+    `timeout`, so such a module stalled the probe indefinitely. That
+    probe runs inside `check-pr-skill-audit-disclosure.sh`, a
+    PreToolUse hook firing on every `mcp__github__create_pull_request` /
+    `update_pull_request` call in this repository -- so an unbounded probe
+    hangs the operation the hook is gating, with no message at all. That
+    is strictly worse than the silent tier-2 degrade #1547(a) reports,
+    since it produces no verdict whatsoever.
+
+    A blocking import must therefore be bounded and treated exactly like
+    the already-handled `OSError` case: fail closed to "cannot confirm
+    this is importable" (`False`), with a warning naming what happened."""
+    blocker = tmp_path / "gitapex_blocking_import_probe.py"
+    blocker.write_text("import time\ntime.sleep(30)\n", encoding="utf-8")
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+
+    started = time.monotonic()
+    result = checker.is_importable("gitapex_blocking_import_probe", timeout=1.0)
+    elapsed = time.monotonic() - started
+
+    assert result is False
+    assert elapsed < 15, f"the probe was not bounded: it took {elapsed:.1f}s for a module that never finishes importing"
+    assert "timed out" in capsys.readouterr().err
+
+
+def test_is_importable_default_timeout_is_pinned() -> None:
+    """The default bound is a hang guard, not a budget: a real import
+    completes in well under a second. Pinned so a later edit cannot
+    silently remove or balloon it back toward "effectively unbounded"."""
+    assert checker.PROBE_TIMEOUT_SECONDS == 10.0
+
+
+def test_find_missing_modules_reports_a_blocking_module_as_missing(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The timeout's fail-closed posture must reach the caller-facing API,
+    not stop at `is_importable`: a module whose import blocks is reported
+    as missing, so the hook denies with an actionable message rather than
+    hanging or silently passing."""
+    blocker = tmp_path / "gitapex_blocking_import_probe2.py"
+    blocker.write_text("import time\ntime.sleep(30)\n", encoding="utf-8")
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+
+    assert checker.find_missing_modules(["gitapex_blocking_import_probe2"], timeout=1.0) == [
+        "gitapex_blocking_import_probe2"
+    ]
+
+
+def test_is_importable_kills_the_probe_process_on_timeout(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`subprocess.run`'s own documented timeout behavior kills the child
+    before re-raising, so a timed-out probe leaves no orphaned `python3`
+    holding the pipes open. Asserted through the observable consequence:
+    the call returns rather than blocking on the child's still-open
+    stdout/stderr pipes, which is what `capture_output=True` would
+    otherwise wait on."""
+    blocker = tmp_path / "gitapex_blocking_import_probe3.py"
+    blocker.write_text("import time\ntime.sleep(30)\n", encoding="utf-8")
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+
+    started = time.monotonic()
+    assert checker.is_importable("gitapex_blocking_import_probe3", timeout=1.0) is False
+    assert time.monotonic() - started < 15
+
+
+def test_is_importable_false_and_warns_on_a_manufactured_timeout(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The `TimeoutExpired` branch itself, isolated from real timing --
+    matching tests/test__gitapex_preconditions.py's own manufactured-
+    timeout style for its sibling git probe."""
+
+    def _hang(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        raise subprocess.TimeoutExpired(cmd="python3 -c ...", timeout=10.0)
+
+    monkeypatch.setattr(subprocess, "run", _hang)
+
+    assert checker.is_importable("pydantic") is False
+    captured = capsys.readouterr()
+    assert "timed out" in captured.err
+    assert "pydantic" in captured.err
 
 
 # --- find_missing_modules() ---
