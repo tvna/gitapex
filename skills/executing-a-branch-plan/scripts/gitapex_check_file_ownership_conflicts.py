@@ -86,6 +86,10 @@ def find_conflicts(task_files: dict[str, list[str]]) -> list[tuple[str, list[str
 
 
 def main(argv: list[str] | None = None) -> int:
+    # function-body-test-coverage: WAIVED: only the CLI --help description
+    # string's own referenced-filename literal changed (a reference-file
+    # rename, issue #1648), no behavior; unchanged by
+    # tests/test_gitapex_check_file_ownership_conflicts.py's own suite.
     parser = argparse.ArgumentParser(
         description="Report task pairs that would write the same file "
         "(decomposition-and-dispatch.md's file-ownership edge, mechanized)."
