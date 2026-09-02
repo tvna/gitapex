@@ -88,8 +88,20 @@ def is_importable(module: str, *, python: str = "python3", timeout: float = PROB
         # The module name is data (sys.argv[1] inside the probe source,
         # never spliced into it), so this is not untrusted-input execution
         # in the sense S603 warns about.
+        #
+        # `-I` (isolated mode) is load-bearing, not cosmetic: without it,
+        # `python3 -c` prepends the process's own current working directory
+        # to sys.path[0], so a file named e.g. `<module>.py` planted in
+        # whatever directory this checker happens to be invoked from would
+        # shadow the real module -- and its top-level code would execute
+        # inside this probe subprocess (CWE-427/CWE-829). `-I` also implies
+        # `-E` and `-s`, ignoring PYTHON*-prefixed environment variables and
+        # the user site-packages directory, so this probe answers only "is
+        # `module` importable by this interpreter's own controlled search
+        # path", never one an attacker-controlled cwd or environment can
+        # steer.
         result = subprocess.run(  # noqa: S603
-            [python, "-c", _PROBE_SOURCE, module],
+            [python, "-I", "-c", _PROBE_SOURCE, module],
             capture_output=True,
             check=False,
             timeout=timeout,
