@@ -236,6 +236,21 @@ spec:
       summary: "an independent re-review found the entry above overclaims: the mkdir/git-conflict closure covers only the blank-page-creation writer class (two dispatches racing to create one new target), never named as scoped that narrowly. A second writer class -- two dispatches concurrently editing one existing target's sidecar -- is unaddressed. Step 2's own references-field paragraph now discloses this second class explicitly, not left silently uncovered by an unqualified 'closed' claim."
       outcome:
         baseCommit: "52213559dba876361a97683949e1cfa78dc218a9"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "a round-5 re-review found the entry above's 'always...isolation: worktree' claim for context 1 false on this file's own terms: executing-a-branch-plan Step 6's sequential fallback (named two entries up by this Step's own mkdir bullet) carries no such guarantee. Step 2 now states the sidecar-edit race is real and open under that fallback, not a future-caller hypothetical."
+      outcome:
+        baseCommit: "83eb216ebfda43d930a4a6a164545411fd9201e1"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "axis 5's actual Pass bar is resume-time, not same-round: context 2 must scan ground truth for completed work the log doesn't disclose, since a same-round self-check can never catch a mid-round crash. Step 2 now also requires: at resume, check git log on this draft's files since the log's last baseCommit for undisclosed commits, treating any found like a stale baseCommit -- a new entry disclosing the gap."
+      outcome:
+        baseCommit: "83eb216ebfda43d930a4a6a164545411fd9201e1"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "the axis-5 sentence added at baseCommit 83eb216e itself carried no decision-log entry of its own -- a live instance of the exact undisclosed-drift pattern it prohibits, caught by a round-5 re-review since this file's own resume-time check was not yet in force when that edit landed. Disclosed and backfilled here."
+      outcome:
+        baseCommit: "83eb216ebfda43d930a4a6a164545411fd9201e1"
   skillDependencies:
     requires:
       - evaluating-skill-quality
