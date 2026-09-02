@@ -567,6 +567,13 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/758"
       summary: "Not blocking, deferred: Declared dependency-policy sub-criterion (c), the PEP 723 self-contained-script pattern, stays unmet for gitapex_check_skill_shape.py -- pyyaml/jsonschema instead resolve via this repository's own uv.lock. No script anywhere in this repository uses PEP 723 yet; adopting it unilaterally here would be scope creep beyond this migration."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1662"
+      summary: "Closed the anticipated unsatisfiability gap: dimension 5 gained a second, independently-gated exception for a cohesion-confirmed, over-cap sequential-pipeline skill, additive to and not modifying the pre-existing self-guard exemption. Gated on an independently-produced cohesion finding plus reference content exceeding BODY_MAX_LINES after padding cuts. A Transfer check against the adjacent self-guard fixture confirmed no regression."
+      outcome:
+        verdict: fixed
+        before: 0.666667
+        after: 1.0
   skillDependencies:
     requires: []
     relatedTo:
