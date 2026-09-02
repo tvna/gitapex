@@ -222,13 +222,10 @@ where the platform supports scoping," discovered empirically rather than
 assumed from Decision 17's own text alone -- named as a deviation from
 the literal decision, not silently substituted for it.
 
-Design doc Decision 7 could not determine, in that design session, whether
-`hooks/check-bash-safety.sh` binds inside a subagent/Workflow execution
-context at all, because `CLAUDE_PLUGIN_ROOT` was unset there -- i.e.
-gitapex was not installed as a plugin in that session. **This remains an
-open item for the plugin-installed deployment case** (re-verify
-`hooks/check-bash-safety.sh` specifically, in that context, before relying
-on it as covering task-agent dispatch).
+Design doc Decision 7 left one question open -- see "Decision 7's own
+broader open question" below -- re-verify `hooks/check-bash-safety.sh`
+specifically inside a plugin-installed deployment before relying on it
+as covering task-agent dispatch.
 
 **Decision 17's own backstop exists in two variants, of genuinely
 different strength, and this asymmetry is stated here explicitly rather
@@ -265,62 +262,33 @@ plugin-agent schema, not a plausible-sounding claim.
    literal invocation path as covered by the same evidence, not only the
    `Agent`-tool proxy for it. **Empirically verified live in this
    skill's own authoring session** (mirroring Decision 7's own "test,
-   don't assume" method), quoted, not summarized:
-   - `pip install --help` -> denied, `systemMessage`: "Blocked by
-     executing-a-branch-plan's task-agent Bash gate (design doc Decision
-     17): package/plugin install commands are not permitted inside a
-     task-level agent...."
-   - `gh issue view 1` -> denied, `systemMessage`: "Blocked by
-     executing-a-branch-plan's task-agent Bash gate (design doc Decision
-     17): the gh CLI is not permitted inside a task-level agent, read or
-     write...."
-   - `git push origin HEAD` -> denied, `systemMessage`: "Blocked by
-     executing-a-branch-plan's task-agent Bash gate (design doc Decision
-     17): git push is not permitted inside a task-level agent...."
-   - `git status --short` (a normal, non-excluded command) -> ran
-     normally, not blocked.
-   - A direct `mcp__github__issue_read` call inside that same subagent ->
-     `Error: No such tool available: mcp__github__issue_read` --
-     confirming `disallowedTools: mcp__github` actually removes the tool
-     from that agent type's registry, not merely from its listing.
+   don't assume" method): all four excluded categories (package/plugin
+   install, `gh`, `git push`) were denied with this skill's own
+   `systemMessage` text naming Decision 17, a normal non-excluded
+   command ran unblocked, and a direct `mcp__github__issue_read` call
+   failed with `Error: No such tool available` -- confirming
+   `disallowedTools: mcp__github` actually removes the tool from that
+   agent type's registry, not merely from its listing.
 
-   **Second, separate probe: does the hook still fire when the subagent
-   also runs `isolation: 'worktree'` (step 6's actual multi-task-wave
-   configuration, not just `agentType` alone)?** This was flagged as an
-   untested gap after the first probe (that dispatch carried no
-   `isolation` option) -- re-run with `isolation: 'worktree'` added,
-   rather than left as a standing "unknown," since the platform's own
-   `Agent` tool exposes the same option this skill's own Workflow-tool
-   invocation uses. Result: **the hook still fires correctly.**
-   `pwd` inside the worktree-isolated subagent returned a path under
-   `.claude/worktrees/agent-<id>/`, not the main project root, and
-   `printenv CLAUDE_PROJECT_DIR` returned empty (unset) inside that
-   worktree -- so the hook command's own `${CLAUDE_PROJECT_DIR:-$(pwd)}`
-   fallback resolved to the *worktree's own* `$(pwd)`, not the main
-   repository root. `pip install --help` was still denied with the
-   identical `systemMessage` quoted above. This works because a git
-   worktree checks out the full working tree at its own path -- the
-   relative path `skills/executing-a-branch-plan/scripts/check_task_
-   bash_safety.sh` exists inside the worktree copy too, for any branch
-   that has the file committed, so the fallback's own relative-path
-   resolution still finds the script even with `CLAUDE_PROJECT_DIR`
-   unset. This closes the specific residual risk the row-2 ACM entry
-   (see the implementation PR) named as untested; not left open.
+   **The hook also fires correctly under `isolation: 'worktree'`**
+   (step 6's actual multi-task-wave configuration, not just `agentType`
+   alone), empirically verified live. Inside a worktree-isolated
+   subagent, `CLAUDE_PROJECT_DIR` is unset, so the hook command's own
+   `${CLAUDE_PROJECT_DIR:-$(pwd)}` fallback resolves to the worktree's
+   own `$(pwd)` -- and since a git worktree checks out the full working
+   tree at its own path, the relative path to
+   `check_task_bash_safety.sh` still resolves there for any branch that
+   has the file committed, so the deny still fired with the identical
+   `systemMessage`.
 
    **What "empirically verified" and "hard deny" above do NOT cover,
-   stated explicitly rather than left for a reader to assume completeness --
-   closed for the specific bypasses named below (issue `#1326`, Stage 1):**
-   `check_task_bash_safety.sh` was originally a raw-text regex gate, and a
-   regex gate cannot see through ordinary shell obfuscation that hides the
-   verb itself -- `git${IFS}push origin HEAD`, `gi""t push origin HEAD`,
-   and `p\ip install foo` (bash parameter expansion and character-
-   splitting, nothing exotic) all ran unblocked when tested directly
-   against the shipped script at the time. `hooks/check-bash-safety.sh`,
-   the file this script is explicitly adapted from, disclosed this
-   identical ceiling for itself at the time.
-
-   Issue `#1326` (Stage 1) closed this specific bypass class in both
-   scripts: `check_task_bash_safety.sh` now shells out to
+   stated explicitly rather than left for a reader to assume
+   completeness:** issue `#1326` (Stage 1) closed the raw-text-regex
+   obfuscation bypass class (`${IFS}`/quote-split/character-splitting
+   hiding the verb token itself, e.g. `git${IFS}push origin HEAD`,
+   `gi""t push origin HEAD`, `p\ip install foo`) both this script and
+   `hooks/check-bash-safety.sh` (the file it is adapted from) originally
+   shared: `check_task_bash_safety.sh` now shells out to
    `gitapex_check_task_bash_safety.py`, a token-based classifier (Python
    stdlib `shlex`, POSIX mode) that matches against bash's own dequoted,
    operator-segmented token stream instead of scanning raw source text --
@@ -345,17 +313,6 @@ plugin-agent schema, not a plausible-sounding claim.
    tracked as a separate, owner-decision-requiring follow-up, not part of
    this issue's own scope.
 
-   Incidentally, a second, distinct Claude-Code-native guard was also
-   observed during this probe (not part of this skill's own mechanism,
-   named here only because it was directly encountered): a
-   worktree-isolated subagent refused a compound/redirected shell
-   command outright ("too complex to verify that it stays inside the
-   worktree"), independent of this skill's own `check_task_bash_safety.sh`
-   hook. This is an additional platform-level control this skill did not
-   design and should not claim credit for or rely on by name -- noted as
-   an observed fact from this one encounter, not characterized further
-   without its own primary-source documentation lookup.
-
 2. **Plugin-distributed variant** (`agents/branch-plan-task.md` at this
    repository's own plugin root -- the deployment when gitapex is
    installed as a plugin into a different repository, the distribution
@@ -375,14 +332,12 @@ plugin-agent schema, not a plausible-sounding claim.
    PreToolUse hook the calling session independently has registered --
    for a session with gitapex's own plugin hooks active, that is
    `hooks/check-bash-safety.sh`, which hard-denies package/plugin
-   installs unconditionally (session-wide, not task-scoped) -- except
-   `uv add`/`uv remove` and `apm install`/`apm uninstall`, carved out as
-   declarative, visibly-mutating commands (issue `#1320`, `#1326`) -- denies
-   `gh issue`/`gh pr` *write* subcommands specifically (not every `gh`
-   invocation), and only warns (does not deny) on `git push`. This is real,
-   structural, defense-in-depth coverage, but it is neither task-scoped
-   nor as strict as the project-local variant, and this reference does
-   not overstate it as equivalent.
+   installs and `gh issue`/`gh pr` writes and warns (does not deny) on
+   `git push`, with narrow, disclosed carve-outs (issue `#1320`,
+   `#1326`) -- see that hook's own documentation for the exact scope.
+   This is real, structural, defense-in-depth coverage, but it is
+   neither task-scoped nor as strict as the project-local variant, and
+   this reference does not overstate it as equivalent.
 
 **Decision 7's own broader open question -- whether
 `hooks/check-bash-safety.sh` binds inside a subagent/Workflow execution

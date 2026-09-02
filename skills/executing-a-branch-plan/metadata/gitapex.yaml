@@ -82,4 +82,7 @@ spec:
       summary: "Issue/1662's rubric fix merged (PR/1672). An isolated re-review against the new rubric re-derived sequential cohesion independently, confirmed both new-exemption conditions (every-use content 1,513 lines, ~1,050-1,150 after real pruning, still over the 500-line cap), and found no easy file-count reduction: dimension 5 now PASSES. Overall verdict stays WELL-FORMED-NOT-MATURE -- dimension 2 (sediment/duplication/sprawl) and the Mixed-portability split gap remain open, disclosed only."
       outcome:
         baseCommit: "a0addc2c10e6ffc4f76bf9d6358232b48246d1b3"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1676"
+      summary: "A Fable dispatch found no rubric blind spot in dimension 2 (sediment/duplication/sprawl) -- fixed here, threat-model-and-authorization.md pruned 584 to 539 lines, no structural change. Mixed-portability's file-level-split rule does conflict with dimension 5's just-closed exemption for this shape: every compliant split adds a 4th every-use file or breaks failure-and-recovery.md. Filed as issue/1676 for a rubric fix, per issue/1662's same governed process. Not fixed here."
 
