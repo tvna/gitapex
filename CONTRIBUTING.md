@@ -140,9 +140,13 @@ the 31-gate set before that measured roughly 7 seconds, and
 the 26-gate set before that measured ~8-9 seconds; all
 are warm-run measurements, not a strict budget, and can vary by hardware --
 up from ~4-6 seconds for the 24-gate set before issue `#985`'s `behind-base`
-gate, this runner's first gate that makes a network call -- it fetches
-`origin/main` before comparing, measured separately at well under a second
-warm). Run it by hand any time with:
+gate, at the time this runner's first gate that makes a network call -- it
+fetches `origin/main` before comparing, measured separately at well under a
+second warm; issue `#1566` later added an earlier network call still, a
+one-time shallow-clone auto-unshallow fetch that runs before any wired gate
+at all, on the (uncommon locally) case of a shallow checkout -- see
+`gitapex_gate_local_preflight.py`'s own `ensure_wired_gate_preconditions`
+docstring). Run it by hand any time with:
 
 ```console
 uv run --frozen python3 .github/scripts/gitapex_gate_local_preflight.py

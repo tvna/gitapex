@@ -25,16 +25,31 @@ from __future__ import annotations
 import json
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 
 import _gitapex_argv_safety
+import _gitapex_preconditions
 import gitapex_gate_local_preflight
 import gitapex_scan_ssot_schema
 import pytest
 import yaml
+from conftest import bare_origin_with_two_commits, shallow_clone, shallow_clone_of_a_shallow_origin
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+
+# A fixture gate script shaped like gitapex_scan_harden_checkout_pin_drift.py's
+# own current_action_sha() -- issue #1566's own reproduction shape for the
+# consolidated #1546/#1489 defect: it needs a resolvable parent commit,
+# which a shallow clone's boundary commit does not have. Exits 0 when run
+# from a working tree with full history, 1 when run from a shallow one.
+_HISTORY_CHECK_SCRIPT = (
+    "import subprocess, sys\n"
+    "result = subprocess.run(['git', 'rev-parse', '--verify', '-q', 'HEAD^'], capture_output=True)\n"
+    "sys.exit(0 if result.returncode == 0 else 1)\n"
+)
+
 
 # A real, registered gate script. The bypass fixtures name it on purpose:
 # keeping the gate's own script in the argv is what makes the existence and
@@ -49,6 +64,7 @@ def _gate(
     planes: list[str],
     local_invocation: list[str] | None = None,
     local_stdin: list[str] | None = None,
+    preconditions: dict[str, object] | None = None,
 ) -> dict[str, object]:
     """One minimally-shaped gates[] entry. Only the fields the runner itself
     reads are populated -- the full schema is gitapex_scan_ssot_schema.py's
@@ -58,6 +74,8 @@ def _gate(
         gate["local_invocation"] = local_invocation
     if local_stdin is not None:
         gate["local_stdin"] = local_stdin
+    if preconditions is not None:
+        gate["preconditions"] = preconditions
     return gate
 
 
@@ -115,6 +133,58 @@ def test_missing_local_stdin_stays_none(tmp_path: pathlib.Path) -> None:
     ssot = _write_ssot(tmp_path, [_gate("plain", planes=["local"], local_invocation=["true"])])
     (check,) = gitapex_gate_local_preflight.load_local_checks(ssot)
     assert check.stdin_argv is None
+
+
+# --------------------------------------------------------------------------
+# load_local_checks: preconditions.requires_full_history (issue #1566)
+# --------------------------------------------------------------------------
+
+
+def test_requires_full_history_true_is_carried_onto_the_check(tmp_path: pathlib.Path) -> None:
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate(
+                "needs-history",
+                planes=["local"],
+                local_invocation=["true"],
+                preconditions={"requires_full_history": True},
+            )
+        ],
+    )
+    (check,) = gitapex_gate_local_preflight.load_local_checks(ssot)
+    assert check.requires_full_history is True
+
+
+def test_requires_full_history_defaults_to_false_when_preconditions_absent(tmp_path: pathlib.Path) -> None:
+    ssot = _write_ssot(tmp_path, [_gate("plain", planes=["local"], local_invocation=["true"])])
+    (check,) = gitapex_gate_local_preflight.load_local_checks(ssot)
+    assert check.requires_full_history is False
+
+
+@pytest.mark.parametrize(
+    "preconditions",
+    [
+        {"requires_full_history": False},
+        {"requires_python_packages": ["pydantic"]},
+        {},
+        "not-a-dict",
+    ],
+)
+def test_requires_full_history_stays_false_for_every_other_preconditions_shape(
+    tmp_path: pathlib.Path, preconditions: object
+) -> None:
+    """Lenient by design, matching this loop's own treatment of a malformed
+    `planes`: only an exact `True` on `requires_full_history` counts. A
+    malformed `preconditions` shape (the `"not-a-dict"` case) is
+    `ssot-schema-drift`'s own finding to report, not a reason for this
+    runner to refuse to run at all."""
+    ssot = _write_ssot(
+        tmp_path,
+        [_gate("x", planes=["local"], local_invocation=["true"], preconditions=preconditions)],  # type: ignore[arg-type]
+    )
+    (check,) = gitapex_gate_local_preflight.load_local_checks(ssot)
+    assert check.requires_full_history is False
 
 
 # --------------------------------------------------------------------------
@@ -477,6 +547,376 @@ def test_the_live_registry_passes_its_own_guard() -> None:
     """Every wired gate in the real .gitapex/ssot.json must survive the
     guard -- otherwise the pre-push hook refuses every push."""
     assert gitapex_gate_local_preflight.load_local_checks()
+
+
+# --------------------------------------------------------------------------
+# ensure_wired_gate_preconditions (issue #1566, consolidating #1546/#1489)
+# --------------------------------------------------------------------------
+
+
+def test_neither_helper_is_called_when_no_wired_gate_requires_full_history(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Proof method (d): a wired set loaded from a fixture registry with no
+    ``requires_full_history``-declaring gate must invoke neither
+    ``is_shallow_clone`` nor ``ensure_full_history`` at all -- no new
+    subprocess on a wired set that never needed this."""
+
+    def _must_not_be_called(*_args: object, **_kwargs: object) -> bool:
+        raise AssertionError("must not be called when no wired gate needs full history")
+
+    monkeypatch.setattr(_gitapex_preconditions, "is_shallow_clone", _must_not_be_called)
+    monkeypatch.setattr(_gitapex_preconditions, "ensure_full_history", _must_not_be_called)
+
+    ssot = _write_ssot(tmp_path, [_gate("plain", planes=["local"], local_invocation=["true"])])
+    checks = gitapex_gate_local_preflight.load_local_checks(ssot)
+    assert gitapex_gate_local_preflight.ensure_wired_gate_preconditions(checks, tmp_path) is None
+
+
+def test_fetch_is_skipped_when_the_repo_already_reports_non_shallow(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Proof method (c): the network-touching fetch specifically must not
+    run when the repo already reports non-shallow. The cheap local probe
+    itself is expected to still run -- there is no other way to know the
+    fetch can be skipped -- so this asserts on the fetch alone, not on
+    ``is_shallow_clone`` being uncalled."""
+    calls: list[str] = []
+
+    def _probe(*_args: object, **_kwargs: object) -> bool:
+        calls.append("is_shallow_clone")
+        return False
+
+    def _must_not_fetch(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("ensure_full_history must not run when the repo already reports non-shallow")
+
+    monkeypatch.setattr(_gitapex_preconditions, "is_shallow_clone", _probe)
+    monkeypatch.setattr(_gitapex_preconditions, "ensure_full_history", _must_not_fetch)
+
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate(
+                "needs-history",
+                planes=["local"],
+                local_invocation=["true"],
+                preconditions={"requires_full_history": True},
+            )
+        ],
+    )
+    checks = gitapex_gate_local_preflight.load_local_checks(ssot)
+    assert gitapex_gate_local_preflight.ensure_wired_gate_preconditions(checks, tmp_path) is None
+    assert calls == ["is_shallow_clone"]
+
+
+def test_fetch_runs_exactly_once_when_the_repo_is_shallow(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[str] = []
+    # Models a genuinely successful unshallow: shallow before the fetch,
+    # non-shallow after it. A stub that reported "shallow" both times would
+    # describe a fetch that exited 0 without unshallowing -- a real git
+    # behavior, but one this function must now ABORT on rather than
+    # proceed through (see
+    # test_abort_when_the_fetch_exits_zero_but_the_repo_is_still_shallow).
+    probe_answers = iter([True, False])
+    monkeypatch.setattr(_gitapex_preconditions, "is_shallow_clone", lambda *_a, **_k: next(probe_answers))
+    monkeypatch.setattr(_gitapex_preconditions, "ensure_full_history", lambda *_a, **_k: calls.append("fetch"))
+
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate(
+                "needs-history",
+                planes=["local"],
+                local_invocation=["true"],
+                preconditions={"requires_full_history": True},
+            )
+        ],
+    )
+    checks = gitapex_gate_local_preflight.load_local_checks(ssot)
+    assert gitapex_gate_local_preflight.ensure_wired_gate_preconditions(checks, tmp_path) is None
+    assert calls == ["fetch"]
+
+
+def test_abort_message_and_exit_code_when_the_shallow_check_itself_fails(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``is_shallow_clone`` failing to answer at all (never a silent 'not
+    shallow') must abort just as loudly as a failed fetch -- both are ways
+    the precondition could not be established."""
+
+    def _raise(*_args: object, **_kwargs: object) -> bool:
+        raise _gitapex_preconditions.PreconditionsError("boom: cannot check")
+
+    monkeypatch.setattr(_gitapex_preconditions, "is_shallow_clone", _raise)
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate(
+                "needs-history",
+                planes=["local"],
+                local_invocation=["true"],
+                preconditions={"requires_full_history": True},
+            )
+        ],
+    )
+    checks = gitapex_gate_local_preflight.load_local_checks(ssot)
+    assert gitapex_gate_local_preflight.ensure_wired_gate_preconditions(checks, tmp_path) == 1
+    assert "boom: cannot check" in capsys.readouterr().err
+
+
+def test_abort_message_and_exit_code_when_the_fetch_itself_fails(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def _raise(*_args: object, **_kwargs: object) -> None:
+        raise _gitapex_preconditions.PreconditionsError("boom: fetch failed")
+
+    monkeypatch.setattr(_gitapex_preconditions, "is_shallow_clone", lambda *_a, **_k: True)
+    monkeypatch.setattr(_gitapex_preconditions, "ensure_full_history", _raise)
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate(
+                "needs-history",
+                planes=["local"],
+                local_invocation=["true"],
+                preconditions={"requires_full_history": True},
+            )
+        ],
+    )
+    checks = gitapex_gate_local_preflight.load_local_checks(ssot)
+    assert gitapex_gate_local_preflight.ensure_wired_gate_preconditions(checks, tmp_path) == 1
+    assert "boom: fetch failed" in capsys.readouterr().err
+
+
+def test_abort_when_the_fetch_exits_zero_but_the_repo_is_still_shallow(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**Defeat case (step-8 adversarial review, issue #1566).** A zero exit
+    from ``git fetch --unshallow`` is not proof of full history -- see
+    ``tests/test__gitapex_preconditions.py``'s own live-verified pin for
+    the git behavior (a shallow ``origin`` propagates its own shallow
+    boundary, so the fetch succeeds and the clone stays shallow).
+
+    Without the post-fetch re-probe, this function returned ``None``
+    ("safe to proceed") and the ``requires_full_history`` gate then ran
+    against a still-shallow repo -- surfacing the failure reactively as
+    that one gate's own confusing mid-run error, the exact outcome
+    #1489 asked to replace with a single clean top-line abort.
+
+    Probe order is asserted, not just the exit code: the second
+    ``is_shallow_clone`` call must happen AFTER the fetch, so a fix that
+    merely re-read a cached first answer would not satisfy this test."""
+    calls: list[str] = []
+
+    def _always_shallow(*_args: object, **_kwargs: object) -> bool:
+        calls.append("is_shallow_clone")
+        return True
+
+    def _fetch_that_exits_zero_without_unshallowing(*_args: object, **_kwargs: object) -> None:
+        calls.append("ensure_full_history")
+
+    monkeypatch.setattr(_gitapex_preconditions, "is_shallow_clone", _always_shallow)
+    monkeypatch.setattr(_gitapex_preconditions, "ensure_full_history", _fetch_that_exits_zero_without_unshallowing)
+
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate(
+                "needs-history",
+                planes=["local"],
+                local_invocation=["true"],
+                preconditions={"requires_full_history": True},
+            )
+        ],
+    )
+    checks = gitapex_gate_local_preflight.load_local_checks(ssot)
+
+    assert gitapex_gate_local_preflight.ensure_wired_gate_preconditions(checks, tmp_path) == 1
+    assert calls == ["is_shallow_clone", "ensure_full_history", "is_shallow_clone"]
+    assert "still reports as shallow" in capsys.readouterr().err
+
+
+def test_no_second_probe_when_the_repo_was_never_shallow(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The post-fetch re-probe above must not become a second unconditional
+    subprocess on the ordinary, already-full-history path -- the wasted-call
+    concern #1546 raised for the fetch applies to the probe too."""
+    calls: list[str] = []
+
+    def _not_shallow(*_args: object, **_kwargs: object) -> bool:
+        calls.append("is_shallow_clone")
+        return False
+
+    monkeypatch.setattr(_gitapex_preconditions, "is_shallow_clone", _not_shallow)
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate(
+                "needs-history",
+                planes=["local"],
+                local_invocation=["true"],
+                preconditions={"requires_full_history": True},
+            )
+        ],
+    )
+    checks = gitapex_gate_local_preflight.load_local_checks(ssot)
+
+    assert gitapex_gate_local_preflight.ensure_wired_gate_preconditions(checks, tmp_path) is None
+    assert calls == ["is_shallow_clone"]
+
+
+def test_second_probe_failing_to_answer_also_aborts(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The re-probe is subject to the same "never a silent not-shallow"
+    rule as the first one: if it cannot answer at all, the run aborts
+    rather than proceeding on an unverified assumption."""
+    answers = [True]
+
+    def _probe(*_args: object, **_kwargs: object) -> bool:
+        if answers:
+            return answers.pop()
+        raise _gitapex_preconditions.PreconditionsError("boom: cannot re-check")
+
+    monkeypatch.setattr(_gitapex_preconditions, "is_shallow_clone", _probe)
+    monkeypatch.setattr(_gitapex_preconditions, "ensure_full_history", lambda *_a, **_k: None)
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate(
+                "needs-history",
+                planes=["local"],
+                local_invocation=["true"],
+                preconditions={"requires_full_history": True},
+            )
+        ],
+    )
+    checks = gitapex_gate_local_preflight.load_local_checks(ssot)
+
+    assert gitapex_gate_local_preflight.ensure_wired_gate_preconditions(checks, tmp_path) == 1
+    assert "boom: cannot re-check" in capsys.readouterr().err
+
+
+@pytest.mark.slow
+def test_main_aborts_before_any_wired_gate_runs_when_the_repo_stays_shallow(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The same defeat case end-to-end through ``main()``, against a real
+    git fixture rather than monkeypatched helpers: a shallow clone whose
+    own origin is itself shallow. ``git fetch --unshallow`` really does
+    exit 0 here and really does leave the clone shallow, so nothing is
+    stubbed -- the wired gate must never start, and the operator must get
+    one clear top-line message instead of that gate's own mid-run error."""
+    shallow = shallow_clone_of_a_shallow_origin(tmp_path)
+    marker = tmp_path / "PWNED.txt"
+    script = _write_script(
+        tmp_path,
+        "would_touch.py",
+        f"import pathlib\npathlib.Path({str(marker)!r}).touch()\n",
+    )
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate(
+                "fake-harden-checkout-pin-drift",
+                planes=["local"],
+                local_invocation=[sys.executable, str(script)],
+                preconditions={"requires_full_history": True},
+            )
+        ],
+    )
+
+    exit_code = gitapex_gate_local_preflight.main(["--ssot-path", str(ssot), "--repo-root", str(shallow)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert not marker.exists(), "the wired gate ran against a still-shallow repo"
+    assert "still reports as shallow" in captured.err
+    assert "local preflight: running" not in captured.out, "no wired gate must start running before the abort"
+
+
+@pytest.mark.slow
+def test_main_reproduces_and_fixes_the_original_shallow_clone_defect(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Reproduces the exact original defect (issue #1566, consolidating
+    #1546/#1489) and confirms the fix: ``_HISTORY_CHECK_SCRIPT``, shaped
+    like ``gitapex_scan_harden_checkout_pin_drift.py``'s own
+    ``current_action_sha()``, needs a resolvable parent commit -- which a
+    shallow clone's boundary commit does not have. First proves the defect
+    directly (the script fails when run against the still-shallow clone
+    with no precondition established), then proves ``main()`` establishes
+    full history before that same gate script ever runs, so it now passes
+    -- proof method (a)."""
+    origin = bare_origin_with_two_commits(tmp_path)
+    shallow = shallow_clone(origin, tmp_path / "shallow")
+    script = _write_script(tmp_path, "needs_history.py", _HISTORY_CHECK_SCRIPT)
+
+    # The defect, reproduced directly: the fixture gate script fails
+    # against the still-shallow clone when nothing establishes full
+    # history first -- exactly gitapex_scan_harden_checkout_pin_drift.py's
+    # own live-verified RuntimeError shape, at the shell-exit-code level.
+    direct = subprocess.run([sys.executable, str(script)], cwd=shallow, capture_output=True)
+    assert direct.returncode != 0, "the fixture gate must fail on a still-shallow clone before the fix runs"
+
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate(
+                "fake-harden-checkout-pin-drift",
+                planes=["local"],
+                local_invocation=[sys.executable, str(script)],
+                preconditions={"requires_full_history": True},
+            )
+        ],
+    )
+
+    exit_code = gitapex_gate_local_preflight.main(["--ssot-path", str(ssot), "--repo-root", str(shallow)])
+    report = capsys.readouterr().out
+    assert exit_code == 0, report
+    assert "PASS  fake-harden-checkout-pin-drift" in report
+    assert _gitapex_preconditions.is_shallow_clone(shallow) is False, "main() must leave the clone unshallowed"
+
+
+@pytest.mark.slow
+def test_main_aborts_before_any_wired_gate_runs_when_the_fetch_itself_fails(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Proof method (b): the bare origin is deleted before the fetch runs,
+    so ``git fetch --unshallow`` itself fails. A single clean top-line
+    abort message and exit 1, before any wired gate runs at all -- never
+    the reactive, mid-run failure #1489 asked to close."""
+    origin = bare_origin_with_two_commits(tmp_path)
+    shallow = shallow_clone(origin, tmp_path / "shallow")
+    shutil.rmtree(origin)
+
+    marker = tmp_path / "PWNED.txt"
+    script = _write_script(
+        tmp_path,
+        "would_touch.py",
+        f"import pathlib\npathlib.Path({str(marker)!r}).touch()\n",
+    )
+    ssot = _write_ssot(
+        tmp_path,
+        [
+            _gate(
+                "fake-harden-checkout-pin-drift",
+                planes=["local"],
+                local_invocation=[sys.executable, str(script)],
+                preconditions={"requires_full_history": True},
+            )
+        ],
+    )
+
+    exit_code = gitapex_gate_local_preflight.main(["--ssot-path", str(ssot), "--repo-root", str(shallow)])
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert not marker.exists(), "the wired gate ran despite the fetch itself failing"
+    assert "error:" in captured.err
+    assert "local preflight: running" not in captured.out, "no wired gate must start running before the abort"
 
 
 # --------------------------------------------------------------------------

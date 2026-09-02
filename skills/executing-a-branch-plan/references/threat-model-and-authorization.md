@@ -12,6 +12,7 @@ lighter-weight case.
 - [Per-task screening](#per-task-screening)
 - [The branch-plan-task subagent type](#the-branch-plan-task-subagent-type)
 - [Full-verification exit condition (Decision 20)](#full-verification-exit-condition-decision-20)
+- [Worktree-base precondition backstop](#worktree-base-precondition-backstop)
 
 ## Authorization gate
 
@@ -591,3 +592,143 @@ open item for the repository owner to configure directly (a
 `.claude/settings.json` change is a standing, repository-wide behavior
 change outside this skill's own file-authoring scope), not added
 unilaterally by this skill's own implementation pass.
+
+## Worktree-base precondition backstop
+
+**The gap this closes.** A `branch-plan-task` dispatch running with
+`isolation: 'worktree'` is forked from the shared plan branch's own tip
+at wave-dispatch time (Decision 13). Nothing previously re-checked, from
+inside that worktree, whether the shared branch had since advanced past
+the worktree's own fork point -- a concurrent sibling task's own wave
+merging and pushing before this one returns, or a stale worktree reused
+across waves, could both leave a task working (and reporting complete)
+from a base that no longer reflects the shared branch's own current
+state, with nothing surfacing the drift until merge-back, if ever. Issue
+`#1508` (one of four duplicates consolidated into issue `#1566`'s own
+gate-preconditions-mechanism umbrella) closes this at the earliest point
+a task-level dispatch can be reached at all:
+`gitapex_check_task_worktree_base.py` asserts `git merge-base HEAD <shared-branch>` equals
+`git rev-parse <shared-branch>` from inside the task's own worktree,
+denying (with both SHAs named) on a confirmed mismatch. Full mechanism
+detail, including the branch-name-resolution design and its own disclosed
+assumptions: [execution and dispatch
+reference](execution-and-dispatch.md#worktree-base-precondition-backstop).
+
+**No `SubagentStart`-equivalent hook event exists to check this before a
+task begins at all.** Confirmed directly against Claude Code's own hooks
+documentation, the identical "test, don't assume" method Decision 7's own
+investigation already applies elsewhere in this section: only
+`SubagentStop` exists (already used above for Decision 20's own exit
+condition, a different purpose -- verifying work done, not gating work
+about to start). The earliest deterministic enforcement point actually
+available is therefore the SAME embedded `PreToolUse` "Bash" hook Decision
+17's own backstop already uses -- this mechanism is chained into
+`check_task_bash_safety.sh` as a second sibling classifier call (the
+identical pattern that script already uses to invoke `gitapex_check_task_
+bash_safety.py`), not a second `hooks.PreToolUse` frontmatter entry (no
+such second entry exists in the shipped frontmatter for any hook event in
+this agent type -- confirmed by reading `.claude/agents/branch-plan-
+task.md` directly before choosing this shape).
+
+**Same two-variant asymmetry as the two mechanisms above, for the same
+reason, and stated with the identical precision.**
+
+1. **Project-local variant.** `.claude/agents/branch-plan-task.md`'s own
+   embedded `hooks.PreToolUse` block (matcher `"Bash"`) already invokes
+   `check_task_bash_safety.sh`; this mechanism rides that SAME hook
+   invocation via the sibling-script chain above, so no frontmatter change
+   was needed to wire it in at all -- the file itself is otherwise
+   unchanged by this mechanism.
+2. **Plugin-distributed variant.** `agents/branch-plan-task.md` carries no
+   `hooks` field at all, for the identical reason Decision 17's own Bash
+   exclusion and Decision 20's own full-verification exit condition are
+   prompt-only there. There is no deterministic backstop of any kind for
+   this precondition in that deployment mode; the same prose-instruction
+   treatment given those two mechanisms is extended to this one there,
+   for consistency, not because prose enforcement is expected to be
+   reliable -- "does this worktree's own fork point still match the
+   shared branch's current tip" is exactly the kind of repo-state fact a
+   model is not reliably positioned to self-check without being told to
+   run the specific git commands this script runs, the same limitation
+   this reference already names for the other two mechanisms in this
+   deployment mode.
+
+**Piggybacks on the task's own first Bash call, not a true "before any
+tool call at all, including a non-Bash one" gate -- an explicitly
+disclosed, asymmetric-strength residual, named here rather than left for
+a reader to assume complete coverage.** Any Read/Edit/Write/Grep/Glob work
+a task does before its own first Bash call is not covered by this
+backstop at all, in either variant. This matches, rather than
+contradicts, this section's own established convention (Decision 17's own
+two-variant asymmetry, disclosed above rather than overclaimed) of naming
+an enforcement gap precisely instead of describing this mechanism as
+covering more than it does.
+
+**Fail-open by design, the opposite default from `gitapex_check_task_
+bash_safety.py`'s own fail-closed classifier immediately above it in the
+same hook chain.** This backstop denies ONLY on a clean, confirmed
+mismatch; every other outcome -- the shared plan branch's own name cannot
+be resolved at all (no worktree, a detached HEAD, an unrelated worktree's
+own reflog naming a startpoint that is not a local branch, a malformed
+hook payload), or even a crash inside the classifier itself -- fails
+OPEN, silently letting the Bash call proceed unchanged. This is a
+deliberate, disclosed asymmetry, not an oversight: unlike Decision 17's
+own Bash-command exclusion list (whose job is preventing a small,
+genuinely dangerous set of actions, where fail-closed is the correct
+default), this mechanism's own job is a repo-state freshness backstop
+"for the wave-dispatch case specifically, not a general-purpose git-state
+gate" (this task's own Planned ops, quoted) -- it must never block the
+sequential fallback (no worktree, no wave) this same `branch-plan-task`
+agent type also runs under (design doc Decision 4's own portability
+answer), and a false DENY here would be strictly worse than a missed
+detection: it would stop a task's own legitimate work over a precondition
+this mechanism cannot always resolve with confidence, for reasons
+(unmerged assumptions about the Workflow tool's own worktree-creation
+internals -- see the execution-and-dispatch reference cited above) that
+have nothing to do with whether the task's own work is actually safe.
+
+**Known, disclosed limitation, live-confirmed: in this repository's own
+observed dispatch shape this backstop does not fire at all.** The
+branch-name resolution above trusts the startpoint recorded in the
+worktree branch's own `branch: Created from ...` reflog entry, and trusts
+it only when that recorded name resolves to an existing LOCAL branch.
+Issue `#1566`'s own step-8 adversarial review
+observed a real `branch-plan-task` worktree in this repository whose
+reflog read exactly `branch: Created from origin/main` -- a
+remote-tracking ref, not a local branch -- while sitting at the plan
+branch's merge-base with every one of that branch's commits missing. That
+is issue `#1508`'s own defect shape, and this mechanism returned `warn`
+(fail open) for it: nothing was detected, and the dispatched agent had to
+notice the stale base and `git reset --hard` by hand.
+
+So the "Disclosed, unverified assumption" in the [execution and dispatch
+reference](execution-and-dispatch.md#worktree-base-precondition-backstop)
+is, for at least one real dispatcher, verified FALSE. **Until the shared
+plan branch's name is threaded in explicitly, plan for this backstop
+being absent rather than present**: a wave dispatch's own prompt should
+tell each task to verify its own worktree base against the shared plan
+branch itself. Resolving `refs/remotes/origin/main` instead is not a fix
+-- `main` is not the shared plan branch, so it would deny every
+legitimately-based task worktree whenever `main` advanced, the same
+false, blast-radius-widening DENY this mechanism's own design rejected
+elsewhere. Pinned as a regression test in
+`scripts/test_gitapex_check_task_worktree_base.py` so the limitation
+cannot be silently widened, and named as an open follow-up rather than
+overclaimed as covered.
+
+**Known, disclosed limitation, not solved here: the same self-tamper
+residual the sibling Bash-safety pair and the Decision 20 exit-condition
+pair above already carry.** `check_task_bash_safety.sh` resolves its own
+sibling scripts (including this mechanism's own
+`gitapex_check_task_worktree_base.py`) via the identical
+`script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"` pattern --
+resolving to the task's own worktree copy, not a copy outside that
+worktree's reach. A `branch-plan-task` dispatch retains Edit/Write access,
+so nothing in this mechanism stops a task from rewriting its own
+worktree's copy of either script to unconditionally emit an "allow"
+verdict before this backstop ever runs against it -- neutralizing this
+precondition check entirely from inside the very dispatch it exists to
+constrain. Not a new class of risk this mechanism introduces: it is the
+identical, already-accepted residual named above for both sibling
+mechanisms, tracked there (and here) as the still-open "Stage 2
+(execution-boundary enforcement)" follow-up rather than solved.
