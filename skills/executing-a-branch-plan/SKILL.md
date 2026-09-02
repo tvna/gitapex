@@ -413,22 +413,22 @@ combined diff, then the draft PR converts to ready-for-review.
 
 ## Notes
 
-Portability: **Mixed**, stated explicitly per this repository's own
-shape-check convention. Step 6's primary path (`Workflow` tool,
-`agentType: 'branch-plan-task'`, `isolation: 'worktree'`) and the
-`branch-plan-task` subagent-type definition are Claude-Code-specific.
-The sequential main-thread fallback in step 6 (one task per turn, no
-Workflow tool, no worktree isolation, no `agentType` scoping -- a task's
-exclusion list is prompt-only in that path) is *architecturally* portable
-to any agent platform (it uses no Claude-Code-specific primitive),
-degraded but not blocked, matching design doc Decision 4's own
-portability answer. This is a structural claim, not an empirically
-verified one on any platform besides Claude Code itself -- see
+Portability: **Mixed**. **Non-portable (Claude-Code-specific):** step
+6's primary path (`Workflow` tool, `agentType: 'branch-plan-task'`,
+`isolation: 'worktree'`), the `branch-plan-task` subagent type, and the
+worktree-base precondition backstop -- full inventory and each one's
+own portable substitute:
+[porting-boundary-map.md](references/porting-boundary-map.md), read
+only at vendoring/porting time.
+
+**Portable:** step 6's sequential fallback is *architecturally* portable
+to any agent platform (degraded, not blocked, per design doc Decision
+4) -- a structural claim, not empirically verified beyond Claude Code
+itself; see
 [decomposition-and-dispatch.md](references/decomposition-and-dispatch.md#sequential-fallback)
-for the specific attempt to verify it against OpenAI Codex (blocked by
-this authoring session's own network policy, not resolved either way).
-Steps 1, 2, 4, 5, 7, 8, 9 use only GitHub-connector calls and
-skill-to-skill reuse, both portable.
+for the blocked attempt to verify it against OpenAI Codex. Steps 1, 2,
+4, 5, 7, 8, 9 use only GitHub-connector calls and skill-to-skill reuse,
+both portable.
 
 Install/vendoring-time integrity (whether this SKILL.md, its
 `references/`, its bundled `scripts/` (`check_task_bash_safety.sh`,

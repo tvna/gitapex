@@ -98,3 +98,13 @@ spec:
         requirement_1_distinct_headings: not_met
         requirement_2_notes_declaration: not_met
         requirement_3_porting_boundary_map_file: not_met
+    - kind: corroboration
+      anchor: "https://github.com/tvna/gitapex/issues/1676"
+      summary: "Round 13: a Sonnet dispatch re-derived this finding, initially doubting condition 2; a direct re-read traced that to misreading two authoring-session-testing-limit passages as deployment gating. Conditions 1-2 stay met, agreeing with the entry above. Requirement 2 found largely met, contra that entry. Requirements 1 and 3 fixed here: SKILL.md Notes split into Non-portable/Portable headings naming the worktree-base backstop; new porting-boundary-map.md enumerates every touchpoint."
+      outcome:
+        verdict: satisfied
+        condition_1_dimension5_exemption: met
+        condition_2_every_use_independently_verified: met
+        requirement_1_distinct_headings: met
+        requirement_2_notes_declaration: met
+        requirement_3_porting_boundary_map_file: met
