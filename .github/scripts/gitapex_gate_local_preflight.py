@@ -132,7 +132,7 @@ surface only via one gate's own error text partway through the run
   the wall clock; parallelism was not added because interleaved failure
   output from eight concurrent subprocesses is the thing this runner exists
   to avoid.
-- ``local_stdin`` producers that need ``origin/main`` to exist locally
+- ``local_stdin`` producers (each run via ``uv run``) that need ``origin/main`` to exist locally
   (today: ``exception-handler-gap``, ``stdlib-only-claim-drift``, and
   ``detection-logic-property-coverage`` -- every gate whose ``local_stdin``
   computes a merge-base diff, not just the first one added) no longer read
