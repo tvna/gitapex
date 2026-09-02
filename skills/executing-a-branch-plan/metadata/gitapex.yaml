@@ -85,4 +85,16 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1676"
       summary: "A Fable dispatch found no rubric blind spot in dimension 2 (sediment/duplication/sprawl) -- fixed here, threat-model-and-authorization.md pruned 584 to 539 lines, no structural change. Mixed-portability's file-level-split rule does conflict with dimension 5's just-closed exemption for this shape: every compliant split adds a 4th every-use file or breaks failure-and-recovery.md. Filed as issue/1676 for a rubric fix, per issue/1662's same governed process. Not fixed here."
-
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "Unrelated style tidy under this same PR: failure-and-recovery.md's prose was hard-wrapped at roughly 72 characters, occasionally mid-clause; reflowed every paragraph/bullet into one line, no wording changed."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/1676"
+      summary: "Mixed-portability re-graded vs. rubric.md's new Mixed-portability substitute (verification-only). Both gating conditions met (D5 exemption granted; Claude-Code mechanics confirmed every-use). All three positive requirements unmet: no heading isolation, an incomplete Notes declaration, no porting-boundary-map file. Stays an open finding; closing it is separate follow-up, out of this issue's scope. Not re-verified against the rubric's later dimension-5 relocation; substance believed unchanged."
+      outcome:
+        verdict: open
+        condition_1_dimension5_exemption: met
+        condition_2_every_use_independently_verified: met
+        requirement_1_distinct_headings: not_met
+        requirement_2_notes_declaration: not_met
+        requirement_3_porting_boundary_map_file: not_met

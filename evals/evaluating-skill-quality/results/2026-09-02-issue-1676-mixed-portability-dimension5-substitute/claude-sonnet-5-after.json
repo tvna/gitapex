@@ -1,0 +1,17 @@
+{
+  "model_id": "claude-sonnet-5",
+  "n_fixtures": 2,
+  "mean_score": 1.0,
+  "scores": [
+    {
+      "fixture_id": "evaluating-skill-quality-mixed-portability-dimension5-substitute-selection",
+      "score": 1.0,
+      "split": "selection"
+    },
+    {
+      "fixture_id": "evaluating-skill-quality-mixed-portability-dimension5-substitute-false-positive-selection",
+      "score": 1.0,
+      "split": "selection"
+    }
+  ]
+}

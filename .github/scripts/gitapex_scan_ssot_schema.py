@@ -137,6 +137,18 @@ class GateTargetEntry(BaseModel):
     ref: str
 
 
+class GatePreconditions(BaseModel):
+    """Mirrors gate.preconditions (issue #1566): environment/repo-state
+    conditions this gate needs before it can run correctly, checked and
+    where possible auto-established (e.g. an unshallow fetch) before this
+    gate runs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    requires_full_history: bool | None = None
+    requires_python_packages: list[str] | None = None
+
+
 class Gate(BaseModel):
     """.gitapex/ssot.json ``gates[]`` entry: one deterministic gate gitapex
     enforces on itself. ``script``/``native_rule`` stay optional here -- the
@@ -164,6 +176,7 @@ class Gate(BaseModel):
     fail_mode: GateFailMode | None = None
     target: list[GateTargetEntry] | None = None
     bypass_review_status: Literal["not-yet-reviewed", "reviewed-none-found"]
+    preconditions: GatePreconditions | None = None
 
 
 class SsotMeta(BaseModel):

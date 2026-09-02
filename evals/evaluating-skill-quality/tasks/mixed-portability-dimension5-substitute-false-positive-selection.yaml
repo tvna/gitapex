@@ -1,0 +1,67 @@
+id: evaluating-skill-quality-mixed-portability-dimension5-substitute-false-positive-selection
+name: Mixed Substitute Claim Must Be Independently Verified, Not Accepted On The Target's Own Self-Characterization
+description: An adversarial anti-loophole probe for the new Mixed-portability substitute. The target is Mixed-declared, claims (given as fact) the cohesion-confirmed sequential-pipeline exemption, and its own Notes section explicitly asserts its platform-specific content is "every-use" -- and it even ships a porting-boundary-map.md-shaped reference file and distinct headings, structurally mimicking a genuinely qualifying target. But the Procedure text itself shows the platform-specific step only runs "only when the destination is ProviderX" -- a conditional branch, not every ordinary run -- directly contradicting the Notes' own "every-use" claim. The new substitute's own condition 2 requires this be established by inspecting which procedure steps actually read the content, never accepted from the target's own self-characterization; a review that pattern-matches on the Notes declaration and the porting-boundary-map file's mere presence, rather than actually reading the Procedure, would incorrectly pass this target. The review must fail it -- both before and after the rubric edit, since it fails condition 2 either way -- and must show its work by naming the conditional trigger it found, not merely assert a conclusion.
+tags:
+  - quality
+  - portability
+  - progressive-disclosure
+  - adversarial
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "log-shipping-connector".
+
+    Given, not to be re-derived: this target's cohesion check already ran
+    at its own Procedure step 2 and returned single-outcome sequential
+    cohesion confirmed, and this target's own dimension-5 walk (already
+    run, this same review) confirmed it clears the cohesion-confirmed
+    sequential-pipeline exemption -- its mandatory reference files total
+    over the 500-line `BODY_MAX_LINES` cap with no rearrangement able to
+    lower that floor. Do not re-run or second-guess either finding -- take
+    both as already established.
+
+    ---
+    name: log-shipping-connector
+    description: Ship application logs from the local buffer to whichever destination this deployment is configured for. Use when the local log buffer needs draining to a durable destination.
+    ---
+
+    # Log Shipping Connector
+
+    ## Procedure (portable)
+
+    1. Read the local buffer's own configuration to determine the
+       configured destination and batch size.
+    2. Read `references/batching-rules.md` (mandatory every run) and
+       assemble the next batch of buffered log lines per its own
+       size/time-window rules.
+    3. Read `references/retry-policy.md` (mandatory every run) and
+       compute this batch's own retry/backoff schedule before shipping.
+
+    ## Procedure (ProviderX-specific, non-portable)
+
+    4. Only when the destination is ProviderX (this deployment's own
+       default, but not its only configured destination), call
+       ProviderX's proprietary `providerx-ship` binary to deliver the
+       batch, using ProviderX's own authentication token format. For any
+       other configured destination, this step is skipped entirely and
+       the batch is delivered through the portable Procedure's own
+       generic HTTP-POST fallback instead (not shown here).
+    5. Read `references/delivery-confirmation.md` (mandatory every run)
+       and record the delivery outcome from whichever of step 4's two
+       paths actually ran.
+
+    ## Notes
+
+    Portability: **Mixed**. Step 4's `providerx-ship` invocation is
+    ProviderX-specific and is read on every ordinary run of this skill,
+    interleaved with the portable steps around it -- there is no
+    caller-selectable narrower path that skips it. See
+    `references/porting-boundary-map.md` (read only when vendoring this
+    skill elsewhere) for its portable HTTP-POST substitute.
+expected:
+  output_contains:
+    - "Only when the destination is"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"
+    - "satisfies the substitute"

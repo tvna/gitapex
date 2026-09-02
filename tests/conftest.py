@@ -308,3 +308,83 @@ def assert_workflow_diff_carries_flags(workflow_name: str, *flags: str) -> None:
     invocation = next(line for line in workflow.split("\n") if "git" in line and "diff -U0" in line)
     for flag in flags:
         assert flag in invocation, invocation
+
+
+def run_git(args: list[str], cwd: pathlib.Path) -> None:
+    """Run one `git` command in `cwd`, raising `CalledProcessError` on a
+    non-zero exit. Fixture setup only: a failed setup step must abort the
+    test outright rather than leave a half-built repo the assertions then
+    misread."""
+    subprocess.run(args, cwd=cwd, check=True, capture_output=True, text=True)
+
+
+def init_git_repo(root: pathlib.Path, *, branch: str = "main") -> pathlib.Path:
+    """`git init` at `root` (created if absent) with a committer identity
+    set locally, so a commit works regardless of the ambient global git
+    config."""
+    root.mkdir(parents=True, exist_ok=True)
+    run_git(["git", "init", "-q", "--initial-branch", branch], root)
+    run_git(["git", "config", "user.email", "test@example.com"], root)
+    run_git(["git", "config", "user.name", "Test"], root)
+    return root
+
+
+def commit_file(root: pathlib.Path, name: str, message: str) -> None:
+    """Write `name` (its own filename as content), stage it, and commit."""
+    (root / name).write_text(f"{name}\n", encoding="utf-8")
+    run_git(["git", "add", "--", name], root)
+    run_git(["git", "commit", "-q", "-m", message], root)
+
+
+def bare_origin_with_two_commits(tmp_path: pathlib.Path) -> pathlib.Path:
+    """A local, non-bare working repo with two commits, then a bare mirror
+    of it -- `git clone --depth 1` needs a real remote (a `file://` bare
+    repo works and needs no network) to produce an actual shallow clone,
+    rather than the no-op shallow-ness a same-filesystem `--depth 1` clone
+    of a *non-bare* repo can produce on some git versions.
+
+    Shared by every shallow-clone precondition test (same rationale as
+    `assert_path_is_gitignored` above): `test__gitapex_preconditions.py`
+    exercises the helpers directly, `test_gitapex_gate_local_preflight.py`
+    the runner that calls them, and both need the identical fixture shape.
+    """
+    working = init_git_repo(tmp_path / "working")
+    commit_file(working, "a.txt", "first")
+    commit_file(working, "b.txt", "second")
+    bare = tmp_path / "origin.git"
+    run_git(["git", "clone", "-q", "--bare", str(working), str(bare)], tmp_path)
+    return bare
+
+
+def shallow_clone(origin: pathlib.Path, dest: pathlib.Path) -> pathlib.Path:
+    """`git clone --depth 1 file://<origin> <dest>` -- a genuinely shallow
+    clone, the state the `requires_full_history` precondition exists to
+    detect and repair."""
+    run_git(["git", "clone", "-q", "--depth", "1", f"file://{origin}", str(dest)], dest.parent)
+    return dest
+
+
+def shallow_clone_of_a_shallow_origin(tmp_path: pathlib.Path) -> pathlib.Path:
+    """A shallow clone whose own `origin` is ITSELF a shallow clone -- the
+    shape in which `git fetch --unshallow` exits **0** and the repository
+    is **still shallow** afterward.
+
+    Live-verified during the step-8 adversarial review of issue #1566, not
+    assumed: git propagates the source repository's own shallow boundary
+    to the fetching clone, so `--unshallow` deepens as far as the source
+    can offer and then stops, reporting success. A caller that treats a
+    zero exit from `ensure_full_history` as proof of full history is
+    therefore wrong -- the same "never trust the fetch's exit code alone"
+    discipline `_gitapex_base_ref.py`'s own docstring already establishes
+    for its sibling `fetch_destination_refspec`/`peeled_ref_exists` pair.
+
+    Shared by the two suites that pin that defeat case (the helper-level
+    one in `test__gitapex_preconditions.py` and the runner-level one in
+    `test_gitapex_gate_local_preflight.py`), same rationale as
+    `bare_origin_with_two_commits` above.
+    """
+    origin = bare_origin_with_two_commits(tmp_path)
+    intermediate = shallow_clone(origin, tmp_path / "shallow-origin")
+    leaf = tmp_path / "shallow-leaf"
+    run_git(["git", "clone", "-q", "--depth", "1", f"file://{intermediate}", str(leaf)], tmp_path)
+    return leaf

@@ -32,6 +32,28 @@
 # itself is fetched, not embedded) remains out of reach of any
 # token-based gate for the same reason, tracked as an open follow-up
 # (specific to this repository, not portable).
+#
+# Issue #1508 (consolidated into #1566's own gate-preconditions-mechanism
+# umbrella): this script also chains gitapex_check_task_worktree_base.py
+# as a second sibling classifier call, run once per Bash call alongside
+# gitapex_check_task_bash_safety.py above -- a worktree-base precondition
+# backstop (does this task's own worktree fork point still match the
+# shared plan branch's current tip?), not a Bash-command classifier, but
+# wired the identical way since no second hooks.PreToolUse frontmatter
+# entry exists in .claude/agents/branch-plan-task.md to hang it off
+# instead (confirmed by reading that file directly before adding this --
+# it defines exactly one PreToolUse entry, matcher "Bash", one command
+# hook; the established convention for a second PreToolUse-scoped check is
+# chaining another sibling script call inside THIS shell wrapper, not a
+# second frontmatter entry). Deliberately asymmetric from the classifier
+# above: that one fails CLOSED (deny) on any malformed input or
+# classification uncertainty; the worktree-base check fails OPEN on
+# everything except a clean, confirmed mismatch -- see
+# gitapex_check_task_worktree_base.py's own module docstring for the full
+# fail-open/fail-closed rationale, and
+# references/threat-model-and-authorization.md for the disclosed residual
+# this asymmetry carries (piggybacks on the task's own first Bash call,
+# not a true "before any tool call" gate).
 
 set -euo pipefail
 
@@ -66,6 +88,34 @@ if [ "$tool_name" != "Bash" ]; then
 fi
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Issue #1508: worktree-base precondition backstop, checked BEFORE the
+# Bash-command classification below -- a stale worktree fork point is a
+# more foundational problem than whether this one command is itself safe.
+# Deliberately fail-open on anything short of a clean, confirmed mismatch
+# (see gitapex_check_task_worktree_base.py's own module docstring for the
+# full rationale): a missing file, a non-zero exit, malformed/non-object
+# output, or a "warn"/"allow" decision are ALL treated identically here --
+# silently proceed to the Bash-safety classifier below. This is the ONLY
+# path in this script that fails open on a classifier malfunction;
+# gitapex_check_task_bash_safety.py's own call further down keeps this
+# script's pre-existing fail-CLOSED default for every other outcome, since
+# THAT classifier's job (preventing git push/gh/install commands) is
+# higher-consequence than this one (a repo-state freshness backstop for
+# the wave-dispatch case specifically, per this task's own Planned ops).
+worktree_base_classifier="$script_dir/gitapex_check_task_worktree_base.py"
+if [ -f "$worktree_base_classifier" ]; then
+  worktree_base_exit=0
+  worktree_base_output=$(printf '%s' "$input" | python3 "$worktree_base_classifier" 2>/dev/null) || worktree_base_exit=$?
+  if [ "$worktree_base_exit" -eq 0 ] && printf '%s' "$worktree_base_output" | jq -e 'type == "object"' >/dev/null 2>&1; then
+    worktree_base_decision=$(printf '%s' "$worktree_base_output" | jq -r '.decision // empty')
+    if [ "$worktree_base_decision" = "deny" ]; then
+      worktree_base_reason=$(printf '%s' "$worktree_base_output" | jq -r '.reason // empty')
+      deny "Blocked by executing-a-branch-plan's task-agent worktree-base precondition (issue #1508): $worktree_base_reason."
+    fi
+  fi
+fi
+
 classifier="$script_dir/gitapex_check_task_bash_safety.py"
 
 if [ ! -f "$classifier" ]; then

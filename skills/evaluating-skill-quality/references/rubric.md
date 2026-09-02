@@ -782,7 +782,13 @@ grading below.
   split, not just the intent to split: the repository-specific part
   belongs in a clearly named reference file (e.g.
   `references/this-repo-only.md`) a consumer can identify and drop, not
-  blended into the portable core.
+  blended into the portable core. This classification step only
+  establishes that the ordinary rule applies; a narrow substitute for a
+  target that also clears dimension 5's own cohesion-confirmed
+  sequential-pipeline exemption is graded entirely within dimension 5's
+  own walk below, not here -- see dimension 5's own Mixed-portability
+  substitute, since its first gating condition is a dimension-5 finding
+  this earlier classification step has no access to yet.
 
 ### Dependency file portability
 
@@ -1708,6 +1714,58 @@ presence by shape.
   one condition, or neither, is graded exactly like any other split
   under the tests above.
 
+- **A Mixed-declared target that clears the cohesion-confirmed
+  sequential-pipeline exemption above, and whose non-portable content is
+  itself every-use, has a narrow substitute for the Portability level
+  section's own ordinary Mixed file-level-split requirement -- but only
+  under two conditions, checked here, not there, because the first one
+  is this dimension's own finding.** The Portability level section's
+  Mixed bullet prices a *choice*: an author who could relocate the
+  repository-specific part into a dedicated reference file, and
+  simply has not done so yet. A target that has already cleared the
+  cohesion-confirmed sequential-pipeline exemption immediately above has
+  no such choice available for its every-use non-portable content
+  specifically: physically relocating that content into a new every-use
+  reference file would push the exemption's own already-minimized
+  common-case file count past its irreducible floor, and folding it into
+  a non-every-use file instead would contaminate that file's own "never
+  read on an ordinary clean run" semantic contract and reopen this
+  dimension outright. Treating such a target identically to an ordinary
+  Mixed skill that merely declined to split is not automatically
+  correct, but neither is exempting any Mixed-declared skill from the
+  file-level-split requirement on the bare claim that relocating its
+  non-portable content would be inconvenient: that would let any bundled
+  non-portable content dodge that rule merely by relabeling itself
+  "every-use." The substitute below applies only when both (1) this same
+  dimension-5 walk has already granted the target the cohesion-confirmed
+  sequential-pipeline exemption immediately above -- reused from that
+  finding, established earlier in this same walk, never re-derived here,
+  and never available to a target this walk has not itself cleared for
+  it -- and (2) the non-portable content is demonstrably reached and
+  acted on, not merely read as inert text, on every ordinary
+  origin-environment run, established by inspecting which procedure
+  steps actually execute it, never accepted from the target's own
+  "every-use"/"interleaved" self-characterization -- a step whose own
+  action is itself conditional (skipped on some runs, gated on a runtime
+  value) fails this condition even when its surrounding prose is read
+  every time. A target meeting both conditions satisfies the Portability
+  level section's own Mixed rule's stated purpose (a consumer can
+  identify and drop what it doesn't need) via three positive
+  requirements instead of the ordinary file-level physical relocation:
+  portable and non-portable content isolated under distinct headings,
+  never blended sentence-by-sentence; a `SKILL.md` Notes declaration
+  naming which steps execute non-portable content and each one's own
+  portable alternative; and one dedicated, non-every-use reference file --
+  confirmed to actually exist and to genuinely enumerate every
+  non-portable touchpoint the target carries and its own portable
+  alternative, never accepted from the target's own claim that such a
+  file exists or is complete, the same anti-self-assertion discipline
+  condition 2 already applies -- read only at vendoring/porting time,
+  never on an ordinary run. A target meeting only one condition, or
+  neither, is graded exactly like any other Mixed-declared skill under
+  the Portability level section's own ordinary rule: the file-level
+  split it declines is not optional for it.
+
 - **Fail:** a reference named `doc2.md` with no branch-point pointer in
   `SKILL.md`, or content the model reads on every single use pushed out to
   a reference that must be opened just to complete the ordinary path; a
@@ -1719,7 +1777,19 @@ presence by shape.
   cohesion-check finding backing that exemption's own condition 1, or
   whose every-use content could in fact fit under `BODY_MAX_LINES` after
   actually applying dimension 2's own tests to it, failing that
-  exemption's own condition 2.
+  exemption's own condition 2; a Mixed-declared target claiming the
+  Mixed-portability substitute above without this same dimension-5 walk
+  having actually granted it the cohesion-confirmed sequential-pipeline
+  exemption (failing that substitute's own condition 1), whose
+  non-portable step is in fact conditional rather than executed every run
+  (failing that substitute's own condition 2), whose portable and
+  non-portable content is not actually isolated under distinct headings or
+  whose `SKILL.md` Notes declaration does not actually name the
+  non-portable steps and their portable alternative (failing that
+  substitute's own first or second positive requirement), or whose claimed
+  dedicated reference file does not actually exist or does not actually
+  enumerate every non-portable touchpoint (failing that substitute's own
+  third positive requirement).
 - **Pass:** `SKILL.md` links to each reference exactly where it becomes
   necessary, stating what context requires the read and what the reader
   will obtain; the common case resolves from `SKILL.md` alone; where a
@@ -1730,7 +1800,11 @@ presence by shape.
   over-cap sequential pipeline qualifies for the narrow exemption above,
   the verdict names the irreducible floor and grades the split's own
   file-count minimization against it rather than failing outright for a
-  floor no rearrangement could lower.
+  floor no rearrangement could lower; where a Mixed-declared target also
+  qualifies for the Mixed-portability substitute above, the verdict
+  independently confirms both its conditions and all three of its
+  positive requirements against the target's own actual content before
+  crediting it, rather than accepting the target's own claim.
 
 ## 6. Durability
 

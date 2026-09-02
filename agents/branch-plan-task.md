@@ -34,3 +34,19 @@ prose instruction -- there is no deterministic backstop of any kind for
 it in this deployment mode, unlike the project-local variant's embedded
 `SubagentStop` hook -- see the reference cited above for the full, honest
 accounting of what is and is not structurally enforced here.
+
+**If you are running inside a git worktree** (design doc Decision 13,
+`isolation: 'worktree'`), before your own first Bash call, confirm this
+worktree's own fork point still matches the shared plan branch's current
+tip: `git merge-base HEAD <shared-branch>` must equal `git rev-parse
+<shared-branch>` (issue #1508). If it does not, the shared branch has
+advanced past this worktree's own base since it was created -- stop and
+say so rather than continuing from a stale base. The project-local
+variant backs this same check with a deterministic `PreToolUse` hook
+(`gitapex_check_task_worktree_base.py`, chained into `check_task_bash_
+safety.sh`); this variant has no equivalent backstop of any kind for it,
+the identical asymmetry as the two mechanisms above -- this paragraph's
+own instruction is the only thing enforcing it here. Skip this check
+entirely if you are not running inside a worktree at all (the sequential-
+fallback dispatch, no wave) -- there is no shared-branch fork point to
+compare against in that case.

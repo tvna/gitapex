@@ -80,7 +80,9 @@
       "dispatch-self-guard-boundary-selection.yaml",
       "structural-identifier-portability-selection.yaml",
       "durability-stale-reference-annotation-selection.yaml",
-      "sequential-pipeline-body-cap-exception-selection.yaml"
+      "sequential-pipeline-body-cap-exception-selection.yaml",
+      "mixed-portability-dimension5-substitute-selection.yaml",
+      "mixed-portability-dimension5-substitute-false-positive-selection.yaml"
     ],
     "test": [
       "guardrail.yaml",
@@ -103,7 +105,7 @@
       "context-economy-test.yaml"
     ]
   },
-  "partition": "35:42:18",
+  "partition": "35:44:18",
   "split_arithmetic_exclusions": [
     "dispatch-required-negative-control.yaml"
   ]

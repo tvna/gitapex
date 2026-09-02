@@ -206,6 +206,87 @@ if [ "$base_is_explicit" = "no" ]; then
 fi
 
 if [ "$base_is_explicit" = "yes" ] && [ -n "$repo_root" ] && [ -f "$full_gate" ] && [ -f "$flag_module" ]; then
+  # Issue #1566, closes #1547(a): before attempting the bare `python3
+  # "$full_gate"` invocation below, confirm every third-party package the
+  # skill-audit-disclosure gate's own .gitapex/ssot.json registry entry
+  # declares under preconditions.requires_python_packages is actually
+  # importable by that same python3. Without this, a missing dependency
+  # (e.g. pydantic not installed) made $full_gate crash with an
+  # ImportError -- no recognizable FAIL: line -- which the existing
+  # fall-through below silently downgrades to a *warning* and degrades to
+  # tier 2's weaker, SKILL.md-only check, never telling the caller a
+  # dependency was missing at all. The required package list is read from
+  # the registry itself (never hardcoded) so a future added/removed
+  # requirement is picked up automatically.
+  #
+  # Read via a base64-encoded jq stream into a bash array, the same
+  # pattern hooks/check-bash-safety.sh already uses for a JSON string
+  # array (issue #1375) -- a package name containing a shell-hazardous
+  # byte cannot corrupt this loop's own field splitting.
+  ssot_json="${repo_root}/.gitapex/ssot.json"
+  precondition_script="$script_dir/gitapex_check_python_precondition.py"
+  required_packages=()
+  while IFS= read -r encoded_pkg; do
+    [ -z "$encoded_pkg" ] && continue
+    required_packages+=("$(printf '%s' "$encoded_pkg" | base64 -d)")
+  done < <(jq -r '
+      (.gates // [])
+      | map(select(.id == "skill-audit-disclosure"))
+      | (.[0].preconditions.requires_python_packages // [])[]
+      | @base64
+    ' "$ssot_json" 2>/dev/null)
+
+  # Fail open (skip this check entirely, fall straight into the existing
+  # tier-1 invocation below) when the registry cannot be read, declares no
+  # required packages for this gate, or this checker's own sibling script
+  # is missing (a corrupted local checkout) -- none of those is the
+  # dependency-missing cause this check exists to catch, and every OTHER
+  # tier-1 failure cause must keep falling through to tier 2 unchanged, as
+  # documented above.
+  if [ "${#required_packages[@]}" -gt 0 ] && [ -f "$precondition_script" ]; then
+    # `--` before the array expansion: a registry-declared package name
+    # that happens to look like a flag (e.g. a value equal to `--help` or
+    # starting with `-`) must be treated as inert data, never as argparse
+    # option syntax -- found by review-persona's own step-6 screening of
+    # this task's diff. Without it, such a name could make the
+    # precondition script exit 0 (its own --help path) or reject with a
+    # usage error, either of which this block would otherwise read as "no
+    # missing packages" and silently skip the new deny path.
+    precondition_json=$(python3 "$precondition_script" -- "${required_packages[@]}" 2>/dev/null) || true
+    # The filter must PROVE the output is the expected `{"missing": [...]}`
+    # object, not merely fail to contradict it. Found by issue #1566's own
+    # step-8 adversarial review: the previous `jq -r '.missing // [] |
+    # join(", ")'` returned empty output and exit 0 for an EMPTY stdout
+    # (jq's documented behavior when its input contains no values), which
+    # is exactly what a crashed, missing-interpreter, or syntactically
+    # broken precondition script produces. That made `missing_packages`
+    # empty, skipped the Warning below, and skipped the deny -- a
+    # completely silent no-op of this whole block, i.e. the same silent
+    # degrade to tier 2 that #1547(a) exists to eliminate, reintroduced
+    # through this check's own failure path. `-e` plus the explicit
+    # type check turns every one of those shapes (empty input, invalid
+    # JSON, a bare `null`/array, an object without a `missing` array) into
+    # a non-zero exit that reaches the Warning instead.
+    if ! missing_packages=$(printf '%s' "$precondition_json" | jq -er '
+        if type == "object" and (.missing | type) == "array"
+        then (.missing | join(", "))
+        else error("unexpected precondition output shape")
+        end
+      ' 2>/dev/null); then
+      # The precondition subprocess produced no parseable JSON (crashed,
+      # timed out, or was rejected by argparse) -- matching this file's
+      # own established convention of an explicit Warning: line on every
+      # other inconclusive fallback, rather than a silent skip. CI's
+      # skill-audit-gate.yml remains the authoritative backstop
+      # regardless, same as every other local-pre-check gap in this file.
+      echo "Warning: hooks/check-pr-skill-audit-disclosure.sh could not parse gitapex_check_python_precondition.py's own output; skipping the dependency-precondition pre-check (CI's skill-audit-gate.yml remains authoritative)." >&2
+      missing_packages=""
+    fi
+    if [ -n "$missing_packages" ]; then
+      deny "Blocked by hooks/check-pr-skill-audit-disclosure.sh: this gate's own local pre-check (gitapex_gate_skill_audit_disclosure.py) requires the following Python package(s), which python3 cannot import: ${missing_packages}. Run 'uv sync --group dev' to install them, then re-invoke this operation (create/update the pull request again)."
+    fi
+  fi
+
   # Found by code review (PR #1213): an unguarded `body_file=$(mktemp)`
   # crashes the whole script under `set -e` (e.g. an unwritable/full
   # /tmp), past every deny() and past this block's own fall-through-to-

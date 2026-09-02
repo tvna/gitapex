@@ -55,6 +55,35 @@ runner, because it converts a real gap into a green verdict. The aggregate
 exit code is non-zero if any single wired gate fails for any of those
 reasons.
 
+**Environment/repo-state preconditions are auto-established before any
+wired gate runs (issue #1566, consolidating #1546/#1489).** A gate's own
+``preconditions.requires_full_history: true`` (today: only
+``harden-checkout-pin-drift``, which resolves a pinned action's true
+last-touching commit via ``git log`` -- a shallow clone's boundary commit
+has no locally-known parent, so that gate's own ``current_action_sha``
+raises ``RuntimeError`` on one) used to surface only reactively, as one
+gate's own confusing mid-run error, on whichever contributor or CI job
+happened to run this preflight from a shallow checkout first. Before
+running any wired gate at all, this module now checks whether *any* wired
+gate declares that precondition -- reading the registry's raw gate objects
+directly, never a hardcoded gate id, so a second gate declaring the same
+precondition later is picked up automatically -- and, only if so, checks
+whether ``args.repo_root`` is actually a shallow clone
+(:func:`_gitapex_preconditions.is_shallow_clone`) and, only if it is,
+fetches full history once (:func:`_gitapex_preconditions.ensure_full_history`,
+``git fetch --unshallow``) before any wired gate's own subprocess starts.
+A wired set where no gate declares the precondition invokes neither
+function at all -- no new subprocess on the common case. A repo that
+already reports non-shallow skips the fetch specifically (no wasted
+network call, #1546's own disclosed residual risk) but the cheap, local
+shallow-repository probe itself still runs whenever a wired gate needs the
+guarantee, since that is the only way to know the fetch can be skipped. A
+failure to establish this precondition -- the probe itself could not run,
+or the fetch failed -- aborts with one clear top-line message on stderr
+and exit 1 before any wired gate runs, rather than letting the failure
+surface only via one gate's own error text partway through the run
+(#1489's own explicit ask).
+
 **Known limits, disclosed rather than solved:**
 
 - **A gate that needs piped input, whose ``local_stdin`` is deleted, still
@@ -103,7 +132,7 @@ reasons.
   the wall clock; parallelism was not added because interleaved failure
   output from eight concurrent subprocesses is the thing this runner exists
   to avoid.
-- ``local_stdin`` producers that need ``origin/main`` to exist locally
+- ``local_stdin`` producers (each run via ``uv run``) that need ``origin/main`` to exist locally
   (today: ``exception-handler-gap``, ``stdlib-only-claim-drift``, and
   ``detection-logic-property-coverage`` -- every gate whose ``local_stdin``
   computes a merge-base diff, not just the first one added) no longer read
@@ -163,6 +192,7 @@ from dataclasses import dataclass
 from typing import TextIO
 
 import _gitapex_argv_safety
+import _gitapex_preconditions
 from _gitapex_schema_validation import load_json_or_raise
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -198,10 +228,14 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # machine can exceed this and report a timeout FAIL on a gate CI would pass.
 # `--timeout-seconds` raises it for that case.
 #
-# Issue #985 added `behind-base`, this runner's first gate that makes a
-# network call (it fetches `origin/main` before comparing); issue #1345
-# added three more, each fetching only when the ref is missing rather than
-# unconditionally on every run. Measured
+# Issue #985 added `behind-base`, at the time this runner's first gate that
+# makes a network call (it fetches `origin/main` before comparing); issue
+# #1345 added three more, each fetching only when the ref is missing rather
+# than unconditionally on every run. Issue #1566 later added a network call
+# that can run earlier still: `ensure_wired_gate_preconditions`'s one-time
+# shallow-clone auto-unshallow fetch, before any wired gate at all, on the
+# (uncommon locally) case of a shallow checkout -- see its own docstring.
+# Measured
 # directly rather than assumed: three warm standalone runs of that one
 # gate averaged under a second (~0.6 s), and the ~8-9 s combined figure
 # above is a real but small addition against a ceiling roughly two orders
@@ -222,12 +256,18 @@ class PreflightRegistryError(Exception):
 
 @dataclass(frozen=True)
 class LocalCheck:
-    """One wired gate: the registry id it came from, the argv to run, and
-    optionally the argv whose stdout feeds its standard input."""
+    """One wired gate: the registry id it came from, the argv to run,
+    optionally the argv whose stdout feeds its standard input, and whether
+    its own registry entry declares ``preconditions.requires_full_history``
+    (issue #1566) -- carried here rather than re-read from the registry a
+    second time, since ``load_local_checks`` already parses each gate's
+    raw object once and this is exactly the same boundary that shapes
+    every other field on this dataclass."""
 
     gate_id: str
     argv: tuple[str, ...]
     stdin_argv: tuple[str, ...] | None = None
+    requires_full_history: bool = False
 
 
 @dataclass(frozen=True)
@@ -310,14 +350,105 @@ def load_local_checks(ssot_path: pathlib.Path = SSOT_PATH) -> list[LocalCheck]:
         if not isinstance(gate_id, str) or not gate_id:
             raise PreflightRegistryError(f"{ssot_path}: a local-plane gate has no usable 'id': {gate!r}")
         stdin_raw = gate.get("local_stdin")
+        preconditions = gate.get("preconditions")
+        # Lenient by design, matching this loop's own treatment of a
+        # malformed `planes`: a `preconditions` shaped wrong is
+        # `ssot-schema-drift`'s own finding to report (it is one of the
+        # wired gates), not a reason for this runner to refuse to run at
+        # all. Only an exact `True` counts -- absent, `None`, or any other
+        # value leaves this gate's own precondition un-declared.
+        requires_full_history = isinstance(preconditions, dict) and preconditions.get("requires_full_history") is True
         check = LocalCheck(
             gate_id=gate_id,
             argv=_argv_or_raise(gate_id, "local_invocation", gate.get("local_invocation")),
             stdin_argv=None if stdin_raw is None else _argv_or_raise(gate_id, "local_stdin", stdin_raw),
+            requires_full_history=requires_full_history,
         )
         _refuse_unsafe_argv(check)
         checks.append(check)
     return sorted(checks, key=lambda check: check.gate_id)
+
+
+def ensure_wired_gate_preconditions(checks: list[LocalCheck], repo_root: pathlib.Path) -> int | None:
+    """Establish, once, whatever environment/repo-state precondition the
+    wired set actually needs -- before any wired gate's own subprocess
+    starts (issue #1566, consolidating #1546/#1489). Returns ``None`` when
+    it is safe to proceed to ``run_checks``; returns an exit code (already
+    printed to stderr) when establishing the precondition itself failed and
+    the whole run must abort before any gate runs.
+
+    Invokes neither :func:`_gitapex_preconditions.is_shallow_clone` nor
+    :func:`_gitapex_preconditions.ensure_full_history` at all when no
+    ``check`` in ``checks`` declares ``requires_full_history`` -- no new
+    subprocess on a wired set that never needed this. When at least one
+    does, the cheap local probe always runs (there is no other way to know
+    whether the fetch can be skipped), but the fetch itself -- the only
+    network call this function can make -- runs only when that probe
+    confirms the repo actually is shallow (#1546's own disclosed residual
+    risk: no wasted network call on the ordinary, already-full-history
+    case).
+
+    **A zero exit from the fetch is never taken as proof of full
+    history.** ``git fetch --unshallow`` exits 0, with empty stderr, and
+    leaves the repository STILL shallow when ``origin`` is itself a
+    shallow clone -- git propagates the source's own shallow boundary,
+    deepens as far as the source can offer, and reports success
+    (live-verified during issue #1566's own step-8 adversarial review, not
+    assumed; pinned in ``tests/test__gitapex_preconditions.py``). Without
+    the re-probe below, that case returned "safe to proceed" and the
+    ``requires_full_history`` gate then failed reactively, mid-run, with
+    its own confusing error -- precisely the outcome #1489 asked to
+    replace with one clean top-line abort. This is the same "never trust
+    the fetch's exit code alone" discipline ``_gitapex_base_ref.py``
+    already establishes for its sibling
+    ``fetch_destination_refspec``/``peeled_ref_exists`` pair, where the
+    post-fetch verification is likewise the caller's job, not the fetch
+    helper's. The re-probe runs only on the path that actually fetched, so
+    the ordinary already-full-history run still makes exactly one git
+    call."""
+    if not any(check.requires_full_history for check in checks):
+        return None
+    try:
+        shallow = _gitapex_preconditions.is_shallow_clone(repo_root)
+    except _gitapex_preconditions.PreconditionsError as error:
+        print(
+            f"error: a wired gate needs full git history, but could not check whether "
+            f"{repo_root} is a shallow clone: {error}",
+            file=sys.stderr,
+        )
+        return 1
+    if not shallow:
+        return None
+    print(f"local preflight: {repo_root} is a shallow clone and a wired gate needs full history -- fetching...")
+    try:
+        _gitapex_preconditions.ensure_full_history(repo_root)
+    except _gitapex_preconditions.PreconditionsError as error:
+        print(
+            f"error: a wired gate needs full git history, and {repo_root} is a shallow clone "
+            f"that could not be given full history: {error}",
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        still_shallow = _gitapex_preconditions.is_shallow_clone(repo_root)
+    except _gitapex_preconditions.PreconditionsError as error:
+        print(
+            f"error: a wired gate needs full git history, and could not confirm whether "
+            f"{repo_root} is still a shallow clone after the unshallow fetch: {error}",
+            file=sys.stderr,
+        )
+        return 1
+    if still_shallow:
+        print(
+            f"error: a wired gate needs full git history; 'git fetch --unshallow' reported success "
+            f"in {repo_root}, but the repository still reports as shallow. The most common cause is "
+            f"an 'origin' that is itself a shallow clone, whose own shallow boundary the fetch "
+            f"cannot reach past. Re-clone with full history (or fetch from a full-history remote) "
+            f"before running the local preflight.",
+            file=sys.stderr,
+        )
+        return 1
+    return None
 
 
 def _run(
@@ -444,10 +575,12 @@ def format_report(results: list[CheckResult]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry point: discover the wired set, run it, print the aggregate
-    verdict, and return 0 only when every wired gate passed. A registry that
-    cannot be read, or that carries an unsafe argv, exits 1 without running
-    anything."""
+    """CLI entry point: discover the wired set, establish any precondition
+    it needs, run it, print the aggregate verdict, and return 0 only when
+    every wired gate passed. A registry that cannot be read, or that
+    carries an unsafe argv, exits 1 without running anything; a wired
+    precondition (issue #1566) that could not be established exits 1
+    before any wired gate runs."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "--ssot-path",
@@ -498,6 +631,14 @@ def main(argv: list[str] | None = None) -> int:
             if check.stdin_argv is not None:
                 print(f"{check.gate_id}: stdin < {' '.join(check.stdin_argv)}")
         return 0
+
+    # Before any wired gate's own subprocess starts, not after one already
+    # failed reactively (issue #1566, consolidating #1546/#1489) -- see
+    # ensure_wired_gate_preconditions's own docstring for exactly what it
+    # does and does not invoke.
+    precondition_exit_code = ensure_wired_gate_preconditions(checks, args.repo_root)
+    if precondition_exit_code is not None:
+        return precondition_exit_code
 
     print(f"local preflight: running {len(checks)} wired gate(s)...")
     results = run_checks(checks, args.repo_root, args.timeout_seconds, progress=sys.stderr)
