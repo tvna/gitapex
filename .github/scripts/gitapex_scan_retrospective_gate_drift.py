@@ -313,6 +313,22 @@ def label_exists(
     return True
 
 
+def format_missing_label_error(label: str, owner: str, repo: str) -> str:
+    """Shared wording for the label-liveness guard's own failure message --
+    both this script's `main` and `gitapex_scan_gate_proposal_consolidation_drift.py`'s
+    `main` call `label_exists` and print the identical text on a `False`
+    result, so it lives here once rather than as two independently
+    maintained copies (found by an adversarial review pass against the
+    sibling script's own diff; unlike `_CONSTRAINT_HINTS`/`_is_blank`,
+    this is ordinary shared logic, not this repository's own deliberate
+    per-script CLI-boilerplate convention)."""
+    return (
+        f"error: label '{label}' does not exist on {owner}/{repo} -- "
+        "cannot tell a genuinely empty backlog apart from a renamed/deleted label; "
+        "create the label (or fix --label) before this check can run"
+    )
+
+
 def list_labelled_issue_records(
     owner: str,
     repo: str,
@@ -580,12 +596,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if not label_exists(args.owner, args.repo, args.label, token):
-            print(
-                f"error: label '{args.label}' does not exist on {args.owner}/{args.repo} -- "
-                "cannot tell a genuinely empty backlog apart from a renamed/deleted label; "
-                "create the label (or fix --label) before this check can run",
-                file=sys.stderr,
-            )
+            print(format_missing_label_error(args.label, args.owner, args.repo), file=sys.stderr)
             return 1
         open_records = list_labelled_issue_records(args.owner, args.repo, args.label, token, state="open")
         closed_records = list_labelled_issue_records(args.owner, args.repo, args.label, token, state="closed")

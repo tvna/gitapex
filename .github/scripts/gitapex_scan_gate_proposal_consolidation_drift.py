@@ -204,7 +204,7 @@ def find_consolidation_violations(
         violating = find_unverified_consolidation_claims(
             umbrella_number,
             referenced_numbers,
-            {n: referenced_states.get(n) for n in referenced_numbers},
+            referenced_states,
         )
         if violating:
             violations_by_umbrella[umbrella_number] = violating
@@ -361,12 +361,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if not gate_drift.label_exists(args.owner, args.repo, args.label, token):
-            print(
-                f"error: label '{args.label}' does not exist on {args.owner}/{args.repo} -- "
-                "cannot tell a genuinely empty backlog apart from a renamed/deleted label; "
-                "create the label (or fix --label) before this check can run",
-                file=sys.stderr,
-            )
+            print(gate_drift.format_missing_label_error(args.label, args.owner, args.repo), file=sys.stderr)
             return 1
         open_records = gate_drift.list_labelled_issue_records(args.owner, args.repo, args.label, token, state="open")
 
