@@ -1,6 +1,7 @@
 # drafting-a-pr-to-merge: archive prior Step 8 round to a PR comment before overwrite
 
 Date: 2026-09-01
+Refs #1649
 
 ## Context
 
@@ -88,18 +89,10 @@ currently exists in the PR body, matched on the exact heading string
   (archived -- round ending at commit <old head SHA>)`), before
   proceeding to overwrite the body section with the new round's verdict.
 
-**What does not change**:
-- The verbatim-transcription choice was deliberate: re-summarizing the
-  archived content risks dropping or misstating a finding, and the
-  content was already validated and preflighted when it was first
-  recorded -- there is nothing left to re-derive.
-- The new body section carries no reference (link or mention) back to
-  the archive comment. The body stays exactly what it is today --
-  the current round's result only -- with no added cross-reference
-  machinery. A reader who wants round history reads the PR's comment
-  list, the same way any other PR history is read.
-- Step 7's `"dirty"` comment rule is untouched and stays a separate,
-  unconditional rule for a different purpose.
+See Non-goals below for what this decision deliberately leaves unchanged
+(the verbatim-transcription choice, the absence of a body-to-comment
+cross-reference, and Step 7's own untouched `"dirty"` comment rule) --
+stated once there rather than restated here.
 
 ## Skill content changes
 

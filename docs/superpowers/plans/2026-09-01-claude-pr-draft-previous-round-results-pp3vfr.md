@@ -1,6 +1,7 @@
 # Branch Plan: claude/pr-draft-previous-round-results-pp3vfr
 
 Source issue: https://github.com/tvna/gitapex/issues/1649
+Design doc: `docs/superpowers/specs/2026-09-01-drafting-a-pr-to-merge-round-archive-comment-design.md`
 
 ## Task list (1 task, 1 wave -- single-task degenerate case)
 
@@ -8,7 +9,9 @@ Source issue: https://github.com/tvna/gitapex/issues/1649
 
 **Owns:**
 - `skills/drafting-a-pr-to-merge/SKILL.md`
-- `evals/drafting-a-pr-to-merge/tasks/*.yaml` (new fixtures only)
+- `evals/drafting-a-pr-to-merge/tasks/*.yaml` -- both new fixtures and a
+  Check-E-driven `exercises:` field addition to pre-existing fixtures
+  whose cited Stop-boundary bullet's own text shifts
 
 **File-ownership / interface-dependency edges:** none -- single task,
 no sibling to conflict or sequence against.
@@ -29,15 +32,21 @@ Acceptance Criteria Map):**
 - `python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py`
   and `gitapex_scan_execution_requirements_drift.py` clean against the
   edited `SKILL.md`.
-- Two new `evals/drafting-a-pr-to-merge/tasks/*.yaml` fixtures:
-  (a) Step 8's first run on a PR (no existing verdict section) -- assert
-  no archive comment is posted; (b) Step 8's second run (confirmed
-  finding -> fix -> re-clean -> Step 8 re-run) -- assert the archive
-  comment is posted with the prior round's exact content before the
-  body section is overwritten, and the new body carries no reference
-  back to it.
+- New `evals/drafting-a-pr-to-merge/tasks/*.yaml` fixtures: (a) Step 8's
+  first run on a PR (no existing verdict section) -- assert no archive
+  comment is posted; (b) Step 8's second run (confirmed finding -> fix ->
+  re-clean -> Step 8 re-run) -- assert the archive comment is posted
+  with the prior round's exact content before the body section is
+  overwritten, and the new body carries no reference back to it. Design
+  review may add further fixtures beyond these two if it finds the
+  Mechanism has more branches than this table's rows anticipate -- see
+  the design doc's own Verification section for the final, authoritative
+  fixture count.
 - Existing `evals/drafting-a-pr-to-merge/tasks/conflict-comment.yaml`
-  (Step 7 `"dirty"` regression) still passes unchanged.
+  (Step 7 `"dirty"` regression) still passes -- its own assertions are
+  unchanged, though it (like every other pre-existing fixture citing a
+  Stop-boundary bullet whose text shifts) gains a new `exercises:` field
+  per this task's own `Owns:` scope above.
 - `gitapex_gate_skill_branch_fixture_coverage.py`'s delta-scoped check
   passes (new Stop-boundary bullet has a citing fixture).
 
