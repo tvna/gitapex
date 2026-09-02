@@ -55,7 +55,10 @@ missed defeat-case here ships a checker script that looks tested but
 silently does not catch what it claims to.
 
 1. **Refactor/simplify pass**, over the full accumulated diff (every
-   task's own diff combined), not per-task. A fresh subagent dispatch,
+   task's own diff combined), not per-task. A fresh subagent dispatch
+   (`agentType: 'branch-plan-task'` -- this agent type's own second
+   sanctioned call site, alongside Step 6's per-task dispatch; see
+   `agents/branch-plan-task.md`'s own "Sanctioned call sites" section),
    distinct from the task agents that wrote the code -- the same agent
    grading its own homework is a weaker check than an independent one.
    This pass finds and fixes reuse, redundancy, and dead code that
@@ -63,9 +66,19 @@ silently does not catch what it claims to.
    behavior -- any behavior-affecting finding is out of this sub-step's
    scope and routes to sub-step 2 instead.
 2. **Adversarial code review**, a separate fresh subagent dispatch (not
-   the refactor pass's own subagent, same independence reason) reviewing
-   the full accumulated diff for correctness bugs. Findings -> verify
-   each -> fix confirmed ones -> validate the fix.
+   the refactor pass's own subagent, same independence reason;
+   `subagent_type: 'review-persona'` -- that agent's own 4th sanctioned
+   call site, see `agents/review-persona.md`'s own "Sanctioned call
+   sites" section) reviewing the full accumulated diff for correctness
+   bugs, and returning findings only. `review-persona`'s own `tools:
+   Read, Grep, Glob` allow-list means this dispatch cannot itself verify
+   a finding against a live check, apply a fix, or validate one -- it is
+   read-only by construction, not merely by convention. That work
+   happens outside this dispatch: verify each returned finding, fix the
+   confirmed ones, and validate the fix, either in the calling main
+   thread or dispatched to the refactor pass's own subagent (sub-step 1
+   above) for the actual file edit -- never inside the review dispatch
+   itself, which has no tool that could perform any of the three.
 
 **Deterministic gate/check script scrutiny.** When the diff adds,
 extends, *or narrows* a deterministic gate or check script -- a CI

@@ -234,12 +234,13 @@ first, not skimmed.
    dispatch is a deadlock, not a harmless leftover. Full dispatch table:
    [domain events and failure-handling
    reference](references/domain-events-and-failure-handling.md#failure-dispatch-step-7).
-8. **Refactor and adversarially review the accumulated diff** (Decision
-   12, mandatory, non-skippable). Two separate fresh subagent dispatches
-   over the full diff -- a refactor/simplify pass (behavior-preserving
-   only), then an independent adversarial code review -- findings
-   verified and fixed before proceeding. The independent adversarial code
-   review also specifically re-checks [Migrate Callers Then Delete Legacy
+8. **Refactor and adversarially review the accumulated diff** (Decision 12, mandatory,
+   non-skippable). Two separate fresh subagent dispatches over the full diff -- a
+   refactor/simplify pass (behavior-preserving only, `agentType: 'branch-plan-task'`), then
+   an independent adversarial code review (`subagent_type: 'review-persona'`) -- findings
+   verified and fixed outside it (main thread or the refactor pass's own subagent), not
+   inside it, before proceeding. The independent adversarial code review also specifically
+   re-checks [Migrate Callers Then Delete Legacy
    APIs](references/code-quality-principles.md#4-migrate-callers-then-delete-legacy-apis),
    confirming a caller migration begun by one task actually completed
    cleanly rather than being left half-done by another -- a
