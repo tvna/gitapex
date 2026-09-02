@@ -47,6 +47,21 @@ def test_is_importable_probes_in_a_subprocess_not_this_process() -> None:
     assert _FAKE_MODULE not in sys.modules
 
 
+def test_is_importable_false_and_warns_when_the_interpreter_cannot_launch(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The `python` executable itself may not be launchable at all (not on
+    PATH, not executable) -- distinct from the module simply being
+    missing. `subprocess.run` raises OSError in that case; this must be
+    caught and treated as a fail-closed "cannot confirm importable"
+    signal (False), with a warning naming what could not be launched, not
+    an uncaught exception escaping this checker."""
+    assert checker.is_importable("json", python="/nonexistent/not-a-real-interpreter") is False
+    captured = capsys.readouterr()
+    assert "could not launch" in captured.err
+    assert "/nonexistent/not-a-real-interpreter" in captured.err
+
+
 # --- find_missing_modules() ---
 
 
