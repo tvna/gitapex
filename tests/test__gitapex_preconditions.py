@@ -7,7 +7,9 @@ tmp dir for the shallow-clone fixtures -- the shape this module's own
 docstring and the branch plan's Proof method both name -- rather than
 cloning this real repository (that heavier, more direct reproduction lives
 in tests/test_gitapex_gate_local_preflight.py, alongside the real
-harden-checkout-pin-drift-shaped fixture gate).
+harden-checkout-pin-drift-shaped fixture gate). That fixture chain lives in
+conftest.py, shared with the runner-level suite that needs the identical
+shape.
 """
 
 from __future__ import annotations
@@ -18,47 +20,13 @@ import subprocess
 
 import _gitapex_preconditions
 import pytest
-
-
-def _run(args: list[str], cwd: pathlib.Path) -> None:
-    subprocess.run(args, cwd=cwd, check=True, capture_output=True, text=True)
-
-
-def _init_repo(root: pathlib.Path, *, branch: str = "main") -> pathlib.Path:
-    root.mkdir(parents=True, exist_ok=True)
-    _run(["git", "init", "-q", "--initial-branch", branch], root)
-    _run(["git", "config", "user.email", "test@example.com"], root)
-    _run(["git", "config", "user.name", "Test"], root)
-    return root
-
-
-def _commit(root: pathlib.Path, name: str, message: str) -> None:
-    (root / name).write_text(f"{name}\n", encoding="utf-8")
-    _run(["git", "add", "--", name], root)
-    _run(["git", "commit", "-q", "-m", message], root)
-
-
-def _bare_origin_with_two_commits(tmp_path: pathlib.Path) -> pathlib.Path:
-    """A local, non-bare working repo with two commits, then a bare mirror
-    of it -- `git clone --depth 1` needs a real remote (a `file://` bare
-    repo works and needs no network) to produce an actual shallow clone,
-    rather than the no-op shallow-ness a same-filesystem `--depth 1` clone
-    of a *non-bare* repo can produce on some git versions."""
-    working = _init_repo(tmp_path / "working")
-    _commit(working, "a.txt", "first")
-    _commit(working, "b.txt", "second")
-    bare = tmp_path / "origin.git"
-    _run(["git", "clone", "-q", "--bare", str(working), str(bare)], tmp_path)
-    return bare
-
-
-def _shallow_clone(origin: pathlib.Path, dest: pathlib.Path) -> pathlib.Path:
-    _run(["git", "clone", "-q", "--depth", "1", f"file://{origin}", str(dest)], dest.parent)
-    return dest
+from conftest import bare_origin_with_two_commits, commit_file, init_git_repo, run_git, shallow_clone
 
 
 def _full_clone(origin: pathlib.Path, dest: pathlib.Path) -> pathlib.Path:
-    _run(["git", "clone", "-q", f"file://{origin}", str(dest)], dest.parent)
+    """An ordinary, full-history clone -- the non-shallow counterpart the
+    shared fixtures have no other caller for, so it stays local here."""
+    run_git(["git", "clone", "-q", f"file://{origin}", str(dest)], dest.parent)
     return dest
 
 
@@ -68,13 +36,13 @@ def _full_clone(origin: pathlib.Path, dest: pathlib.Path) -> pathlib.Path:
 
 
 def test_is_shallow_clone_is_true_for_a_depth_one_clone(tmp_path: pathlib.Path) -> None:
-    origin = _bare_origin_with_two_commits(tmp_path)
-    shallow = _shallow_clone(origin, tmp_path / "shallow")
+    origin = bare_origin_with_two_commits(tmp_path)
+    shallow = shallow_clone(origin, tmp_path / "shallow")
     assert _gitapex_preconditions.is_shallow_clone(shallow) is True
 
 
 def test_is_shallow_clone_is_false_for_an_ordinary_full_clone(tmp_path: pathlib.Path) -> None:
-    origin = _bare_origin_with_two_commits(tmp_path)
+    origin = bare_origin_with_two_commits(tmp_path)
     full = _full_clone(origin, tmp_path / "full")
     assert _gitapex_preconditions.is_shallow_clone(full) is False
 
@@ -82,8 +50,8 @@ def test_is_shallow_clone_is_false_for_an_ordinary_full_clone(tmp_path: pathlib.
 def test_is_shallow_clone_is_false_for_a_freshly_initialized_repo(tmp_path: pathlib.Path) -> None:
     """A repo with no remote at all is not shallow -- the ordinary local
     development case this precondition mechanism must leave untouched."""
-    repo = _init_repo(tmp_path / "solo")
-    _commit(repo, "a.txt", "first")
+    repo = init_git_repo(tmp_path / "solo")
+    commit_file(repo, "a.txt", "first")
     assert _gitapex_preconditions.is_shallow_clone(repo) is False
 
 
@@ -106,7 +74,7 @@ def test_is_shallow_clone_raises_when_git_cannot_be_run(
     def _no_git(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
         raise OSError("No such file or directory: 'git'")
 
-    monkeypatch.setattr(_gitapex_preconditions.subprocess, "run", _no_git)
+    monkeypatch.setattr(subprocess, "run", _no_git)
     with pytest.raises(_gitapex_preconditions.PreconditionsError, match="cannot run git"):
         _gitapex_preconditions.is_shallow_clone(tmp_path)
 
@@ -115,7 +83,7 @@ def test_is_shallow_clone_raises_on_timeout(tmp_path: pathlib.Path, monkeypatch:
     def _hang(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
         raise subprocess.TimeoutExpired(cmd="git rev-parse --is-shallow-repository", timeout=5)
 
-    monkeypatch.setattr(_gitapex_preconditions.subprocess, "run", _hang)
+    monkeypatch.setattr(subprocess, "run", _hang)
     with pytest.raises(_gitapex_preconditions.PreconditionsError, match="timed out after 5s"):
         _gitapex_preconditions.is_shallow_clone(tmp_path, timeout=5)
 
@@ -126,8 +94,8 @@ def test_is_shallow_clone_raises_on_timeout(tmp_path: pathlib.Path, monkeypatch:
 
 
 def test_ensure_full_history_makes_a_shallow_clone_report_non_shallow(tmp_path: pathlib.Path) -> None:
-    origin = _bare_origin_with_two_commits(tmp_path)
-    shallow = _shallow_clone(origin, tmp_path / "shallow")
+    origin = bare_origin_with_two_commits(tmp_path)
+    shallow = shallow_clone(origin, tmp_path / "shallow")
     assert _gitapex_preconditions.is_shallow_clone(shallow) is True
     _gitapex_preconditions.ensure_full_history(shallow)
     assert _gitapex_preconditions.is_shallow_clone(shallow) is False
@@ -140,8 +108,8 @@ def test_ensure_full_history_raises_naming_the_underlying_git_error_when_origin_
     branch plan's own Proof method names for reproducing an abort. The
     fetch failure text (git's own, naming the missing path) must reach the
     caller, never be swallowed."""
-    origin = _bare_origin_with_two_commits(tmp_path)
-    shallow = _shallow_clone(origin, tmp_path / "shallow")
+    origin = bare_origin_with_two_commits(tmp_path)
+    shallow = shallow_clone(origin, tmp_path / "shallow")
     shutil.rmtree(origin)
     with pytest.raises(_gitapex_preconditions.PreconditionsError, match="git fetch --unshallow failed"):
         _gitapex_preconditions.ensure_full_history(shallow)
@@ -160,7 +128,7 @@ def test_ensure_full_history_raises_when_git_cannot_be_run(
     def _no_git(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
         raise OSError("No such file or directory: 'git'")
 
-    monkeypatch.setattr(_gitapex_preconditions.subprocess, "run", _no_git)
+    monkeypatch.setattr(subprocess, "run", _no_git)
     with pytest.raises(_gitapex_preconditions.PreconditionsError, match="cannot run git"):
         _gitapex_preconditions.ensure_full_history(tmp_path)
 
@@ -169,7 +137,7 @@ def test_ensure_full_history_raises_on_timeout(tmp_path: pathlib.Path, monkeypat
     def _hang(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
         raise subprocess.TimeoutExpired(cmd="git fetch --unshallow", timeout=5)
 
-    monkeypatch.setattr(_gitapex_preconditions.subprocess, "run", _hang)
+    monkeypatch.setattr(subprocess, "run", _hang)
     with pytest.raises(_gitapex_preconditions.PreconditionsError, match="timed out after 5s"):
         _gitapex_preconditions.ensure_full_history(tmp_path, timeout=5)
 

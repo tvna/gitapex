@@ -185,11 +185,15 @@ def _current_branch(cwd: Path) -> str | None:
 def _reflog_created_from(branch: str, cwd: Path) -> str | None:
     """The startpoint name git recorded when BRANCH was created, per its
     own `refs/heads/<branch>` reflog's `"branch: Created from <name>"`
-    entry (searched across every entry, not just the oldest -- see this
-    module's own docstring for why more than one entry can exist by the
-    time this check runs). None when the git call fails or no such entry
-    exists (e.g. BRANCH predates this repository's own reflog, or was
-    never created via a startpoint-naming operation at all).
+    entry. Every reflog line is scanned, not only the last one: `git reflog
+    show` prints newest-first, and every later operation on BRANCH (a
+    `"branch: Reset to <x>"` from a `git branch -f`, an ordinary commit's
+    own entry) pushes the creation entry further down the list -- so a scan
+    that stopped at the first line would resolve nothing for any branch
+    that has been used at all since it was created. None when the git call
+    fails or no such entry exists (e.g. BRANCH predates this repository's
+    own reflog, or was never created via a startpoint-naming operation at
+    all).
 
     Splits OUT on a literal `"\\n"` rather than `str.splitlines()`: git's
     own subprocess text output (via `text=True`) is newline-delimited

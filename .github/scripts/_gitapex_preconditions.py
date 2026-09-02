@@ -36,29 +36,30 @@ close. :func:`is_shallow_clone` therefore raises rather than returning a
 default value on any failure to run or interpret the command.
 
 **A ``.github/scripts/`` file, not a ``hooks/`` one.** This directory's own
-convention (unlike ``hooks/``) allows third-party imports; this module
-needs none, so it stays stdlib-only anyway, but that is a simplicity choice
-here, not a hard constraint the way it is under ``hooks/``.
+convention (unlike ``hooks/``) allows imports beyond the standard library,
+and this module takes one: every ``git`` subprocess call below runs through
+``_gitapex_base_ref.run_git``, the sibling helper this directory already
+shares for exactly that -- its own ``error_cls`` parameter exists so each
+caller keeps raising its own error type (here :class:`PreconditionsError`)
+while the subprocess-layer failure handling lives in one place. A third
+near-identical ``subprocess.run`` wrapper here instead is precisely the
+duplicate-then-drift that helper's own docstring exists to prevent, and
+``GIT_TIMEOUT_SECONDS`` is imported from the same sibling for the same
+reason rather than redefined as a second literal ``60``.
 
-Run via the pytest gate in ``tests/test__gitapex_preconditions.py``; not a
-standalone CLI (no ``main()``), matching ``_gitapex_base_ref.py``'s and
-``_gitapex_argv_safety.py``'s own private-helper shape -- it exists to be
-imported, not invoked directly.
+Reached only through ``uv run --frozen`` -- via
+``gitapex_gate_local_preflight.py``'s own import of it, or the pytest gate
+in ``tests/test__gitapex_preconditions.py`` -- never a bare ``python3``:
+this is not a standalone CLI (no ``main()``), matching
+``_gitapex_base_ref.py``'s and ``_gitapex_argv_safety.py``'s own
+private-helper shape -- it exists to be imported, not invoked directly.
 """
 
 from __future__ import annotations
 
 import pathlib
-import subprocess
 
-# Ceiling for one git subprocess call (the shallow-repository probe, or the
-# unshallow fetch). Matches _gitapex_base_ref.py's own GIT_TIMEOUT_SECONDS
-# value and rationale (generous for a local call or a fetch over an
-# ordinary network, while still failing loudly on a hung connection rather
-# than blocking indefinitely) -- defined locally rather than imported,
-# since this module shares no fetch logic with that one to keep in sync,
-# only the same timeout judgment call.
-GIT_TIMEOUT_SECONDS = 60
+from _gitapex_base_ref import GIT_TIMEOUT_SECONDS, run_git
 
 
 class PreconditionsError(Exception):
@@ -78,24 +79,13 @@ def is_shallow_clone(repo_root: pathlib.Path, *, timeout: int = GIT_TIMEOUT_SECO
     executable, a timeout, or a nonzero exit -- e.g. ``repo_root`` is not a
     git repository) rather than returning ``False`` for any of them: a
     failed check is not evidence of a full-history clone."""
-    try:
-        # S603/S607 waived: a fixed argv list with no shell, `git` resolved
-        # from PATH -- same rationale as every other gate script in this
-        # directory (gitapex_gate_local_preflight.py, _gitapex_base_ref.py).
-        result = subprocess.run(  # noqa: S603
-            ["git", "-C", str(repo_root), "rev-parse", "--is-shallow-repository"],  # noqa: S607
-            capture_output=True,
-            text=True,
-            errors="replace",
-            check=False,
-            timeout=timeout,
-        )
-    except subprocess.TimeoutExpired as error:
-        raise PreconditionsError(
-            f"git rev-parse --is-shallow-repository timed out after {timeout}s in {repo_root}"
-        ) from error
-    except (OSError, ValueError, subprocess.SubprocessError) as error:
-        raise PreconditionsError(f"cannot run git to check shallow-clone status in {repo_root}: {error}") from error
+    result = run_git(
+        repo_root,
+        ["rev-parse", "--is-shallow-repository"],
+        label=f"rev-parse --is-shallow-repository in {repo_root}",
+        timeout=timeout,
+        error_cls=PreconditionsError,
+    )
     if result.returncode != 0:
         raise PreconditionsError(
             f"git rev-parse --is-shallow-repository exited {result.returncode} in {repo_root}: {result.stderr.strip()}"
@@ -109,18 +99,12 @@ def ensure_full_history(repo_root: pathlib.Path, *, timeout: int = GIT_TIMEOUT_S
     any non-zero exit, timeout, or failure to run the subprocess at all --
     never swallowed, so a caller running this before a wired gate can trust
     that a return with no exception means the fetch actually happened."""
-    try:
-        result = subprocess.run(  # noqa: S603
-            ["git", "-C", str(repo_root), "fetch", "--unshallow"],  # noqa: S607
-            capture_output=True,
-            text=True,
-            errors="replace",
-            check=False,
-            timeout=timeout,
-        )
-    except subprocess.TimeoutExpired as error:
-        raise PreconditionsError(f"git fetch --unshallow timed out after {timeout}s in {repo_root}") from error
-    except (OSError, ValueError, subprocess.SubprocessError) as error:
-        raise PreconditionsError(f"cannot run git to fetch full history in {repo_root}: {error}") from error
+    result = run_git(
+        repo_root,
+        ["fetch", "--unshallow"],
+        label=f"fetch --unshallow in {repo_root}",
+        timeout=timeout,
+        error_cls=PreconditionsError,
+    )
     if result.returncode != 0:
         raise PreconditionsError(f"git fetch --unshallow failed in {repo_root}: {result.stderr.strip()}")
