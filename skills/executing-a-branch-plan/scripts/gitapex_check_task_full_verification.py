@@ -73,6 +73,8 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from _gitapex_hook_cwd import resolve_cwd as _resolve_cwd
+
 # Matches .github/workflows/test.yml's own "pytest" job --ignore list
 # (issue #1365) -- see this module's own docstring for why.
 _IGNORED_ORACLE_TESTS = (
@@ -211,22 +213,6 @@ def run_verification(
             )
             return {"decision": "deny", "reason": reason}
     return {"decision": "allow"}
-
-
-def _resolve_cwd(payload: dict[str, object]) -> Path:
-    """The SubagentStop hook payload's own `cwd` field when it names a real
-    directory (the task's own worktree root, per Claude Code's documented
-    hook input schema); this process's own working directory otherwise --
-    matching the empirically-verified fallback
-    check_task_bash_safety.sh's own `${CLAUDE_PROJECT_DIR:-$(pwd)}` uses
-    for the sibling PreToolUse hook (see
-    references/threat-model-and-authorization.md)."""
-    raw = payload.get("cwd")
-    if isinstance(raw, str) and raw:
-        candidate = Path(raw)
-        if candidate.is_dir():
-            return candidate
-    return Path.cwd()
 
 
 def _steps_from_json(raw: str) -> tuple[VerificationStep, ...] | None:

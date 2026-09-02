@@ -228,10 +228,14 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # machine can exceed this and report a timeout FAIL on a gate CI would pass.
 # `--timeout-seconds` raises it for that case.
 #
-# Issue #985 added `behind-base`, this runner's first gate that makes a
-# network call (it fetches `origin/main` before comparing); issue #1345
-# added three more, each fetching only when the ref is missing rather than
-# unconditionally on every run. Measured
+# Issue #985 added `behind-base`, at the time this runner's first gate that
+# makes a network call (it fetches `origin/main` before comparing); issue
+# #1345 added three more, each fetching only when the ref is missing rather
+# than unconditionally on every run. Issue #1566 later added a network call
+# that can run earlier still: `ensure_wired_gate_preconditions`'s one-time
+# shallow-clone auto-unshallow fetch, before any wired gate at all, on the
+# (uncommon locally) case of a shallow checkout -- see its own docstring.
+# Measured
 # directly rather than assumed: three warm standalone runs of that one
 # gate averaged under a second (~0.6 s), and the ~8-9 s combined figure
 # above is a real but small addition against a ceiling roughly two orders

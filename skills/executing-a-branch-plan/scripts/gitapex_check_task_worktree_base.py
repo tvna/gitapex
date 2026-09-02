@@ -161,6 +161,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from _gitapex_hook_cwd import resolve_cwd as _resolve_cwd
+
 # A hang guard, not a budget: every git call this module makes is a plain,
 # local, read-only plumbing command (symbolic-ref, reflog show, rev-parse,
 # merge-base) against a worktree's own already-cloned object store -- none
@@ -357,20 +359,6 @@ def check_worktree_base(cwd: Path) -> dict[str, object]:
         "decision": "allow",
         "reason": f"this worktree's own fork point matches '{candidate}'s current tip ({shared_sha})",
     }
-
-
-def _resolve_cwd(payload: dict[str, object]) -> Path:
-    """The PreToolUse hook payload's own `cwd` field when it names a real
-    directory (the task's own worktree root, per Claude Code's documented
-    hook input schema); this process's own working directory otherwise --
-    matching gitapex_check_task_full_verification.py's own identical
-    helper for its sibling SubagentStop hook."""
-    raw = payload.get("cwd")
-    if isinstance(raw, str) and raw:
-        candidate = Path(raw)
-        if candidate.is_dir():
-            return candidate
-    return Path.cwd()
 
 
 def main() -> int:

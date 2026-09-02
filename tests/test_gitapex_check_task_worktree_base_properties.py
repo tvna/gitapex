@@ -37,6 +37,7 @@ import subprocess
 import gitapex_check_task_worktree_base as checker
 import pytest
 from conftest import FakeStdin as _FakeStdin
+from conftest import commit_file, init_git_repo
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -94,13 +95,8 @@ def _fixture_repo(tmp_path_factory: pytest.TempPathFactory) -> pathlib.Path:
     ever mutates this repo -- every call is a read-only git plumbing
     command (``rev-parse``, ``symbolic-ref``) against fixed, already-
     committed state."""
-    root = tmp_path_factory.mktemp("worktree-base-properties-fixture")
-    subprocess.run(["git", "init", "-q", "--initial-branch", "main"], cwd=root, check=True)
-    subprocess.run(["git", "config", "user.email", "test@example.com"], cwd=root, check=True)
-    subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
-    (root / "a.txt").write_text("a\n", encoding="utf-8")
-    subprocess.run(["git", "add", "--", "a.txt"], cwd=root, check=True)
-    subprocess.run(["git", "commit", "-q", "-m", "c1"], cwd=root, check=True)
+    root = init_git_repo(tmp_path_factory.mktemp("worktree-base-properties-fixture"))
+    commit_file(root, "a.txt", "c1")
     return root
 
 
