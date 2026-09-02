@@ -265,6 +265,26 @@ def format_closed_integrity_report(
     return "\n".join(lines)
 
 
+def format_missing_label_error(owner: str, repo: str, label: str) -> str:
+    """Shared wording for the label-liveness guard's own failure message --
+    both this script's `main` and `gitapex_scan_gate_proposal_consolidation_drift.py`'s
+    `main` call `label_exists` and print the identical text on a `False`
+    result, so it lives here once rather than as two independently
+    maintained copies (found by an adversarial review pass against the
+    sibling script's own diff; unlike `_CONSTRAINT_HINTS`/`_is_blank`,
+    this is ordinary shared logic, not this repository's own deliberate
+    per-script CLI-boilerplate convention). Pure string formatting, no I/O
+    -- lives here in the Pure logic section, not I/O glue below, and takes
+    `(owner, repo, label)` to match `label_exists`'s own parameter order
+    and every sibling `format_*` report function's own "label last"
+    convention (found by a second adversarial review pass)."""
+    return (
+        f"error: label '{label}' does not exist on {owner}/{repo} -- "
+        "cannot tell a genuinely empty backlog apart from a renamed/deleted label; "
+        "create the label (or fix --label) before this check can run"
+    )
+
+
 # ---------------------------------------------------------------------------
 # I/O glue
 # ---------------------------------------------------------------------------
@@ -580,12 +600,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if not label_exists(args.owner, args.repo, args.label, token):
-            print(
-                f"error: label '{args.label}' does not exist on {args.owner}/{args.repo} -- "
-                "cannot tell a genuinely empty backlog apart from a renamed/deleted label; "
-                "create the label (or fix --label) before this check can run",
-                file=sys.stderr,
-            )
+            print(format_missing_label_error(args.owner, args.repo, args.label), file=sys.stderr)
             return 1
         open_records = list_labelled_issue_records(args.owner, args.repo, args.label, token, state="open")
         closed_records = list_labelled_issue_records(args.owner, args.repo, args.label, token, state="closed")

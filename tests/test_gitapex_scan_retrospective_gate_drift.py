@@ -247,6 +247,18 @@ def test_format_closed_integrity_report_never_mentions_reopening():
 
 
 # ---------------------------------------------------------------------------
+# format_missing_label_error
+# ---------------------------------------------------------------------------
+
+
+def test_format_missing_label_error_names_label_and_repo():
+    message = gate.format_missing_label_error("tvna", "gitapex", "gate-proposal")
+    assert "gate-proposal" in message
+    assert "tvna/gitapex" in message
+    assert "does not exist" in message
+
+
+# ---------------------------------------------------------------------------
 # label_exists (the label-liveness guard both passes require)
 # ---------------------------------------------------------------------------
 
@@ -720,11 +732,13 @@ def _fake_records_by_state(open_records=(), closed_records=()):
 def test_main_fails_loudly_when_label_does_not_exist(monkeypatch, capsys):
     monkeypatch.setenv("GITHUB_TOKEN", "tok")
     monkeypatch.setattr(gate, "label_exists", lambda *a, **k: False)
-    exit_code = gate.main(["--owner", "tvna", "--repo", "gitapex", "--label", "gate-proposal"])
-    assert exit_code == 1
+    argv = ["--owner", "tvna", "--repo", "gitapex", "--label", "gate-proposal"]
+    assert gate.main(argv) == 1
     stderr = capsys.readouterr().err
-    assert "gate-proposal" in stderr
-    assert "does not exist" in stderr
+    # main prints exactly the shared format_missing_label_error text, not a
+    # locally re-derived copy of it -- this is the touched call site's own
+    # test, not merely a substring check.
+    assert stderr.strip() == gate.format_missing_label_error("tvna", "gitapex", "gate-proposal")
 
 
 def test_main_does_not_fetch_issues_when_label_missing(monkeypatch):
