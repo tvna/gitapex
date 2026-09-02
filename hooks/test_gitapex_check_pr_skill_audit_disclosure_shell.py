@@ -389,6 +389,46 @@ def test_tier1_precondition_skipped_when_the_gate_declares_no_required_packages(
     assert "deterministic-gate-quality" in result.stderr
 
 
+def test_tier1_precondition_warns_when_the_precondition_checker_itself_cannot_run(repo: Path) -> None:
+    """**Defeat case (step-8 adversarial review, issue #1566).** The exact
+    condition this block exists to catch -- a declared package `python3`
+    cannot import -- reshaped to fall just outside the block's own
+    detection path: the *checker* is broken rather than the dependency, so
+    it produces no JSON at all.
+
+    `jq` exits **0** with empty output when its input is empty (verified
+    directly), so `missing_packages` came back empty and the `if !` guard
+    that is supposed to emit this file's documented `Warning:` line never
+    fired. The result was a completely silent skip of the
+    dependency-precondition pre-check -- the same silent degrade to tier 2
+    that #1547(a) reports, reintroduced through this check's own failure
+    path, with the block's own comment claiming a warning it never
+    printed.
+
+    A required package is declared missing here *as well as* the checker
+    being broken, so this pins the worst case: the deny cannot be reached
+    (nothing can determine what is missing), and therefore the operator
+    must at minimum be told the pre-check did not run. Falling through to
+    tier 2 remains correct -- a broken checker is not the
+    dependency-missing cause this block denies on -- but it must not be
+    silent."""
+    _with_tier1(repo)
+    _set_skill_audit_required_packages(repo, ["this_module_does_not_exist_xyz"])
+    _write(repo, "hooks/gitapex_check_python_precondition.py", "this is not valid python(((")
+    _commit(repo, "break the precondition checker itself")
+
+    result = _run(repo, _BASE_EVIDENCE)
+
+    assert "skipping the dependency-precondition pre-check" in result.stderr, (
+        "the precondition pre-check was skipped with no message at all -- "
+        "the silent degrade #1547(a) exists to eliminate"
+    )
+    # Still falls through rather than denying: a checker that cannot run is
+    # not evidence a dependency is missing, so the narrow scope this fix
+    # was given ("dependency-missing cause only") is preserved.
+    assert "uv sync --group dev" not in result.stderr
+
+
 def test_tier1_precondition_check_does_not_widen_an_unrelated_tier1_failure(repo: Path) -> None:
     """A genuinely unrelated tier-1 failure -- a bug in the gate script
     itself producing no recognizable FAIL: line -- must still fall through

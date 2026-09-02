@@ -19,7 +19,13 @@ checker itself with an ImportError, the same failure class this script
 exists to report cleanly instead. Each module is probed in a SEPARATE
 `python3` subprocess via `importlib.import_module`, with the module name
 passed as a plain argv value -- never interpolated into the `-c` source
-text -- so a module name is data, never code.
+text -- so a module name is data, never code. Each probe is also
+time-bounded (`PROBE_TIMEOUT_SECONDS`): a module's own import-time code is
+arbitrary and may block rather than either succeed or fail, and this
+checker runs inside a PreToolUse hook, where an unbounded probe would
+stall the gated operation itself with no verdict at all. A timed-out probe
+reports the module as not importable, the same fail-closed answer a
+probe that could not be launched already gives.
 
 Input: one or more module names as positional CLI arguments; when none
 are given, reads them instead from standard input, one per line (blank
@@ -51,9 +57,24 @@ import sys
 #: sys.argv[1] in that subprocess, never spliced into this source text.
 _PROBE_SOURCE = "import importlib, sys\nimportlib.import_module(sys.argv[1])\n"
 
+#: A hang guard, not a budget: importing an already-installed package
+#: completes in well under a second, so this ceiling is never reached by a
+#: healthy probe. Bounded anyway because a module's own import-time code is
+#: arbitrary and may block indefinitely (a network call, a lock, a
+#: `time.sleep`) -- and this probe runs inside
+#: hooks/check-pr-skill-audit-disclosure.sh, a PreToolUse hook firing on
+#: every mcp__github__create_pull_request/update_pull_request call in this
+#: repository, so an unbounded probe stalls the very operation the hook is
+#: gating, producing no verdict at all. Matches the same hang-guard
+#: rationale (and fail-to-the-safe-answer handling) that
+#: skills/executing-a-branch-plan/scripts/gitapex_check_task_worktree_base.py
+#: applies to its own PreToolUse-hook subprocess calls.
+PROBE_TIMEOUT_SECONDS = 10.0
 
-def is_importable(module: str, *, python: str = "python3") -> bool:
-    """Return True iff `module` is importable by a separate `python` subprocess.
+
+def is_importable(module: str, *, python: str = "python3", timeout: float = PROBE_TIMEOUT_SECONDS) -> bool:
+    """Return True iff `module` is importable by a separate `python`
+    subprocess within `timeout` seconds.
 
     Never imports `module` in this process: a missing module must not be
     able to crash this checker itself.
@@ -71,7 +92,21 @@ def is_importable(module: str, *, python: str = "python3") -> bool:
             [python, "-c", _PROBE_SOURCE, module],
             capture_output=True,
             check=False,
+            timeout=timeout,
         )
+    except subprocess.TimeoutExpired:
+        # The module neither imported nor failed to import: its own
+        # import-time code blocked past the ceiling. Handled exactly like
+        # the OSError case below -- this probe could not answer its own
+        # question, and the only safe answer is the fail-closed "cannot
+        # confirm this is importable". `subprocess.run` kills the child
+        # before re-raising, so no orphaned interpreter is left behind.
+        print(
+            f"warning: probing '{module}' with '{python}' timed out after {timeout}s "
+            f"(its import blocked); treating it as not importable",
+            file=sys.stderr,
+        )
+        return False
     except OSError as error:
         # `python` itself could not even be launched (not on PATH, not
         # executable, ...). That is not evidence the module is missing --
@@ -86,9 +121,12 @@ def is_importable(module: str, *, python: str = "python3") -> bool:
     return result.returncode == 0
 
 
-def find_missing_modules(modules: list[str], *, python: str = "python3") -> list[str]:
-    """Return the subsequence of `modules` not importable by `python`, in order."""
-    return [module for module in modules if not is_importable(module, python=python)]
+def find_missing_modules(
+    modules: list[str], *, python: str = "python3", timeout: float = PROBE_TIMEOUT_SECONDS
+) -> list[str]:
+    """Return the subsequence of `modules` not importable by `python`, in
+    order. `timeout` bounds each module's own probe independently."""
+    return [module for module in modules if not is_importable(module, python=python, timeout=timeout)]
 
 
 def _read_modules_from_stdin() -> list[str]:
