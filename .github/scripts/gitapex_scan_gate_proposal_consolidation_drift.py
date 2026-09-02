@@ -86,6 +86,8 @@ import re
 import sys
 import time
 import unicodedata
+import urllib.request
+from collections.abc import Callable
 from typing import Any
 
 import _gitapex_github_http
@@ -97,7 +99,10 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 # research): "Consolidates: #1547, #1546, #1489, #1508" -- comma-separated,
 # `#N` form, on its own line. MULTILINE so `^`/`$` anchor per line, not the
 # whole body; `[ \t]` rather than `\s` so the match cannot itself cross a
-# newline into a following paragraph.
+# newline into a following paragraph. `finditer`, not `search`, at the call
+# site below: an issue body edited to append a second Consolidates: line
+# must not leave that second line's own references silently unchecked
+# (found by an adversarial review pass against this script's own diff).
 _CONSOLIDATES_LINE_RE = re.compile(r"^Consolidates:[ \t]*(#\d+(?:,[ \t]*#\d+)*)[ \t]*$", re.MULTILINE)
 _ISSUE_REF_RE = re.compile(r"#(\d+)")
 
@@ -128,15 +133,22 @@ query($owner: String!, $repo: String!, $number: Int!) {
 
 
 def extract_consolidates_issue_numbers(body: str) -> list[int]:
-    """Return the issue numbers named in `body`'s own `Consolidates: #a,
-    #b, ...` line, in the order they appear, or `[]` if no such line
-    exists. `body` carrying no such line is not itself a defect -- an
-    ordinary (non-umbrella) gate-proposal issue has nothing for this
-    check to verify."""
-    match = _CONSOLIDATES_LINE_RE.search(body)
-    if not match:
-        return []
-    return [int(n) for n in _ISSUE_REF_RE.findall(match.group(1))]
+    """Return the issue numbers named across every `Consolidates: #a, #b,
+    ...` line in `body`, in first-seen order with duplicates removed, or
+    `[]` if no such line exists. `body` carrying no such line is not
+    itself a defect -- an ordinary (non-umbrella) gate-proposal issue has
+    nothing for this check to verify. Scans every matching line, not just
+    the first: an issue body edited to append a second Consolidates: line
+    must not leave that line's own references unchecked."""
+    numbers: list[int] = []
+    seen: set[int] = set()
+    for line_match in _CONSOLIDATES_LINE_RE.finditer(body):
+        for ref in _ISSUE_REF_RE.findall(line_match.group(1)):
+            number = int(ref)
+            if number not in seen:
+                seen.add(number)
+                numbers.append(number)
+    return numbers
 
 
 def find_unverified_consolidation_claims(
@@ -173,19 +185,20 @@ def find_unverified_consolidation_claims(
 
 
 def find_consolidation_violations(
-    umbrella_records: list[dict[str, Any]],
+    referenced_numbers_by_umbrella: dict[int, list[int]],
     referenced_states: dict[int, dict[str, Any] | None],
 ) -> dict[int, list[int]]:
     """Return `{umbrella_number: [violating_referenced_numbers]}` for every
-    record in `umbrella_records` (each carrying `number` and `body`)
-    whose own `Consolidates:` line names at least one issue not confirmed
-    CLOSED-as-duplicate pointing back to it. A record with no
-    `Consolidates:` line contributes no entry -- not a violation, nothing
-    to verify."""
+    `(umbrella_number, referenced_numbers)` pair in
+    `referenced_numbers_by_umbrella` (as already extracted by
+    `extract_consolidates_issue_numbers`, once, by the caller -- this
+    function does no body parsing of its own so a caller iterating many
+    umbrella records never re-parses the same body twice) with at least
+    one referenced issue not confirmed CLOSED-as-duplicate pointing back
+    to it. An umbrella with no referenced numbers at all contributes no
+    entry -- not a violation, nothing to verify."""
     violations_by_umbrella: dict[int, list[int]] = {}
-    for record in umbrella_records:
-        umbrella_number = record["number"]
-        referenced_numbers = extract_consolidates_issue_numbers(record.get("body") or "")
+    for umbrella_number, referenced_numbers in referenced_numbers_by_umbrella.items():
         if not referenced_numbers:
             continue
         violating = find_unverified_consolidation_claims(
@@ -229,8 +242,8 @@ def fetch_issue_duplicate_state(
     repo: str,
     number: int,
     token: str,
-    opener: Any = _gitapex_github_http.default_opener,
-    sleeper: Any = None,
+    opener: Callable[[urllib.request.Request], Any] = _gitapex_github_http.default_opener,
+    sleeper: Callable[[float], None] | None = None,
 ) -> dict[str, Any] | None:
     """GraphQL-fetch issue `number`'s own `state`/`stateReason`/
     `duplicateOf.number` -- the one live signal REST does not expose (see
@@ -238,10 +251,17 @@ def fetch_issue_duplicate_state(
     issue at all (a `data.repository.issue` that comes back `null`, e.g.
     a deleted or cross-repository number) rather than raising -- an
     unresolvable referenced issue is a violation for the caller to
-    report, not a script-level failure. Raises `GitHubApiError` only on
-    an actual HTTP-level failure (after `graphql_call`'s own retry
-    budget is exhausted), matching every other I/O function in this
-    repository's `.github/scripts/*.py` tree."""
+    report, not a script-level failure. Raises `GitHubApiError` on an
+    HTTP-level failure (after `graphql_call`'s own retry budget is
+    exhausted) or on a 200 response whose body carries a GraphQL `errors`
+    entry (a systemic condition -- e.g. a scope/field error unrelated to
+    any one issue number -- that must stop the whole run rather than be
+    silently read as "issue unresolvable, one violation," found by an
+    adversarial review pass against this script's own diff and matching
+    the identical `graphql_call` caller pattern in
+    `apm_modules/tvna/clairvoyance/scripts/sync_pr_publish.py`), matching
+    every other I/O function in this repository's `.github/scripts/*.py`
+    tree."""
     sleeper = sleeper if sleeper is not None else time.sleep
     code, body = _gitapex_github_http.graphql_call(
         query=_ISSUE_DUPLICATE_STATE_QUERY,
@@ -250,20 +270,22 @@ def fetch_issue_duplicate_state(
         opener=opener,
         sleeper=sleeper,
     )
-    if not (200 <= code < 300):
-        raise GitHubApiError(f"GraphQL query for issue #{number} failed: HTTP {_gitapex_github_http.format_code(code)}")
-    data = body.get("data")
-    repository = data.get("repository") if isinstance(data, dict) else None
-    issue = repository.get("issue") if isinstance(repository, dict) else None
-    if not isinstance(issue, dict):
-        return None
-    duplicate_of = issue.get("duplicateOf")
-    duplicate_of_number = duplicate_of.get("number") if isinstance(duplicate_of, dict) else None
-    return {
-        "state": issue.get("state"),
-        "state_reason": issue.get("stateReason"),
-        "duplicate_of_number": duplicate_of_number,
-    }
+    if 200 <= code < 300:
+        if "errors" in body:
+            raise GitHubApiError(f"GraphQL query for issue #{number} returned errors: {body['errors']}")
+        data = body.get("data")
+        repository = data.get("repository") if isinstance(data, dict) else None
+        issue = repository.get("issue") if isinstance(repository, dict) else None
+        if not isinstance(issue, dict):
+            return None
+        duplicate_of = issue.get("duplicateOf")
+        duplicate_of_number = duplicate_of.get("number") if isinstance(duplicate_of, dict) else None
+        return {
+            "state": issue.get("state"),
+            "state_reason": issue.get("stateReason"),
+            "duplicate_of_number": duplicate_of_number,
+        }
+    raise GitHubApiError(f"GraphQL query for issue #{number} failed: HTTP {_gitapex_github_http.format_code(code)}")
 
 
 # ---------------------------------------------------------------------------
@@ -348,19 +370,23 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         open_records = gate_drift.list_labelled_issue_records(args.owner, args.repo, args.label, token, state="open")
 
-        referenced_numbers: set[int] = set()
+        referenced_numbers_by_umbrella: dict[int, list[int]] = {}
+        all_referenced_numbers: set[int] = set()
         for record in open_records:
-            referenced_numbers.update(extract_consolidates_issue_numbers(record.get("body") or ""))
+            numbers = extract_consolidates_issue_numbers(record.get("body") or "")
+            if numbers:
+                referenced_numbers_by_umbrella[record["number"]] = numbers
+                all_referenced_numbers.update(numbers)
 
         referenced_states: dict[int, dict[str, Any] | None] = {
             number: fetch_issue_duplicate_state(args.owner, args.repo, number, token)
-            for number in sorted(referenced_numbers)
+            for number in sorted(all_referenced_numbers)
         }
     except GitHubApiError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
-    violations_by_umbrella = find_consolidation_violations(open_records, referenced_states)
+    violations_by_umbrella = find_consolidation_violations(referenced_numbers_by_umbrella, referenced_states)
     print(format_consolidation_drift_report(violations_by_umbrella, args.label))
     return 1 if violations_by_umbrella else 0
 

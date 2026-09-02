@@ -91,6 +91,19 @@ def test_extract_consolidates_issue_numbers_does_not_cross_into_next_paragraph()
     assert csd.extract_consolidates_issue_numbers(body) == [1]
 
 
+def test_extract_consolidates_issue_numbers_collects_every_matching_line() -> None:
+    # An issue body edited to append a second Consolidates: line (e.g. a
+    # follow-up edit consolidating a further finding) must not leave that
+    # second line's own references unchecked.
+    body = "Consolidates: #1547, #1546\n\nSome intervening text.\n\nConsolidates: #1600\n"
+    assert csd.extract_consolidates_issue_numbers(body) == [1547, 1546, 1600]
+
+
+def test_extract_consolidates_issue_numbers_deduplicates_across_lines() -> None:
+    body = "Consolidates: #1547\n\nConsolidates: #1547, #1600\n"
+    assert csd.extract_consolidates_issue_numbers(body) == [1547, 1600]
+
+
 # ---------------------------------------------------------------------------
 # find_unverified_consolidation_claims
 # ---------------------------------------------------------------------------
@@ -142,30 +155,23 @@ def test_find_unverified_consolidation_claims_reports_only_the_violating_subset(
 # ---------------------------------------------------------------------------
 
 
-def test_find_consolidation_violations_empty_for_issue_with_no_consolidates_line() -> None:
-    records: list[dict[str, Any]] = [{"number": 1500, "body": "An ordinary gate-proposal issue."}]
-    assert csd.find_consolidation_violations(records, {}) == {}
+def test_find_consolidation_violations_empty_for_umbrella_with_no_referenced_numbers() -> None:
+    assert csd.find_consolidation_violations({1500: []}, {}) == {}
 
 
 def test_find_consolidation_violations_reports_offending_umbrella() -> None:
-    records: list[dict[str, Any]] = [{"number": 1566, "body": "Consolidates: #1547, #1546"}]
     states: dict[int, dict[str, Any] | None] = {1547: _verified_state(1566), 1546: _open_state()}
-    assert csd.find_consolidation_violations(records, states) == {1566: [1546]}
+    assert csd.find_consolidation_violations({1566: [1547, 1546]}, states) == {1566: [1546]}
 
 
 def test_find_consolidation_violations_skips_umbrella_with_no_violations() -> None:
-    records: list[dict[str, Any]] = [{"number": 1566, "body": "Consolidates: #1547"}]
     states: dict[int, dict[str, Any] | None] = {1547: _verified_state(1566)}
-    assert csd.find_consolidation_violations(records, states) == {}
+    assert csd.find_consolidation_violations({1566: [1547]}, states) == {}
 
 
 def test_find_consolidation_violations_reports_multiple_umbrellas_independently() -> None:
-    records: list[dict[str, Any]] = [
-        {"number": 1566, "body": "Consolidates: #1547"},
-        {"number": 1568, "body": "Consolidates: #1600"},
-    ]
     states: dict[int, dict[str, Any] | None] = {1547: _verified_state(1566), 1600: _open_state()}
-    assert csd.find_consolidation_violations(records, states) == {1568: [1600]}
+    assert csd.find_consolidation_violations({1566: [1547], 1568: [1600]}, states) == {1568: [1600]}
 
 
 # ---------------------------------------------------------------------------
@@ -256,6 +262,22 @@ def test_fetch_issue_duplicate_state_returns_none_when_duplicate_of_is_absent() 
 
     result = csd.fetch_issue_duplicate_state("tvna", "gitapex", 1547, "tok", opener=opener, sleeper=lambda _: None)
     assert result == {"state": "CLOSED", "state_reason": "COMPLETED", "duplicate_of_number": None}
+
+
+def test_fetch_issue_duplicate_state_raises_on_200_with_errors_field() -> None:
+    # A 200 response can still carry a GraphQL "errors" entry with
+    # data.repository: null (e.g. a scope or field error unrelated to any
+    # one issue number) -- this is a systemic failure that must stop the
+    # run, never be silently read as "issue unresolvable, one violation"
+    # (found by an adversarial review pass against this script's own diff).
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(
+            200,
+            json.dumps({"data": {"repository": None}, "errors": [{"message": "Field 'duplicateOf' does not exist"}]}),
+        )
+
+    with pytest.raises(csd.GitHubApiError, match="errors"):
+        csd.fetch_issue_duplicate_state("tvna", "gitapex", 1547, "tok", opener=opener, sleeper=lambda _: None)
 
 
 def test_fetch_issue_duplicate_state_raises_on_persistent_http_error() -> None:
