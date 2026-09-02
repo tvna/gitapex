@@ -78,8 +78,7 @@ directory's index and HEAD are single, shared, mutable state, so
 concurrent `git add`/`git commit`/`git status` is not safe even when the
 files touched are disjoint.
 
-Every task dispatched in a multi-task wave runs with `isolation:
-'worktree'`, the Workflow tool's own documented mechanism for exactly
+Every task dispatched in a multi-task wave runs with `isolation: 'worktree'`, the Workflow tool's own documented mechanism for exactly
 this case ("use ONLY when agents mutate files in parallel and would
 otherwise conflict; the worktree is auto-removed if unchanged").
 task-decomposition.md's own file-ownership map is what makes this
@@ -125,8 +124,7 @@ second sibling classifier call (the identical pattern that script already
 uses to invoke `gitapex_check_task_bash_safety.py`), re-asserts on every
 Bash call that the shared plan branch's own current tip is still an
 ancestor of the task's own worktree HEAD -- in git terms, that
-`git merge-base HEAD SHARED_BRANCH` still equals `git rev-parse
-SHARED_BRANCH`.
+`git merge-base HEAD SHARED_BRANCH` still equals `git rev-parse SHARED_BRANCH`.
 
 **Piggybacks on the task's own first Bash call, not a true "before any
 tool call at all, including a non-Bash one" gate.** Claude Code has no
@@ -183,8 +181,7 @@ no-ops for that dispatch -- see the fail-open paragraph next.
 
 **This is not hypothetical, and it is the common case here.** Issue
 `#1566`'s own step-8 adversarial review observed a real `branch-plan-task`
-worktree in this repository whose own branch reflog read exactly `branch:
-Created from origin/main`, sitting at the plan branch's merge-base with
+worktree in this repository whose own branch reflog read exactly `branch: Created from origin/main`, sitting at the plan branch's merge-base with
 every one of that branch's commits missing -- issue `#1508`'s own defect
 shape, in the flesh. `origin/main` is a remote-tracking ref, not a local
 branch, so `gitapex_check_task_worktree_base.py` returned `warn` and

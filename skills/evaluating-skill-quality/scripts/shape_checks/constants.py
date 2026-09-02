@@ -65,6 +65,15 @@ EXTERNAL_CITATION_PATH_RE = re.compile(r"^(?:evals|docs)/[A-Za-z0-9._/-]+$")
 # "Keep SKILL.md body under 500 lines for optimal performance" (same doc;
 # also code.claude.com/docs/en/skills).
 BODY_MAX_LINES = 500
+# NVIDIA/SkillEvaluator's own QUALITY_RECOMMENDED_MAX_TOKENS (design doc
+# docs/superpowers/specs/2026-09-02-skill-body-cost-controls-design.md,
+# Decision 3) -- an advisory ceiling on SKILL.md body token count,
+# estimated via the stdlib-only len(content) // 4 approximation (no real
+# tokenizer dependency, matching SkillEvaluator's own formula). Scope is
+# the SKILL.md body only; references/*.md is explicitly exempt from this
+# ceiling (and from BODY_MAX_LINES above) -- a reference file's job is
+# topic-scoped focus, not brevity for its own sake.
+BODY_MAX_TOKENS = 5000
 # Not an Anthropic-specified number -- this repository's own convention
 # for when a reference file earns a table of contents, chosen as a round
 # threshold past which skimming a flat file gets slow.

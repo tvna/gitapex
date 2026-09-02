@@ -148,13 +148,7 @@ skill instead.
 ## 4. Enforcement-fit
 
 Grounded in [Steering Claude Code][steering]'s own explicit rule:
-`"Never do this" in CLAUDE.md. When there's something that absolutely
-must not happen, an instruction is the wrong tool. Claude will follow the
-instruction most of the time, but when under pressure, in a long session
-or an ambiguous situation, or due to a prompt injection in a file
-accessed as part of the task, the model can fail to follow a prompted
-rule. A real guardrail needs to be deterministic, and the enforcement
-methods are hooks and permissions.`
+`"Never do this" in CLAUDE.md. When there's something that absolutely must not happen, an instruction is the wrong tool. Claude will follow the instruction most of the time, but when under pressure, in a long session or an ambiguous situation, or due to a prompt injection in a file accessed as part of the task, the model can fail to follow a prompted rule. A real guardrail needs to be deterministic, and the enforcement methods are hooks and permissions.`
 
 Applied here: a channel in this skill's own scope stating an absolute
 prohibition, with no corresponding hook or permission actually

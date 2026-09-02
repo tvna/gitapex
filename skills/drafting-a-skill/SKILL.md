@@ -16,8 +16,7 @@ bounded contexts, never grading the same question twice.
 
 ## Precondition
 
-- Dispatched by `executing-a-branch-plan` (Step 6, `agentType:
-  branch-plan-task`) because an ACM row's Planned ops name a brand-new
+- Dispatched by `executing-a-branch-plan` (Step 6, `agentType: branch-plan-task`) because an ACM row's Planned ops name a brand-new
   `SKILL.md` to author. Never invoked as an independent entry point --
   see Stop boundaries.
 - The dispatching task's quoted ACM Planned-ops text already carries,
@@ -79,8 +78,7 @@ bounded contexts, never grading the same question twice.
      guarantee, or report the conductor must hand back. Everything else
      non-behavioral (creation background, change history, a scope cut, a
      rejected alternative's rationale) is metadata-only:
-     `metadata/gitapex.yaml`'s own `references` decision log (`kind:
-     elision` for a scope cut) or `executionRequirements`, never restated
+     `metadata/gitapex.yaml`'s own `references` decision log (`kind: elision` for a scope cut) or `executionRequirements`, never restated
      in the body. See `references/contract-structure.md` for the
      fault-attribution rule, worked examples, and a drafting checklist --
      load it when the definitions above aren't enough, not as required
@@ -120,8 +118,7 @@ bounded contexts, never grading the same question twice.
      splitting into two skills -- route back to Step 1 for the second one
      rather than forcing one `SKILL.md` to cover both.
      `references/guidance-form-and-sdo.md` names this the Single
-     Decisive Outcome (SDO) test; `references/mechanism-fit-and-
-     cohesion.md` gives the deeper seven-way cohesion taxonomy
+     Decisive Outcome (SDO) test; `references/mechanism-fit-and- cohesion.md` gives the deeper seven-way cohesion taxonomy
      (functional / sequential / communicational / procedural / temporal /
      logical / coincidental) for a borderline case the one-sentence test
      alone doesn't settle.
@@ -175,13 +172,11 @@ bounded contexts, never grading the same question twice.
 
 6. **Sweep against the formative dimensions, then run the deterministic
    checkers.**
-   - Sweep the draft against `references/formative-quality-
-     dimensions.md`'s nine formative dimensions -- a prose quality pass
+   - Sweep the draft against `references/formative-quality- dimensions.md`'s nine formative dimensions -- a prose quality pass
      the deterministic checkers below can't perform.
    - Run this repository's own deterministic checkers against the draft
-     directory, gitapex-repo only (see `references/gitapex-cross-
-     links.md` for the exact flags):
-     - `python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py`
+     directory, gitapex-repo only (see `references/gitapex-cross- links.md` for the exact flags):
+     - `python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py --strict-token-budget`
      - `python3 skills/evaluating-skill-quality/scripts/gitapex_scan_execution_requirements_drift.py`
    - Fix every finding before Step 7 -- Step 7's handoff does not run
      either checker itself, and this Step has no deferral path the way
@@ -256,8 +251,7 @@ fresh at Step 7.
   blocking-gate threshold, or mechanize that policy into
   `gitapex_check_skill_shape.py` -- both deferred to a future issue, once
   explicit `stable` lifecycle declarations become common enough in this
-  repository to judge readiness (see `references/mechanism-fit-and-
-  cohesion.md`'s own placement-policy section).
+  repository to judge readiness (see `references/mechanism-fit-and- cohesion.md`'s own placement-policy section).
 - Does not build a Red Flags / rationalization-pattern table for this
   skill's own Stop boundaries -- the plain-bullet form below is this
   draft's own choice, not a placeholder for an undelivered table.
@@ -312,8 +306,7 @@ that the elicited Capability assumption (`Frontier`) is wrong for a body
 this thin -- but that call was `eliciting-a-design`'s own Part-adjacent
 axis resolution, not anything this skill's own Steps produced. This
 skill's own dispatch context cannot reopen that dialogue: it emits
-`StageDeviated{action: escalate, reason: "Capability assumption
-Frontier does not fit a lean body; needs eliciting-a-design re-run"}` and
+`StageDeviated{action: escalate, reason: "Capability assumption Frontier does not fit a lean body; needs eliciting-a-design re-run"}` and
 stops, rather than silently overriding the axis or looping the review.
 
 ## Stop boundaries
@@ -406,8 +399,7 @@ stops, rather than silently overriding the axis or looping the review.
 
 Portability: **Mixed**. This body's own inlined content (Steps 1, 3-5, 7)
 depends on no repository-specific tooling. The repository-specific part
-isn't confined to Step 6 alone: `references/mechanism-fit-and-
-cohesion.md`'s cohesion taxonomy and `references/contract-structure.md`'s
+isn't confined to Step 6 alone: `references/mechanism-fit-and- cohesion.md`'s cohesion taxonomy and `references/contract-structure.md`'s
 citation into `skills/evaluating-skill-quality/references/rubric.md` are
 both gitapex-specific -- named here, not narrowed to Step 6, since each is
 a real dependency a vendoring consumer must substitute, per

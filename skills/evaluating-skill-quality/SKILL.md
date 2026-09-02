@@ -489,8 +489,7 @@ citations are barred unconditionally. Declared level: `metadata/gitapex.yaml`.
 
 Downstream verdict consumption, for readers working in this repository
 (gitapex): `.github/scripts/gitapex_gate_skill_audit_disclosure.py`, wired by
-`.github/workflows/skill-audit-gate.yml`, parses a PR body's `## Skill
-audit evidence` section for the literal verdict tokens
+`.github/workflows/skill-audit-gate.yml`, parses a PR body's `## Skill audit evidence` section for the literal verdict tokens
 `WELL-FORMED-AND-MATURE`, `WELL-FORMED-NOT-MATURE`, `NOT-WELL-FORMED`, or a
 `WAIVED: <reason>` line, and blocks the PR when the section or a valid
 token is absent -- by its own docstring, "it checks that disclosure was

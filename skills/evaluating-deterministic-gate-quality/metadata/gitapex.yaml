@@ -819,7 +819,7 @@ spec:
       anchor: "https://github.com/tvna/gitapex/issues/1456"
       summary: "Added the missing second `[elided]` marker for the dropped ACM-disclosure-family clause, and generalized the quotation's own preamble from 'one elided span' to 'two elided spans' to match. Re-run confirmed 61/61 shape checks unchanged."
       outcome:
-        lines: "branch-final, measured against the working tree at the final commit: gitapex-worked-examples.md 595->598 (second elision marker), dimensions.md unchanged at 638"
+        lines: "branch-final, measured against the working tree at the final commit: gitapex-worked-examples.md 595->597 (second elision marker; later reduced by 1 via an unrelated cross-skill code-span-line-break-integrity fix, https://github.com/tvna/gitapex/issues/1698), dimensions.md unchanged at 638"
   skillDependencies:
     requires:
       - evaluating-skill-quality

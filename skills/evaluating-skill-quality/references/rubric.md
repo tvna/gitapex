@@ -23,6 +23,9 @@ skill's own folder.
 ## Table of contents
 
 - [The mental model](#the-mental-model)
+  - [Notes vs. metadata placement axis](#notes-vs-metadata-placement-axis)
+  - [Code-span line-break integrity](#code-span-line-break-integrity)
+  - [SKILL.md body token budget](#skillmd-body-token-budget)
 - [Unknowns framework](#unknowns-framework)
   - [Blind spot pass](#blind-spot-pass)
 - [Contract discipline](#contract-discipline)
@@ -70,6 +73,81 @@ disclosure (dimension 5) across load layers, and Contract discipline's
 "never both" rule keeps each check in exactly one place. There is no
 separate dimension for it because it is cross-cutting, not one more thing
 to check.
+
+### Notes vs. metadata placement axis
+
+One recurring instance of the cheapest-level judgment above, stated once
+here rather than restated at each site that applies it: where does a
+declaration's supporting rationale, decision history, or correction
+narration go -- a skill's footer `## Notes` section, or its
+`metadata/gitapex.yaml` sidecar? Ask a single question: does a reader
+need this content *at the moment* of reading `SKILL.md`, in the ordinary
+course of using or reviewing the skill?
+
+- **Yes -> `## Notes`, kept short.** A declaration itself (e.g.
+  "Portability: Mixed", "Capability assumption: Adaptive") and a live
+  warning a reader must see before acting stay in `## Notes`, as one to
+  two sentences -- a pointer, not the full case.
+- **No -> `metadata/gitapex.yaml`'s `spec.references`.** The *why*
+  behind a declaration, decision history, audit outcomes, and
+  correction narration (the sediment rule under dimension 8 below) sit
+  outside the three-layer load-cost model above entirely -- the sidecar
+  is maintainer-facing and never auto-loaded -- recorded there using the
+  existing `kind` vocabulary and 500-character `summary` cap. A skill
+  needing to walk through *how* to run a bundled script standalone (not
+  a rationale, but usable operational content) belongs in `references/`
+  instead, loaded on demand, not in either of these two.
+
+Every place below that names where extended rationale goes applies this
+one axis rather than repeating the full explanation, per this file's own
+"same extended rule or disclosure restated in full at two or more sites
+is duplication" bullet further down.
+
+### Code-span line-break integrity
+
+A single-backtick inline code span (e.g. `` `path/to/file.md` ``) must
+open and close on the same line, in both `SKILL.md` and
+`references/*.md` -- enforced by the `code-span-integrity` shape check
+(and its per-file `code-span-integrity:{ref.name}` form for a
+references file). A Markdown renderer collapses an embedded line break
+inside a code span into a literal space, so a span split by this
+repository's own ~70-74 character wrap habit renders with an injected
+space, corrupting the literal path, identifier, or command string a
+reader would copy or grep verbatim. Two real instances of exactly this
+defect, both split at the time this check was introduced and fixed in
+the same change: `skills/drafting-a-skill/SKILL.md` (a
+`` `references/mechanism-fit-and-cohesion.md` `` citation) and this
+file's own Agentic operation mechanism-fit section (a
+`` `skills/battle-testing-a-skill/references/provenance-and-caveats.md` ``
+citation) -- see either file's current content for the corrected,
+single-line form; the check itself is what keeps a future edit from
+reintroducing the same split. The check is deliberately narrow: it does
+not touch the wrap threshold itself (a Semantic Line Breaks migration is
+a separate, out-of-scope follow-up), and a triple-backtick fenced code
+block or a double/triple-backtick span (rare in this corpus, used to
+let a span's own content contain a literal backtick) is out of scope --
+only a single-backtick span crossing a line break is newly forbidden.
+
+### SKILL.md body token budget
+
+`BODY_MAX_TOKENS` (5000) is an advisory ceiling on a `SKILL.md` body's
+estimated token count, checked by the `body-token-budget` shape check
+using the stdlib-only estimator `len(content) // 4` -- the same formula
+NVIDIA/SkillEvaluator uses, chosen over a real tokenizer specifically to
+avoid a new runtime dependency and to keep this repository's own
+numbers comparable to that tool's reporting. It is a rough
+approximation, not Claude's actual tokenizer, and is scoped to the
+`SKILL.md` body only: `references/*.md` is exempt from this ceiling (and
+from `BODY_MAX_LINES`), matching this file's own position that a
+reference file's target is focused scope, not brevity for its own sake.
+Enforcement is tiered: without `drafting-a-skill`'s own
+`--strict-token-budget` flag, an over-budget body is advisory only
+(`passed=True`, with a warning in the check's evidence) -- the state
+every already-shipped skill over the threshold is in today, left
+untouched by this check's own introduction; with the flag, wired only
+into `drafting-a-skill`'s own invocation, `passed` reflects the real
+threshold comparison, so a brand-new skill drafted through that skill
+is held to the real bar from the start.
 
 ## Unknowns framework
 
@@ -247,8 +325,7 @@ subagent dispatch removes a bias risk an in-context instruction to
 evidence: `battle-testing-a-skill`'s cold-enumeration step already
 isolates for exactly this reason ("not the current context, which has
 likely already seen the target"), and that skill's own extraction
-protocol (`skills/battle-testing-a-skill/references/provenance-and-
-caveats.md`, caveat 3) names the limit of instruction-only isolation
+protocol (`skills/battle-testing-a-skill/references/provenance-and- caveats.md`, caveat 3) names the limit of instruction-only isolation
 directly. Unlike [steering]'s clutter-avoidance trigger, this one does
 not require the dispatch's results to go unreferenced: the dispatch's
 full evidence-cited output is exactly what gets relayed back, preserving
@@ -271,11 +348,13 @@ Model/effort tier fit, and Tool-capability verification checks further
 below are the exceptions: their findings are step-level, reported for
 triage, and are neither a headline nor a *mature* blocker.
 
-A recorded mechanism-fit decision for the *reviewed* skill -- the "keep
-vs. retire, and why" rationale once a wrong-mechanism or low-cohesion
-finding has been weighed -- belongs in that skill's footer `## Notes`
-section, not front-loaded above its procedure; the same placement
-convention that keeps portability declarations terse up top applies here.
+A recorded mechanism-fit decision for the *reviewed* skill -- that a
+wrong-mechanism or low-cohesion finding was weighed and the target kept
+as-is (or scheduled to retire) -- belongs in that skill's footer
+`## Notes` section as a one-to-two-sentence conclusion, not front-loaded
+above its procedure. The *why* behind that conclusion follows the [Notes
+vs. metadata placement axis](#notes-vs-metadata-placement-axis) above and
+belongs in `metadata/gitapex.yaml`'s `spec.references` instead.
 
 ### Skill vs. multiple skills / cohesion
 
@@ -715,8 +794,7 @@ grading below.
       dependency; it does not remove it -- this half of the hedge
       vocabulary (`this repository` / `gitapex`) never rescues an
       inline-code match, and never rescues a bare-prose one either (bare
-      prose has never had a hedge escape at all). The other half (`the
-      calling repository` / `the target repository`) marks the opposite:
+      prose has never had a hedge escape at all). The other half (`the calling repository` / `the target repository`) marks the opposite:
       a generic illustrative placeholder for *whatever* repository the
       skill lands in, not a citation to the origin repository's own real
       file at all (establishing-ubiquitous-language's "record resolved
@@ -775,9 +853,11 @@ grading below.
   turns out to be repository-scoped is itself a finding, not something to
   silently infer and move past. Declared as the `portability` field in
   the skill's `metadata/gitapex.yaml` sidecar (the
-  `portability-declared` shape check enforces presence and value); any
-  extended rationale belongs in a footer `## Notes` section of
-  `SKILL.md`.
+  `portability-declared` shape check enforces presence and value); the
+  declaration itself may get a one-line `## Notes` mention, but any
+  extended rationale follows the [Notes vs. metadata placement
+  axis](#notes-vs-metadata-placement-axis) above and belongs in
+  `metadata/gitapex.yaml`'s `spec.references` instead.
 - **Mixed** -- dimension 5 (progressive disclosure) requires the actual
   split, not just the intent to split: the repository-specific part
   belongs in a clearly named reference file (e.g.
@@ -813,9 +893,12 @@ folder) that a plugin install or a vendoring copy will not carry along.
 - **Repository-scoped / Mixed** -- a dependency file legitimately living
   outside the skill's own directory is fine under these two levels, the
   same way an operational prose path-read is; the declared scope is what
-  licenses it. Still worth naming in the footer `## Notes` rationale
-  alongside any prose citations, so a reader sees the full dependency
-  surface in one place rather than only the sentences that mention it.
+  licenses it. Per the [Notes vs. metadata placement
+  axis](#notes-vs-metadata-placement-axis) above, a brief `## Notes` line
+  naming the file and its path is what a reader needs at the moment of
+  reading (so the full dependency surface is visible in one place
+  alongside any prose citations); any extended justification beyond that
+  belongs in `metadata/gitapex.yaml`'s `spec.references` instead.
 
 A worked example already in this repository: this skill's own grading of
 a target's `metadata/gitapex.yaml` sidecar -- the contract this section,
@@ -1069,8 +1152,11 @@ If genuinely unsure whether the near-ceiling content is a meaningful
 fraction or would fit Adaptive at least as well, default to treating the
 check as firing rather than silently passing -- the disclosure this check
 asks for costs one sentence, while a missed real foreclosure risk costs a
-structural rewrite later. **Check**: does the target's own Notes section
-or `metadata/gitapex.yaml` decision log disclose that Adaptive was
+structural rewrite later. Per the [Notes vs. metadata placement
+axis](#notes-vs-metadata-placement-axis) above, this is decision
+history, not at-the-moment content, so it belongs in the sidecar, not
+`## Notes`. **Check**: does the target's own `metadata/gitapex.yaml`
+`spec.references` decision log disclose that Adaptive was
 considered, name the specific rare-path/schema/procedural content
 responsible for a meaningful share of the near-ceiling body (not one
 token, unrepresentative example), and give a real cost/benefit reason for

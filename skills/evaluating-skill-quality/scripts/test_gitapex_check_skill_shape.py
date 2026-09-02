@@ -492,6 +492,66 @@ def test_overlong_body_fails(tmp_path):
     assert _by_name(css.check_shape(d))["body-length"].passed is False
 
 
+def test_split_code_span_in_skill_md_fails(tmp_path):
+    d = _write_skill(tmp_path)
+    skill_md = d / "SKILL.md"
+    text = skill_md.read_text(encoding="utf-8")
+    text += "\nSee `references/some-file.\nmd` for detail.\n"
+    skill_md.write_text(text, encoding="utf-8")
+    assert _by_name(css.check_shape(d))["code-span-integrity"].passed is False
+
+
+def test_normal_code_span_in_skill_md_passes(tmp_path):
+    d = _write_skill(tmp_path)
+    skill_md = d / "SKILL.md"
+    text = skill_md.read_text(encoding="utf-8")
+    text += "\nSee `references/some-file.md` for detail.\n"
+    skill_md.write_text(text, encoding="utf-8")
+    assert _by_name(css.check_shape(d))["code-span-integrity"].passed is True
+
+
+def test_split_code_span_in_reference_fails(tmp_path):
+    d = _write_skill(tmp_path, references={"note.md": "See `a-split-\ncode-span` here.\n"})
+    assert _by_name(css.check_shape(d))["code-span-integrity:note.md"].passed is False
+
+
+def test_normal_code_span_in_reference_passes(tmp_path):
+    d = _write_skill(tmp_path, references={"note.md": "See `a-normal-code-span` here.\n"})
+    assert _by_name(css.check_shape(d))["code-span-integrity:note.md"].passed is True
+
+
+def test_over_budget_skill_md_body_passes_advisory_without_flag(tmp_path):
+    d = _write_skill(tmp_path, body_lines=5000)
+    result = _by_name(css.check_shape(d))["body-token-budget"]
+    assert result.passed is True
+    assert "over budget" in result.evidence
+
+
+def test_over_budget_skill_md_body_fails_with_strict_flag(tmp_path):
+    d = _write_skill(tmp_path, body_lines=5000)
+    result = _by_name(css.check_shape(d, strict_token_budget=True))["body-token-budget"]
+    assert result.passed is False
+    assert "over budget" in result.evidence
+
+
+def test_under_budget_skill_md_body_passes_either_way(tmp_path):
+    d = _write_skill(tmp_path)
+    assert _by_name(css.check_shape(d))["body-token-budget"].passed is True
+    assert _by_name(css.check_shape(d, strict_token_budget=True))["body-token-budget"].passed is True
+
+
+def test_references_are_exempt_from_token_budget(tmp_path):
+    # A references/*.md file well over BODY_MAX_TOKENS worth of chars must
+    # not gain a body-token-budget:*-shaped check at all -- BODY_MAX_TOKENS
+    # applies to the SKILL.md body only, never to references/*.md, even
+    # under --strict-token-budget.
+    big_ref = "\n".join(f"line {i}" for i in range(5000))
+    d = _write_skill(tmp_path, references={"big.md": big_ref})
+    names = _by_name(css.check_shape(d, strict_token_budget=True))
+    assert not any(k.startswith("body-token-budget:") for k in names)
+    assert names["body-token-budget"].passed is True  # SKILL.md's own short body is unaffected
+
+
 def test_nested_references_fail(tmp_path):
     d = _write_skill(tmp_path, references={"sub/deep.md": "x\n"})
     assert _by_name(css.check_shape(d))["references-flat"].passed is False
@@ -583,7 +643,7 @@ def test_check_shape_raising_is_a_guard_error_not_a_crash(tmp_path, monkeypatch,
     # escaping exception into a reported guard error, never propagate.
     d = _write_skill(tmp_path)
 
-    def _raise(_target):
+    def _raise(_target, **_kwargs):
         raise OSError("simulated unreadable skill file")
 
     monkeypatch.setattr(css, "check_shape", _raise)

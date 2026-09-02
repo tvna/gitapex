@@ -266,8 +266,7 @@ AGENTS.md-equivalent file, that file is both the artifact being graded
 what the dispatch prompt references. A dispatch that inherits the
 calling repository's own project-instruction file is not reviewing it
 from outside -- it is reasoning from inside the very content criterion 5
-asks whether an adversarial writer could shape. `evaluating-skill-
-quality`'s own Subagent dispatch section carries the isolation-
+asks whether an adversarial writer could shape. `evaluating-skill- quality`'s own Subagent dispatch section carries the isolation-
 verification mechanics (confirming a dispatch does not inherit the
 calling repository's own `CLAUDE.md`/`AGENTS.md`, via its own two-part
 behavioral test rather than a filesystem-only check) this skill defers to

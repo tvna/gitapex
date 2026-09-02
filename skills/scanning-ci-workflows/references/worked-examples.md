@@ -80,8 +80,7 @@ exit=14
 ```
 
 zizmor did collect the composite action -- its own verbose log shows
-`registering action input as with key
-file://.github/actions/harden-checkout/action.yml`, then scheduling
+`registering action input as with key file://.github/actions/harden-checkout/action.yml`, then scheduling
 `artipacked`, `unsound-contains`, `excessive-permissions`, and
 `dangerous-triggers` against it. It produced no finding there, so the
 totals below are identical to a workflows-only run. That is a result
