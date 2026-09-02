@@ -66,3 +66,12 @@ spec:
       summary: "dimension 5 major: 5-6 reference files were each cited from an ordinary, non-failure Step, exceeding rubric.md's three-file ceiling; no self-guard exemption applies (each varies with the target Branch Plan). Merged by lifecycle axis into decomposition-and-dispatch.md and events-and-review-gate.md; threat-model-and-authorization.md stays standalone. Three files now, matching the ceiling. Content preserved verbatim under demoted headings; cross-references repointed."
       outcome:
         baseCommit: "0a069a68ba4889ebcd79082494d5253c2596701b"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "the entry above overclaims: rubric.md's own text reads 'if acting on the typical request needs three files open, the split is wrong' -- three IS the failure condition, not an acceptable ceiling. A round-5 re-review confirmed the 6-to-3 merge itself is clean (no new defect, links/anchors resolve) but dimension 5 does not clear: the ordinary path still opens exactly three files."
+      outcome:
+        baseCommit: "be8ee11641d2612f1ab796b63a463916da70c1d8"
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "declined two further restructurings, by the repository owner's own direction: (a) arguing threat-model-and-authorization.md is a rubric self-guard exemption -- round 5 called this the repository owner's own rubric-process call, not a single session's; (b) merging all three files into one -- risks failing dimension 5 from the opposite direction (a 1700+-line file). Standing open gap, disclosed alongside this skill's other residuals."
+
