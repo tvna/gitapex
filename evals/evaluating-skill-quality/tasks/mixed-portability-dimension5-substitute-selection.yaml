@@ -86,7 +86,7 @@ inputs:
     touchpoint and its portable substitute.
 expected:
   output_contains:
-    - "enumerating every non-portable touchpoint"
+    - "Mixed-portability substitute"
   output_not_contains:
     - "LGTM"
     - "no concerns"

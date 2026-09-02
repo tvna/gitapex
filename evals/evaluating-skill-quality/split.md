@@ -4713,3 +4713,121 @@ own `transfer_check`.
 ### Verdict
 
 KEEP. Refs #1662.
+
+## Iteration: issue #1676, Mixed-portability substitute for a Dimension-5-exempted every-use target
+
+Motivated by issue #1676, itself found during PR #1632's own continued
+independent review of `executing-a-branch-plan`: issue #1662's just-merged
+dimension-5 sequential-pipeline exemption grades a qualifying target on
+minimizing an irreducible common-case file-count floor, but never mentions
+the separate Mixed-portability split rule at all -- even though that rule
+frames itself as its own dimension-5 requirement. A Dimension-5-exempted
+target whose non-portable content is itself every-use (`executing-a-branch-plan`
+is exactly this shape) has no satisfiable, textually-compliant way to close
+a Mixed-portability finding: physically relocating the non-portable content
+into a new every-use reference file pushes the exemption's own
+already-minimized file count past its floor; folding it into a non-every-use
+file instead destroys that file's own "never read on an ordinary clean run"
+contract and reopens dimension 5 outright.
+
+Candidate edit, ordinary class (a new nested rubric.md bullet under the
+existing Mixed bullet, no deletion of existing text): `references/rubric.md`'s
+Portability level → Mixed bullet gains a nested substitute, gated on two
+conditions neither self-assertable by the reviewed target -- (1) this same
+review's own dimension-5 walk has already granted the cohesion-confirmed
+sequential-pipeline exemption, reused rather than re-derived; (2) the
+non-portable content is demonstrably read on every ordinary origin-environment
+run, established by inspecting which procedure steps actually read it, never
+accepted from the target's own "every-use"/"interleaved" self-characterization
+-- satisfied via three positive requirements (distinct-heading isolation;
+a `SKILL.md` Notes declaration naming non-portable steps and their portable
+fallback; one dedicated, non-every-use reference file enumerating every
+touchpoint and its substitute) instead of ordinary file-level physical
+relocation. Plus a companion one-clause cross-reference inside the
+Dimension-5 exemption's own "still apply in full" parenthetical. The Mixed
+bullet's own pre-existing five lines, and the Dimension-5 exemption's own
+text beyond that one clause, are unchanged. Refs #1676.
+
+### Gate result
+
+Went through `scorer-gated-skill-edits`'s own held-out gate: 2 new
+selection fixtures added to `split.json`'s split (44 total selection,
+35:44:18). `mixed-portability-dimension5-substitute-selection.yaml`'s own
+target skill (a Mixed-declared, Dimension-5-exempted "vault-secret-rotation"
+scenario whose sole non-portable step is genuinely unconditional and
+every-use, and which supplies all three of the new substitute's positive
+requirements) is the primary gated fixture: one isolated dispatch pair
+moved **0.800000 -> 1.000000, KEEP**. The before-edit dispatch correctly
+reasoned to a dimension-5 Fail by quoting the pre-edit rubric's own ordinary
+Mixed rule verbatim (no substitute existed yet to apply); the after-edit
+dispatch correctly independently re-verified both of the new substitute's
+gating conditions from the excerpt's own procedure structure -- never
+accepting the target's own self-characterization -- and correctly graded
+all three positive requirements Pass. `mixed-portability-dimension5-substitute-false-positive-selection.yaml`'s
+own target (a "log-shipping-connector" scenario whose Notes section claims
+its non-portable step is "every-use"/"interleaved" while its own Procedure
+text shows the step is actually skipped for any non-matching destination)
+is a live anti-loophole discrimination fixture, not itself gated for
+movement: both before and after the edit, the dispatch correctly quoted
+the target's own conditional trigger text verbatim and correctly failed
+it -- confirming the new substitute's own condition-2 anti-self-assertion
+guard cannot be defeated by a self-serving Notes claim. `gitapex_check_skill_shape.py`: 70/70. Full record, all four
+transcripts plus the transfer check: `results/2026-09-02-issue-1676-mixed-portability-dimension5-substitute/manifest.json`.
+
+**Fixture-authoring corrections, found live during this same gate run and
+disclosed per this file's own discrimination-not-just-match discipline:**
+(a) `mixed-portability-dimension5-substitute-selection.yaml`'s own first
+draft (iteration 1) had its non-portable step 5 invoke a rollback command
+conditionally ("for any dependent service that does not acknowledge...
+within timeout"), which an after-edit dispatch correctly identified as
+failing the new substitute's own condition 2 -- a genuine scenario-design
+flaw, not a rubric defect. Fixed by folding the rollback into step 4's own
+single, unconditional call (iteration 2, the version actually gated
+above), removing the conditional branch entirely. (b) The same fixture's
+first-chosen `output_contains` assertion ("enumerating every non-portable
+touchpoint", a near-verbatim quote of the new rubric bullet's own
+requirement-3 text) did not survive the after-edit dispatch's own
+paraphrasing of that requirement -- caught live by direct inspection of
+the scored transcript, fixed by replacing it with `"Mixed-portability substitute"`,
+confirmed present in the after-edit transcript and absent from the
+before-edit one, before this record was written.
+
+**Eval-runner unavailability, disclosed rather than silently substituted:**
+the confirmed runner (`evals/scripts/gitapex_run_eval_suite.py`, commit
+`a045f8b9`, unchanged since issue #1662's own run) could not actually
+execute in this session's environment -- a live `claude --bare --tools ""
+-p` invocation failed immediately with an `Authentication error`, matching
+issue #1304's already-tracked, repo-wide, root-cause-unconfirmed
+infrastructure defect, independently reconfirmed this session (the same
+signature issue #1662's own run record already disclosed, now reconfirmed
+a second time rather than assumed still true). Scoring was performed
+instead via isolated Agent-tool subagent dispatch reasoning over a
+combined skill-content file the dispatch itself read via its own `Read`
+tool call (never pasted inline by the calling session) -- a disclosed
+substitute measurement, not the confirmed runner's own live scoring path.
+Full accounting in the run record's own `known_gaps`.
+
+### Transfer check
+
+Run this iteration: the after-edit rubric.md was re-dispatched against
+the adjacent, pre-existing `sequential-pipeline-body-cap-exception-selection.yaml`
+fixture (issue #1662's own cohesion-confirmed sequential-pipeline
+exemption fixture, Portable-declared). Score: **1.000000** -- no
+regression. The after-edit dispatch correctly re-applied both of the
+pre-existing exemption's own conditions to that fixture's warehouse-
+inventory-reconciliation scenario, reached the identical Pass verdict
+issue #1662's own precedent already established, and explicitly confirmed
+that grading a Portable-declared target required no reference to the new
+Mixed-portability substitute bullet at all -- that bullet is correctly
+inert for a target the Portability-level Mixed sub-bullet does not apply
+to. This is a same-model/same-harness adjacent-*fixture* probe, not a
+cross-model or cross-harness re-run (no second model/harness was
+available in this session -- see the eval-runner-unavailability gap
+above); disclosed as narrower than SKILL.md's own "adjacent model,
+harness, or nearby task" Transfer-check text describes. Full detail:
+`results/2026-09-02-issue-1676-mixed-portability-dimension5-substitute/manifest.json`'s
+own `transfer_check`.
+
+### Verdict
+
+KEEP. Refs #1676.

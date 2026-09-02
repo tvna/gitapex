@@ -574,6 +574,13 @@ spec:
         verdict: fixed
         before: 0.666667
         after: 1.0
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1676"
+      summary: "Mixed-portability rule gained a nested substitute for a D5-exempted target whose non-portable content is itself every-use, gated on two independently-verifiable conditions and satisfied via three positive requirements instead of file relocation. An anti-loophole fixture confirmed the anti-self-assertion guard resists a self-serving Notes claim. A Transfer check confirmed no regression and the substitute is inert for Portable targets."
+      outcome:
+        verdict: fixed
+        before: 0.8
+        after: 1.0
   skillDependencies:
     requires: []
     relatedTo:
