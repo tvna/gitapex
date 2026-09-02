@@ -46,7 +46,9 @@ structural-identifier-portability addition (gitapex#1347: the new
 dimension-6 narrative-citation-vs-structural-identifier bullet), and a
 0:1:0 stale-reference-vs-commit-provenance-annotation addition
 (gitapex#1466: the new dimension-6 durability bullet naming that exact
-pattern), for a resulting 35:41:18
+pattern), and a 0:1:0 sequential-pipeline-body-cap-exception addition
+(gitapex#1662: the new dimension-5 cohesion-confirmed over-cap
+sequential-pipeline exception), for a resulting 35:42:18
 partition. This is
 named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
