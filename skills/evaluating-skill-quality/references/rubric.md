@@ -1721,7 +1721,7 @@ presence by shape.
   under two conditions, checked here, not there, because the first one
   is this dimension's own finding.** The Portability level section's
   Mixed bullet prices a *choice*: an author who could relocate the
-  repository/platform-specific part into a dedicated reference file, and
+  repository-specific part into a dedicated reference file, and
   simply has not done so yet. A target that has already cleared the
   cohesion-confirmed sequential-pipeline exemption immediately above has
   no such choice available for its every-use non-portable content
@@ -1755,10 +1755,10 @@ presence by shape.
   portable and non-portable content isolated under distinct headings,
   never blended sentence-by-sentence; a `SKILL.md` Notes declaration
   naming which steps execute non-portable content and each one's own
-  portable fallback; and one dedicated, non-every-use reference file --
+  portable alternative; and one dedicated, non-every-use reference file --
   confirmed to actually exist and to genuinely enumerate every
   non-portable touchpoint the target carries and its own portable
-  substitute, never accepted from the target's own claim that such a
+  alternative, never accepted from the target's own claim that such a
   file exists or is complete, the same anti-self-assertion discipline
   condition 2 already applies -- read only at vendoring/porting time,
   never on an ordinary run. A target meeting only one condition, or
@@ -1778,11 +1778,18 @@ presence by shape.
   whose every-use content could in fact fit under `BODY_MAX_LINES` after
   actually applying dimension 2's own tests to it, failing that
   exemption's own condition 2; a Mixed-declared target claiming the
-  Mixed-portability substitute above whose non-portable step is in fact
-  conditional rather than executed every run (failing that substitute's
-  own condition 2), or whose claimed dedicated reference file does not
-  actually exist or does not actually enumerate every non-portable
-  touchpoint (failing that substitute's own third positive requirement).
+  Mixed-portability substitute above without this same dimension-5 walk
+  having actually granted it the cohesion-confirmed sequential-pipeline
+  exemption (failing that substitute's own condition 1), whose
+  non-portable step is in fact conditional rather than executed every run
+  (failing that substitute's own condition 2), whose portable and
+  non-portable content is not actually isolated under distinct headings or
+  whose `SKILL.md` Notes declaration does not actually name the
+  non-portable steps and their portable alternative (failing that
+  substitute's own first or second positive requirement), or whose claimed
+  dedicated reference file does not actually exist or does not actually
+  enumerate every non-portable touchpoint (failing that substitute's own
+  third positive requirement).
 - **Pass:** `SKILL.md` links to each reference exactly where it becomes
   necessary, stating what context requires the read and what the reader
   will obtain; the common case resolves from `SKILL.md` alone; where a
