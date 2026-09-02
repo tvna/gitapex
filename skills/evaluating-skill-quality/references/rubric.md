@@ -783,6 +783,49 @@ grading below.
   belongs in a clearly named reference file (e.g.
   `references/this-repo-only.md`) a consumer can identify and drop, not
   blended into the portable core.
+    - **A Dimension-5-exempted target whose non-portable content is
+      itself every-use is a distinct case from the ordinary Mixed split
+      above, but only under a narrow, stated condition.** The Mixed
+      bullet's own file-level-split requirement prices a *choice*: an
+      author who could relocate the repository/platform-specific part
+      into a dedicated reference file, and simply has not done so yet.
+      A target that has already cleared dimension 5's own
+      cohesion-confirmed sequential-pipeline exemption (below) has no
+      such choice available for its every-use non-portable content
+      specifically: physically relocating that content into a new
+      every-use reference file would push the exemption's own
+      already-minimized common-case file count past its irreducible
+      floor, and folding it into a non-every-use file instead would
+      contaminate that file's own "never read on an ordinary clean run"
+      semantic contract and reopen dimension 5 outright. Treating such a
+      target identically to an ordinary Mixed skill that merely declined
+      to split is not automatically correct, but neither is exempting
+      any Mixed-declared skill from the file-level-split requirement on
+      the bare claim that relocating its non-portable content would be
+      inconvenient: that would let any bundled non-portable content
+      dodge this rule merely by relabeling itself "every-use." The
+      substitute below applies only when both (1) this same review's own
+      dimension-5 walk has already granted the target the
+      cohesion-confirmed sequential-pipeline exemption -- reused from
+      that finding, never re-derived here, and never available to a
+      target the dimension-5 walk has not itself cleared -- and (2) the
+      non-portable content is demonstrably read on every ordinary
+      origin-environment run, established by inspecting which procedure
+      steps actually read it, never accepted from the target's own
+      "every-use"/"interleaved" self-characterization. A target meeting
+      both conditions satisfies the Mixed rule's own stated purpose (a
+      consumer can identify and drop what it doesn't need) via three
+      positive requirements instead of the ordinary file-level physical
+      relocation: portable and non-portable content isolated under
+      distinct headings, never blended sentence-by-sentence; a
+      `SKILL.md` Notes declaration naming which steps read non-portable
+      content and each one's own portable fallback; and one dedicated,
+      non-every-use reference file -- read only at vendoring/porting
+      time, never on an ordinary run -- enumerating every non-portable
+      touchpoint the target carries and its own portable substitute. A
+      target meeting only one condition, or neither, is graded exactly
+      like any other Mixed-declared skill under the ordinary rule above:
+      the file-level split it declines is not optional for it.
 
 ### Dependency file portability
 
@@ -1702,11 +1745,12 @@ presence by shape.
   to inline detail it could have inlined without exceeding the cap does
   not qualify. A skill meeting both conditions is graded on whether its
   split minimizes the common-case file count given that irreducible
-  floor (co-location, content-named files, and a `SKILL.md` pointer at
-  each branch point still apply in full) rather than being failed
-  outright for a floor no rearrangement can lower; a skill meeting only
-  one condition, or neither, is graded exactly like any other split
-  under the tests above.
+  floor (co-location, content-named files, a `SKILL.md` pointer at each
+  branch point, and -- for a Mixed-declared target -- the
+  Mixed-portability substitute in Step 4's own Mixed bullet above still
+  apply in full) rather than being failed outright for a floor no
+  rearrangement can lower; a skill meeting only one condition, or
+  neither, is graded exactly like any other split under the tests above.
 
 - **Fail:** a reference named `doc2.md` with no branch-point pointer in
   `SKILL.md`, or content the model reads on every single use pushed out to

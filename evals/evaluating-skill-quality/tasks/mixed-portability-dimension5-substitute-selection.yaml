@@ -1,0 +1,94 @@
+id: evaluating-skill-quality-mixed-portability-dimension5-substitute-selection
+name: Dimension-5-Exempted Mixed Skill Has A Satisfiable Portability Closure Via The Substitute
+description: The target skill is Mixed-declared and its cohesion check has already confirmed (Procedure step 2, given as fact) single-outcome sequential cohesion with every-use reference content over BODY_MAX_LINES -- it already clears dimension 5's own cohesion-confirmed sequential-pipeline exemption. Its non-portable, platform-specific content (a proprietary secrets-vault API) is itself read on every ordinary run, not detail a caller only sometimes needs. The excerpt supplies all three of the new Mixed substitute's positive requirements -- portable/non-portable content under distinct headings, a SKILL.md Notes declaration naming the non-portable steps and their portable fallback, and a dedicated non-every-use porting-boundary-map.md reference file. Tests the new Mixed-portability substitute bullet -- before the rubric edit, the review must fail the target under the ordinary Mixed rule's literal file-level-split requirement (the non-portable content stays inline); after the edit, the review must recognize the substitute is satisfied and pass it, while still independently re-deriving both gating conditions rather than accepting the target's own self-characterization.
+tags:
+  - quality
+  - portability
+  - progressive-disclosure
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "vault-secret-rotation".
+
+    Given, not to be re-derived: this target's cohesion check already ran
+    at its own Procedure step 2 and returned single-outcome sequential
+    cohesion confirmed -- the five steps below all converge on one outcome
+    ("every credential due for rotation is rotated in the vault and every
+    dependent service is updated to the new value, with no service left
+    holding a stale credential"), each step's output is the next step's
+    required input, and there is no caller-selectable narrower path
+    through this skill. This target's own dimension-5 walk (already run,
+    this same review) confirmed it clears the cohesion-confirmed
+    sequential-pipeline exemption: its three mandatory reference files
+    (`references/rotation-policy.md`, 260 lines,
+    `references/dependent-service-registry.md`, 230 lines, and
+    `references/rollback-procedure.md`, 200 lines -- 690 lines combined,
+    over the 500-line `BODY_MAX_LINES` cap) are each genuinely load-bearing
+    domain policy with no padding a dimension-2 cut could remove, and no
+    fourth-file or single-file rearrangement lowers that floor. Do not
+    re-run or second-guess either the cohesion finding or the dimension-5
+    exemption -- take both as already established.
+
+    ---
+    name: vault-secret-rotation
+    description: Rotate every credential due for rotation in the organization's secrets vault and propagate each new value to its dependent services. Use when a scheduled or emergency credential rotation is due.
+    ---
+
+    # Vault Secret Rotation
+
+    ## Procedure (portable)
+
+    1. Enumerate every credential due for rotation from the vault's own
+       rotation schedule.
+    2. Read `references/rotation-policy.md` (mandatory every run) and
+       compute each credential's own new value per its rotation policy.
+    3. Read `references/dependent-service-registry.md` (mandatory every
+       run) to identify every service that depends on each rotated
+       credential.
+
+    ## Procedure (VaultCo-specific, non-portable)
+
+    4. Call VaultCo's proprietary `vaultco-cli rotate --id <credential>
+       --auto-rollback` command (a VaultCo-only binary, present only in
+       this organization's own deployment) to write each new credential
+       value into the vault and issue VaultCo's own propagation webhook
+       to every dependent service identified in step 3. This single
+       command always runs to completion on every rotation: the
+       binary's own `--auto-rollback` flag atomically reverts to the
+       prior value, internally, if any dependent service fails to
+       acknowledge within VaultCo's own webhook timeout, so no separate
+       conditional rollback step exists in this Procedure -- the command
+       itself, and its outcome (rotated or auto-rolled-back), is the
+       only VaultCo-specific content, and it is invoked exactly once,
+       unconditionally, every run.
+
+    ## Procedure (portable, continued)
+
+    5. Read `references/rollback-procedure.md` (mandatory every run) and
+       record this rotation's own outcome -- whether step 4 completed as
+       a rotation or an auto-rollback -- per its own generic audit-trail
+       rules, closing the reconciliation. This step reads only the
+       outcome step 4 already produced and never itself calls
+       `vaultco-cli`.
+
+    ## Notes
+
+    Portability: **Mixed**. Steps 1-3, step 5, and all three mandatory
+    reference files are portable. Step 4's own `vaultco-cli` invocation
+    and webhook mechanism -- and only step 4's -- is VaultCo-specific,
+    is read and executed on every ordinary run with no
+    caller-selectable narrower path around it, and has no portable
+    substitute inline in this file: a copy of this skill vendored
+    outside a VaultCo deployment would need to replace step 4's own
+    single call with that deployment's own credential-write mechanism.
+    See `references/porting-boundary-map.md` (read only when vendoring
+    this skill elsewhere, never on an ordinary run) for that one
+    touchpoint and its portable substitute.
+expected:
+  output_contains:
+    - "enumerating every non-portable touchpoint"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"
+    - "does not apply"
+    - "reverts to the ordinary"
