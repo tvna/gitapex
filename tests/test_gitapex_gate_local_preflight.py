@@ -35,6 +35,7 @@ import gitapex_gate_local_preflight
 import gitapex_scan_ssot_schema
 import pytest
 import yaml
+from conftest import bare_origin_with_two_commits, shallow_clone
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -48,41 +49,6 @@ _HISTORY_CHECK_SCRIPT = (
     "result = subprocess.run(['git', 'rev-parse', '--verify', '-q', 'HEAD^'], capture_output=True)\n"
     "sys.exit(0 if result.returncode == 0 else 1)\n"
 )
-
-
-def _run_git(args: list[str], cwd: pathlib.Path) -> None:
-    subprocess.run(args, cwd=cwd, check=True, capture_output=True, text=True)
-
-
-def _init_repo(root: pathlib.Path, *, branch: str = "main") -> pathlib.Path:
-    root.mkdir(parents=True, exist_ok=True)
-    _run_git(["git", "init", "-q", "--initial-branch", branch], root)
-    _run_git(["git", "config", "user.email", "test@example.com"], root)
-    _run_git(["git", "config", "user.name", "Test"], root)
-    return root
-
-
-def _commit(root: pathlib.Path, name: str, message: str) -> None:
-    (root / name).write_text(f"{name}\n", encoding="utf-8")
-    _run_git(["git", "add", "--", name], root)
-    _run_git(["git", "commit", "-q", "-m", message], root)
-
-
-def _bare_origin_with_two_commits(tmp_path: pathlib.Path) -> pathlib.Path:
-    """A local, non-bare working repo with two commits, then a bare mirror
-    of it -- ``git clone --depth 1`` needs a real remote to produce an
-    actual shallow clone."""
-    working = _init_repo(tmp_path / "working")
-    _commit(working, "a.txt", "first")
-    _commit(working, "b.txt", "second")
-    bare = tmp_path / "origin.git"
-    _run_git(["git", "clone", "-q", "--bare", str(working), str(bare)], tmp_path)
-    return bare
-
-
-def _shallow_clone(origin: pathlib.Path, dest: pathlib.Path) -> pathlib.Path:
-    _run_git(["git", "clone", "-q", "--depth", "1", f"file://{origin}", str(dest)], dest.parent)
-    return dest
 
 
 # A real, registered gate script. The bypass fixtures name it on purpose:
@@ -730,8 +696,8 @@ def test_main_reproduces_and_fixes_the_original_shallow_clone_defect(
     with no precondition established), then proves ``main()`` establishes
     full history before that same gate script ever runs, so it now passes
     -- proof method (a)."""
-    origin = _bare_origin_with_two_commits(tmp_path)
-    shallow = _shallow_clone(origin, tmp_path / "shallow")
+    origin = bare_origin_with_two_commits(tmp_path)
+    shallow = shallow_clone(origin, tmp_path / "shallow")
     script = _write_script(tmp_path, "needs_history.py", _HISTORY_CHECK_SCRIPT)
 
     # The defect, reproduced directly: the fixture gate script fails
@@ -768,8 +734,8 @@ def test_main_aborts_before_any_wired_gate_runs_when_the_fetch_itself_fails(
     so ``git fetch --unshallow`` itself fails. A single clean top-line
     abort message and exit 1, before any wired gate runs at all -- never
     the reactive, mid-run failure #1489 asked to close."""
-    origin = _bare_origin_with_two_commits(tmp_path)
-    shallow = _shallow_clone(origin, tmp_path / "shallow")
+    origin = bare_origin_with_two_commits(tmp_path)
+    shallow = shallow_clone(origin, tmp_path / "shallow")
     shutil.rmtree(origin)
 
     marker = tmp_path / "PWNED.txt"

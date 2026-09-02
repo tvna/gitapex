@@ -51,8 +51,8 @@ CLASSIFIER = (
 )
 
 # A single-line, non-empty string -- ``_reflog_created_from``'s own regex
-# is matched against one reflog line at a time (``line.strip()`` inside a
-# ``splitlines()`` loop), so an embedded newline would change which LINE
+# is matched against one reflog line at a time (``line.strip()`` inside an
+# ``out.split("\n")`` loop), so an embedded newline would change which LINE
 # carries the "Created from" marker rather than exercising the capture
 # group itself.
 _SINGLE_LINE_TEXT = st.text(min_size=1, max_size=40).filter(
