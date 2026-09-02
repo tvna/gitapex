@@ -107,6 +107,11 @@ spec:
       summary: "the same round's Cleanup sub-step named `git worktree prune` as the way to clear a stale self-established worktree; per git's own docs, prune only clears admin metadata for a working tree already removed by other means, it does not remove one still on disk. Corrected to `git worktree remove <path>` (+ `git branch -d`), prune's real scope stated."
       outcome:
         baseCommit: "83eb216ebfda43d930a4a6a164545411fd9201e1"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "a round-9 re-review found two minor gaps: Cleanup's `git worktree remove`/`git branch -d` have real refusal preconditions (uncommitted changes; an unmerged branch) with no fallback stated -- added, never silently force-overridden. Step 5's rejected-edit log never named its own file locus -- stated as `evals/<skill>/split.md`, the same file step 4's own worked example already cites for the Kept-edit log."
+      outcome:
+        baseCommit: "a0d3c270c341028d417ec046eb72b156f5f7ee6f"
   skillDependencies:
     requires:
       - drafting-a-skill
