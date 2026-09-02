@@ -19,6 +19,10 @@ inputs:
 
     Drive this PR to a terminal state.
 expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
+  # this fixture's own scenario is exactly the cited Stop-boundary bullet.
+  exercises:
+    - "Step 1: don't proceed past a missing ACM/waiver, `tracking` waiver, or closed issue without escalating; a `Refs`-only citation is exempt. Step 2: never run steps 3-6's fix loop while `branch-plan-executing` is present -- defer before step 3, not after step 7's own dispatch."
   output_contains:
     - "escalate"
     - "390"

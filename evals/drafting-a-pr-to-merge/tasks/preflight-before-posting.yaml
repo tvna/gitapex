@@ -16,6 +16,10 @@ inputs:
     Is fencing the raw verdict text in a code block enough before posting
     it to the PR, or is something else required first?
 expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
+  # this fixture's own scenario is exactly the cited Stop-boundary bullet.
+  exercises:
+    - "Step 8 (record): run outward-artifact-preflight before posting any composed verdict -- quoting/fencing alone does not satisfy the ASCII-only and provenance-disclosure requirements."
   output_contains:
     - "preflight"
     - "sanitize"
