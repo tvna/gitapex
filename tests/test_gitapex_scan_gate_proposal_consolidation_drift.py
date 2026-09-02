@@ -352,6 +352,55 @@ def test_main_exits_one_on_label_exists_github_api_error(monkeypatch: pytest.Mon
 
 
 # ---------------------------------------------------------------------------
+# _is_blank / ScanConsolidationDriftArgs._reject_whitespace_only (issue #1094's
+# own invisible-character finding, reproduced here as this script's own
+# independent copy of the check -- see the module docstring for why)
+# ---------------------------------------------------------------------------
+
+
+def test_is_blank_true_for_empty_string() -> None:
+    assert csd._is_blank("") is True
+
+
+def test_is_blank_true_for_ordinary_whitespace() -> None:
+    assert csd._is_blank("   \t\n") is True
+
+
+def test_is_blank_true_for_zero_width_space() -> None:
+    assert csd._is_blank("​") is True
+
+
+def test_is_blank_false_for_meaningful_text() -> None:
+    assert csd._is_blank("tvna") is False
+
+
+def test_is_blank_false_for_padded_but_meaningful_text() -> None:
+    assert csd._is_blank("  tvna  ") is False
+
+
+def test_scan_consolidation_drift_args_rejects_blank_owner() -> None:
+    with pytest.raises(csd.ValidationError):
+        csd.ScanConsolidationDriftArgs(owner="", repo="gitapex", label="gate-proposal")
+
+
+def test_scan_consolidation_drift_args_rejects_whitespace_only_repo() -> None:
+    with pytest.raises(csd.ValidationError):
+        csd.ScanConsolidationDriftArgs(owner="tvna", repo="   ", label="gate-proposal")
+
+
+def test_scan_consolidation_drift_args_rejects_invisible_only_label() -> None:
+    with pytest.raises(csd.ValidationError):
+        csd.ScanConsolidationDriftArgs(owner="tvna", repo="gitapex", label="​")
+
+
+def test_scan_consolidation_drift_args_accepts_meaningful_values() -> None:
+    args = csd.ScanConsolidationDriftArgs(owner="tvna", repo="gitapex", label="gate-proposal")
+    assert args.owner == "tvna"
+    assert args.repo == "gitapex"
+    assert args.label == "gate-proposal"
+
+
+# ---------------------------------------------------------------------------
 # main -- end-to-end regression: the exact #1566-#1575 defect class
 # ---------------------------------------------------------------------------
 
