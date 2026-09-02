@@ -169,16 +169,40 @@ linked worktree whatsoever, not only one this skill's own Workflow-tool
 dispatch created, confirmed live against exactly such an unrelated
 worktree during authoring.
 
-**Disclosed, unverified assumption.** This resolution mechanism assumes
-the Workflow tool's own `isolation: 'worktree'` implementation creates
-each task's worktree via a `-b <new-branch> <shared-branch-name>`-shaped
-operation naming the shared branch as a literal startpoint -- the same
-"Open item, not resolved here" territory this file already flags above
-for this exact tool's own worktree-creation internals (its cleanup-on-
-merge-back behavior). If the real implementation instead uses a detached-
-HEAD checkout, or passes a raw commit SHA rather than the branch's own
-name as the startpoint, this backstop's own resolution fails cleanly and
-it silently no-ops for that dispatch -- see the fail-open paragraph next.
+**Disclosed assumption -- and it is verified FALSE for at least one real
+dispatcher.** This resolution mechanism assumes the Workflow tool's own
+`isolation: 'worktree'` implementation creates each task's worktree via a
+`-b <new-branch> <shared-branch-name>`-shaped operation naming the shared
+branch as a literal startpoint -- the same "Open item, not resolved here"
+territory this file already flags above for this exact tool's own
+worktree-creation internals (its cleanup-on-merge-back behavior). If the
+real implementation instead uses a detached-HEAD checkout, or passes a raw
+commit SHA or a remote-tracking ref rather than a local branch name as the
+startpoint, this backstop's own resolution fails cleanly and it silently
+no-ops for that dispatch -- see the fail-open paragraph next.
+
+**This is not hypothetical, and it is the common case here.** Issue
+`#1566`'s own step-8 adversarial review observed a real `branch-plan-task`
+worktree in this repository whose own branch reflog read exactly `branch:
+Created from origin/main`, sitting at the plan branch's merge-base with
+every one of that branch's commits missing -- issue `#1508`'s own defect
+shape, in the flesh. `origin/main` is a remote-tracking ref, not a local
+branch, so `gitapex_check_task_worktree_base.py` returned `warn` and
+failed open: the stale base went undetected and the dispatched agent had
+to notice it and `git reset --hard` by hand.
+
+**Therefore: treat this backstop as absent until the shared plan branch's
+name is threaded in explicitly.** Until then, a wave dispatch's own prompt
+should tell each task to verify its worktree HEAD against the shared plan
+branch's tip itself, rather than relying on this hook to catch it -- which
+is exactly what the step-8 dispatch prompt that found this had to do by
+hand. Comparing against `origin/main` instead would NOT be a fix: `main`
+is not the shared plan branch, so that check would deny every
+legitimately-based task worktree the moment `main` advanced -- the same
+false, blast-radius-widening DENY the rejected main-checkout heuristic
+above was rejected for. The real fix (an env var naming the shared plan
+branch, set by this skill's own dispatch step and read by the script) is
+an open follow-up, named here rather than silently assumed away.
 
 **Fail-open by design, the opposite default from
 `gitapex_check_task_bash_safety.py`'s own fail-closed classifier.** This

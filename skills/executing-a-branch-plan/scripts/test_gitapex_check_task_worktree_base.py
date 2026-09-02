@@ -168,6 +168,85 @@ def test_warn_when_worktree_created_from_a_remote_tracking_ref(tmp_path: pathlib
     assert result["decision"] == "warn"
 
 
+def test_stale_base_is_NOT_detected_when_the_worktree_was_created_from_a_remote_tracking_ref(
+    tmp_path: pathlib.Path,
+) -> None:
+    """**Defeat case (step-8 adversarial review, issue #1566) -- pins a
+    DISCLOSED STRUCTURAL LIMITATION, not a desired behavior.**
+
+    This is issue #1508's own defect condition -- a task worktree forked
+    from a base the shared plan branch has since advanced far past --
+    reshaped to fall just outside this module's own reflog heuristic: the
+    worktree's branch was created from `origin/main` (a remote-tracking
+    ref) rather than from the shared plan branch by name. `_verify_local_branch`
+    correctly refuses to resolve `refs/heads/origin/main`, so the whole
+    resolution chain returns "cannot resolve" and this backstop fails
+    OPEN -- while the stale base it exists to catch is genuinely,
+    severely present.
+
+    **This is not hypothetical.** It is the observed shape of a real
+    `branch-plan-task` worktree in this repository: the step-8 review
+    dispatch that wrote this test was itself handed a worktree whose own
+    reflog read exactly `branch: Created from origin/main`, sitting at the
+    branch's merge-base with every one of the plan branch's commits
+    missing. The check did not fire, and the agent had to notice and
+    `git reset --hard` by hand.
+
+    The module's own docstring previously reasoned that a startpoint which
+    is not a local branch signals an *unrelated* worktree ("essentially
+    never a name that also happens to resolve to an existing local branch
+    by coincidence"). The first half of that inference is sound; the
+    conclusion drawn from it was not, because this skill's own dispatcher
+    produces exactly that shape. Resolving it correctly needs the shared
+    plan branch's name threaded in from the dispatching thread -- a
+    design change this module explicitly does not make (see its own
+    "Disclosed, unverified assumption" section) -- so it is disclosed
+    there, in references/execution-and-dispatch.md, and in
+    references/threat-model-and-authorization.md rather than papered over.
+
+    Comparing against `origin/main` instead would NOT be a fix: `main` is
+    not the shared plan branch, so it would deny every legitimately-based
+    task worktree the moment `main` advanced -- precisely the "false,
+    actively-blast-radius-widening DENY" this module's own docstring
+    rejects that alternative for.
+
+    If a future change makes this case DENY, that is a real improvement
+    and this test should be rewritten to assert the deny -- it is pinned
+    as `warn` so the limitation cannot be quietly *widened* or forgotten,
+    not because `warn` is the good outcome.
+    """
+    origin = _init_repo(tmp_path / "origin", branch="main")
+    _commit(origin, "a.txt", "c1")
+    main_root = tmp_path / "main"
+    _run(["git", "clone", "-q", str(origin), str(main_root)], tmp_path)
+
+    # The shared plan branch, forked from main and then advanced -- the
+    # real wave-dispatch shape this backstop is built for.
+    _run(["git", "checkout", "-q", "-b", "shared-plan"], main_root)
+    plan_tip = _commit(main_root, "plan-work.txt", "the plan branch advances")
+
+    # The task worktree, created the way this repository's own dispatcher
+    # actually creates one: from origin/main, NOT from shared-plan.
+    worktree = _worktree_add(main_root, tmp_path / "wt", new_branch="task1", startpoint="origin/main")
+
+    # The stale base is genuinely present: shared-plan's tip is not an
+    # ancestor of the worktree's HEAD, so a correctly-targeted check would
+    # deny here.
+    merge_base = _run(["git", "merge-base", "HEAD", "refs/heads/shared-plan"], worktree).stdout.strip()
+    assert merge_base != plan_tip, "fixture no longer reproduces a stale base"
+
+    result = under_test.check_worktree_base(worktree)
+
+    assert result["decision"] == "warn", (
+        "this defeat case is disclosed as a structural limitation; if it now "
+        "resolves the shared plan branch and denies, update this test to assert deny"
+    )
+    reason = result["reason"]
+    assert isinstance(reason, str)
+    assert "origin/main" in reason
+    assert "failing open" in reason
+
+
 def test_warn_when_worktree_root_does_not_exist(tmp_path: pathlib.Path) -> None:
     """Every git call in this module fails the same way (non-zero exit) on
     a nonexistent cwd -- confirms the whole chain folds that into a single

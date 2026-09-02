@@ -277,6 +277,61 @@ def test_a_gate_with_an_unrecognized_precondition_sub_key_is_rejected_by_both_la
     assert drift._parse_registry(bad) is None
 
 
+@pytest.mark.parametrize(
+    "packages",
+    [
+        pytest.param([], id="empty-list"),
+        pytest.param([""], id="empty-string-item"),
+        pytest.param(["pydantic", ""], id="one-good-one-empty"),
+    ],
+)
+def test_a_degenerate_requires_python_packages_list_is_rejected_end_to_end(tmp_path, packages):
+    """Issue #1566, step-8 adversarial review. The schema declares
+    `minItems: 1` and `items.minLength: 1` on
+    `preconditions.requires_python_packages`; the pydantic
+    `GatePreconditions` model types the same field as a plain
+    `list[str] | None` and accepts both degenerate shapes on its own.
+
+    That asymmetry is DELIBERATE and matches every sibling model in this
+    file's module: `Gate.rule`, `Gate.policy_refs`, `GateFailMode.rationale`
+    and `GateTargetEntry.ref` all carry the schema's `minLength`/`minItems`
+    constraints on the schema side only. `GateFailMode`'s own docstring
+    states the division outright -- "jsonschema is the strict validator;
+    this is the secondary typed-access layer". Adding a constraint to
+    `GatePreconditions` alone would make it the single model that
+    duplicates a schema rule, creating exactly the two-places-to-update
+    drift this layering exists to avoid.
+
+    What must hold is the end-to-end contract, which this pins: `find_drift`
+    runs the strict layer first, so a degenerate list is rejected by the
+    wired gate regardless of what the typed-access layer alone would
+    accept. It matters concretely -- `check-pr-skill-audit-disclosure.sh`
+    reads this exact list out of the registry and probes each entry, so
+    `[]` would silently disable that hook's dependency pre-check and `[""]`
+    would make it deny naming an empty package.
+    """
+    bad = json.loads(json.dumps(_VALID_INSTANCE))
+    bad["gates"][0]["preconditions"] = {"requires_python_packages": packages}
+    instance_path = _write_instance(tmp_path, bad)
+
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+
+    assert any(f.startswith("schema:") for f in findings), findings
+
+
+def test_gate_preconditions_matches_its_sibling_models_strictness_convention():
+    """Pins the layering the test above depends on, so a future edit that
+    tightens `GatePreconditions` in isolation has to confront the
+    convention rather than silently diverge from it: the typed-access
+    models carry no value-level length constraints, only shape and type.
+    If this repository ever decides the pydantic layer SHOULD mirror the
+    schema's `minLength`/`minItems`, that is a deliberate change across
+    every model here -- not this one field alone."""
+    assert drift.GatePreconditions.model_validate({"requires_python_packages": []}).requires_python_packages == []
+    assert drift.GateFailMode.model_validate({"on_error": "fail-open", "rationale": ""}).rationale == ""
+    assert drift.GateTargetEntry.model_validate({"kind": "mcp-tool", "ref": ""}).ref == ""
+
+
 def test_script_drift_still_caught_when_gate_carries_new_fields(tmp_path):
     """Defeat test (refactor-and-review-gate.md's own mandatory step 8
     requirement, constructed here at task time since it exercises this

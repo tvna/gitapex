@@ -687,6 +687,35 @@ this mechanism cannot always resolve with confidence, for reasons
 internals -- see the execution-and-dispatch reference cited above) that
 have nothing to do with whether the task's own work is actually safe.
 
+**Known, disclosed limitation, live-confirmed: in this repository's own
+observed dispatch shape this backstop does not fire at all.** The
+branch-name resolution above trusts the startpoint recorded in the
+worktree branch's own `branch: Created from ...` reflog entry, and trusts
+it only when that recorded name resolves to an existing LOCAL branch.
+Issue `#1566`'s own step-8 adversarial review
+observed a real `branch-plan-task` worktree in this repository whose
+reflog read exactly `branch: Created from origin/main` -- a
+remote-tracking ref, not a local branch -- while sitting at the plan
+branch's merge-base with every one of that branch's commits missing. That
+is issue `#1508`'s own defect shape, and this mechanism returned `warn`
+(fail open) for it: nothing was detected, and the dispatched agent had to
+notice the stale base and `git reset --hard` by hand.
+
+So the "Disclosed, unverified assumption" in the [execution and dispatch
+reference](execution-and-dispatch.md#worktree-base-precondition-backstop)
+is, for at least one real dispatcher, verified FALSE. **Until the shared
+plan branch's name is threaded in explicitly, plan for this backstop
+being absent rather than present**: a wave dispatch's own prompt should
+tell each task to verify its own worktree base against the shared plan
+branch itself. Resolving `refs/remotes/origin/main` instead is not a fix
+-- `main` is not the shared plan branch, so it would deny every
+legitimately-based task worktree whenever `main` advanced, the same
+false, blast-radius-widening DENY this mechanism's own design rejected
+elsewhere. Pinned as a regression test in
+`scripts/test_gitapex_check_task_worktree_base.py` so the limitation
+cannot be silently widened, and named as an open follow-up rather than
+overclaimed as covered.
+
 **Known, disclosed limitation, not solved here: the same self-tamper
 residual the sibling Bash-safety pair and the Decision 20 exit-condition
 pair above already carry.** `check_task_bash_safety.sh` resolves its own
