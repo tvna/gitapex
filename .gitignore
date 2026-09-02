@@ -34,3 +34,8 @@ apm_modules/
 # Transient git worktrees created by Agent-tool `isolation: worktree` dispatches
 # (one per parallel task); reproducible on demand, never meant to be committed.
 /.claude/worktrees/
+
+# Personal, per-session overrides (env, permission tweaks) -- unlike
+# .claude/settings.json above, this file is never meant to be shared or
+# committed.
+/.claude/settings.local.json
