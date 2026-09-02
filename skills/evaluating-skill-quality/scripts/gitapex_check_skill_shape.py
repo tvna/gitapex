@@ -1013,6 +1013,18 @@ def format_report(results: list[CheckResult]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # function-body-test-coverage: WAIVED: this diff's own new
+    # test_main_strict_token_budget_flag_fails_over_budget_skill and
+    # test_main_strict_token_budget_flag_passes_under_budget_skill tests
+    # already call css.main(["--strict-token-budget", ...]) directly
+    # (skills/evaluating-skill-quality/scripts/test_gitapex_check_skill_
+    # shape.py), exercising this function's own new --strict-token-budget
+    # argv path end to end -- the identical gate-side path-resolution gap
+    # check_shape()'s own WAIVED comment above already documents (that
+    # gate's own _test_relative_paths() unconditionally resolves to
+    # top-level tests/test_{stem}.py, with no fallback for this
+    # repository's pre-existing co-located test convention this exact
+    # file/test pair uses), not a real coverage hole in this function.
     parser = argparse.ArgumentParser(description="Check one or more SKILL.md's deterministic shape (read-only).")
     parser.add_argument(
         "--allowed-root",

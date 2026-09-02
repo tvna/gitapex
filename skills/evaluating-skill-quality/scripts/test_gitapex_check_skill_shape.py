@@ -540,6 +540,28 @@ def test_under_budget_skill_md_body_passes_either_way(tmp_path):
     assert _by_name(css.check_shape(d, strict_token_budget=True))["body-token-budget"].passed is True
 
 
+def test_main_strict_token_budget_flag_fails_over_budget_skill(tmp_path):
+    # Exercises the new --strict-token-budget flag through main()'s own
+    # real argv/argparse path, distinct from the check_shape()-level
+    # tests above -- confirms the CLI flag actually threads through, not
+    # only the Python-level keyword argument. Long-but-few lines (not
+    # css.BODY_MAX_LINES + 5, unlike test_overlong_body_fails above) push
+    # the estimated token count over budget while staying well under
+    # BODY_MAX_LINES, isolating the flag's own effect on main()'s exit
+    # code from body-length's own separate, always-hard FAIL.
+    d = _write_skill(tmp_path)
+    skill_md = d / "SKILL.md"
+    padding = "\n".join("x" * 60 for _ in range(400))
+    skill_md.write_text(skill_md.read_text(encoding="utf-8") + "\n" + padding + "\n", encoding="utf-8")
+    assert css.main([str(d)]) == 0  # advisory-only without the flag
+    assert css.main(["--strict-token-budget", str(d)]) == 1
+
+
+def test_main_strict_token_budget_flag_passes_under_budget_skill(tmp_path):
+    d = _write_skill(tmp_path)
+    assert css.main(["--strict-token-budget", str(d)]) == 0
+
+
 def test_references_are_exempt_from_token_budget(tmp_path):
     # A references/*.md file well over BODY_MAX_TOKENS worth of chars must
     # not gain a body-token-budget:*-shaped check at all -- BODY_MAX_TOKENS
