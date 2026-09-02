@@ -267,6 +267,60 @@ def test_fetch_issue_duplicate_state_raises_on_persistent_http_error() -> None:
 
 
 # ---------------------------------------------------------------------------
+# fetch_issue_duplicate_state -- defeat tests against malformed GraphQL
+# responses (dimension 15 of evaluating-deterministic-gate-quality:
+# fail-closed on malformed input, independently constructed and run
+# directly against the gate rather than only exercising happy-path
+# fixtures). A 200 response with a well-formed HTTP envelope but a
+# GraphQL body shaped nothing like the expected schema must never be
+# misread as "verified" -- it must resolve to None, which
+# find_unverified_consolidation_claims already treats as a violation.
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_issue_duplicate_state_returns_none_on_completely_empty_body() -> None:
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, "{}")
+
+    result = csd.fetch_issue_duplicate_state("tvna", "gitapex", 1547, "tok", opener=opener, sleeper=lambda _: None)
+    assert result is None
+
+
+def test_fetch_issue_duplicate_state_returns_none_when_repository_is_null() -> None:
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps({"data": {"repository": None}}))
+
+    result = csd.fetch_issue_duplicate_state("tvna", "gitapex", 1547, "tok", opener=opener, sleeper=lambda _: None)
+    assert result is None
+
+
+def test_fetch_issue_duplicate_state_returns_none_when_data_is_wrong_type() -> None:
+    # Type confusion attempt: `data` is a list, not the expected object.
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps({"data": ["unexpected", "array"]}))
+
+    result = csd.fetch_issue_duplicate_state("tvna", "gitapex", 1547, "tok", opener=opener, sleeper=lambda _: None)
+    assert result is None
+
+
+def test_fetch_issue_duplicate_state_returns_none_when_issue_is_wrong_type() -> None:
+    # Type confusion attempt: `issue` is a bare string, not the expected object.
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps({"data": {"repository": {"issue": "not-a-dict"}}}))
+
+    result = csd.fetch_issue_duplicate_state("tvna", "gitapex", 1547, "tok", opener=opener, sleeper=lambda _: None)
+    assert result is None
+
+
+def test_unresolvable_referenced_issue_is_always_a_violation_not_a_silent_pass() -> None:
+    # Ties the malformed-input cases above to the actual fail-closed
+    # consequence: a None state must never be read as "nothing to
+    # report" -- it is exactly as much a violation as a confirmed-open
+    # issue is.
+    assert csd.find_unverified_consolidation_claims(1566, [1547], {1547: None}) == [1547]
+
+
+# ---------------------------------------------------------------------------
 # main -- CLI arg validation
 # ---------------------------------------------------------------------------
 
