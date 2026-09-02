@@ -1662,10 +1662,18 @@ presence by shape.
   "how many files does the common case need" judgment; a file meeting only
   one, or neither, is counted exactly like any other reference.
 
-- **A cohesion-confirmed, single-outcome sequential pipeline whose
-  every-use content genuinely exceeds the body cap is a distinct case
-  from an ordinary multi-file split, but only under a narrow, stated
-  condition.** The count sentence and the direction rule above both
+- **A cohesion-confirmed, single-outcome sequential- or
+  functional-cohesion orchestrator whose every-use content genuinely
+  exceeds the body cap is a distinct case from an ordinary multi-file
+  split, but only under a narrow, stated condition.** (Functional
+  cohesion clears the same no-caller-selectable-narrower-path bar
+  sequential cohesion does -- dimension 4's own decision rule above
+  already routes any skill with an independently-triggerable branch to
+  a procedural/temporal/logical split finding instead, so a target that
+  actually clears as functional or sequential never has one; this
+  exemption's own condition (1) below tests exactly that clearing
+  verdict, not "sequential" read narrowly as pipeline-shaped alone.)
+  The count sentence and the direction rule above both
   price a *choice*: a request-shaped skill where an ordinary request
   selects one narrower path, and the author chose how much of the
   unselected detail to inline versus push out. Some skills make no such
