@@ -246,6 +246,11 @@ def test_format_closed_integrity_report_never_mentions_reopening():
     assert pass_report.count("reopen") == 0
 
 
+# ---------------------------------------------------------------------------
+# format_missing_label_error
+# ---------------------------------------------------------------------------
+
+
 def test_format_missing_label_error_names_label_and_repo():
     message = gate.format_missing_label_error("tvna", "gitapex", "gate-proposal")
     assert "gate-proposal" in message
