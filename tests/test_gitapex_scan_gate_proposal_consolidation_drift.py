@@ -367,7 +367,7 @@ def test_is_blank_true_for_ordinary_whitespace() -> None:
 
 
 def test_is_blank_true_for_zero_width_space() -> None:
-    assert csd._is_blank("​") is True
+    assert csd._is_blank("\u200b") is True
 
 
 def test_is_blank_false_for_meaningful_text() -> None:
@@ -379,6 +379,8 @@ def test_is_blank_false_for_padded_but_meaningful_text() -> None:
 
 
 def test_scan_consolidation_drift_args_rejects_blank_owner() -> None:
+    # Exercises ScanConsolidationDriftArgs's own _reject_whitespace_only
+    # field_validator (pydantic runs it against every one of owner/repo/label).
     with pytest.raises(csd.ValidationError):
         csd.ScanConsolidationDriftArgs(owner="", repo="gitapex", label="gate-proposal")
 
@@ -390,7 +392,7 @@ def test_scan_consolidation_drift_args_rejects_whitespace_only_repo() -> None:
 
 def test_scan_consolidation_drift_args_rejects_invisible_only_label() -> None:
     with pytest.raises(csd.ValidationError):
-        csd.ScanConsolidationDriftArgs(owner="tvna", repo="gitapex", label="​")
+        csd.ScanConsolidationDriftArgs(owner="tvna", repo="gitapex", label="\u200b")
 
 
 def test_scan_consolidation_drift_args_accepts_meaningful_values() -> None:
