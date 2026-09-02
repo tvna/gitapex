@@ -1686,9 +1686,13 @@ presence by shape.
   a target the cohesion check has not itself cleared -- and (2) the
   target's combined every-use reference content, measured in lines,
   demonstrably exceeds `BODY_MAX_LINES` even after every dimension-2
-  padding cut has been applied -- a body that merely declines to inline
-  detail it could have inlined without exceeding the cap does not
-  qualify. A skill meeting both conditions is graded on whether its
+  padding cut (dimension 2's own relevance, duplication, sediment, and
+  sprawl tests) has actually been applied to that content directly --
+  established the same way condition 1 is, by inspecting the content
+  itself, never accepted solely on the target's own characterization of
+  its own reference files as non-prunable. A body that merely declines
+  to inline detail it could have inlined without exceeding the cap does
+  not qualify. A skill meeting both conditions is graded on whether its
   split minimizes the common-case file count given that irreducible
   floor (co-location, content-named files, and a `SKILL.md` pointer at
   each branch point still apply in full) rather than being failed
@@ -1704,9 +1708,10 @@ presence by shape.
   above), or that mixes self-guard material with content-grading material
   in the same file (failing condition 2); a long-procedure skill claiming
   the sequential-pipeline exemption above without an independently-produced
-  cohesion-check finding backing condition 1, or whose every-use content
-  could in fact fit under `BODY_MAX_LINES` after applying dimension 2's
-  own padding cuts, failing condition 2.
+  cohesion-check finding backing that exemption's own condition 1, or
+  whose every-use content could in fact fit under `BODY_MAX_LINES` after
+  actually applying dimension 2's own tests to it, failing that
+  exemption's own condition 2.
 - **Pass:** `SKILL.md` links to each reference exactly where it becomes
   necessary, stating what context requires the read and what the reader
   will obtain; the common case resolves from `SKILL.md` alone; where a
