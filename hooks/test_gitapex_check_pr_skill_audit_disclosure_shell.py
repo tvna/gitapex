@@ -51,6 +51,7 @@ _TIER1_FILES = (
 _HOOK_FILES = (
     "hooks/check-pr-skill-audit-disclosure.sh",
     "hooks/gitapex_check_skill_audit_disclosure_or_waiver.py",
+    "hooks/gitapex_check_python_precondition.py",
 )
 
 _SKILL_MD = """---
@@ -121,6 +122,20 @@ def _with_tier1(repo: Path) -> Path:
 def _commit(repo: Path, message: str = "change") -> None:
     _git(repo, "add", "-A")
     _git(repo, "commit", "-qm", message)
+
+
+def _set_skill_audit_required_packages(repo: Path, packages: list[str]) -> None:
+    """Rewrite the skill-audit-disclosure gate's own
+    preconditions.requires_python_packages in the scratch repo's copy of
+    .gitapex/ssot.json (already present via _TIER1_FILES after
+    _with_tier1()), so a test can force a specific precondition outcome
+    without hardcoding anything the hook itself is supposed to read from
+    the registry."""
+    ssot_path = repo / ".gitapex" / "ssot.json"
+    ssot_data = json.loads(ssot_path.read_text(encoding="utf-8"))
+    (gate,) = (g for g in ssot_data["gates"] if g["id"] == "skill-audit-disclosure")
+    gate["preconditions"]["requires_python_packages"] = packages
+    ssot_path.write_text(json.dumps(ssot_data), encoding="utf-8")
 
 
 def _hook_env(**overrides: str) -> dict[str, str]:
@@ -283,6 +298,111 @@ def test_tier1_still_runs_on_an_update_that_does_supply_a_base(repo: Path) -> No
     result = _run(repo, _BASE_EVIDENCE, tool_name="mcp__github__update_pull_request")
     assert result.returncode == 2
     assert "deterministic-gate-quality" in result.stderr
+
+
+# --- tier 1: the requires_python_packages precondition (issue #1566, closes #1547(a)) ---
+
+
+def test_tier1_denies_when_a_required_python_package_is_missing(repo: Path) -> None:
+    """The original #1547(a) defect: before this fix, a tier-1 python3
+    invocation that could not import a required package (e.g. pydantic
+    genuinely uninstalled) crashed with no recognizable FAIL: line, which
+    the existing fallback silently downgraded to a *warning* and fell
+    through to tier 2's weaker, SKILL.md-only check -- never telling the
+    caller a dependency was missing at all. The registry's declared
+    package list is swapped for a deliberately-unimportable module name
+    here (rather than actually uninstalling pydantic) so this reproduces
+    the exact defect shape without depending on the host environment's
+    own package state."""
+    _with_tier1(repo)
+    _set_skill_audit_required_packages(repo, ["this_module_does_not_exist_xyz"])
+    _commit(repo, "break the skill-audit-disclosure precondition")
+    result = _run(repo, _BASE_EVIDENCE)
+    assert result.returncode == 2, result.stderr
+    assert "uv sync --group dev" in result.stderr
+    assert "this_module_does_not_exist_xyz" in result.stderr
+    # Must deny outright, not warn-and-fall-through to tier 2 -- that
+    # silent degrade is exactly what #1547(a) reports.
+    assert "falling back to the bundled base two-audit check" not in result.stderr
+
+
+def test_tier1_precondition_names_every_missing_package(repo: Path) -> None:
+    """Two required packages, only one genuinely missing: the deny message
+    must name the missing one and must not blame the package that is
+    actually importable."""
+    _with_tier1(repo)
+    _set_skill_audit_required_packages(repo, ["json", "this_module_does_not_exist_xyz"])
+    _commit(repo, "break one of two preconditions")
+    result = _run(repo, _BASE_EVIDENCE)
+    assert result.returncode == 2, result.stderr
+    assert "this_module_does_not_exist_xyz" in result.stderr
+
+
+def test_tier1_precondition_treats_a_flag_shaped_package_name_as_data(repo: Path) -> None:
+    """Found by review-persona's own step-6 screening of this task's diff:
+    a registry-declared package name that happens to look like an
+    argparse flag (e.g. "--help") must still be treated as inert data,
+    never as option syntax for gitapex_check_python_precondition.py's own
+    CLI. Without the `--` separator this fix adds, "--help" would trigger
+    that script's own --help handling instead of a module-import probe --
+    printing usage text (not JSON) and exiting 0 -- which this hook's own
+    jq parse of that output would then read as empty, silently skipping
+    the deny path entirely and letting the tier-1 invocation proceed as
+    though nothing were missing. This must deny, naming "--help" as
+    missing, exactly like any other unimportable module name."""
+    _with_tier1(repo)
+    _set_skill_audit_required_packages(repo, ["--help"])
+    _commit(repo, "declare a flag-shaped required package name")
+    result = _run(repo, _BASE_EVIDENCE)
+    assert result.returncode == 2, result.stderr
+    assert "uv sync --group dev" in result.stderr
+    assert "--help" in result.stderr
+    assert "falling back to the bundled base two-audit check" not in result.stderr
+
+
+def test_tier1_precondition_passes_when_every_required_package_is_importable(repo: Path) -> None:
+    """The happy path: the registry's real declared package (pydantic) is
+    actually importable in this test environment, so the precondition
+    check must not interfere with tier 1's own genuine verdict at all."""
+    _with_tier1(repo)
+    _write(repo, ".github/scripts/gitapex_gate_new.py")
+    _commit(repo, "new gate")
+    result = _run(repo, _BASE_EVIDENCE)
+    assert result.returncode == 2, result.stderr
+    assert "deterministic-gate-quality" in result.stderr
+    assert "uv sync --group dev" not in result.stderr
+
+
+def test_tier1_precondition_skipped_when_the_gate_declares_no_required_packages(repo: Path) -> None:
+    """Fail open per design: an empty requires_python_packages list means
+    this new check must skip entirely and proceed to the existing tier-1
+    invocation unchanged -- the same verdict tier 1 already produces when
+    the registry's real package list (pydantic) is present, pinned here
+    by reusing test_tier1_denies_a_conditional_extension_tier2_would_miss's
+    own fixture shape with the precondition cleared instead."""
+    _with_tier1(repo)
+    _set_skill_audit_required_packages(repo, [])
+    _write(repo, ".github/scripts/gitapex_gate_new.py")
+    _commit(repo, "clear the precondition and add a new gate")
+    result = _run(repo, _BASE_EVIDENCE)
+    assert result.returncode == 2, result.stderr
+    assert "deterministic-gate-quality" in result.stderr
+
+
+def test_tier1_precondition_check_does_not_widen_an_unrelated_tier1_failure(repo: Path) -> None:
+    """A genuinely unrelated tier-1 failure -- a bug in the gate script
+    itself producing no recognizable FAIL: line -- must still fall through
+    to tier 2 with a warning exactly as before this fix, proving the new
+    precondition check did not widen scope. The registry's declared
+    package (pydantic) is left untouched and genuinely importable here:
+    only the gate script itself is corrupted."""
+    _with_tier1(repo)
+    _write(repo, ".github/scripts/gitapex_gate_skill_audit_disclosure.py", "this is not valid python(((")
+    _commit(repo, "corrupt the gate script itself")
+    result = _run(repo, "no evidence section at all")
+    assert result.returncode == 0, result.stderr
+    assert "falling back to the bundled base two-audit check" in result.stderr
+    assert "uv sync --group dev" not in result.stderr
 
 
 # --- tier 2: the bundled, plugin-bundle-safe base check ---
