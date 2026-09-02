@@ -77,4 +77,9 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1662"
       summary: "Split events-and-review-gate.md's failure/resume-only content (loss/absence, freshness/hang, failure dispatch, rollback) into new failure-and-recovery.md, never read on a clean run. Four files now, but the typical request still opens three (threat-model, decomposition-and-dispatch, events-and-review-gate). Real progressive-disclosure gain; does not itself close dimension 5's three-file reading -- open pending issue/1662's rubric fix (a Fable dispatch found no satisfiable clause for this shape)."
+    - kind: corroboration
+      anchor: "https://github.com/tvna/gitapex/issues/1662"
+      summary: "Issue/1662's rubric fix merged (PR/1672). An isolated re-review against the new rubric re-derived sequential cohesion independently, confirmed both new-exemption conditions (every-use content 1,513 lines, ~1,050-1,150 after real pruning, still over the 500-line cap), and found no easy file-count reduction: dimension 5 now PASSES. Overall verdict stays WELL-FORMED-NOT-MATURE -- dimension 2 (sediment/duplication/sprawl) and the Mixed-portability split gap remain open, disclosed only."
+      outcome:
+        baseCommit: "a0addc2c10e6ffc4f76bf9d6358232b48246d1b3"
 
