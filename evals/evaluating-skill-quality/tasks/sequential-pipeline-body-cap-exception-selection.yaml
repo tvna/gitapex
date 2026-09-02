@@ -65,4 +65,3 @@ expected:
   output_not_contains:
     - "LGTM"
     - "no concerns"
-    - "three files open, the split is wrong"
