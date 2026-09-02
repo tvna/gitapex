@@ -1,6 +1,6 @@
 id: evaluating-skill-quality-mixed-portability-dimension5-substitute-selection
 name: Dimension-5-Exempted Mixed Skill Has A Satisfiable Portability Closure Via The Substitute
-description: The target skill is Mixed-declared and its cohesion check has already confirmed (Procedure step 2, given as fact) single-outcome sequential cohesion with every-use reference content over BODY_MAX_LINES -- it already clears dimension 5's own cohesion-confirmed sequential-pipeline exemption. Its non-portable, platform-specific content (a proprietary secrets-vault API) is itself read on every ordinary run, not detail a caller only sometimes needs. The excerpt supplies all three of the new Mixed substitute's positive requirements -- portable/non-portable content under distinct headings, a SKILL.md Notes declaration naming the non-portable steps and their portable fallback, and a dedicated non-every-use porting-boundary-map.md reference file. Tests the new Mixed-portability substitute bullet -- before the rubric edit, the review must fail the target under the ordinary Mixed rule's literal file-level-split requirement (the non-portable content stays inline); after the edit, the review must recognize the substitute is satisfied and pass it, while still independently re-deriving both gating conditions rather than accepting the target's own self-characterization.
+description: The target skill is Mixed-declared and its cohesion check has already confirmed (Procedure step 2, given as fact) single-outcome sequential cohesion with every-use reference content over BODY_MAX_LINES -- it already clears dimension 5's own cohesion-confirmed sequential-pipeline exemption. Its non-portable, platform-specific content (a proprietary secrets-vault API) is itself executed unconditionally on every ordinary run, not detail a caller only sometimes needs. The excerpt supplies all three of the new Mixed-portability substitute's positive requirements -- portable/non-portable content under distinct headings, a SKILL.md Notes declaration naming the non-portable step and its portable fallback, and a dedicated non-every-use porting-boundary-map.md reference file whose full content is also supplied so its own existence and completeness can be independently verified, not accepted on the target's own claim. Tests the substitute as now graded entirely within dimension 5's own walk (moved there after issue #1676's own Step 8 adversarial review found the original Portability-level placement created a backward dependency on a not-yet-run dimension-5 finding) -- before the rubric edit, the review must fail the target under the ordinary Mixed rule's literal file-level-split requirement; after the edit, the review must recognize the substitute is satisfied and pass it, while still independently re-deriving both gating conditions and all three positive requirements rather than accepting the target's own self-characterization.
 tags:
   - quality
   - portability
@@ -84,6 +84,23 @@ inputs:
     See `references/porting-boundary-map.md` (read only when vendoring
     this skill elsewhere, never on an ordinary run) for that one
     touchpoint and its portable substitute.
+
+    Also given: `references/porting-boundary-map.md` genuinely exists
+    and reads in full as follows (do not accept this on the target's
+    own say-so alone -- its content is supplied here so you can verify
+    it actually enumerates the one non-portable touchpoint and its
+    substitute, rather than merely being claimed to):
+
+    ```
+    # Porting boundary map
+
+    Read only when vendoring vault-secret-rotation outside a VaultCo
+    deployment -- never on an ordinary run.
+
+    | Non-portable touchpoint | Portable substitute |
+    |---|---|
+    | Step 4's `vaultco-cli rotate --id <credential> --auto-rollback` | Replace with the target deployment's own credential-write-and-auto-rollback mechanism (e.g. a direct API call to that deployment's own secrets vault, mirroring the same atomic rotate-with-rollback contract). |
+    ```
 expected:
   output_contains:
     - "Mixed-portability substitute"
@@ -91,4 +108,7 @@ expected:
     - "LGTM"
     - "no concerns"
     - "does not apply"
+    - "does not qualify"
+    - "fails condition"
+    - "is conditional"
     - "reverts to the ordinary"
