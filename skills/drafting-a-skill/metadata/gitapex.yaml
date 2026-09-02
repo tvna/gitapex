@@ -251,6 +251,11 @@ spec:
       summary: "the axis-5 sentence added at baseCommit 83eb216e itself carried no decision-log entry of its own -- a live instance of the exact undisclosed-drift pattern it prohibits, caught by a round-5 re-review since this file's own resume-time check was not yet in force when that edit landed. Disclosed and backfilled here."
       outcome:
         baseCommit: "83eb216ebfda43d930a4a6a164545411fd9201e1"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "a round-6 re-review found the resume-time sweep (axis 5) was scoped only to context 2, though Precondition item 1 lets context 1 also target an existing SKILL.md -- an equally in-scope resume case with no equivalent sweep. Broadened to either context. Also declared `git` in executionRequirements.tools.shell, undeclared though the sweep itself runs `git log`."
+      outcome:
+        baseCommit: "a0d3c270c341028d417ec046eb72b156f5f7ee6f"
   skillDependencies:
     requires:
       - evaluating-skill-quality
@@ -272,3 +277,4 @@ spec:
       shell:
         - python3
         - mkdir
+        - git
