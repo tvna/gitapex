@@ -1,0 +1,68 @@
+id: evaluating-skill-quality-sequential-pipeline-body-cap-exception-selection
+name: Cohesion-Confirmed Over-Cap Sequential Pipeline Has A Passing Dimension-5 Configuration
+description: The target skill's cohesion check has already confirmed (Procedure step 2, given as fact in the prompt) single-outcome sequential cohesion -- an unbroken six-step data-flow pipeline with no caller-selectable narrower path. Its three mandatory-every-run reference files total 640 lines, over BODY_MAX_LINES (500), and the prompt states each file's content is genuinely load-bearing (no padding a dimension-2 cut could remove). Tests the new dimension-5 sequential-pipeline exception -- the review must recognize the irreducible floor and grade the split's own file-count minimization against it, rather than failing the skill outright the way the old three-thresholds text would.
+tags:
+  - quality
+  - progressive-disclosure
+  - sequential-pipeline
+inputs:
+  prompt: |
+    Use evaluating-skill-quality. Review this draft SKILL.md excerpt for a
+    skill called "warehouse-inventory-reconciliation".
+
+    Given, not to be re-derived: this target's cohesion check already ran
+    at its own Procedure step 2 and returned single-outcome sequential
+    cohesion confirmed -- the six steps below all converge on one outcome
+    ("the warehouse's recorded inventory matches its physical count, with
+    every discrepancy resolved"), each step's output is the next step's
+    required input, and there is no caller-selectable narrower path
+    through this skill; an ordinary invocation always runs the full
+    Procedure end to end. Do not re-run or second-guess this cohesion
+    finding -- take it as already established.
+
+    Also given: `references/count-reconciliation-rules.md` (240 lines),
+    `references/discrepancy-resolution-policy.md` (210 lines), and
+    `references/audit-trail-requirements.md` (190 lines) are each
+    mandatory on every single run of this Procedure (steps 2, 4, and 6
+    below read one each, every time, never conditionally) -- 640 lines
+    combined, over this repository's `BODY_MAX_LINES` cap of 500. Every
+    line in all three is genuinely load-bearing domain policy specific to
+    its own step (reconciliation math, resolution authority thresholds,
+    regulatory retention rules); none of it is restatement, throat-
+    clearing, or padding a dimension-2 cut could remove, and none of it
+    could be inlined into `SKILL.md` without blowing the cap outright.
+
+    ---
+    name: warehouse-inventory-reconciliation
+    description: Reconcile a warehouse's recorded inventory against a physical count end to end -- ingest the count, apply reconciliation rules, resolve every discrepancy, and record the audit trail. Use when a physical inventory count has just been completed and needs to be reconciled against system records.
+    ---
+
+    # Warehouse Inventory Reconciliation
+
+    ## Procedure
+
+    1. Ingest the physical count file and the system's current recorded
+       inventory snapshot.
+    2. Read `references/count-reconciliation-rules.md` (mandatory every
+       run) and apply its matching rules to produce a discrepancy list
+       from step 1's two inputs.
+    3. For each discrepancy, classify it by cause (miscount, shrinkage,
+       system lag) using step 2's own output.
+    4. Read `references/discrepancy-resolution-policy.md` (mandatory
+       every run) and resolve each classified discrepancy from step 3
+       per its authority-threshold rules.
+    5. Apply every resolution from step 4 to the system's recorded
+       inventory, producing the corrected snapshot.
+    6. Read `references/audit-trail-requirements.md` (mandatory every
+       run) and record an audit entry for every resolution from step 4
+       and correction from step 5, closing the reconciliation.
+
+    A partially-run subset (e.g. discrepancies resolved but no audit
+    trail recorded) is not a usable end state on its own.
+expected:
+  output_contains:
+    - "irreducible floor"
+  output_not_contains:
+    - "LGTM"
+    - "no concerns"
+    - "three files open, the split is wrong"

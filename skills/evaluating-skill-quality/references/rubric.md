@@ -1662,20 +1662,62 @@ presence by shape.
   "how many files does the common case need" judgment; a file meeting only
   one, or neither, is counted exactly like any other reference.
 
+- **A cohesion-confirmed, single-outcome sequential pipeline whose
+  every-use content genuinely exceeds the body cap is a distinct case
+  from an ordinary multi-file split, but only under a narrow, stated
+  condition.** The count sentence and the direction rule above both
+  price a *choice*: a request-shaped skill where an ordinary request
+  selects one narrower path, and the author chose how much of the
+  unselected detail to inline versus push out. Some skills make no such
+  choice available -- the typical invocation already is the entire
+  numbered Procedure end to end, with no caller-selectable narrower path
+  for the count sentence to price -- and their combined every-use
+  reference content cannot fit under `BODY_MAX_LINES` no matter how it
+  is arranged. Treating such a skill identically to a request-shaped
+  skill that merely declined to inline its detail is not automatically
+  correct, but neither is exempting any long-procedure skill from this
+  dimension on the bare claim that it is "inherently sequential": that
+  would let any bundled reference dodge this dimension merely by
+  relabeling its own shape. The exemption applies only when both (1) the
+  cohesion check has already confirmed, at its own Procedure step 2,
+  that the target's steps are single-outcome sequential or functional
+  cohesion -- reused from that finding, never re-derived here from the
+  target's own prose asserting it is sequential, and never available to
+  a target the cohesion check has not itself cleared -- and (2) the
+  target's combined every-use reference content, measured in lines,
+  demonstrably exceeds `BODY_MAX_LINES` even after every dimension-2
+  padding cut has been applied -- a body that merely declines to inline
+  detail it could have inlined without exceeding the cap does not
+  qualify. A skill meeting both conditions is graded on whether its
+  split minimizes the common-case file count given that irreducible
+  floor (co-location, content-named files, and a `SKILL.md` pointer at
+  each branch point still apply in full) rather than being failed
+  outright for a floor no rearrangement can lower; a skill meeting only
+  one condition, or neither, is graded exactly like any other split
+  under the tests above.
+
 - **Fail:** a reference named `doc2.md` with no branch-point pointer in
   `SKILL.md`, or content the model reads on every single use pushed out to
   a reference that must be opened just to complete the ordinary path; a
   reference claimed as a self-guard exemption that actually varies its
   content by, or quotes from, the reviewed target (failing condition 1
   above), or that mixes self-guard material with content-grading material
-  in the same file (failing condition 2).
+  in the same file (failing condition 2); a long-procedure skill claiming
+  the sequential-pipeline exemption above without an independently-produced
+  cohesion-check finding backing condition 1, or whose every-use content
+  could in fact fit under `BODY_MAX_LINES` after applying dimension 2's
+  own padding cuts, failing condition 2.
 - **Pass:** `SKILL.md` links to each reference exactly where it becomes
   necessary, stating what context requires the read and what the reader
   will obtain; the common case resolves from `SKILL.md` alone; where a
   content-independent, dedicated-file dispatch self-guard is also
   mandatory every run, the verdict names it as that distinct kind of
   read rather than silently inflating (or silently excusing) the
-  common-case file count.
+  common-case file count; where a cohesion-confirmed, genuinely
+  over-cap sequential pipeline qualifies for the narrow exemption above,
+  the verdict names the irreducible floor and grades the split's own
+  file-count minimization against it rather than failing outright for a
+  floor no rearrangement could lower.
 
 ## 6. Durability
 
