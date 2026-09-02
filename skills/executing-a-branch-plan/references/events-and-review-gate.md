@@ -1,21 +1,37 @@
-# Domain Events and Failure Handling
+# Events and Review Gate
+
+Steps 5, 6, 7, and 8's own detail, merged into one file per
+`evaluating-skill-quality/references/rubric.md`'s Dimension 5 (the
+ordinary execution path must not force more than roughly three reference
+files open): the Execution-log event mechanism and failure-dispatch table
+(steps 5-7), and the mandatory aggregate refactor/adversarial-review gate
+(step 8). Source: design doc Decision 8 (unifies failure/deviation
+semantics and durable cross-session resume into one mechanism),
+Decision 12 (the refactor/review gate), Decision 14, Decision 18
+(rollback), Decision 19 (the `NeedsInput` event).
+
+## Contents
+
+- [Domain events and failure handling](#domain-events-and-failure-handling)
+  - [Where the log lives](#where-the-log-lives)
+  - [Read-modify-write discipline](#read-modify-write-discipline)
+  - [Event vocabulary](#event-vocabulary-closed-set-append-only-one-line-per-event)
+  - [Loss and absence handling](#loss-and-absence-handling)
+  - [Freshness and hang detection](#freshness-and-hang-detection)
+  - [Failure dispatch](#failure-dispatch-step-7)
+  - [Rollback](#rollback-offered-not-automatic)
+  - [Draft-PR-first pattern](#draft-pr-first-pattern-step-5)
+- [Refactor and review gate](#refactor-and-review-gate)
+  - [Per-task Red-Green](#per-task-red-green-step-6-not-this-gate)
+  - [Mandatory aggregate refactor + adversarial review](#mandatory-aggregate-refactor--adversarial-review-step-8)
+
+## Domain events and failure handling
 
 Steps 5 and 7's own detail. Source: design doc Decision 8 (unifies
 failure/deviation semantics and durable cross-session resume into one
 mechanism), Decision 18 (rollback), Decision 19 (the `NeedsInput` event).
 
-## Contents
-
-- [Where the log lives](#where-the-log-lives)
-- [Read-modify-write discipline](#read-modify-write-discipline)
-- [Event vocabulary](#event-vocabulary-closed-set-append-only-one-line-per-event)
-- [Loss and absence handling](#loss-and-absence-handling)
-- [Freshness and hang detection](#freshness-and-hang-detection)
-- [Failure dispatch](#failure-dispatch-step-7)
-- [Rollback](#rollback-offered-not-automatic)
-- [Draft-PR-first pattern](#draft-pr-first-pattern-step-5)
-
-## Where the log lives
+### Where the log lives
 
 The PR body, in a `## Execution log` section, is gitapex's own
 illustrative default -- substitute the calling repository's actual
@@ -42,8 +58,9 @@ untrusted for the ACM; the same discipline applies to the Execution log
 it later reads back. Before resuming from it: for every `TaskCompleted{
 run_id, task_id, commit_sha}` event, verify that `commit_sha` actually
 exists on the branch and its diff is consistent with that task's own
-file-ownership assignment (task-decomposition.md) -- a `commit_sha` that
-does not
+file-ownership assignment (this file's own sibling,
+`decomposition-and-dispatch.md`'s Task decomposition section) -- a
+`commit_sha` that does not
 resolve, or that touches files outside that task's own assignment, is
 treated as a screening flag (escalate), not as a completed task to trust.
 Then run the same reconciliation in the reverse direction: scan the
@@ -63,7 +80,7 @@ interruption, or a log entry edited after the fact, must not silently
 desynchronize what the branch actually contains from what a resumed
 session believes it contains.
 
-## Read-modify-write discipline
+### Read-modify-write discipline
 
 **"Append-only" names the convention, not the write primitive underneath
 it.** The PR-body write API this skill relies on
@@ -151,7 +168,7 @@ against in the first place, so this fetch-modify-write-back sequence is
 the fallback for a platform (or connector) whose only label-write
 primitive is a whole-set replace.
 
-## Event vocabulary (closed set, append-only, one line per event)
+### Event vocabulary (closed set, append-only, one line per event)
 
 Every event below carries a `run_id` field identifying the specific
 Branch Plan execution that wrote it: the step-4 task-list-file commit SHA
@@ -214,9 +231,9 @@ mistaken for an earlier run's.
 **Escape before interpolating.** Every event's free-text fields
 (`TaskFailed.reason`, `NeedsInput.question`, `StageDeviated.reason`), the
 ACM itself, and a task record's own quoted ACM Planned-ops text
-(`task-decomposition.md`'s Verbatim-quotation discipline) are ultimately
-sourced from, or generated in response to, untrusted issue-body text.
-Before writing any of it into the task-list file (step 3), the PR body,
+(`decomposition-and-dispatch.md`'s own Verbatim-quotation discipline) are
+ultimately sourced from, or generated in response to, untrusted
+issue-body text. Before writing any of it into the task-list file (step 3), the PR body,
 or a comment, neutralize a raw pipe character, a code-fence marker, or
 another Markdown/HTML control sequence it might carry -- the same
 escaping rule `drafting-issues` Step 4 already applies to ACM
@@ -226,7 +243,7 @@ quoted into its own task record, cannot break the PR body's or task-list
 file's own table/heading rendering or forge an unintended heading or
 event line elsewhere in it.
 
-## Loss and absence handling
+### Loss and absence handling
 
 A missing, truncated, or unparseable `## Execution log` section -- the PR
 body fetch fails outright, the section heading is not found, or the found
@@ -273,7 +290,7 @@ skill's resume path already applies. Report what that check found (some
 commits exist / none exist / history itself could not be read) as part
 of the escalation, rather than leaving the human to re-derive it.
 
-## Freshness and hang detection
+### Freshness and hang detection
 
 **This check catches a run that died silently, not a live wave that is
 simply taking a while.** Step 6 writes every one of a wave's events
@@ -350,7 +367,7 @@ misjudging a merely-unpicked-up branch as hung pays the same cost as a
 false positive above (an unnecessary escalation and label release), not
 a worse one -- it is disclosed here for the same reason.
 
-## Failure dispatch (step 7)
+### Failure dispatch (step 7)
 
 A task's own proof method failing writes a `TaskFailed{run_id, task_id,
 reason}` event, then triggers exactly one retry, with the failure output folded
@@ -407,7 +424,7 @@ needed. If the retry also fails, dispatch on what actually failed:
   drafting task again would only reproduce the same upstream-rooted
   finding.
 
-## Rollback (offered, not automatic)
+### Rollback (offered, not automatic)
 
 When `stop-and-replan` fires, before closing the draft PR: offer, via the
 escalation comment already being written, a revert of every
@@ -426,7 +443,7 @@ branch a human may already be inspecting. No new artifact is required:
 the Execution log's own `TaskCompleted{run_id, commit_sha}` events
 already are the manifest a revert needs.
 
-## Draft-PR-first pattern (step 5)
+### Draft-PR-first pattern (step 5)
 
 The draft PR opens immediately once the step-1 authorization gate passes
 (not after every task commits), containing the ACM and an Execution log
@@ -473,3 +490,146 @@ actually is:
 This does not consume the one-retry budget defined for task proof-method
 failures above -- it is a distinct event class, entering the task list
 via decomposition rather than the failure-dispatch table.
+
+## Refactor and review gate
+
+Steps 6 and 8's own detail. Source: design doc Decisions 12, 14.
+
+### Per-task Red-Green (step 6, not this gate)
+
+For a task whose inherited proof method is an automatable test (a unit
+test, a command assertion), apply the Red/Green discipline described
+immediately below -- this gate's own definition, not borrowed from
+elsewhere:
+
+- **Red.** Write that test first and run it to confirm it fails for the
+  right reason, before touching any implementation code.
+- **Green.** Implement the smallest change that makes the test pass -- no
+  surrounding refactor, no unrelated cleanup bundled in.
+
+**Scope boundary.** Not every task's inherited proof method is an
+automatable test -- a task decomposed from an ACM row whose proof method
+is inherently manual (e.g. "design doc reviewed and approved") has no Red
+step to run. Red-Green applies only when the inherited proof method is
+genuinely code-verifiable; this is a per-task judgment made at
+decomposition time (`decomposition-and-dispatch.md`'s own Task
+decomposition section), not a blanket rule forced onto every task
+regardless of what its own row actually asks for.
+
+**Refactor is deliberately NOT per-task.** Doing it inside each task's
+own isolated context would duplicate this gate's own aggregate pass below
+and reintroduce the exact blind spot that pass exists to close: a task
+refactoring only what it can see cannot catch the cross-task redundancy
+two independently-executed parallel tasks can produce with no visibility
+into each other's diff. Refactor happens exactly once, in the aggregate
+pass below, after all tasks complete -- not duplicated per task and not
+skipped.
+
+### Mandatory aggregate refactor + adversarial review (step 8)
+
+Inserted between "all tasks complete" and "mark ready for review" --
+sequence-gated, not a step this skill can rationalize skipping under time
+pressure, the same fail-closed shape as the step-1 authorization gate and
+step-2/6 screening.
+
+**Model/effort pin.** Both dispatches below carry the same pin as the
+Authorization gate and Per-task screening's residual judgment
+(`references/threat-model-and-authorization.md`): a stronger-reasoning
+model tier at default-or-higher effort. The adversarial-review dispatch
+is the specific carrier: its own Stop boundary below already requires
+constructing a case built to defeat a diff's own detection logic
+whenever the diff touches a deterministic gate/check script -- itself a
+judgment-heavy bar no weaker tier is pinned to attempt reliably, and a
+missed defeat-case here ships a checker script that looks tested but
+silently does not catch what it claims to.
+
+1. **Refactor/simplify pass**, over the full accumulated diff (every
+   task's own diff combined), not per-task. A fresh subagent dispatch,
+   distinct from the task agents that wrote the code -- the same agent
+   grading its own homework is a weaker check than an independent one.
+   This pass finds and fixes reuse, redundancy, and dead code that
+   parallel/pipeline task execution can hide, but may not change
+   behavior -- any behavior-affecting finding is out of this sub-step's
+   scope and routes to sub-step 2 instead.
+2. **Adversarial code review**, a separate fresh subagent dispatch (not
+   the refactor pass's own subagent, same independence reason) reviewing
+   the full accumulated diff for correctness bugs. Findings -> verify
+   each -> fix confirmed ones -> validate the fix.
+
+**Deterministic gate/check script scrutiny.** When the diff adds,
+extends, *or narrows* a deterministic gate or check script -- a CI
+workflow script, a new check function in a shape-checker, or any code
+whose job is to detect or validate a defined condition in a diff, tree,
+or document -- happy-path tests passing is not sufficient grounds to
+call that script done. A narrowing edit (loosening a regex, deleting a
+deny pattern, adding an exemption, raising a threshold) is in scope
+exactly like an additive one; "no new detection logic was added" is not
+an exit from this sub-step.
+
+Before this sub-step can clear it, construct at least one case built
+specifically to defeat the script's detection logic on its own terms:
+the exact condition the check exists to catch, reshaped to fall just
+outside whatever heuristic it applies (for example: a rename bundled
+with enough of a rewrite to break a similarity-based rename detector, a
+text scan bounded to the wrong section of a document, a claim written
+into a comment or docstring that was never actually verified against
+real behavior). For a narrowing edit, the case instead targets the
+newly-widened boundary: an input sitting just inside the new exemption
+or threshold that must still not smuggle through anything the check's
+own purpose says it must keep catching -- ground that purpose in the
+originating issue or design decision, not only a docstring the same diff
+is free to write narrowly. Commit the case to the script's own test
+suite as a regression test asserting the correct outcome -- one only
+constructed and run once, then discarded, can be silently reintroduced
+by a later edit with nothing left to catch it.
+
+A defeat-case that still succeeds must either be fixed before step 9, or
+explicitly disclosed as a known limitation next to the script's own
+documentation -- and disclosure is only acceptable for a structural
+limit of the check's own approach (the same class of ceiling
+`scripts/check_task_bash_safety.sh` discloses for regex-based
+obfuscation), not an ordinary, fixable gap the current diff itself
+introduced or loosened. Leaving it neither fixed nor disclosed does not
+clear this sub-step.
+
+When a sibling script in the repository already implements matching
+parsing or detection logic over the same data shape, diff the new logic
+against that sibling's own and determine, from actual behavior against a
+real case, which side is correct before reconciling -- mere agreement is
+not the bar, and a pre-existing sibling is not automatically ground
+truth (the same install-time-versus-runtime-content-trust question this
+skill's Notes section already applies elsewhere, not something this step
+gets to assume away). Treat a reconciliation-driven edit as a fix subject
+to this gate's own re-verification rule below. If it is genuinely
+unclear which side is correct, that is a step-7 escalation, not a guess
+made in place.
+
+A check whose own stated purpose (what its docstring or description says
+it exists to catch) is not actually exercised end-to-end by at least one
+such adversarial case is not yet complete, regardless of how many
+happy-path tests already pass.
+
+**Distinct from step 2/6's screening.** That screening checks each task's
+own diff for *security* threats as each task completes. This gate reviews
+the *whole* accumulated diff for *correctness* (logic bugs, missed edge
+cases, inconsistency introduced by independently-executed parallel tasks)
+once, after all tasks are done. Both run; neither substitutes for the
+other.
+
+**Not itself parallelized.** This stage runs once, after step 6's own
+wave-by-wave execution has already completed: a single reviewer needs the
+full accumulated diff to catch cross-task inconsistencies no one task's
+own context can see.
+
+**Full re-verification after any fix.** After every CONFIRMED finding's
+fix is applied, re-run every task's own Red-Green test above -- not only
+the one related to the fix -- before step 9. The last gate before
+hand-off does not rest on an unverified "the fix didn't break anything
+else" assumption. An outstanding CONFIRMED finding, or a re-verification
+failure, blocks step 9.
+
+**Push every fix commit as it lands, same as step 6's per-wave push.** A
+fix applied and verified only in the local working copy leaves the
+ready-for-review PR (step 9) not actually containing what it claims to
+-- step 9's own remote-state check exists specifically to catch a fix
+commit that never made it to the remote.

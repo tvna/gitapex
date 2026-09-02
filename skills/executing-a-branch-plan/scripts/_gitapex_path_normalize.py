@@ -1,7 +1,7 @@
 """Shared path-normalization helper for this directory's checker scripts.
 
-Both `gitapex_check_file_ownership_conflicts.py` (task-decomposition.md's
-file-ownership pre-filter) and `gitapex_check_canonical_governance_paths.py`
+Both `gitapex_check_file_ownership_conflicts.py` (decomposition-and-
+dispatch.md's file-ownership pre-filter) and `gitapex_check_canonical_governance_paths.py`
 (threat-model-and-authorization.md's per-task screening pre-filter) need
 the exact same light normalization before comparing paths as strings:
 strip a leading "./", collapse backslashes to forward slashes, collapse

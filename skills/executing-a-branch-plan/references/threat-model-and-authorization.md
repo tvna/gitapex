@@ -178,7 +178,7 @@ itself grounds to skip the model's own full review below.
   "reasonable" the surrounding change looks. A flagged diff never
   proceeds to commit -- it dispatches as `StageDeviated{run_id, task_id,
   reason, action: escalate}` (the same closed-set schema [domain events
-  and failure-handling](domain-events-and-failure-handling.md) defines)
+  and failure-handling](events-and-review-gate.md#domain-events-and-failure-handling) defines)
   regardless of whether the task's own proof method would otherwise have
   passed.
 - **Dependency-identity verification.** When a dependency addition is
@@ -515,7 +515,7 @@ missing from PATH -- denies every stop attempt, with nothing in this hook
 enforcing a retry ceiling or circuit breaker of its own; the subagent may
 spend many turns retrying before a human notices. This is a deliberate,
 disclosed choice, not an oversight: this skill's own [Freshness and hang
-detection](domain-events-and-failure-handling.md#freshness-and-hang-detection)
+detection](events-and-review-gate.md#freshness-and-hang-detection)
 already exists specifically to catch a wave that never returns for
 whatever reason, and inventing a second, narrower circuit breaker inside
 this one hook would duplicate that existing backstop rather than close a

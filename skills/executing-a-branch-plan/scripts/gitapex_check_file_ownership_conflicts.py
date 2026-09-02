@@ -1,15 +1,15 @@
-"""Deterministic pre-filter for task-decomposition.md's file-ownership edge.
+"""Deterministic pre-filter for decomposition-and-dispatch.md's file-ownership edge.
 
 Step 3's own tool: given a task list's file assignments (task-id -> the
 files that task will write), reports every task pair that would write
 the same file -- the literal, pure-string-matching case
-task-decomposition.md's "Two dependency-edge types" section already
-describes in prose ("build a file path -> task ID map ... any two tasks
-that would write the same file share an edge"). A pre-filter, not a full
-replacement: this mechanizes the file-ownership edge only. The
+decomposition-and-dispatch.md's "Two dependency-edge types" section
+already describes in prose ("build a file path -> task ID map ... any
+two tasks that would write the same file share an edge"). A pre-filter,
+not a full replacement: this mechanizes the file-ownership edge only. The
 interface-dependency edge (a semantic producer/consumer judgment between
 two tasks' free-text Planned-ops descriptions) stays a model judgment,
-carrying its own pin -- see references/task-decomposition.md.
+carrying its own pin -- see references/decomposition-and-dispatch.md.
 
 Read-only: reads the given task/file mapping only, writes nothing,
 network-free. Path comparison is exact-string equality after a light
@@ -88,7 +88,7 @@ def find_conflicts(task_files: dict[str, list[str]]) -> list[tuple[str, list[str
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Report task pairs that would write the same file "
-        "(task-decomposition.md's file-ownership edge, mechanized)."
+        "(decomposition-and-dispatch.md's file-ownership edge, mechanized)."
     )
     parser.add_argument(
         "--input",

@@ -61,3 +61,8 @@ spec:
       summary: "capabilityAssumption's own round-trip, never previously recorded: commit f79fdec3 changed it Frontier to Adaptive as a round-2 review-repair attempt; the near-500-line body and threat-model-and-authorization.md's uniformly-mandatory-read status contradict Adaptive's lean-body-plus-on-demand-reference claim (rubric.md dimension 5). Commits 14485a4c/80d9f7d5 reverted field and Notes prose to Frontier, under which dimension 5's Adaptive-only layering rule does not apply."
       outcome:
         baseCommit: "80d9f7d5a936534ca43182ff0a17ee2c9433c809"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "dimension 5 major: 5-6 reference files were each cited from an ordinary, non-failure Step, exceeding rubric.md's three-file ceiling; no self-guard exemption applies (each varies with the target Branch Plan). Merged by lifecycle axis into decomposition-and-dispatch.md and events-and-review-gate.md; threat-model-and-authorization.md stays standalone. Three files now, matching the ceiling. Content preserved verbatim under demoted headings; cross-references repointed."
+      outcome:
+        baseCommit: "0a069a68ba4889ebcd79082494d5253c2596701b"

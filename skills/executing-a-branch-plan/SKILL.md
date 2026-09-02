@@ -63,12 +63,12 @@ first, not skimmed.
    `scripts/gitapex_check_file_ownership_conflicts.py`, a deterministic
    mechanization of the pure-string-matching case) AND an
    interface-dependency map (a pinned model judgment -- see [task
-   decomposition reference](references/task-decomposition.md#two-dependency-edge-types-both-computed-before-wave-assignment))
+   decomposition reference](references/decomposition-and-dispatch.md#two-dependency-edge-types-both-computed-before-wave-assignment))
    before any wave assignment; a task pair connected by either edge type
    is sequenced, never co-assigned to a parallel wave. Classify each
    task's Planned ops for irreversibility and for whether they create or
    edit a `SKILL.md` (new or existing alike). Full rule set: [task
-   decomposition reference](references/task-decomposition.md).
+   decomposition reference](references/decomposition-and-dispatch.md#task-decomposition).
 4. **Publish the branch** (Decision 16 step ordering). In the main
    thread: create the Branch Plan's named branch, commit step 3's
    task-list file as its first commit, and push -- publishing the head ref
@@ -84,14 +84,14 @@ first, not skimmed.
    (step 7), never proceed. Only then apply the `branch-plan-executing`
    label to the PR (per the fetch-modify-write-back sequence in the
    [domain events
-   reference](references/domain-events-and-failure-handling.md#read-modify-write-discipline),
+   reference](references/events-and-review-gate.md#read-modify-write-discipline),
    not a naive single-label set) -- an ownership-signal mirror of this
    skill's own in-flight execution, letting `drafting-a-pr-to-merge`
    detect a mid-execution draft before entering its own fix loop against
    it (that skill's own Step 2, before its fix loop ever runs, checks for
    this label). Subscribe to the draft PR's own CI/review/comment activity
    in this same step; this skill owns responding to it until step 9, not
-   `drafting-a-pr-to-merge`. Event vocabulary and log format: [domain events reference](references/domain-events-and-failure-handling.md).
+   `drafting-a-pr-to-merge`. Event vocabulary and log format: [domain events reference](references/events-and-review-gate.md#domain-events-and-failure-handling).
 6. **Execute, one Workflow run per wave** (Decision 16, 4, 13, 14). For
    each wave from step 3: dispatch one Workflow run containing only that
    wave's task `agent()` calls, each with `agentType:
@@ -123,7 +123,7 @@ first, not skimmed.
    method is an automatable test; Refactor is never per-task, deferred
    entirely to step 8. When writing a task's own implementation code,
    apply the principles in [the code quality principles
-   reference](references/code-quality-principles.md) -- this runs inside
+   reference](references/decomposition-and-dispatch.md#code-quality-principles) -- this runs inside
    this step's own dispatched `agent()` call, a separate context from the
    main thread that read this file, so each task's own dispatch prompt
    cites this reference's path explicitly, in-band, the same way Decision
@@ -221,7 +221,7 @@ first, not skimmed.
    An irreversible task (step 3's flag) gets a fresh step-1-
    equivalent confirmation for that specific task before its own wave
    dispatches. Full execution/wave/worktree mechanics: [execution and
-   dispatch reference](references/execution-and-dispatch.md).
+   dispatch reference](references/decomposition-and-dispatch.md#execution-and-dispatch).
 7. **On task failure, a `NeedsInput` event, a screening flag, or a
    declined irreversible-task confirmation**, dispatch per the failure
    rule: `NeedsInput` answers from the ACM/Branch Plan's own content
@@ -236,20 +236,20 @@ first, not skimmed.
    `StageDeviated` entry for why a label left standing past either
    dispatch is a deadlock, not a harmless leftover. Full dispatch table:
    [domain events and failure-handling
-   reference](references/domain-events-and-failure-handling.md#failure-dispatch-step-7).
+   reference](references/events-and-review-gate.md#failure-dispatch-step-7).
 8. **Refactor and adversarially review the accumulated diff** (Decision
    12, mandatory, non-skippable). Two separate fresh subagent dispatches
    over the full diff -- a refactor/simplify pass (behavior-preserving
    only), then an independent adversarial code review -- findings
    verified and fixed before proceeding. The independent adversarial code
    review also specifically re-checks [Migrate Callers Then Delete Legacy
-   APIs](references/code-quality-principles.md#4-migrate-callers-then-delete-legacy-apis),
+   APIs](references/decomposition-and-dispatch.md#4-migrate-callers-then-delete-legacy-apis),
    confirming a caller migration begun by one task actually completed
    cleanly rather than being left half-done by another -- a
    behavior-affecting correctness question, not the refactor/simplify
    pass's own behavior-preserving scope. Both dispatches carry a
    model/effort pin; see [refactor and review gate
-   reference](references/refactor-and-review-gate.md#mandatory-aggregate-refactor--adversarial-review-step-8)
+   reference](references/events-and-review-gate.md#mandatory-aggregate-refactor--adversarial-review-step-8)
    for the rationale. After
    every CONFIRMED finding's
    fix, re-run every task's own Red-Green test, not only the one related
@@ -271,7 +271,7 @@ first, not skimmed.
    own review/fix work itself -- exactly the gap the motivating incident
    above sits in. An outstanding CONFIRMED finding, or
    a re-verification failure, blocks step 9. Detail: [refactor and review
-   gate reference](references/refactor-and-review-gate.md).
+   gate reference](references/events-and-review-gate.md#refactor-and-review-gate).
 9. **On all tasks complete, step 8 clean, and the branch's remote state
    confirmed to match local** (a final `git status`/push-state check --
    not assumed from step 6/8's own per-step pushes alone), remove the
@@ -341,7 +341,7 @@ combined diff, then the draft PR converts to ready-for-review.
   a deterministic gate/check script using only happy-path tests --
   construct and run at least one case built to defeat its own detection
   logic first, per [the refactor and review gate
-  reference](references/refactor-and-review-gate.md).
+  reference](references/events-and-review-gate.md#refactor-and-review-gate).
 - Never co-assign two tasks connected by a file-ownership or
   interface-dependency edge to the same parallel wave.
 - Never merge a task's worktree-isolated commit onto the shared branch when
@@ -424,7 +424,7 @@ to any agent platform (it uses no Claude-Code-specific primitive),
 degraded but not blocked, matching design doc Decision 4's own
 portability answer. This is a structural claim, not an empirically
 verified one on any platform besides Claude Code itself -- see
-[execution-and-dispatch.md](references/execution-and-dispatch.md#sequential-fallback)
+[decomposition-and-dispatch.md](references/decomposition-and-dispatch.md#sequential-fallback)
 for the specific attempt to verify it against OpenAI Codex (blocked by
 this authoring session's own network policy, not resolved either way).
 Steps 1, 2, 4, 5, 7, 8, 9 use only GitHub-connector calls and
