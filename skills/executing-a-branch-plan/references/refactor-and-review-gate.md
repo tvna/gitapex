@@ -74,11 +74,14 @@ silently does not catch what it claims to.
    Read, Grep, Glob` allow-list means this dispatch cannot itself verify
    a finding against a live check, apply a fix, or validate one -- it is
    read-only by construction, not merely by convention. That work
-   happens outside this dispatch: verify each returned finding, fix the
-   confirmed ones, and validate the fix, either in the calling main
-   thread or dispatched to the refactor pass's own subagent (sub-step 1
-   above) for the actual file edit -- never inside the review dispatch
-   itself, which has no tool that could perform any of the three.
+   happens outside this dispatch, in the calling main thread: verify
+   each returned finding, fix the confirmed ones, and validate the fix
+   -- never inside the review dispatch itself, which has no tool that
+   could perform any of the three, and never dispatched to the refactor
+   pass's own subagent (sub-step 1 above), whose own "Sanctioned call
+   sites" entry restricts it to behavior-preserving edits only -- a
+   confirmed correctness-bug fix is behavior-affecting by definition and
+   so falls outside that entry's own scope.
 
 **Deterministic gate/check script scrutiny.** When the diff adds,
 extends, *or narrows* a deterministic gate or check script -- a CI
