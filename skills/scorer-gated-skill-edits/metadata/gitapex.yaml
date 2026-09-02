@@ -97,6 +97,16 @@ spec:
       summary: "Redivides the drafting-a-skill/scorer-gated-skill-edits boundary along a how-to-rewrite-vs-evaluate axis (design doc, 2026-08-31). Step 3 names drafting-a-skill as patch author, through its Step 6 only, Step 7 deferred. New required Step 9 dispatches drafting-a-skill's Step 7 once pre-ship, distinct from step 8's recommended pass. Two Stop boundaries reworded: step 9 as where review happens, drafting-a-skill as sole editor."
       outcome:
         baseCommit: "2ff00c34c897074a619d390c208d66e9c52cf7d3"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "state-management axis 7 (writer-class-B, concurrent edits to one existing target from two peer dispatches sharing a checkout) closed for real this round: the Precondition gate's Relocate sub-step adds the missing explicit `cd` into the self-established worktree, then re-runs the Check comparison as its own completion criterion. An independent re-review confirmed this is a genuine, checkable construction, not restated assertion."
+      outcome:
+        baseCommit: "83eb216ebfda43d930a4a6a164545411fd9201e1"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "the same round's Cleanup sub-step named `git worktree prune` as the way to clear a stale self-established worktree; per git's own docs, prune only clears admin metadata for a working tree already removed by other means, it does not remove one still on disk. Corrected to `git worktree remove <path>` (+ `git branch -d`), prune's real scope stated."
+      outcome:
+        baseCommit: "83eb216ebfda43d930a4a6a164545411fd9201e1"
   skillDependencies:
     requires:
       - drafting-a-skill
