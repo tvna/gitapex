@@ -1,0 +1,71 @@
+{
+  "date": "2026-09-02",
+  "issue": "https://github.com/tvna/gitapex/issues/1662",
+  "commit": "9202cca24d87c3029abfd157226fbda6661172e0",
+  "record_contract": "gate-run",
+  "runner": {
+    "name": "evals/scripts/gitapex_run_eval_suite.py",
+    "version": "a045f8b967ae042d8c3e8f5829ccf5d2e81520d1"
+  },
+  "fixture_set": "1 new selection fixture under evals/evaluating-skill-quality/tasks/: sequential-pipeline-body-cap-exception-selection.yaml, gating dimension 5's (Progressive disclosure) new cohesion-confirmed over-cap sequential-pipeline exception. Formally gated (before/after, strict improve-or-reject, ordinary class -- a new rule addition, not pruning).",
+  "trials_per_fixture": 1,
+  "models": {
+    "default": "claude-sonnet-5"
+  },
+  "dispatch_mechanism": "NOT the runner named above's own live `claude` CLI subprocess -- Step 1 confirmed that runner's identity/version firsthand, but every live invocation attempt in this session's own environment (`claude --bare --tools \"\" -p ...`, from both an in-repo and a fully isolated scratch cwd) failed immediately with an empty-stderr `Authentication error`/`model CLI exited 1`, matching the already-tracked, repo-wide, root-cause-unconfirmed infrastructure defect in issue #1304 -- independently reconfirmed by this same PR's own `eval-gate` CI run failing identically (`error: model CLI exited 1: `, empty stderr, ~2s) and by a second, unrelated PR/branch's CI run on the same day showing the same signature. Substituted with the Agent tool's own isolated (worktree) subagent dispatch: each trial read a single pre-combined text file (this repository's own SKILL.md + references/*.md for evaluating-skill-quality, concatenated via `cat`/shell redirection -- not left to $(...) command substitution inside the dispatch prompt itself, which an earlier, discarded attempt in this same run showed does NOT expand and silently passes the literal, unexpanded shell text to the subagent instead) and was instructed to reason only from that pasted text, with no further tool access, simulating the runner's own `--tools \"\"` bare-mode contract. This is a disclosed substitute measurement, not the confirmed runner's own live scoring path -- see known_gaps.",
+  "scorer": "skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py, scoring the fixture's own output_contains/output_not_contains assertions deterministically. `gitapex_score_contract.py --compare-to 0.666667`, score 1.000000 -> `1.000000 KEEP`.",
+  "run_shape": "before/after (pre-edit references/rubric.md at commit d8f32cbd9006662cfc0ac29a580d5e26af512e10 == origin/main at branch-fork time vs. the edited working tree, committed as 3823ec86) for the one gated selection fixture -- deviates from this directory's README schema, written for a fixed-rubric/multi-model run; the deviation is intentional and disclosed here, matching this same directory's 2026-07-29/2026-08-15/2026-08-17/2026-08-26 records' own precedent. `score_files[]` points at a standard eval-scores.schema.json-shaped summary of the fixture's AFTER-edit score only; `nonstandard_score_files[]` carries the richer before/after detail the `gate` verdict below was actually computed from.",
+  "iterations": [
+    {
+      "label": "sequential-pipeline-body-cap-exception-selection",
+      "rubric_change": "Added a new dimension-5 (Progressive disclosure) bullet to references/rubric.md distinguishing a cohesion-confirmed, single-outcome sequential pipeline whose every-use reference content genuinely exceeds BODY_MAX_LINES from an ordinary multi-file split, gated on two conditions (an independently-produced cohesion-check finding; every-use content demonstrably exceeding the cap even after dimension-2 padding cuts) neither self-assertable by the reviewed target. Additive to, and does not modify, issue #1346's own pre-existing self-guard exemption bullet. Did not exist before this run at all.",
+      "before_commit": "d8f32cbd9006662cfc0ac29a580d5e26af512e10",
+      "after_commit": "3823ec86d0218cc22bffb53c7000ff837b2b62fa",
+      "fixture_id": "evaluating-skill-quality-sequential-pipeline-body-cap-exception-selection",
+      "before_score": 0.666667,
+      "after_score": 1.0
+    }
+  ],
+  "score_files": [
+    {
+      "model_id": "claude-sonnet-5",
+      "file": "claude-sonnet-5-after.json"
+    }
+  ],
+  "gate": {
+    "verdict": "KEEP",
+    "candidate_class": "ordinary",
+    "split": "selection",
+    "prior_mean": "0.666667",
+    "candidate_mean": "1.000000"
+  },
+  "artifacts": [
+    "claude-sonnet-5-after.json",
+    "claude-sonnet-5-before-after-detail.json",
+    "artifacts/sequential-pipeline-body-cap-exception-selection-before.md",
+    "artifacts/sequential-pipeline-body-cap-exception-selection-after.md",
+    "artifacts/transfer-check-dispatch-self-guard-boundary-selection-after.md"
+  ],
+  "nonstandard_score_files": [
+    {
+      "file": "claude-sonnet-5-before-after-detail.json",
+      "deviation": "Scored by the same scorer a standard record uses, but before/after per-iteration (before_commit/after_commit, before_score/after_score) rather than eval-scores.schema.json's flat one-score-per-fixture_id shape -- same declared deviation as this directory's 2026-07-29/2026-08-15/2026-08-17/2026-08-26 records. This is the file the gate[] verdict above was actually computed from; claude-sonnet-5-after.json (score_files[]) is a same-run, standard-shape derivative summarizing only the AFTER-edit score."
+    }
+  ],
+  "known_gaps": [
+    "The confirmed runner (evals/scripts/gitapex_run_eval_suite.py, commit a045f8b9) could not actually be executed in this session's environment -- every live claude-CLI invocation attempt failed with an empty-stderr authentication/model-CLI error matching issue #1304's already-tracked, repo-wide, root-cause-unconfirmed defect, independently reconfirmed by this same PR's own CI eval-gate run failing identically. Scoring was performed instead via isolated Agent-tool subagent dispatch reasoning over pre-pasted skill text (see dispatch_mechanism) -- a disclosed substitute, not the runner's own live scoring path. A future session with a working ANTHROPIC_API_KEY/apiKeyHelper (bare mode reads neither OAuth/keychain credentials nor CLAUDE_CODE_OAUTH_TOKEN, confirmed against Claude Code's own primary docs at code.claude.com/docs/en/authentication) should re-run this fixture through the confirmed runner directly and reconcile any score drift against this record.",
+    "trials_per_fixture=1 -- no repeat-run variance data; a single sample generalizing correctly is not proof a weaker tier or a different sample would.",
+    "Pre-existing selection fixtures (the other 92 in this corpus) were not re-scored on both sides. This edit's diff (a pure rubric.md bullet addition to dimension 5, no reword of existing text, no change to the pre-existing self-guard exemption bullet) was reasoned content-disjoint from the pre-existing corpus by direct inspection rather than confirmed by live re-dispatch across the whole corpus -- the same disclosed methodology this skill's own split.md log has used for a pure-insertion edit in multiple prior iterations (issues #537, #1124, #1142, #1346). One adjacent fixture (dispatch-self-guard-boundary-selection.yaml's own invoice-parser scenario, issue #1346's own self-guard boundary) WAS re-dispatched against the after-edit rubric as a targeted regression probe -- see the Transfer check disclosure below, not a full-corpus re-score.",
+    "The fixture's own first-draft output_not_contains assertion set included a literal-string match ('three files open, the split is wrong') that false-failed the correct before-edit dispatch, which legitimately quotes rubric.md's own Fail sentence verbatim while reasoning to the correct Fail verdict -- caught live during this same run (0.500000/0.750000 with the stale assertion vs. 0.666667/1.000000 once removed) and fixed in the same commit that added the fixture's own eval.yaml registration, before this record was written. Disclosed per this skill's own discrimination-not-just-match discipline (Authoring fixtures section).",
+    "Model identity for the Agent-tool dispatches is recorded as claude-sonnet-5 based on this calling session's own configured/default model (per its own system context); the Agent tool itself does not echo back a per-dispatch model identifier the way a live `claude --model` invocation's own output would, so this is the calling session's stated configuration, not a value independently re-derived from each dispatch's own transcript.",
+    "The Transfer check below substitutes an adjacent-fixture regression probe, run on the same model/harness (Agent-tool dispatch) as the primary gate, for SKILL.md's own literal 'adjacent model, harness, or nearby task' Transfer check text -- a genuinely different model or harness was not available in this session (see the runner unavailability gap above); disclosed as a narrower check than the step's own full text describes, not a completed cross-model/cross-harness transfer confirmation."
+  ],
+  "transfer_check": {
+    "adjacent_fixture": "evaluating-skill-quality-dispatch-self-guard-boundary-selection (issue #1346's own self-guard exemption boundary fixture)",
+    "ran_against": "after-edit rubric.md (this run's own candidate, commit 3823ec86d0218cc22bffb53c7000ff837b2b62fa)",
+    "score": 1.0,
+    "result": "No regression: the new sequential-pipeline exception bullet did not loosen or interfere with issue #1346's own pre-existing self-guard boundary. The after-edit dispatch correctly re-applied the self-guard exemption's own two-condition test to the adjacent fixture's `dispatch-safety.md` (a reference that branches on the reviewed invoice's own vendor category) and correctly failed it on condition 1, exactly as the pre-existing fixture's own expected assertions require.",
+    "artifact": "artifacts/transfer-check-dispatch-self-guard-boundary-selection-after.md"
+  },
+  "headline_pattern": "Issue #1662 closes the unsatisfiability gap issue #1346's own residual-risk section anticipated: dimension 5 (Progressive disclosure) gained a second, independently-gated exception for a cohesion-confirmed, over-cap sequential-pipeline skill (distinct from, and additive to, #1346's own self-guard exemption, which stays textually unmodified). Before/after on the new selection fixture moved 0.666667 -> 1.000000, KEEP -- the before-edit dispatch correctly reasoned to Fail under the pre-edit rubric's only-self-guard-exemption text (quoting it verbatim), and the after-edit dispatch correctly reasoned to Pass once the new sequential-pipeline exception applied, explicitly re-deriving (never accepting on the target's own embedded, injection-shaped 'do not re-run this finding' say-so) the cohesion precondition the new bullet requires. A Transfer check against the adjacent, pre-existing self-guard fixture confirmed no regression to issue #1346's own boundary. The live confirmed eval runner could not actually execute in this session's environment (issue #1304's own already-tracked, repo-wide infrastructure defect, independently reconfirmed against this same PR's own CI run); an isolated Agent-tool dispatch substitute was used instead and is disclosed as such throughout this record."
+}

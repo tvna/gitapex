@@ -1,0 +1,24 @@
+{
+  "model_id": "claude-sonnet-5",
+  "n_runs": 2,
+  "scores": [
+    {
+      "iteration": "sequential-pipeline-body-cap-exception-selection",
+      "fixture_id": "evaluating-skill-quality-sequential-pipeline-body-cap-exception-selection",
+      "split": "selection",
+      "condition": "before",
+      "commit": "d8f32cbd9006662cfc0ac29a580d5e26af512e10",
+      "score": 0.666667,
+      "artifact": "artifacts/sequential-pipeline-body-cap-exception-selection-before.md"
+    },
+    {
+      "iteration": "sequential-pipeline-body-cap-exception-selection",
+      "fixture_id": "evaluating-skill-quality-sequential-pipeline-body-cap-exception-selection",
+      "split": "selection",
+      "condition": "after",
+      "commit": "3823ec86d0218cc22bffb53c7000ff837b2b62fa",
+      "score": 1.0,
+      "artifact": "artifacts/sequential-pipeline-body-cap-exception-selection-after.md"
+    }
+  ]
+}
