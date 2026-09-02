@@ -4748,6 +4748,35 @@ Dimension-5 exemption's own "still apply in full" parenthetical. The Mixed
 bullet's own pre-existing five lines, and the Dimension-5 exemption's own
 text beyond that one clause, are unchanged. Refs #1676.
 
+### Placement correction, found live during executing-a-branch-plan's own Step 8
+
+**Found during this branch's own mandatory Step 8 independent adversarial
+review (executing-a-branch-plan's own gate, distinct from this skill's own
+recommended Step 8 pass), after the fixtures below had already been gated
+once against an earlier placement, and disclosed per this file's own
+discrimination-not-just-match discipline:** the review found a real
+structural defect in the substitute's first placement -- it lived under
+the Portability level section (graded at SKILL.md Procedure step 4), but
+its own condition 1 required a dimension-5 finding (step 5) that had not
+run yet at step 4, a genuine backward reference confirmed against
+SKILL.md's own literal Procedure step-order annotations before acting on
+it, not assumed. Relocated the full substitute into dimension 5's own
+section, immediately after the sequential-pipeline exemption it depends
+on, resolving the backward reference; the Portability level section keeps
+only a short forward-pointer sentence. The same review also found
+condition 2's "read" wording did not close the loophole it was meant to (a
+conditionally-executed step could still claim to satisfy a "read" test),
+fixed to require the content be demonstrably reached and acted on; and
+found the third positive requirement (the dedicated reference file) was
+satisfiable by the target's own bare claim with no supplied content to
+verify against, fixed by adding the same anti-self-assertion discipline
+condition 2 already carries, and by supplying
+`mixed-portability-dimension5-substitute-selection.yaml`'s own
+dedicated-file content directly in its fixture prompt so this can actually
+be checked. Both fixtures were then re-dispatched against the relocated
+rubric text and re-scored; the gate result below is the final,
+post-relocation result, not the original placement's.
+
 ### Gate result
 
 Went through `scorer-gated-skill-edits`'s own held-out gate: 2 new
@@ -4756,41 +4785,58 @@ selection fixtures added to `split.json`'s split (44 total selection,
 target skill (a Mixed-declared, Dimension-5-exempted "vault-secret-rotation"
 scenario whose sole non-portable step is genuinely unconditional and
 every-use, and which supplies all three of the new substitute's positive
-requirements) is the primary gated fixture: one isolated dispatch pair
-moved **0.800000 -> 1.000000, KEEP**. The before-edit dispatch correctly
-reasoned to a dimension-5 Fail by quoting the pre-edit rubric's own ordinary
-Mixed rule verbatim (no substitute existed yet to apply); the after-edit
-dispatch correctly independently re-verified both of the new substitute's
-gating conditions from the excerpt's own procedure structure -- never
-accepting the target's own self-characterization -- and correctly graded
-all three positive requirements Pass. `mixed-portability-dimension5-substitute-false-positive-selection.yaml`'s
+requirements) is the primary gated fixture: re-scored against the final,
+relocated rubric text, one isolated dispatch pair moved
+**0.666667 -> 1.000000, KEEP**. The before-edit dispatch (dispatched
+against the pre-issue-1676 commit, no substitute of any kind) correctly
+reasoned to a dimension-5 Fail by quoting the ordinary Mixed rule verbatim
+and confirming no substitute for a Dimension-5-exempted target exists in
+that rubric text; the after-edit dispatch correctly independently
+re-verified both of the relocated substitute's gating conditions from the
+excerpt's own procedure structure -- never accepting the target's own
+self-characterization -- and correctly graded all three positive
+requirements Pass, explicitly naming "Condition 2 holds" for the
+unconditional-execution finding.
+`mixed-portability-dimension5-substitute-false-positive-selection.yaml`'s
 own target (a "log-shipping-connector" scenario whose Notes section claims
 its non-portable step is "every-use"/"interleaved" while its own Procedure
 text shows the step is actually skipped for any non-matching destination)
 is a live anti-loophole discrimination fixture, not itself gated for
-movement: both before and after the edit, the dispatch correctly quoted
-the target's own conditional trigger text verbatim and correctly failed
-it -- confirming the new substitute's own condition-2 anti-self-assertion
-guard cannot be defeated by a self-serving Notes claim. `gitapex_check_skill_shape.py`: 70/70. Full record, all four
+movement: both before and after the edit, and both before and after the
+relocation, the dispatch correctly quoted the target's own conditional
+trigger text verbatim and correctly failed it -- confirming the new
+substitute's own condition-2 anti-self-assertion guard cannot be defeated
+by a self-serving Notes claim regardless of which rubric section it is
+graded under. `gitapex_check_skill_shape.py`: 70/70. Full record, all four
 transcripts plus the transfer check: `results/2026-09-02-issue-1676-mixed-portability-dimension5-substitute/manifest.json`.
 
-**Fixture-authoring corrections, found live during this same gate run and
-disclosed per this file's own discrimination-not-just-match discipline:**
-(a) `mixed-portability-dimension5-substitute-selection.yaml`'s own first
-draft (iteration 1) had its non-portable step 5 invoke a rollback command
+**Further corrections, found live while re-scoring the relocated rubric
+against real dispatch transcripts and disclosed per this file's own
+discrimination-not-just-match discipline:** the primary fixture's
+`output_contains` assertion went through two more rounds after the
+relocation. `"Mixed-portability substitute"` (itself already a
+replacement for an even earlier near-verbatim quote that failed to survive
+paraphrasing) still under-discriminated once condition 2's own wording
+changed to "reached and acted on": generic negative guards considered
+alongside it (`"does not apply"`, `"is conditional"`) each collided with an
+innocuous, unrelated phrase inside the correct PASS transcript (an
+unrelated "Indeterminate: does not apply" verdict-category line; a
+"whether step 4's own execution is conditional" clause). Abandoned the
+generic-phrase-avoidance strategy and instead empirically tested candidate
+positive-only phrases directly against all four real saved transcripts
+until finding `"Condition 2 holds"`, confirmed via `grep -c` to occur
+exactly 0/1/0/0 times across before/after/false-positive-before/
+false-positive-after respectively -- perfect discrimination -- before this
+record was finalized. Separately, and earlier, during the original
+(pre-relocation) gate run: `mixed-portability-dimension5-substitute-selection.yaml`'s
+own first draft had its non-portable step invoke a rollback command
 conditionally ("for any dependent service that does not acknowledge...
 within timeout"), which an after-edit dispatch correctly identified as
-failing the new substitute's own condition 2 -- a genuine scenario-design
-flaw, not a rubric defect. Fixed by folding the rollback into step 4's own
-single, unconditional call (iteration 2, the version actually gated
-above), removing the conditional branch entirely. (b) The same fixture's
-first-chosen `output_contains` assertion ("enumerating every non-portable
-touchpoint", a near-verbatim quote of the new rubric bullet's own
-requirement-3 text) did not survive the after-edit dispatch's own
-paraphrasing of that requirement -- caught live by direct inspection of
-the scored transcript, fixed by replacing it with `"Mixed-portability substitute"`,
-confirmed present in the after-edit transcript and absent from the
-before-edit one, before this record was written.
+failing the substitute's own condition 2 -- a genuine scenario-design
+flaw, not a rubric defect. Fixed by folding the rollback into a single,
+unconditional invocation, removing the conditional branch entirely; that
+discarded draft's own transcripts are not included in the run record's
+artifacts/.
 
 **Eval-runner unavailability, disclosed rather than silently substituted:**
 the confirmed runner (`evals/scripts/gitapex_run_eval_suite.py`, commit
@@ -4809,27 +4855,27 @@ Full accounting in the run record's own `known_gaps`.
 
 ### Transfer check
 
-Run this iteration: the after-edit rubric.md was re-dispatched against
-the adjacent, pre-existing `sequential-pipeline-body-cap-exception-selection.yaml`
-fixture (issue #1662's own cohesion-confirmed sequential-pipeline
-exemption fixture, Portable-declared). Score: **1.000000** -- no
-regression. The after-edit dispatch correctly re-applied both of the
-pre-existing exemption's own conditions to that fixture's warehouse-
-inventory-reconciliation scenario, reached the identical Pass verdict
-issue #1662's own precedent already established, and explicitly confirmed
-that grading a Portable-declared target required no reference to the new
-Mixed-portability substitute bullet at all -- that bullet is correctly
-inert for a target the Portability-level Mixed sub-bullet does not apply
-to. This is a same-model/same-harness adjacent-*fixture* probe, not a
-cross-model or cross-harness re-run (no second model/harness was
-available in this session -- see the eval-runner-unavailability gap
-above); disclosed as narrower than SKILL.md's own "adjacent model,
-harness, or nearby task" Transfer-check text describes. Full detail:
+Run this iteration: the final, relocated after-edit rubric.md was
+re-dispatched against the adjacent, pre-existing
+`sequential-pipeline-body-cap-exception-selection.yaml` fixture (issue
+#1662's own cohesion-confirmed sequential-pipeline exemption fixture,
+Portable-declared). Score: **1.000000** -- no regression. The after-edit
+dispatch correctly re-applied both of the pre-existing exemption's own
+conditions to that fixture's warehouse-inventory-reconciliation scenario,
+reached the identical Pass verdict issue #1662's own precedent already
+established, and explicitly confirmed that grading a Portable-declared
+target required no reference to the new Mixed-portability substitute
+bullet at all -- that bullet is correctly inert for a target the
+Portability-level Mixed sub-bullet does not apply to, and its relocation
+into dimension 5's own section changes nothing about that inertness. This
+is a same-model/same-harness adjacent-*fixture* probe, not a cross-model
+or cross-harness re-run (no second model/harness was available in this
+session -- see the eval-runner-unavailability gap above); disclosed as
+narrower than SKILL.md's own "adjacent model, harness, or nearby task"
+Transfer-check text describes. Full detail:
 `results/2026-09-02-issue-1676-mixed-portability-dimension5-substitute/manifest.json`'s
 own `transfer_check`.
 
 ### Verdict
 
 KEEP. Refs #1676.
-
-**Correction, found live during Step 8's mandatory independent adversarial review (executing-a-branch-plan's own gate, distinct from this skill's own recommended Step 8 pass) and disclosed per this file's own discrimination-not-just-match discipline:** the review found a real structural defect in the original placement -- the substitute lived under the Portability level section (graded at SKILL.md Procedure step 4), but its own condition 1 required a dimension-5 finding (step 5) that had not run yet at step 4. Relocated the full substitute into dimension 5's own section, immediately after the sequential-pipeline exemption it depends on, resolving the backward reference. The same review also found condition 2's "read" wording did not close the loophole it was meant to (a conditionally-executed step could still claim to satisfy a "read" test), fixed to require the content be demonstrably reached and acted on; and found the third positive requirement (the dedicated reference file) was satisfiable by the target's own bare claim with no supplied content to verify against, fixed by adding the same anti-self-assertion discipline condition 2 already carries, and by supplying `mixed-portability-dimension5-substitute-selection.yaml`'s own dedicated-file content directly in its fixture prompt so this can actually be checked. A fresh before/after gate run against the restructured rubric is in progress; this note discloses the fixture-assertion change ahead of that run's own full write-up, per this file's own per-commit disclosure convention.

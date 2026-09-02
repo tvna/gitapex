@@ -8,7 +8,7 @@
       "split": "selection",
       "condition": "before",
       "commit": "b07fabc53f2bee4f4404fbe7f7620426e60363d6",
-      "score": 0.8,
+      "score": 0.666667,
       "artifact": "artifacts/mixed-portability-dimension5-substitute-selection-before.md"
     },
     {
@@ -16,7 +16,7 @@
       "fixture_id": "evaluating-skill-quality-mixed-portability-dimension5-substitute-selection",
       "split": "selection",
       "condition": "after",
-      "commit": "98f6c3145ecd3663a05b6a2b249396ace87e2413",
+      "commit": "eced6acde2e8f251ab87e3a326cd2f320ba9dcec",
       "score": 1.0,
       "artifact": "artifacts/mixed-portability-dimension5-substitute-selection-after.md"
     },
@@ -34,7 +34,7 @@
       "fixture_id": "evaluating-skill-quality-mixed-portability-dimension5-substitute-false-positive-selection",
       "split": "selection",
       "condition": "after",
-      "commit": "98f6c3145ecd3663a05b6a2b249396ace87e2413",
+      "commit": "eced6acde2e8f251ab87e3a326cd2f320ba9dcec",
       "score": 1.0,
       "artifact": "artifacts/mixed-portability-dimension5-substitute-false-positive-selection-after.md"
     }

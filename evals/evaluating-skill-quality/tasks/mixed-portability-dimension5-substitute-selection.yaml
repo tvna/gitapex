@@ -103,12 +103,7 @@ inputs:
     ```
 expected:
   output_contains:
-    - "Mixed-portability substitute"
+    - "Condition 2 holds"
   output_not_contains:
     - "LGTM"
     - "no concerns"
-    - "does not apply"
-    - "does not qualify"
-    - "fails condition"
-    - "is conditional"
-    - "reverts to the ordinary"

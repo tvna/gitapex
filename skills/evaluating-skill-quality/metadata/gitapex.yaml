@@ -576,10 +576,10 @@ spec:
         after: 1.0
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1676"
-      summary: "Mixed-portability rule gained a nested substitute for a D5-exempted target whose non-portable content is itself every-use, gated on two independently-verifiable conditions and satisfied via three positive requirements instead of file relocation. An anti-loophole fixture confirmed the anti-self-assertion guard resists a self-serving Notes claim. A Transfer check confirmed no regression and the substitute is inert for Portable targets."
+      summary: "Dimension 5 gained a Mixed-portability substitute for a D5-exempted every-use target, gated on two conditions and satisfied via three positive requirements instead of file relocation. Relocated from an initial Portability-level placement into dimension 5 after Step 8 review found the original backward-referenced a not-yet-run dimension-5 finding. An anti-loophole fixture confirmed the guard resists a self-serving Notes claim, before and after relocation. A Transfer check confirmed no regression."
       outcome:
         verdict: fixed
-        before: 0.8
+        before: 0.666667
         after: 1.0
   skillDependencies:
     requires: []

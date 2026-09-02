@@ -1,70 +1,121 @@
-# Review: `vault-secret-rotation` (draft SKILL.md excerpt)
+# Review: `vault-secret-rotation` (evaluating-skill-quality applied)
 
-**Fidelity note (bare-mode deviation, disclosed rather than silently absorbed):** `evaluating-skill-quality`'s own Procedure requires steps 1, 2, 4, 5, 6 to run inside one fresh subagent dispatch, with only step 3 in the main thread before it, and requires the exclusion of any calling `CLAUDE.md`/`AGENTS.md` to be verified first (Subagent dispatch section, `SKILL.md`). This session has zero further tool access, so no actual dispatch is possible. Per that same section's own discipline ("Never fall back to an unverified subagent dispatch merely because no verified mechanism exists"), I am not pretending a dispatch occurred — I am running the walk directly, single-pass, and flagging that the isolation-for-neutrality guarantee the dispatch exists to provide is **not** in force for this run. Also: only the caller-supplied excerpt was reviewed, not a full skill directory — no `metadata/gitapex.yaml` sidecar, no `scripts/`, no full `references/*.md` bodies were available to read, so the bundled deterministic checker (Two lanes, `SKILL.md`) could not literally be executed. Where that limits a finding, it is named explicitly rather than guessed past, per the Stop boundary: "Never claim a violation the reviewed text does not actually show. If a dimension cannot be assessed, say that explicitly instead of guessing."
+## Scope and run-mode caveats (stated up front, per Contract discipline)
 
-**Accepted as given, not re-derived** (per instruction): the cohesion check (single-outcome sequential cohesion, no caller-selectable narrower path) and the dimension-5 sequential-pipeline exemption for the three mandatory reference files (690 combined lines vs. the 500-line `BODY_MAX_LINES` cap, each load-bearing, no rearrangement lowers the floor). Both are treated below as already-established facts, never re-argued.
+This is a bare-mode, zero-further-tool-access run reviewing a **draft excerpt**, not a full skill directory. Before walking the Procedure I record what this run cannot do, rather than silently filling the gaps:
+
+- **Procedure step 3 (deterministic shape checker)** cannot be executed — no script/file-system access to `gitapex_check_skill_shape.py`, and the excerpt gives no full frontmatter/line counts to hand-apply its rules against. Reported as **shape-check status: unavailable in this run**, not fabricated as PASS or FAIL.
+- **Subagent dispatch / isolation verification** (`SKILL.md`'s Subagent dispatch section, `adversarial-self-audit.md`'s Isolation verification) cannot actually be performed — there is no dispatch mechanism available in this simulation. Noted as a limitation, not silently assumed clean.
+- No `metadata/gitapex.yaml` sidecar was given. Per rubric.md's Capability assumption / Procedure step 4: *"When the target has no sidecar … establish portability and capability assumption by reading the target's content instead … and note the sidecar's absence as context, not as a finding."* Done below.
+- Given, not re-derived (per task instructions): the **cohesion finding** (single-outcome sequential cohesion) and the **dimension-5 sequential-pipeline exemption** for the three mandatory reference files. Both are treated as established facts from here on.
+
+## Step 1 — Read
+
+Target read in full as given: frontmatter (`name`, `description`), a five-step Procedure split across three headed subsections, a `## Notes` section declaring portability, and the full content of `references/porting-boundary-map.md`. No other `references/*.md` content (e.g. `rotation-policy.md`) was supplied, so any claim about *their* content is explicitly unverifiable and not asserted.
 
 ## Step 2 — Agentic operation mechanism-fit
 
-**Skill vs. subagent:** no finding. This is a sequential pipeline whose intermediate outputs are consumed by the next step, not a side task with unreferenced intermediate results.
+**Whole-artifact wrong-mechanism check:** nothing in the excerpt suggests this should have been a hook, subagent, or CLAUDE.md content — it is a multi-step judgment+external-call procedure, appropriate for a skill. No finding.
 
-**Skill vs. hook — whole-artifact, headline standing.** Every step in the draft is described as deterministic, with no named judgment call anywhere:
-- Step 1: mechanical enumeration ("from the vault's own rotation schedule").
-- Step 2/3: mechanical application of a written policy/registry.
-- Step 4, in the draft's own words: "This single command always runs to completion on every rotation... no separate conditional rollback step exists in this Procedure... it is invoked exactly once, unconditionally, every run."
-- Step 5: "record this rotation's own outcome... per its own generic audit-trail rules."
+**Cohesion (Skill vs. multiple skills):** per the task's own preamble, already confirmed at this step as single-outcome sequential cohesion converging on *"every credential due for rotation is rotated in the vault and every dependent service is updated to the new value, with no service left holding a stale credential."* Not re-derived here.
 
-This is precisely the shape `references/rubric.md`'s Agentic operation mechanism-fit section names, quoting Anthropic's steering guidance: *"'Every time X, always do Y' in CLAUDE.md[, or a skill]. If the behavior should happen reliably... use a hook... instead. The model choosing to run a formatter is different from the formatter running automatically."* A skill with zero judgment-bearing steps, gated only by an outward invocation decision ("scheduled or emergency... is due"), is a candidate for a hook/scheduled job plus a bundled script, not a model-followed procedure. Per `SKILL.md`'s Procedure step 2 and Stop boundaries, this is reported at headline standing regardless of the rest of the review's score, and is distinct from the (accepted, not re-litigated) cohesion finding — cohesion asks whether this is one skill or several; this asks whether it is a skill at all.
+**Step-level checks:**
 
-**Skill vs. CLAUDE.md:** no finding — this is a procedure, not a standing fact.
+- **Invocation-mode fit — Fail, unguarded side effects (step-level).** No `disable-model-invocation` or `user-invocable` field appears anywhere in the given frontmatter, so the effective mode is the default: invocable by both. The procedure's outward-facing/irreversible action is exactly the shape rubric.md names. Rotating every due credential across an org's vault and pushing new values to every dependent service is materially the same blast-radius class as `/deploy`. Auto-rollback on webhook-timeout mitigates the *failure* case but does not remove the outward-facing write itself. No justification for open model-invocation is stated anywhere in the excerpt. **Propose:** `disable-model-invocation: true`, or an explicit stated reason for leaving it open.
 
-**Step-level findings, reported for triage:**
+- **Model/effort tier fit, Subagent delegation scope, Tool-capability verification:** not applicable — no model/effort pin, no subagent-dispatch instruction, and `vaultco-cli` is an externally-invoked CLI, not a harness-surfaced tool/MCP subcall with a schema this check is scoped to. Noting by reasoned analogy, not as this check's literal Fail: the claim that `--auto-rollback` *"atomically reverts to the prior value, internally, if any dependent service fails to acknowledge"* is asserted as flat fact about a third-party binary's behavior with no citation to VaultCo's own docs — worth a hedge on the same principle even though the check's stated applicability trigger doesn't literally cover it.
 
-- **Invocation-mode fit — Fail, unguarded side effects.** No `disable-model-invocation`/`user-invocable` field is shown; default is "invocable by both" ([Claude Code skills][cc], cited via `rubric.md`). But: *"The target's procedure performs outward-facing or irreversible work... yet the skill stays model-invocable with no stated reason. Propose `disable-model-invocation: true`, or an explicit justification for leaving automatic invocation open."* Writing new credential values into a live vault and propagating them to dependent services is at least as consequential as the rubric's own named examples (`/commit`, `/deploy`, `/send-slack-message`). No justification for open model-invocation is stated in the excerpt. This is separate from, and compatible with, the Skill-vs-hook finding above ("both can be true at once," per that section).
-- **Tool-capability verification — cannot verify, must be disclosed as such.** Step 4 asserts: *"the binary's own `--auto-rollback` flag atomically reverts to the prior value, internally, if any dependent service fails to acknowledge within VaultCo's own webhook timeout."* This is exactly the shape the check targets — a claim that a tool subcall *enforces/reconstructs* something, inside what functions as the procedure's only rollback guardrail. `vaultco-cli` is described as "a VaultCo-only binary, present only in this organization's own deployment" — internal, no schema or docs reachable from this review. Per the rubric: *"When the named tool is internal, unpublished, or otherwise has no schema or docs reachable from this review, say that explicitly rather than guessing at the claim's truth either way."* So: unverified, not asserted as fact — the draft currently states it as flat fact with no hedge, which is the Fail condition.
-- **Model/effort tier fit, Subagent delegation scope:** not applicable — no pin, no dispatch instruction in this content.
-- **Skill-step vs. bundled script:** not a clear finding — step 4 is already a single external CLI invocation, not multi-rule in-model reasoning the break-even test would move into a script.
+- **Skill-step vs. bundled script — candidate, unconfirmed.** Step 2's *"compute each credential's own new value per its rotation policy"* is exactly the shape this check flags as a delegation candidate. If `rotation-policy.md`'s rules are mechanical this is a real candidate; its content was not supplied, so this is flagged as **worth checking against that file**, not a confirmed Fail.
 
-## Blind spot pass (Unknowns framework)
-
-A gap found, named explicitly per the "never silently fold into an existing dimension" rule: the file I read pairs two mechanisms that never cross-reference each other. Dimension 5's cohesion-confirmed sequential-pipeline exemption licenses an irreducible *reference-file line-count floor* above `BODY_MAX_LINES` for mandatory-every-run **portable** content. The Portability level section's Mixed bullet separately, unconditionally requires that **non-portable** content be split into its own reference file, "not blended into the portable core," with no exception for content that is itself mandatory-every-run. Nothing in the file states whether a Mixed skill's non-portable mandatory-every-run step may satisfy that split via the *same* "mandatory-every-run reference file" mechanism dimension 5 already licenses for portable content (this draft's own steps 2, 3, and 5 already use exactly that mechanism: `references/rotation-policy.md (mandatory every run)`, etc.). An author reading only the Mixed bullet in isolation — as this draft's own footer Notes visibly do — can plausibly conclude that mandatory-every-run non-portable content has "no portable substitute inline in this file" and must therefore stay inline. The rubric leaves that inference uncorrected. This is a genuine rubric gap for this target's domain (Mixed-portability skills built as single-path pipelines), not something to invent a fix for mid-review — flagging it here for this repository's own held-out-gated edit process, per the Blind spot pass's own instruction, rather than improvising a rule.
-
-Importantly: **this gap does not excuse the draft.** As shown below, dimension 5 still fails against the text as actually written, and the fix is already demonstrated elsewhere in the same draft.
+**Blind spot pass:** naming a gap, not folding it into an existing dimension. None of the nine dimensions, mechanism-fit, or portability asks whether the procedure verifies that each dependent service's *own* credential store actually converged on the new value, as opposed to merely acknowledging VaultCo's webhook — webhook ack and actual downstream consistency are different facts.
 
 ## Step 3 — Deterministic shape
 
-Cannot be run: no `scripts/gitapex_check_skill_shape.py` execution is available in this bare-mode session, and only the `SKILL.md` excerpt was supplied — no `metadata/gitapex.yaml` sidecar, no full directory. From manual inspection only: frontmatter is present with `name`/`description`, no XML tags visible, body is well under the 500-line `BODY_MAX_LINES` cap (the excerpt is a few dozen lines). I cannot confirm or deny the `portability-declared`, `capability-assumption-declared`, or `dependency-policy-declared` sidecar checks, since no sidecar was supplied — this is recorded as **unverified**, not as a pass or a fail, per the Stop boundary against guessing.
+Not run (see Scope caveats). Reported as **unavailable**, not PASS/FAIL.
 
-## Step 4 — Portability, capability assumption, dependency policy; Compatibility/Confidentiality awareness
+## Step 4 — Portability / Capability / Dependency preconditions; Compatibility & Confidentiality
 
-- **Portability: Mixed**, as declared in the draft's own footer Notes, and independently confirmed by content: steps 1–3, 5, and the three reference files read as portable; step 4's `vaultco-cli` invocation is organization-specific ("a VaultCo-only binary, present only in this organization's own deployment"). Placement in a footer `## Notes` section matches the convention `SKILL.md` states ("Extended rationale belongs in a footer `## Notes` section").
-- **Capability assumption:** not declared anywhere in this excerpt (no sidecar visible). Per the rubric this is a *required* field, not optional ("the `capability-assumption-declared` shape check gates the value") — flagged as an open item pending the sidecar, not graded either way here.
-- **Dependency policy:** not applicable — no `scripts/` bundled in this excerpt.
-- **Compatibility awareness:** no runtime-specific frontmatter dependency established. `Compatibility awareness: NO_COMPATIBILITY_WARNING`.
-- **Confidentiality awareness — PROPOSE_CONFIDENTIALITY_SAFEGUARD.** Steps 2, 4, and 5 each handle credential material directly (computing new credential values, writing them to the vault, and recording "this rotation's own outcome"), squarely inside the sensitive-data category ("secrets, credentials, API keys/tokens..."). No step states a safeguard against, e.g., logging or persisting the plaintext new-credential value in the audit record step 5 produces. Concrete proposed fix: step 5 should state explicitly that the audit trail records rotation metadata and outcome (rotated/auto-rolled-back) only, never the credential value itself.
+**Portability — read as Mixed** (declared directly in `## Notes`: *"Portability: **Mixed**."*), consistent with `SKILL.md`'s own three-level definition: *"Mixed: a portable core plus repo-specific detail should split the two into a clearly named reference file, not blend them."* Graded in full below (dimension 5 is where this gets checked).
+
+**Capability assumption — undeclared / not established** from the given excerpt (no sidecar, no stated Broad/Frontier/Adaptive). Per rubric.md dimension 2's own rule, this means dimensions 2/3/5/9 grade at *"the ungraded, no-declaration default — equivalent to Frontier-level strictness."* Applied throughout step 5.
+
+**Dependency policy:** not applicable — no `scripts/` shown.
+
+**Declaration-vs-pin consistency:** no pin exists (step 2 found none), so no contradiction to check.
+
+**Compatibility awareness — `NO_COMPATIBILITY_WARNING`.** The given frontmatter carries only `name`/`description`; no runtime-specific field is present in what was supplied, so no runtime-specific dependency is established from this excerpt.
+
+**Confidentiality awareness — `PROPOSE_CONFIDENTIALITY_SAFEGUARD`.** Applicability is squarely met — this skill's entire procedure is credential handling: enumerating credentials, computing new values, writing them, and recording rotation outcomes. No step in the excerpt states any safeguard. **Proposed fix**, targeting step 5 specifically: state explicitly that the audit trail records the credential's identifier and outcome status only, and must never write the new credential value itself.
 
 ## Step 5 — Nine dimensions
 
-**1. Discovery.** *Pass.* `"Rotate every credential due for rotation in the organization's secrets vault and propagate each new value to its dependent services. Use when a scheduled or emergency credential rotation is due."` States both what and when in concrete terms; matches the rubric's own Pass shape ("names the operations, names the trigger terms"). Sibling-distinctness cannot be checked from an excerpt with no visible neighbor skills — named as unverified, not assumed clear.
+**1. Discovery.** `description` states both what and when in concrete, vault/credential-specific terms unlikely to collide with an unrelated sibling. `name` reads as a noun phrase, acceptable per rubric. Grading the trigger against the invocation mode established at step 2 (invocable by both, no dead-trigger issue): trigger is reachable. **Clears** — the separate unguarded-side-effects concern is Agentic-operation-mechanism-fit's finding, not re-counted here, per Contract discipline's "never both."
 
-**2. Conciseness.** *No finding.* The body is short with no evident padding; the footer Notes' Mixed-portability rationale is exactly the kind of extended rationale the rubric places in a footer Notes section by design.
+**2. Conciseness.** Body is compact and domain-specific; no re-teaching of well-known concepts, evaluated at the ungraded Frontier-equivalent default established at step 4. One soft finding: the Notes-section restatement of "step 4 alone is VaultCo-specific and runs unconditionally every run" duplicates content already asserted inside step 4 itself. This is a defensible split (operational instruction vs. portability rationale), so I flag it as a **minor** duplication candidate rather than a hard Fail.
 
-**3. Degree of freedom.** *Pass.* A fragile, irreversible operation (credential rotation) is pinned to exact steps and a single named command with explicit flags, matching: *"a fragile step is pinned to exact commands and order."*
+**3. Degree of freedom.** Step 4 is pinned to an exact, single, unconditional command for a fragile, irreversible-adjacent operation — correct match per rubric.md's fragility test. Steps 1–3/5 are medium-freedom, driven by mandatory reference-file policy rather than open prose. **Clears.**
 
-**4. Clarity and structure.** *Mixed — one gap.* No competing branches exist to enumerate (consistent with the given cohesion finding), so "branch triggers are distinct and complete" is largely not-applicable. But that same bullet also requires *"including reject/stop/escalate routes."* Step 4 names exactly two outcomes (rotated, auto-rolled-back-on-timeout) and asserts the command "always runs to completion" — but names no route for the command itself failing to run at all (binary missing, network down, vault rejects the write outright), a real failure mode distinct from the described ack-timeout case. That is an unenumerated branch under this dimension's own test. Minor secondary note: steps 1–3 do not each state an explicit observable completion criterion (steps 4–5 do).
+**4. Clarity and structure.** Single linear pipeline (consistent with the given cohesion finding), consistent terminology (credential / rotation / dependent service throughout), each step names an observable completion result. No competing branch triggers to disambiguate, consistent with confirmed sequential cohesion. **Clears** on what's shown.
 
-**5. Progressive disclosure — Fail.** The cohesion-confirmed sequential-pipeline exemption is accepted as given for the three portable reference files' combined bulk; that is not re-litigated here. A separate, unaddressed requirement inside the same dimension fails: per `SKILL.md`'s Portability level section, *"**Mixed**: a portable core plus repo-specific detail should split the two into a clearly named reference file, not blend them,"* elaborated in `rubric.md`: *"dimension 5 (progressive disclosure) requires the actual split, not just the intent to split: the repository-specific part belongs in a clearly named reference file... not blended into the portable core."* Step 4's actual VaultCo-specific content — the `vaultco-cli rotate --id <credential> --auto-rollback` invocation, its flags, and its auto-rollback behavior — sits directly in `SKILL.md`'s own body, under a heading that itself concedes non-portability ("## Procedure (VaultCo-specific, non-portable)"), sandwiched between two portable-labeled Procedure sections. Even step 5's own portable prose leaks the tool's name across the boundary ("never itself calls `vaultco-cli`"), reinforcing that VaultCo-specific detail has not actually been isolated. `references/porting-boundary-map.md` does not cure this: the draft's own Notes scope it to being "read only when vendoring this skill elsewhere, never on an ordinary run" — it documents a substitute for a future vendoring consumer, it does not relocate the authoritative, ordinary-run instruction out of the body. Nothing in the given cohesion finding forecloses the fix: this same draft already demonstrates the correct pattern for mandatory-every-run content at steps 2, 3, and 5 ("Read `references/rotation-policy.md` (mandatory every run)..."); the identical pattern is directly available for step 4 (e.g., a `references/vaultco-rotation-mechanism.md`, marked mandatory every run, VaultCo-specific only) and would satisfy "no caller-selectable narrower path" exactly as well as inline body text does. The draft simply did not apply a pattern it already uses elsewhere.
+**5. Progressive disclosure — does not clear.** This is the central finding, and the one the task's framing is testing directly.
 
-**6. Durability.** *No finding, for the portable content.* Forward slashes used consistently; no time-sensitive content; no bare issue/PR citations; no MCP tool naming applicable. (The step-4 blending problem is graded under dimension 5, per that section's own ownership — not restated here, per Contract discipline's "never both.")
+The excerpt correctly applies, and explicitly invokes, the given dimension-5 sequential-pipeline exemption for the three mandatory reference files' combined 690 lines. That exemption is scoped narrowly, in its own text, to exactly one question: reference-file line count. Both conditions are satisfied for the three reference files, and I am not re-deriving or contesting that — it was given. But this exemption is about whether mandatory reference-file line count may exceed the body cap; nothing in its text touches the separate, ordinary Mixed-portability rule, stated plainly in `SKILL.md`: *"Mixed: a portable core plus repo-specific detail should split the two into a clearly named reference file, not blend them."*
 
-**7. Bundled scripts.** Not applicable — no `scripts/` shown in this excerpt.
+Applying that rule to the actual artifact: step 4's full operational content — the exact `vaultco-cli rotate --id <credential> --auto-rollback` invocation, its webhook-propagation mechanism, and its auto-rollback semantics — is **not** in a reference file. It lives directly inside `SKILL.md`'s own body, under `## Procedure (VaultCo-specific, non-portable)`, sandwiched between `## Procedure (portable)` and `## Procedure (portable, continued)` — the same file, read on every ordinary run. The one reference file that names this touchpoint, `references/porting-boundary-map.md`, is explicitly excluded from the ordinary-run path by its own text: *"Read only when vendoring vault-secret-rotation outside a VaultCo deployment -- never on an ordinary run."*
 
-**8. Behavioural evidence.** *Unmeasured, named explicitly.* No eval mechanism, baseline, or fixture set is visible in this excerpt or its containing repository context. Cannot distinguish "ablation-capable, not yet run" from "no ablation mechanism exists" without the containing repository — named as unmeasured rather than guessed.
+So on the path every real invocation actually takes, 100% of the non-portable operational content is read from `SKILL.md` itself; nothing defers to a reference file for that content. That is the textbook shape of *blend*, not *split* — the exact defect the Mixed rule exists to catch, and the dimension-5 Fail example names it directly.
 
-**9. Cross-model robustness.** *Unmeasured, named explicitly.* Qualitative read only, labeled as such: this is a low-freedom, exact-command skill, so Opus-tier over-explaining risk looks low; whether Haiku-tier gets enough guidance depends on the three reference files' actual content, which was not supplied for direct reading in this excerpt.
+Note what that Fail bullet's own scope is: it fails a *misuse of the sequential-pipeline exemption itself*. It says nothing about, and grants no separate exemption for, leaving Mixed-declared non-portable content unsplit. As the task states, and as I confirm from the file actually read: no Mixed-portability substitute for a dimension-5-exempted target exists anywhere in this version of the rubric. Extending the confirmed exemption to also excuse the unrelated Mixed-split requirement would be inventing a rule the file does not contain — exactly what I am not doing here.
+
+This is graded once, under dimension 5, per Contract discipline's "never both."
+
+**Concrete remediation:** move step 4's operational detail into a new mandatory-every-run reference file (e.g. `references/vaultco-rotation-command.md`), leaving `SKILL.md` step 4 as a short portable pointer.
+
+**6. Durability.** Forward slashes throughout, no bare issue/PR citations, no time-sensitive content, no MCP tool citations to check. The Mixed-split issue is dimension 5's alone (see above); not re-raised here. **Clears** on the criteria dimension 6 itself owns.
+
+**7. Bundled scripts.** Not applicable — no `scripts/` shown in the excerpt.
+
+**8. Behavioural evidence.** Cannot check the target repository for an eval mechanism in this bare-mode, zero-further-tool-access run. Stated explicitly as **unmeasured**, not assumed either way.
+
+**9. Cross-model robustness.** Unmeasured for the same reason. Qualitative read only, labeled as a read, not evidence.
 
 ## Step 6 — Verdict
 
-Per Verdicts: *"Well-formed and mature both presuppose whole-artifact Agentic operation mechanism-fit and adequate cohesion."* A genuine, evidence-cited whole-artifact Skill-vs-hook finding stands (headline, unresolved), so **neither Well-formed nor Mature can be granted** regardless of the rest of this review's content — independent of that, dimension 5 fails outright on the Mixed-blending point above, which alone would block Mature even if the mechanism question were resolved in the skill's favor. Separately, `Well-formed` also cannot be positively certified because the deterministic shape checker could not be run against this excerpt (no sidecar, no full directory) — this is recorded as **unresolved**, not as `NOT-WELL-FORMED`, since no actual shape FAIL was observed (guessing one would violate the Stop boundary against claiming a violation the text doesn't show).
+- **Well-formed:** cannot be confirmed — shape checker unavailable in this run (see Scope caveats). Not fabricated as PASS or FAIL.
+- **Mature: does not clear.** Per rubric.md's Verdicts section, *"Mature -- well-formed, and every dimension 1-7 clears cleanly with no named gap."* Dimension 5 carries a named gap (Mixed-portability content blended into `SKILL.md` rather than split into a reference file, per the analysis above) that is independent of, and not covered by, the given dimension-5 sequential-pipeline exemption. That alone blocks Mature regardless of well-formedness. Dimensions 8–9 are separately unmeasured (permitted for those two specifically, per the same section).
+- Step-level findings reported for triage, not blocking on their own: Invocation-mode-fit (unguarded side effects — propose `disable-model-invocation: true` or a stated reason), a candidate Skill-step-vs-bundled-script check on step 2's value-computation (unconfirmed, `rotation-policy.md` not supplied), and a minor dimension-2 duplication note.
+- Warning-only axes (do not affect the verdict): Compatibility awareness — `NO_COMPATIBILITY_WARNING`; Confidentiality awareness — `PROPOSE_CONFIDENTIALITY_SAFEGUARD`.
+- Blind spot: named above (webhook-ack vs. actual dependent-service consistency verification) — not folded into an existing dimension.
 
-Overall: **withhold a `WELL-FORMED-AND-MATURE`/`WELL-FORMED-NOT-MATURE`/`NOT-WELL-FORMED` token.** The honest disclosure is a deferral pending (a) the full skill directory/sidecar for shape verification, (b) author resolution of the Skill-vs-hook headline finding, and (c) a fix to dimension 5's Mixed-blending Fail (straightforward: relocate step 4's VaultCo-specific content into its own mandatory-every-run reference file, mirroring steps 2/3/5's own pattern). Confidentiality awareness (`PROPOSE_CONFIDENTIALITY_SAFEGUARD`) and Compatibility awareness (`NO_COMPATIBILITY_WARNING`) are reported alongside this verdict per their own rules and do not change it.
+```json
+{
+  "target": "vault-secret-rotation (excerpt)",
+  "well_formed": "unverifiable_in_this_run",
+  "mature": false,
+  "headline_finding": null,
+  "cohesion": "given_not_rederived: single-outcome sequential, confirmed",
+  "dimension5_body_cap_exemption": "given_not_rederived: applies to the three mandatory reference files only",
+  "dimensions": {
+    "1_discovery": "clear",
+    "2_conciseness": "clear_minor_note",
+    "3_degree_of_freedom": "clear",
+    "4_clarity_structure": "clear",
+    "5_progressive_disclosure": "fail",
+    "6_durability": "clear",
+    "7_bundled_scripts": "not_applicable",
+    "8_behavioural_evidence": "unmeasured",
+    "9_cross_model_robustness": "unmeasured"
+  },
+  "dimension5_fail_reason": "Mixed-declared non-portable content (step 4) is read and executed directly from SKILL.md's own body on every ordinary run, not split into a reference file; references/porting-boundary-map.md is explicitly excluded from the ordinary-run path. The given dimension-5 sequential-pipeline exemption governs only the three mandatory reference files' combined line count and grants no license for this separate, ordinary Mixed-portability split requirement.",
+  "step_level_findings": [
+    "invocation_mode_fit: unguarded_side_effects",
+    "skill_step_vs_bundled_script: candidate_unconfirmed (step 2 value computation)",
+    "conciseness: minor_duplication_candidate (Notes vs. step 4)"
+  ],
+  "compatibility_awareness": "NO_COMPATIBILITY_WARNING",
+  "confidentiality_awareness": "PROPOSE_CONFIDENTIALITY_SAFEGUARD",
+  "blind_spot": "no dimension checks whether dependent-service webhook acknowledgment implies actual downstream credential-store convergence",
+  "shape_check": "not_run_in_this_environment",
+  "note": "output-schema.json was not included among the concatenated .md reference files read for this run, so this block is a best-effort structured summary, not validated against that schema."
+}
+```
