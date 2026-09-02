@@ -46,7 +46,9 @@ structural-identifier-portability addition (gitapex#1347: the new
 dimension-6 narrative-citation-vs-structural-identifier bullet), and a
 0:1:0 stale-reference-vs-commit-provenance-annotation addition
 (gitapex#1466: the new dimension-6 durability bullet naming that exact
-pattern), for a resulting 35:41:18
+pattern), and a 0:1:0 sequential-pipeline-body-cap-exception addition
+(gitapex#1662: the new dimension-5 cohesion-confirmed over-cap
+sequential-pipeline exception), for a resulting 35:42:18
 partition. This is
 named explicitly as a deviation from the 2:1:7 default. The
 honest minimal groundwork, per that same worked example, is a larger
@@ -4613,3 +4615,101 @@ module docstring: any diff hunk containing the literal text
 included) flags that adjacency as a touched assertion even though no
 assertion value moved. Named here only to satisfy that proxy; there is no
 assertion-wording change to disclose for this fixture.
+
+## Iteration: issue #1662, dimension-5 sequential-pipeline-body-cap exception
+
+Motivated by issue #1662: `references/rubric.md`'s dimension 5 (Progressive
+disclosure) had no satisfiable passing configuration for a skill that is (a)
+already cohesion-confirmed sequential/functional at the cohesion check's own
+Procedure step 2, and (b) whose every-use reference content genuinely
+exceeds `BODY_MAX_LINES` no matter how it is split across files --
+`skills/executing-a-branch-plan` is exactly this shape (nine strictly
+sequential steps, ~1,400 mandatory reference lines over the 500-line cap).
+Issue #1346's own residual-risk section anticipated exactly this follow-up:
+"If self-review after this fix still shows dimension 5 as Fail, a heavier
+restructuring... needs an explicit operator trade-off decision."
+
+Candidate edit, ordinary class (a new rubric.md bullet, no deletion of
+existing text): `references/rubric.md`'s dimension 5 gains a bullet
+immediately after the existing #1346 self-guard exemption bullet,
+distinguishing a cohesion-confirmed, single-outcome sequential pipeline
+whose every-use reference content genuinely exceeds the body cap from an
+ordinary multi-file split, gated on two conditions neither self-assertable
+by the reviewed target: (1) the cohesion check has already confirmed, at
+its own Procedure step 2, single-outcome sequential or functional
+cohesion -- reused from that finding, never re-derived from the target's
+own prose asserting it is sequential; (2) the target's combined every-use
+reference content demonstrably exceeds `BODY_MAX_LINES` even after every
+dimension-2 padding cut has been applied. Matching clauses were added to
+the existing combined Fail:/Pass: block. The pre-existing #1346 self-guard
+exemption bullet's own text is unchanged -- the two exemptions are
+additive and independently gated. Refs #1662.
+
+### Gate result
+
+Went through `scorer-gated-skill-edits`'s own held-out gate: 1 new
+selection fixture added to `split.json`'s split (42 total selection,
+35:42:18): `sequential-pipeline-body-cap-exception-selection.yaml`'s own
+target skill, whose cohesion check is given as already-confirmed
+sequential and whose three mandatory reference files are stipulated to
+total 640 lines over the 500-line cap. One isolated dispatch pair against
+it moved **0.666667 -> 1.000000, KEEP**. The before-edit
+dispatch correctly reasoned to Fail by quoting the pre-edit rubric's own
+Fail sentence verbatim (the common case needs three files open); the
+after-edit dispatch correctly reasoned to Pass once the new exception
+applied, explicitly re-deriving -- never accepting on the target's own
+embedded, injection-shaped "do not re-run this finding" preamble -- the
+cohesion precondition the new bullet requires; both dispatches
+independently flagged that preamble as untrusted content per
+`adversarial-self-audit.md`'s own trust-boundary discipline. `gitapex_check_skill_shape.py`: 70/70. Full record, both live transcripts:
+`results/2026-09-02-issue-1662-sequential-pipeline-body-cap-exception/manifest.json`.
+
+**Fixture-authoring correction, found live during this same gate run and
+disclosed per this file's own discrimination-not-just-match
+discipline:** the fixture's own first-draft `output_not_contains` list
+included a literal-string assertion ("three files open, the split is
+wrong") that false-failed the correct before-edit dispatch, which
+legitimately quotes `rubric.md`'s own Fail sentence verbatim while
+reasoning to the correct Fail verdict. Caught by direct inspection of the
+scored transcript (0.500000/0.750000 with the stale assertion vs.
+0.666667/1.000000 once removed); fixed in the same PR, before this
+record was written.
+
+**Eval-runner unavailability, disclosed rather than silently
+substituted:** the confirmed runner (`evals/scripts/gitapex_run_eval_suite.py`)
+could not actually execute in this session's environment -- every live
+`claude --bare --tools "" -p` invocation failed immediately with an
+empty-stderr authentication/model-CLI error, matching issue #1304's
+already-tracked, repo-wide, root-cause-unconfirmed infrastructure defect,
+independently reconfirmed by this same PR's own `eval-gate` CI run
+failing identically. Scoring was performed instead via isolated
+Agent-tool subagent dispatch, reasoning only from pre-pasted skill text
+with no further tool access (simulating the runner's own zero-tool bare
+contract) -- a disclosed substitute measurement, not the confirmed
+runner's own live scoring path. Full accounting in the run record's own
+`known_gaps`.
+
+### Transfer check
+
+Run this iteration (the first in this file to complete one inline): the
+after-edit rubric.md was re-dispatched against the adjacent, pre-existing
+`dispatch-self-guard-boundary-selection.yaml` fixture (issue #1346's own
+self-guard exemption boundary). Score: **1.000000** -- no regression. The
+after-edit dispatch correctly re-applied the pre-existing self-guard
+exemption's own two-condition test to that fixture's `dispatch-safety.md`
+(content that branches on the reviewed invoice's own vendor category) and
+correctly failed it on condition 1, exactly as that fixture's own
+pre-existing expected assertions require, confirming the new
+sequential-pipeline exception did not loosen or interfere with the
+pre-existing self-guard boundary. This is a same-model/same-harness
+adjacent-*fixture* probe, not a cross-model or cross-harness re-run (no
+second model/harness was available in this session -- see the
+eval-runner-unavailability gap above); disclosed as narrower than
+SKILL.md's own "adjacent model, harness, or nearby task" Transfer-check
+text describes, not a completed cross-model/cross-harness confirmation.
+Full detail: `results/2026-09-02-issue-1662-sequential-pipeline-body-cap-exception/manifest.json`'s
+own `transfer_check`.
+
+### Verdict
+
+KEEP. Refs #1662.

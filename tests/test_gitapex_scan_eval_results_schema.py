@@ -933,6 +933,7 @@ def test_real_repository_nonstandard_score_files_are_all_declared() -> None:
         "evaluating-skill-quality/2026-08-26-issue-1346-dispatch-self-guard-boundary",
         "evaluating-skill-quality/2026-08-26-issue-1347-structural-identifier-portability",
         "evaluating-skill-quality/2026-08-30-issue-1466-durability-stale-reference",
+        "evaluating-skill-quality/2026-09-02-issue-1662-sequential-pipeline-body-cap-exception",
     }
 
 
@@ -1074,6 +1075,7 @@ def test_real_repository_discovers_every_committed_run_directory() -> None:
         "evaluating-skill-quality/2026-08-26-issue-1346-dispatch-self-guard-boundary",
         "evaluating-skill-quality/2026-08-26-issue-1347-structural-identifier-portability",
         "evaluating-skill-quality/2026-08-30-issue-1466-durability-stale-reference",
+        "evaluating-skill-quality/2026-09-02-issue-1662-sequential-pipeline-body-cap-exception",
         "untrusted-input-triage/2026-08-01-issue-645-battle-test",
         "untrusted-input-triage/2026-08-01-issue-645-behavioral-eval",
         "untrusted-input-triage/2026-08-01-issue-646-behavioral-gate2",
