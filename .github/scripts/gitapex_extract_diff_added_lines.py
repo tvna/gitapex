@@ -83,6 +83,11 @@ Usage::
 
     git diff -U<large> "$BASE_SHA...$HEAD_SHA" -- <pathspec...> \\
       | python3 .github/scripts/gitapex_extract_diff_added_lines.py > added_lines.txt
+
+A bare pipe here masks `git diff`'s own exit status in a non-`pipefail`
+shell (issue #1531): add `set -o pipefail` first, or check `git diff`'s
+own exit code separately, if the caller must detect an upstream failure
+rather than silently extracting whatever partial diff reached stdin.
 """
 
 from __future__ import annotations

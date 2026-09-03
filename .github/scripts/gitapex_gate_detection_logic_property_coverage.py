@@ -337,6 +337,11 @@ Usage::
         "$MERGE_BASE" "$HEAD_SHA" -- '*.py' \\
       | uv run --frozen python3 .github/scripts/gitapex_gate_detection_logic_property_coverage.py
 
+A bare pipe here masks `git diff`'s own exit status in a non-`pipefail`
+shell (issue #1531): add `set -o pipefail` first, or check `git diff`'s
+own exit code separately, if the caller must detect an upstream failure
+rather than silently grading whatever partial diff reached stdin.
+
 Both flags are load-bearing for the same reason they are in
 ``gitapex_gate_exception_handler_gaps.py``: rename detection would hide a file
 newly promoted into a graded directory behind a zero-added-line header, and

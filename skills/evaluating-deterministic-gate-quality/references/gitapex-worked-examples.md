@@ -374,6 +374,7 @@ real script with bash's own `time` builtin (copy-pasteable and reproducible
 as written; substitute a different repository checkout's own path if
 re-running elsewhere):
 
+<!-- gitapex-allow-unguarded-shell-pipe: a copy-pasteable timing transcript, not a documented gate invocation -- the pipe only feeds `sed`'s own line-prefixing for display, and the measurement's own pass/fail is read from the printed `real`/`exit=` values below, not from this pipeline's own exit status (https://github.com/tvna/gitapex/issues/1531) -->
 ```
 $ payload='{"tool_name":"mcp__github__issue_write","tool_input":{"method":"create","body":"ACM: not-applicable (docs): example"}}'
 $ for i in 1 2 3 4 5; do
