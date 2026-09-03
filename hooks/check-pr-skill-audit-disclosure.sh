@@ -252,7 +252,20 @@ if [ "$base_is_explicit" = "yes" ] && [ -n "$repo_root" ] && [ -f "$full_gate" ]
     # precondition script exit 0 (its own --help path) or reject with a
     # usage error, either of which this block would otherwise read as "no
     # missing packages" and silently skip the new deny path.
-    precondition_json=$(python3 "$precondition_script" -- "${required_packages[@]}" 2>/dev/null) || true
+    #
+    # Issue #1697: `uv run --frozen python3`, not a bare `python3` -- this
+    # whole block only ever runs once $full_gate/$flag_module (both under
+    # .github/scripts/, never deployed with the plugin -- see tier
+    # docstring above) are confirmed present, i.e. only inside this
+    # repository's own dev checkout, where uv and its .venv are always
+    # available (same precondition .pre-commit-config.yaml's own
+    # local-preflight entry already relies on, issue #1485/PR #1486). A
+    # bare `python3` here resolves from the calling PreToolUse hook's own
+    # ambient PATH, which may have no access to this checkout's
+    # uv-managed .venv -- the exact false-deny #1697 reports live (a
+    # PATH lacking pydantic reports it "missing" even though `uv sync`
+    # installed it).
+    precondition_json=$(uv run --frozen python3 "$precondition_script" -- "${required_packages[@]}" 2>/dev/null) || true
     # The filter must PROVE the output is the expected `{"missing": [...]}`
     # object, not merely fail to contradict it. Found by issue #1566's own
     # step-8 adversarial review: the previous `jq -r '.missing // [] |
@@ -298,7 +311,10 @@ if [ "$base_is_explicit" = "yes" ] && [ -n "$repo_root" ] && [ -f "$full_gate" ]
   # disclosure.sh` crashed with mktemp's own exit 1, not falling through.
   if body_file=$(mktemp 2>/dev/null); then
     printf '%s' "$body" >"$body_file"
-    if full_output=$(cd "$repo_root" && python3 "$full_gate" \
+    # Issue #1697: `uv run --frozen python3`, same rationale as the
+    # precondition-probe invocation above -- this call is also inside the
+    # dev-checkout-only tier-1 block.
+    if full_output=$(cd "$repo_root" && uv run --frozen python3 "$full_gate" \
         --check-diff "$merge_base" HEAD --body-file "$body_file" 2>&1); then
       full_exit=0
     else
@@ -326,7 +342,7 @@ if [ "$base_is_explicit" = "yes" ] && [ -n "$repo_root" ] && [ -f "$full_gate" ]
       # the latter anyway.
       deny "Blocked by hooks/check-pr-skill-audit-disclosure.sh: this PR's diff requires skill-audit disclosure evidence its body does not carry. This is the same verdict .github/workflows/skill-audit-gate.yml will report, computed locally before the push. Fix the '## Skill audit evidence' section, then re-check with:
 
-  python3 .github/scripts/gitapex_gate_skill_audit_disclosure.py --check-diff ${merge_base} HEAD --body-file <path>
+  uv run --frozen python3 .github/scripts/gitapex_gate_skill_audit_disclosure.py --check-diff ${merge_base} HEAD --body-file <path>
 
 $full_output"
     fi
@@ -347,6 +363,21 @@ fi
 # would otherwise crash past this hook's own "skip the local pre-check,
 # CI remains authoritative" fallback with mktemp's own exit code, an
 # exit Claude Code's PreToolUse contract treats as non-blocking.
+#
+# Issue #1697/#1581: prefer this checkout's own uv-managed .venv (uv on
+# PATH plus a pyproject.toml/uv.lock at repo_root) over a bare `python3`
+# resolved from the calling shell's own ambient PATH. Unlike tier 1
+# above, this block also runs in a consumer plugin install -- only
+# skills/ and hooks/ are ever deployed there (docs/repository-layout.md),
+# so no uv toolchain or lockfile exists to prefer -- an unconditional `uv
+# run` would newly break every such install. $check_script is stdlib-only
+# by design, so a bare python3 has always been a correct answer there;
+# this fallback keeps that unchanged.
+python3_cmd=(python3)
+if command -v uv >/dev/null 2>&1 && [ -f "${repo_root}/pyproject.toml" ] && [ -f "${repo_root}/uv.lock" ]; then
+  python3_cmd=(uv run --frozen --directory "$repo_root" python3)
+fi
+
 if ! diff_error=$(mktemp 2>/dev/null); then
   echo "Warning: hooks/check-pr-skill-audit-disclosure.sh could not create a temp file for git-diff error capture (mktemp failed); skipping the local pre-check (CI's skill-audit-gate.yml will still catch this)." >&2
   exit 0
@@ -363,7 +394,7 @@ if [ -z "$changed" ]; then
   exit 0
 fi
 
-if check_output=$(printf '%s' "$body" | python3 "$check_script" 2>&1); then
+if check_output=$(printf '%s' "$body" | "${python3_cmd[@]}" "$check_script" 2>&1); then
   check_exit=0
 else
   check_exit=$?

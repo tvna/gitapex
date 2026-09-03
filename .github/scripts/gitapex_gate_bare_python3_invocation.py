@@ -73,42 +73,64 @@ implementation's own further-narrowed instances of it):
   shell parsing.
 
 Usage:
-    uv run --frozen python3 .github/scripts/gitapex_gate_bare_python3_invocation.py [workflows_dir] [hooks_dir]
+    uv run --frozen python3 .github/scripts/gitapex_gate_bare_python3_invocation.py [workflows_dir] [hooks_dir] [ssot_path]
 
 Exit codes:
     0  every `.github/scripts/*.py` invocation found in a `run:` step uses
-       `uv run`.
-    1  a bare `python3 .github/scripts/*.py` invocation was found, OR the
-       scan could not be performed (missing/unreadable directory, no
-       workflow files, a file that will not decode, or a file whose YAML
-       does not parse to the expected `jobs: {...: {steps: [...]}}`
-       shape) -- "nothing was scanned" and "everything scanned was clean"
-       are different claims, and only one of them is ever true, so the
-       former is reported as a finding rather than sharing the latter's
-       exit code (matching `gitapex_scan_unpinned_actions.py`'s own
-       fail-closed rationale, issue #848).
+       `uv run`, and every `hooks/*.sh` shell-variable-indirected
+       invocation (see below) is likewise clean.
+    1  a bare `python3 .github/scripts/*.py` invocation was found (in a
+       workflow `run:` step or, indirected through a shell variable, in a
+       `hooks/*.sh` file), a bare `hooks/*.sh` invocation of a registered
+       `hooks/*.py` target whose own gate requires a third-party Python
+       package was found, OR the scan could not be performed
+       (missing/unreadable directory, no workflow files, a file that will
+       not decode, or a file whose YAML does not parse to the expected
+       `jobs: {...: {steps: [...]}}` shape) -- "nothing was scanned" and
+       "everything scanned was clean" are different claims, and only one
+       of them is ever true, so the former is reported as a finding
+       rather than sharing the latter's exit code (matching
+       `gitapex_scan_unpinned_actions.py`'s own fail-closed rationale,
+       issue #848).
 
-Issue #1446 Item 2 -- WARNING-tier addition: `hooks/*.sh` almost never
-invokes a `.github/scripts/*.py` gate directly on the same line the way a
-workflow `run:` step does. It instead assigns the path to a shell
-variable on one line and invokes `python3 "$var"` several lines later
-(e.g. `hooks/check-pr-skill-audit-disclosure.sh`'s `full_gate` variable),
-which `find_bare_invocations`'s same-line regex cannot see.
+Issue #1446 Item 2 (original introduction) / issue #1697 (HARD-FAIL
+promotion): `hooks/*.sh` almost never invokes a `.github/scripts/*.py`
+gate directly on the same line the way a workflow `run:` step does. It
+instead assigns the path to a shell variable on one line and invokes
+`python3 "$var"` several lines later (e.g.
+`hooks/check-pr-skill-audit-disclosure.sh`'s `full_gate` variable), which
+`find_bare_invocations`'s same-line regex cannot see.
 `find_hooks_shell_indirected_invocations` closes that blind spot with a
 two-step static scan of `hooks/*.sh`, scoped to the direct single-
 assignment-then-invocation shape this repository's real `hooks/*.sh`
 files actually use (no aliasing, no string concatenation, no multi-hop
-reassignment tracing). Its findings are report-only: `main()` prints them
-but they never flip the exit code, unlike `find_bare_invocations`'s own
-workflow-scan findings above, which remain a hard fail. This is
-deliberate, not an oversight -- a `hooks/*.py` sibling script is
-stdlib-only, self-contained, and bare-invoked by design
-(`docs/repository-layout.md`), and a variable assigned from one is never
-tracked, so it can never be flagged.
+reassignment tracing).
+
+Originally WARNING-tier (report-only, never flipped the exit code) on the
+theory that a `hooks/*.py` sibling script is stdlib-only, self-contained,
+and bare-invoked by design (`docs/repository-layout.md`). Issue #1697
+found the gap in that theory live: `hooks/gitapex_check_python_precondition.py`
+is itself stdlib-only, but its own job is probing whether a *third-party*
+package (pydantic, for the `skill-audit-disclosure` gate) is importable --
+and `hooks/check-pr-skill-audit-disclosure.sh`'s own bare `python3
+"$precondition_script"` invocation of it inherited the exact PATH-
+dependent false-deny this whole gate exists to prevent, invisible to this
+scan because it targeted a `hooks/*.py` file, a class this scan
+categorically never tracked. `load_python_dependent_hook_script_names`
+closes that gap by reading `.gitapex/ssot.json` directly: a `hooks/*.py`
+path is tracked (and now hard-fails, same as `.github/scripts/*.py`) if
+and only if it is registered under a gate whose own
+`preconditions.requires_python_packages` is non-empty -- i.e. a `hooks/*.py`
+file that genuinely needs a third-party-dependent, deterministically-
+resolved interpreter, not every `hooks/*.py` sibling indiscriminately. A
+`hooks/*.py` variable NOT so registered is still never tracked, so it can
+never be flagged -- the original stdlib-only-and-bare-by-design theory
+still holds for every such file.
 """
 
 from __future__ import annotations
 
+import json
 import pathlib
 import re
 import sys
@@ -117,6 +139,7 @@ import yaml
 
 WORKFLOWS_DIR = pathlib.Path(".github/workflows")
 HOOKS_DIR = pathlib.Path("hooks")
+SSOT_PATH = pathlib.Path(".gitapex/ssot.json")
 
 # `uv run`, optionally followed by long-form flags (`--frozen`,
 # `--flag=value` -- the only shapes this repository's real call sites use;
@@ -261,37 +284,133 @@ def _scan_workflow(workflow: pathlib.Path) -> list[tuple[str, int, str]]:
     return findings
 
 
-def find_hooks_shell_indirected_invocations(hooks_dir: pathlib.Path = HOOKS_DIR) -> list[tuple[str, int, str]]:
+def load_python_dependent_hook_script_names(ssot_path: pathlib.Path = SSOT_PATH) -> frozenset[str] | None:
+    """Return the basenames of every `hooks/*.py` file registered in
+    `.gitapex/ssot.json` under a gate whose own
+    `preconditions.requires_python_packages` is non-empty (issue #1697): a
+    `hooks/*.sh` bare-`python3` invocation of one of these risks the exact
+    PATH-dependent false-deny #1697 found (the calling shell's own ambient
+    PATH may not resolve an interpreter that can import the third-party
+    package that gate needs), the same reason a bare `python3
+    .github/scripts/*.py` invocation is already a hard failure below.
+
+    Returns `None` (never an empty result masquerading as "nothing
+    registered") when the registry is missing, unreadable, or does not
+    parse to the expected shape -- whole-file, or scoped to one `gates`
+    entry that does name a `hooks/*.py` script but whose own
+    `preconditions`/`requires_python_packages` shape is malformed: the
+    caller must treat either the same fail-closed way
+    `find_bare_invocations`/`_scan_workflow` already treat an unreadable
+    workflow file -- a "cannot verify" finding, not a silent "no
+    additional targets" pass (adversarial-review finding, issue #1697: a
+    malformed `.gitapex/ssot.json`, or a single gate entry's own malformed
+    `preconditions`, alongside a real bare invocation of a registered
+    `hooks/*.py` target previously made this whole gate report "No ...
+    bare invocations found" and exit 0 either way). A gate entry that
+    names no `hooks/*.py` script at all, or that genuinely omits
+    `preconditions`/`requires_python_packages` or leaves the latter
+    empty, is not malformed -- it legitimately contributes nothing and is
+    skipped, not fail-closed."""
+    try:
+        data = json.loads(ssot_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    gates = data.get("gates")
+    if not isinstance(gates, list):
+        return None
+
+    names: set[str] = set()
+    for gate in gates:
+        if not isinstance(gate, dict):
+            continue
+        scripts = gate.get("script")
+        if not isinstance(scripts, list):
+            continue
+        hooks_py_scripts = [s for s in scripts if isinstance(s, str) and s.startswith("hooks/") and s.endswith(".py")]
+        if not hooks_py_scripts:
+            continue
+        preconditions = gate.get("preconditions")
+        if preconditions is None:
+            continue
+        if not isinstance(preconditions, dict):
+            return None
+        packages = preconditions.get("requires_python_packages")
+        if packages is None or packages == []:
+            continue
+        if not isinstance(packages, list):
+            return None
+        for script in hooks_py_scripts:
+            names.add(pathlib.PurePosixPath(script).name)
+    return frozenset(names)
+
+
+def find_hooks_shell_indirected_invocations(
+    hooks_dir: pathlib.Path = HOOKS_DIR,
+    hard_fail_hooks_py_names: frozenset[str] = frozenset(),
+) -> list[tuple[str, int, str]]:
     """Return (file, line_number, line) for each `hooks/*.sh` bare
     `python3 "$var"` invocation (quoted or unquoted, `${var}` brace form
-    or bare `$var`) of a shell variable whose own assignment targets a
-    `.github/scripts/*.py` path. WARNING tier (report-only, see
-    module docstring): unlike `find_bare_invocations`, a missing or
-    unreadable `hooks_dir` is simply nothing to warn about, not a
-    fail-closed finding -- there is no exit-code contract here to protect.
-    A variable assigned from a `hooks/*.py` path is never tracked, so it
-    can never appear in the result (those are bare-invoked by design)."""
+    or bare `$var`) of a shell variable whose own assignment targets
+    either a `.github/scripts/*.py` path, or a `hooks/*.py` file named in
+    `hard_fail_hooks_py_names` (issue #1697: a gate-registered `hooks/*.py`
+    whose own gate declares a non-empty
+    `preconditions.requires_python_packages` -- see
+    `load_python_dependent_hook_script_names`). HARD-FAIL tier (issue
+    #1697; formerly WARNING-only, see issue #1446's own original
+    introduction): unlike `find_bare_invocations`, a missing or unreadable
+    `hooks_dir` is simply nothing to check, not a fail-closed finding --
+    there is no exit-code contract to protect on a directory this gate's
+    own caller may legitimately not have. A `hooks/*.py` variable NOT
+    named in `hard_fail_hooks_py_names` is still never tracked (those
+    remain bare-invoked by design, per docs/repository-layout.md)."""
     findings: list[tuple[str, int, str]] = []
     if not hooks_dir.is_dir():
         return findings
     for hook in sorted(hooks_dir.glob("*.sh")):
-        findings.extend(_scan_hook(hook))
+        findings.extend(_scan_hook(hook, hard_fail_hooks_py_names))
     return findings
 
 
-def _scan_hook(hook: pathlib.Path) -> list[tuple[str, int, str]]:
+def _scan_hook(
+    hook: pathlib.Path, hard_fail_hooks_py_names: frozenset[str] = frozenset()
+) -> list[tuple[str, int, str]]:
     try:
         lines = hook.read_text(encoding="utf-8").splitlines()
     except (OSError, UnicodeDecodeError):
-        # WARNING tier: nothing to fail closed on -- a hook that cannot be
-        # read has no reportable finding, not a hard failure.
+        # No exit-code contract to protect here (see this function's own
+        # caller docstring) -- a hook that cannot be read has no
+        # reportable finding, not a hard failure of the scan itself.
         return []
 
-    # Pass 1: which variables get assigned a `.github/scripts/*.py` path
-    # anywhere in this file. Whole-file rather than "only assignments
-    # before the invocation line" -- the real shape this repository uses
-    # always assigns before invoking, and tracking that ordering would add
-    # dataflow analysis this scan deliberately does not attempt.
+    # A registered hooks/*.py target's own basename (e.g.
+    # "gitapex_check_python_precondition.py") at the very end of an
+    # assignment's right-hand side, after trailing-comment stripping and
+    # quote trimming -- the real shape this repository's own hooks/*.sh
+    # files use is always a `$script_dir/<name>.py`-style path, never a
+    # literal `hooks/<name>.py` substring (that literal-substring shape is
+    # what `_GITHUB_SCRIPTS_PATH_RE` matches for `.github/scripts/*.py`
+    # instead, since those are always written relative to repo_root).
+    # `(?:^|/)` anchors the match to a real path-component boundary --
+    # without it, an unregistered file whose own name merely ENDS with a
+    # registered name as a substring (e.g.
+    # "my_other_gitapex_check_python_precondition.py" against registered
+    # "gitapex_check_python_precondition.py") would false-positive, since
+    # a bare trailing `$` allows any preceding character (adversarial-
+    # review finding, issue #1697).
+    hooks_py_target_re = None
+    if hard_fail_hooks_py_names:
+        hooks_py_target_re = re.compile(
+            r"(?:^|/)(?:" + "|".join(re.escape(name) for name in sorted(hard_fail_hooks_py_names)) + r")$"
+        )
+
+    # Pass 1: which variables get assigned a `.github/scripts/*.py` path,
+    # or a registered `hooks/*.py` target, anywhere in this file. Whole-
+    # file rather than "only assignments before the invocation line" --
+    # the real shape this repository uses always assigns before invoking,
+    # and tracking that ordering would add dataflow analysis this scan
+    # deliberately does not attempt.
     tracked_vars: set[str] = set()
     for line in lines:
         if line.lstrip().startswith("#"):
@@ -303,7 +422,8 @@ def _scan_hook(hook: pathlib.Path) -> list[tuple[str, int, str]]:
         comment = _TRAILING_COMMENT_RE.search(rhs)
         if comment:
             rhs = rhs[: comment.start()]
-        if _GITHUB_SCRIPTS_PATH_RE.search(rhs):
+        rhs_trimmed = rhs.strip().strip('"').strip("'")
+        if _GITHUB_SCRIPTS_PATH_RE.search(rhs) or (hooks_py_target_re and hooks_py_target_re.search(rhs_trimmed)):
             tracked_vars.add(assignment.group(1))
 
     if not tracked_vars:
@@ -341,6 +461,7 @@ def _scan_hook(hook: pathlib.Path) -> list[tuple[str, int, str]]:
 def main() -> int:
     workflows_dir = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else WORKFLOWS_DIR
     hooks_dir = pathlib.Path(sys.argv[2]) if len(sys.argv) > 2 else HOOKS_DIR
+    ssot_path = pathlib.Path(sys.argv[3]) if len(sys.argv) > 3 else SSOT_PATH
 
     findings = find_bare_invocations(workflows_dir)
     if findings:
@@ -352,17 +473,39 @@ def main() -> int:
         print("No bare `python3 .github/scripts/*.py` invocations found; every call site uses `uv run`.")
         exit_code = 0
 
-    # WARNING tier (issue #1446 Item 2): report-only, never contributes to
-    # exit_code -- see find_hooks_shell_indirected_invocations's own
-    # docstring and this module's docstring for why.
-    hooks_findings = find_hooks_shell_indirected_invocations(hooks_dir)
+    # HARD-FAIL tier (issue #1697; formerly WARNING-only under issue
+    # #1446 Item 2 -- see find_hooks_shell_indirected_invocations's own
+    # docstring for why that changed): a bare `python3 "$var"` of a
+    # `.github/scripts/*.py` target, or of a registered `hooks/*.py`
+    # target whose own gate declares a non-empty
+    # `preconditions.requires_python_packages`, now fails this gate the
+    # same way a workflow-level bare invocation always has.
+    #
+    # `None` (registry missing/unreadable/malformed) is itself a hard
+    # failure here, not a silent "nothing extra to widen with" pass --
+    # adversarial-review finding, issue #1697: without this, a malformed
+    # .gitapex/ssot.json made this whole gate report a false "clean"
+    # verdict even with a real bare invocation of a registered target
+    # present, the exact silent-degrade class this gate exists to close.
+    # The `.github/scripts/*.py`-only scan below still runs against an
+    # empty hooks/*.py scope rather than being skipped entirely, matching
+    # find_bare_invocations's own "still scan what you can, but report the
+    # inability to verify" precedent.
+    hard_fail_hooks_py_names = load_python_dependent_hook_script_names(ssot_path)
+    if hard_fail_hooks_py_names is None:
+        print(f"Could not read or parse {ssot_path} to determine hooks/*.py third-party-dependent targets.")
+        exit_code = 1
+        hard_fail_hooks_py_names = frozenset()
+    hooks_findings = find_hooks_shell_indirected_invocations(hooks_dir, hard_fail_hooks_py_names)
     if hooks_findings:
         print(
-            "WARNING (non-blocking): hooks/*.sh shell-variable-indirected bare "
-            '`python3 "$var"` invocations of a `.github/scripts/*.py` target:'
+            'Bare `python3 "$var"` invocations (hooks/*.sh) of a `.github/scripts/*.py` '
+            "target, or of a hooks/*.py target whose own gate requires a third-party "
+            "Python package:"
         )
         for path, lineno, line in hooks_findings:
             print(f"  {path}:{lineno}: {line}")
+        exit_code = 1
     else:
         print("No hooks/*.sh shell-variable-indirected bare invocations found.")
 

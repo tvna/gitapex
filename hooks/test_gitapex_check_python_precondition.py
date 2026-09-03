@@ -64,6 +64,55 @@ def test_is_importable_false_for_a_fake_module_name() -> None:
     assert checker.is_importable(_FAKE_MODULE) is False
 
 
+def test_is_importable_default_python_is_this_processs_own_interpreter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression (issue #1697): the default `python` must be
+    `sys.executable`, not a fresh `python3` PATH lookup -- a PreToolUse
+    hook's own shell can resolve a bare `python3` from a PATH lacking the
+    uv-managed .venv this checker itself was launched from, causing a
+    false "cannot import" even though the venv genuinely has the
+    package. Asserted by intercepting `subprocess.run`'s own argv rather
+    than the return value, so this fails loudly if a future edit
+    reintroduces a literal `"python3"` default."""
+    captured: list[list[str]] = []
+
+    def _fake_run(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        captured.append(argv)
+        return subprocess.CompletedProcess(argv, returncode=0)
+
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    checker.is_importable("json")
+
+    assert captured[0][0] == sys.executable
+
+
+def test_is_importable_default_falls_back_to_python3_when_sys_executable_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`sys.executable` can be an empty string for an embedded interpreter
+    (documented CPython behavior) -- that must fall back to the literal
+    "python3" rather than launching argv[0] == "" (which OSErrors)."""
+    captured: list[list[str]] = []
+
+    def _fake_run(argv: list[str], **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        captured.append(argv)
+        return subprocess.CompletedProcess(argv, returncode=0)
+
+    monkeypatch.setattr(sys, "executable", "")
+    monkeypatch.setattr(subprocess, "run", _fake_run)
+    checker.is_importable("json")
+
+    assert captured[0][0] == "python3"
+
+
+def test_is_importable_explicit_python_overrides_the_default() -> None:
+    """An explicitly passed `python` (e.g. a caller that already resolved
+    a specific interpreter) must still win over the `sys.executable`
+    default."""
+    assert checker.is_importable("json", python=sys.executable) is True
+
+
 def test_is_importable_probes_in_a_subprocess_not_this_process() -> None:
     """A missing module must not be able to crash this checker itself --
     the whole reason for the subprocess-probe design. If is_importable()
