@@ -458,6 +458,25 @@ def test_cli_emits_every_output_key_in_order(repo: pathlib.Path, capsys: pytest.
     assert tuple(keys) == flags_module.OUTPUT_KEYS
 
 
+def test_not_applicable_stderr_message_names_both_design_doc_paths(
+    repo: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Issue #1700: `compute_flags`'s own skip-diagnostic message named
+    only the old `docs/superpowers/specs/*.md` path even after
+    `_DESIGN_DOC_SHAPE_RE`/`_DESIGN_DOC_PATHSPECS` were widened to also
+    accept `docs/gitapex/specs/*.md` -- a contributor reading this
+    stderr line got an incomplete picture of what the gate actually
+    covers. Pins the fixed wording, calling `compute_flags` directly
+    (the print lives inside it, not only reachable through the CLI)."""
+    _write(repo, "README.md")
+    _commit(repo)
+    flags = flags_module.compute_flags("HEAD~1", "HEAD", repo)
+    err = capsys.readouterr().err
+    assert flags.applicable is False
+    assert "docs/superpowers/specs/*.md" in err
+    assert "docs/gitapex/specs/*.md" in err
+
+
 def test_cli_json_format_round_trips(repo: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     import json
 
