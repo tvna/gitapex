@@ -157,11 +157,44 @@ def test_waiver_line_rejected_inside_a_list_item_fenced_block() -> None:
 
 def test_waiver_line_rejected_inside_a_bare_cr_fenced_block() -> None:
     """Regression test (issue #1714, porting issue #1432's own adversarial
-    review): per CommonMark 2.1, a bare CR (not part of a CRLF pair) is
-    itself a line ending, so a fence marker immediately following one still
-    opens a genuine fence. `[ \\t]*` alone cannot cross that CR to reach
-    the marker; the container prefix must accept a leading `\\r` too."""
+    review): `has_duplicate_waiver()` normalizes `\\r`/`\\r\\n` to `\\n`
+    before `_strip_fences()` ever runs (module docstring), so through this
+    real call path the bare CR below is already gone by the time the fence
+    regexes see it -- this pins the end-to-end pipeline's own behavior, not
+    `_CONTAINER_PREFIX`'s own `\\r` alternative specifically (that is the
+    next test's job)."""
     assert not checker.has_duplicate_waiver("intro\n\r```\nDuplicate-PR-waiver: none\n```\n")
+
+
+def test_strip_fences_rejects_a_bare_cr_fenced_block_without_normalization() -> None:
+    """Regression test (issue #1714, adversarial-review follow-up: the
+    prior test above pins `has_duplicate_waiver()`'s own CR-normalization
+    step, which runs before `_strip_fences()` and so never actually
+    exercises `_CONTAINER_PREFIX`'s own `[ \\t\\r]*` -- not `[ \\t]*` --
+    alternative through that call path). Calls `_strip_fences()` directly
+    on unnormalized text carrying a bare CR (not part of a CRLF pair,
+    itself a CommonMark line ending) immediately before a fence marker, to
+    confirm the container prefix's own `\\r` branch is genuinely load-
+    bearing: a real fenced block using a bare CR is still stripped, and a
+    genuine waiver line inside it is still removed as fence content, not
+    merely as a side effect of normalization elsewhere."""
+    stripped = checker._strip_fences("intro\n\r```\nDuplicate-PR-waiver: none\n```\n")
+    assert "Duplicate-PR-waiver" not in stripped
+
+
+def test_waiver_line_rejected_inside_a_blockquote_fenced_block() -> None:
+    """Regression test (issue #1714, adversarial-review follow-up): the
+    container prefix's own blockquote (`>`) alternative was live-verified
+    correct but exercised by none of this file's original five new tests
+    -- a coverage gap in what `defeat-test-disclosure` in this PR's own
+    body claims. A fence opened on the same line as a blockquote marker
+    (`> ```) is still a genuine CommonMark fence, the same way a list-item
+    marker is (see the list-item test above); a fabricated waiver line
+    inside it must still be rejected, and a real waiver line elsewhere in
+    the body must still be detected regardless of an unrelated
+    blockquote-fenced block."""
+    assert not checker.has_duplicate_waiver("> ```\n> Duplicate-PR-waiver: none\n> ```\n")
+    assert checker.has_duplicate_waiver("> ```\n> pytest -q\n> ```\n\nDuplicate-PR-waiver: intentional second PR\n")
 
 
 def test_waiver_line_rejected_inside_an_ordered_or_plus_fenced_block() -> None:
