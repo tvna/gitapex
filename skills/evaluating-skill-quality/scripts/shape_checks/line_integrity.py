@@ -22,23 +22,42 @@ exists to catch.
 
 from __future__ import annotations
 
+import bisect
 import re
 
 from shape_checks.citations import _blank_fenced_blocks
 from shape_checks.constants import CheckResult
 
-# A same-line, well-formed double- or triple-backtick code span (content
-# may itself contain single backticks, e.g. a span quoting a literal
-# backtick character) -- blanked out first so its interior single
-# backticks are never mistaken for single-backtick delimiters below. Not
-# widened to also match single-backtick spans (INLINE_CODE_RE's own
-# {1,3} range): a leading double/triple-backtick run that never finds a
-# same-width close on the same line must stay untouched here so the
-# real defect class (a genuine cross-line double/triple-backtick span,
-# out of this check's scope per the module docstring above) is not
-# mis-parsed as a same-line single-backtick match by this pass.
-_MULTI_BACKTICK_SPAN_RE = re.compile(r"(`{2,3})(?!`)(.+?)(?<!`)\1(?!`)")
+# A well-formed double- or triple-backtick code span (content may itself
+# contain single backticks, e.g. a span quoting a literal backtick
+# character) -- blanked out first so its interior single backticks are
+# never mistaken for single-backtick delimiters below. `re.DOTALL` is
+# deliberate: this span's own delimiter pair is legitimately allowed to
+# cross a line break (module docstring above), so the scan must match it
+# across the whole document, not line-by-line -- an earlier per-line
+# revision missed exactly this and mis-flagged a nested single-backtick
+# pair inside such a span as a genuine violation (independent review,
+# see test_nested_single_backtick_inside_cross_line_double_backtick_
+# span_does_not_false_positive). Not widened to also match single-backtick
+# spans (INLINE_CODE_RE's own {1,3} range, no DOTALL): a leading
+# double/triple-backtick run that never finds a same-width close anywhere
+# must stay untouched here so the real defect class (a genuine cross-line
+# double/triple-backtick span, out of this check's own scope) is not
+# mis-parsed as a single-backtick match by this pass -- and INLINE_CODE_RE
+# itself is deliberately not reused: giving it DOTALL for this pass would
+# also let it swallow a genuinely split single-backtick span (the exact
+# defect this check exists to catch) as if it were well-formed.
+_MULTI_BACKTICK_SPAN_RE = re.compile(r"(`{2,3})(?!`)(.+?)(?<!`)\1(?!`)", re.DOTALL)
 _BACKTICK_RUN_RE = re.compile(r"`+")
+
+
+def _blank_preserving_newlines(match: re.Match[str]) -> str:
+    """Replace a match with spaces, keeping every embedded newline intact
+    so a later line-number computation over the blanked text stays
+    accurate -- a plain ``" " * len(match.group(0))`` would flatten an
+    embedded newline into a space and silently shift every subsequent
+    line number."""
+    return "".join(ch if ch == "\n" else " " for ch in match.group(0))
 
 
 def _split_single_backtick_span_lines(text: str) -> list[int]:
@@ -47,26 +66,34 @@ def _split_single_backtick_span_lines(text: str) -> list[int]:
 
     Two passes over ``text`` (already fence-blanked via
     ``_blank_fenced_blocks``, which also normalizes CRLF/CR line endings
-    to bare '\\n' via its own splitlines()+join pass): first, per line,
-    blank every well-formed same-line double/triple-backtick span so its
-    own nested single backticks cannot be mistaken for single-backtick
-    delimiters; second, walk every remaining backtick run in document
-    order, pairing up only the runs of length exactly 1 (a run of any
-    other length here is itself a leftover, not-same-line-closed
+    to bare '\\n'): first, blank every well-formed double/triple-backtick
+    span (which may itself cross a line break) across the whole document
+    so its own nested single backticks cannot be mistaken for
+    single-backtick delimiters; second, walk every remaining backtick run
+    in document order, pairing up only the runs of length exactly 1 (a
+    run of any other length here is itself a leftover, unclosed
     double/triple-backtick span -- out of this check's own scope per the
     module docstring, so it is skipped rather than mis-paired).
+
+    Line numbers are read via `bisect` against a precomputed newline-offset
+    table rather than `blanked.count("\\n", 0, match.start())` per match --
+    the latter is O(document length) per lookup, making the whole scan
+    O(matches x document length) on an adversarial document with many
+    isolated backtick characters (independent review flagged this as a
+    CWE-1333 resource-consumption risk for a repository-wide gate run
+    against externally-contributed content); `bisect` makes each lookup
+    O(log line count) instead.
     """
     defenced = _blank_fenced_blocks(text)
-    lines = defenced.splitlines()
-    blanked_lines = [_MULTI_BACKTICK_SPAN_RE.sub(lambda m: " " * len(m.group(0)), line) for line in lines]
-    blanked = "\n".join(blanked_lines)
+    blanked = _MULTI_BACKTICK_SPAN_RE.sub(_blank_preserving_newlines, defenced)
+    newline_offsets = [i for i, ch in enumerate(blanked) if ch == "\n"]
 
     offenders: list[int] = []
     open_line: int | None = None
     for match in _BACKTICK_RUN_RE.finditer(blanked):
         if len(match.group(0)) != 1:
             continue
-        line_no = blanked.count("\n", 0, match.start()) + 1
+        line_no = bisect.bisect_right(newline_offsets, match.start()) + 1
         if open_line is None:
             open_line = line_no
         elif line_no == open_line:

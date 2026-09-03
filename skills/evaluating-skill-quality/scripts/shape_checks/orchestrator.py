@@ -422,11 +422,11 @@ def _lifecycle_reason_citation_sources(lifecycle_dict: dict[str, object]) -> lis
 
 
 def _references_dir_checks(skill_dir: Path, anchor_slug_cache: dict[Path, frozenset[str] | None]) -> list[CheckResult]:
-    """references/'s own flatness/TOC/links/anchor checks, extracted
-    verbatim from ``check_shape`` -- mutates ``anchor_slug_cache`` in place
-    exactly as the original inline loop did (shared with the SKILL.md-level
-    anchor check above it there), and returns ``[]`` when there is no
-    references/ directory at all."""
+    """references/'s own flatness/code-span-integrity/TOC/links/anchor
+    checks, extracted verbatim from ``check_shape`` -- mutates
+    ``anchor_slug_cache`` in place exactly as the original inline loop did
+    (shared with the SKILL.md-level anchor check above it there), and
+    returns ``[]`` when there is no references/ directory at all."""
     results: list[CheckResult] = []
     refs_dir = skill_dir / "references"
     if not refs_dir.is_dir():

@@ -633,6 +633,29 @@ def test_single_backtick_never_closed_anywhere_fails(tmp_path):
     assert "split across a line break" in result.evidence
 
 
+def test_nested_single_backtick_inside_cross_line_double_backtick_span_does_not_false_positive(tmp_path):
+    # Adversarial defeat test (independent review, PR #1716 Step 8): a
+    # legitimately cross-line double-backtick span (already covered by
+    # test_double_backtick_span_crossing_line_break_does_not_false_positive
+    # above) whose own content happens to contain a NESTED single-backtick
+    # pair that itself straddles the same line break must still PASS --
+    # those two single backticks are inert literal content inside the
+    # outer double-backtick span (exactly the "quote a literal backtick"
+    # use case the module docstring names), not an independent
+    # single-backtick span of their own. An earlier revision blanked the
+    # outer double-backtick span per LINE rather than across the whole
+    # document, so it never blanked the cross-line span at all and
+    # mis-flagged the nested single backticks as a genuine split span --
+    # reproduced directly against _split_single_backtick_span_lines before
+    # this fix, confirmed fixed after it.
+    d = _write_skill(tmp_path)
+    skill_md = d / "SKILL.md"
+    text = skill_md.read_text(encoding="utf-8")
+    text += "\n``quote: `first\nsecond` end`` in the doc.\n"
+    skill_md.write_text(text, encoding="utf-8")
+    assert _by_name(css.check_shape(d))["code-span-integrity"].passed is True
+
+
 def test_token_budget_at_exact_threshold_passes_even_under_strict(tmp_path):
     # Adversarial defeat test: the off-by-one edge of the ">" comparison
     # in _token_budget_result -- exactly BODY_MAX_TOKENS*4 characters
