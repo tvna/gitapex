@@ -79,15 +79,16 @@ The pattern argument (first positional, or a ``pattern=`` keyword) is
 resolved statically: a plain string ``Constant``, a chain of ``Constant``s
 joined by ``+``, or a reference to a same-file ``NAME`` this gate can
 resolve to its own statically-known string value -- ``_string_constants``
-collects every module- or function-level ``NAME = <string-literal-or-+
--chain>`` assignment in file order, the same "assign a reusable prefix/
-suffix constant, then compose it with ``+`` into the real ``_RE``" idiom
-this repository's own regexes are overwhelmingly written in (e.g.
-``_UV_RUN_PREFIX`` composed into ``_UV_WRAPPED_INVOCATION_RE`` in the very
-file this gate's own motivating defect came from). A name assigned more
-than once in the file is treated as unresolvable (its value could differ
-by the time a given compile call actually runs) rather than guessed at
-from whichever assignment happens to be seen. A pattern argument this gate
+collects every module-level (never function-local -- see that function's
+own docstring for why) ``NAME = <string-literal-or-+-chain>`` assignment
+in file order, the same "assign a reusable prefix/suffix constant, then
+compose it with ``+`` into the real ``_RE``" idiom this repository's own
+regexes are overwhelmingly written in (e.g. ``_UV_RUN_PREFIX`` composed
+into ``_UV_WRAPPED_INVOCATION_RE`` in the very file this gate's own
+motivating defect came from). A name assigned more than once at module
+level is treated as unresolvable (its value could differ by the time a
+given compile call actually runs) rather than guessed at from whichever
+assignment happens to be seen. A pattern argument this gate
 cannot fully resolve to a concrete string -- an f-string, a runtime
 concatenation with a non-literal, an unresolvable name -- is silently out
 of scope for this call site: a dynamic pattern this gate cannot read
