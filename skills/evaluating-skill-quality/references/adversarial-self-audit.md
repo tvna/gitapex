@@ -776,15 +776,22 @@ content is read or any finding is drawn:
    dispatch actually starting.
 2. **Instruct the dispatch to fetch and check out that target itself**,
    as its own first action, rather than trusting the worktree's default
-   state -- e.g. `git fetch origin <branch>` then `git checkout FETCH_HEAD`
-   (or `git checkout <sha>` directly when a SHA was given), run as
-   separate commands, never combined with a `cd` in the same invocation
-   per this platform's own bash-safety backstop.
-3. **Instruct the dispatch to confirm the result before proceeding** --
-   `git rev-parse HEAD` (or equivalent) compared against the exact
-   target from step 1 -- and to stop and report the mismatch as its own
-   finding, rather than silently reviewing whatever it landed on, if the
-   two do not match.
+   state -- e.g. `git fetch origin <branch>` then `git checkout FETCH_HEAD`,
+   run as separate commands, never combined with a `cd` in the same
+   invocation per this platform's own bash-safety backstop. A commit SHA
+   given directly (`git checkout <sha>`) still needs the same `git fetch`
+   first -- a fresh isolated worktree does not already hold that commit
+   object -- so fetch the branch or remote that carries it before the
+   checkout, not only when a branch name was given.
+3. **Instruct the dispatch to treat either command failing, or the
+   post-checkout confirmation not matching, as its own stop-and-report
+   finding** -- never proceed to review on a guess. The confirmation
+   itself: `git rev-parse HEAD` (or equivalent) compared against the
+   exact target from step 1; report the mismatch rather than silently
+   reviewing whatever was landed on when the two do not match, and
+   report the failure itself (a deleted or force-pushed-away branch, a
+   network error) rather than retrying blindly when the fetch or
+   checkout command errors outright.
 4. **Treat a dispatch that skipped this check as unverified**, not as a
    completed review with an unlucky target -- the same fail-closed
    posture Isolation verification's own Known entries registry already
