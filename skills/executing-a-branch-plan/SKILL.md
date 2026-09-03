@@ -8,7 +8,7 @@ description: Use when a Branch Plan and Acceptance Criteria Map (from planning-a
 Turns an approved Branch Plan and Acceptance Criteria Map into committed
 code, a decomposed task history, and an opened PR that
 `drafting-a-pr-to-merge` picks up from its own "PR has just been opened"
-entry point. Design source: `docs/superpowers/specs/2026-07-22-plan- execution-handoff-design.md` (20 Decisions; this SKILL.md and its
+entry point. Design source: `docs/superpowers/specs/2026-07-22-plan-execution-handoff-design.md` (20 Decisions; this SKILL.md and its
 `references/` implement the doc's own "New skill: consolidated sequence"
 section verbatim in structure, citing each Decision by number rather than
 re-deriving it).
@@ -142,7 +142,7 @@ first, not skimmed.
    Once a wave's run returns, in the main thread (the Workflow script itself has no
    filesystem/shell access): screen each
    task's own `BASE..HEAD` diff -- `scripts/gitapex_check_canonical_governance_paths.py`
-   pre-filters the literal/canonical cases first, then `screening-a-low-trust- contribution`'s checks 2-8, dispatched to `review-persona`,
+   pre-filters the literal/canonical cases first, then `screening-a-low-trust-contribution`'s checks 2-8, dispatched to `review-persona`,
    still run regardless of that pre-filter's result. **Also scan that
    same task's own new commit messages** (issue `#1477`, gate-proposal,
    directly together (a `git log` failure must not be masked as an empty,

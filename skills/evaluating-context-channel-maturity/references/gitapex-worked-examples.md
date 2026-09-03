@@ -79,7 +79,7 @@ scopes its own code-owner-review requirement to
 `/.github/actions/harden-checkout/` only, not `AGENTS.md` or `CLAUDE.md`.
 No human approval is structurally required for either file. Two
 mitigating mechanisms are worth naming precisely rather than assumed
-away in either direction: one required check, `independent-review- pending`, blocks merge until an "Independent review verdict" naming the
+away in either direction: one required check, `independent-review-pending`, blocks merge until an "Independent review verdict" naming the
 exact head commit is recorded in the PR body -- a real, commit-scoped
 gate more specific than the old generated-file regime ever offered -- but
 it is a presence check on recorded text, not a guarantee that whoever

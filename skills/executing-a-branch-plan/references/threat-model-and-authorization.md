@@ -151,7 +151,7 @@ itself grounds to skip the model's own full review below.
   `agent()` call returns, before that task's own commit or
   `TaskCompleted` event): run `scripts/gitapex_check_canonical_governance_paths.py`
   against that task's own changed-file list first (the deterministic
-  pre-filter above), then screen the full diff via `screening-a-low-trust- contribution`'s checks 2-8 regardless of the pre-filter's own result --
+  pre-filter above), then screen the full diff via `screening-a-low-trust-contribution`'s checks 2-8 regardless of the pre-filter's own result --
   checks 2-8's full model review still runs even when the pre-filter finds
   nothing. **Checks 2-8 dispatch to the `review-persona` subagent type**
   (`agents/review-persona.md` -- a `tools: Read, Grep, Glob` allow-list,
@@ -159,7 +159,7 @@ itself grounds to skip the model's own full review below.
   about directly in the main thread, which at this point holds
   `mcp__github` write access, `git push`, and unrestricted Bash (issue
   `#1558`): the main thread already holds the task's own literal
-  `BASE..HEAD` diff at this point, satisfying `screening-a-low-trust- contribution`'s own dispatch precondition (its Procedure's own
+  `BASE..HEAD` diff at this point, satisfying `screening-a-low-trust-contribution`'s own dispatch precondition (its Procedure's own
   Execution-context-per-check paragraph). Check 1 does not apply here --
   the diff is already the platform's own artifact (a `git diff` against
   the task's own worktree, not a paraphrase), not a fetch this step needs
@@ -616,7 +616,7 @@ available is therefore the SAME embedded `PreToolUse` "Bash" hook Decision
 `check_task_bash_safety.sh` as a second sibling classifier call (the
 identical pattern that script already uses to invoke `gitapex_check_task_ bash_safety.py`), not a second `hooks.PreToolUse` frontmatter entry (no
 such second entry exists in the shipped frontmatter for any hook event in
-this agent type -- confirmed by reading `.claude/agents/branch-plan- task.md` directly before choosing this shape).
+this agent type -- confirmed by reading `.claude/agents/branch-plan-task.md` directly before choosing this shape).
 
 **Same two-variant asymmetry as the two mechanisms above, for the same
 reason, and stated with the identical precision.**

@@ -325,7 +325,7 @@ subagent dispatch removes a bias risk an in-context instruction to
 evidence: `battle-testing-a-skill`'s cold-enumeration step already
 isolates for exactly this reason ("not the current context, which has
 likely already seen the target"), and that skill's own extraction
-protocol (`skills/battle-testing-a-skill/references/provenance-and- caveats.md`, caveat 3) names the limit of instruction-only isolation
+protocol (`skills/battle-testing-a-skill/references/provenance-and-caveats.md`, caveat 3) names the limit of instruction-only isolation
 directly. Unlike [steering]'s clutter-avoidance trigger, this one does
 not require the dispatch's results to go unreferenced: the dispatch's
 full evidence-cited output is exactly what gets relayed back, preserving

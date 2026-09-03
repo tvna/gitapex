@@ -118,7 +118,7 @@ bounded contexts, never grading the same question twice.
      splitting into two skills -- route back to Step 1 for the second one
      rather than forcing one `SKILL.md` to cover both.
      `references/guidance-form-and-sdo.md` names this the Single
-     Decisive Outcome (SDO) test; `references/mechanism-fit-and- cohesion.md` gives the deeper seven-way cohesion taxonomy
+     Decisive Outcome (SDO) test; `references/mechanism-fit-and-cohesion.md` gives the deeper seven-way cohesion taxonomy
      (functional / sequential / communicational / procedural / temporal /
      logical / coincidental) for a borderline case the one-sentence test
      alone doesn't settle.
@@ -172,10 +172,10 @@ bounded contexts, never grading the same question twice.
 
 6. **Sweep against the formative dimensions, then run the deterministic
    checkers.**
-   - Sweep the draft against `references/formative-quality- dimensions.md`'s nine formative dimensions -- a prose quality pass
+   - Sweep the draft against `references/formative-quality-dimensions.md`'s nine formative dimensions -- a prose quality pass
      the deterministic checkers below can't perform.
    - Run this repository's own deterministic checkers against the draft
-     directory, gitapex-repo only (see `references/gitapex-cross- links.md` for the exact flags):
+     directory, gitapex-repo only (see `references/gitapex-cross-links.md` for the exact flags):
      - `python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py --strict-token-budget`
      - `python3 skills/evaluating-skill-quality/scripts/gitapex_scan_execution_requirements_drift.py`
    - Fix every finding before Step 7 -- Step 7's handoff does not run
@@ -251,7 +251,7 @@ fresh at Step 7.
   blocking-gate threshold, or mechanize that policy into
   `gitapex_check_skill_shape.py` -- both deferred to a future issue, once
   explicit `stable` lifecycle declarations become common enough in this
-  repository to judge readiness (see `references/mechanism-fit-and- cohesion.md`'s own placement-policy section).
+  repository to judge readiness (see `references/mechanism-fit-and-cohesion.md`'s own placement-policy section).
 - Does not build a Red Flags / rationalization-pattern table for this
   skill's own Stop boundaries -- the plain-bullet form below is this
   draft's own choice, not a placeholder for an undelivered table.
@@ -399,7 +399,7 @@ stops, rather than silently overriding the axis or looping the review.
 
 Portability: **Mixed**. This body's own inlined content (Steps 1, 3-5, 7)
 depends on no repository-specific tooling. The repository-specific part
-isn't confined to Step 6 alone: `references/mechanism-fit-and- cohesion.md`'s cohesion taxonomy and `references/contract-structure.md`'s
+isn't confined to Step 6 alone: `references/mechanism-fit-and-cohesion.md`'s cohesion taxonomy and `references/contract-structure.md`'s
 citation into `skills/evaluating-skill-quality/references/rubric.md` are
 both gitapex-specific -- named here, not narrowed to Step 6, since each is
 a real dependency a vendoring consumer must substitute, per
