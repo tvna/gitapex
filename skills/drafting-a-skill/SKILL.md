@@ -186,10 +186,17 @@ bounded contexts, never grading the same question twice.
      `references/`, on demand rather than paid on every route (dimension
      5's own progressive-disclosure principle); (2) prune duplicate or
      sedimentary sentences per `references/rubric.md`'s own Conciseness
-     checks; (3) only once (1) and (2) are exhausted, cut real content
-     -- and if that is the only path left, treat it as a signal the
-     draft's own Capability assumption or scope may be wrong, not
-     something to silently shrink around.
+     checks.
+   - **Never cut a Stop boundary, an injection-resistance rule, an
+     authorization/escalation gate, or any other safety-relevant
+     sentence to clear the budget, regardless of how (1)/(2) are going.**
+     If (1) and (2) are both exhausted and the body is still over
+     budget, that is not something to silently shrink around by cutting
+     real content: emit a `StageDeviated{action: escalate}`-shaped event
+     naming the specific content that would have to move and why neither
+     (1) nor (2) can absorb it, then stop. The draft's own Capability
+     assumption or scope is what needs revisiting at that point, not
+     this Step's own text.
    - **Completion criterion:** both checkers exit clean against the
      current draft, re-run after every fix until they do.
 

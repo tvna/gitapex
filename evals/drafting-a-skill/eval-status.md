@@ -1,13 +1,19 @@
 # drafting-a-skill eval status
 
-A committed suite exists (`eval.yaml` plus seven fixtures under `tasks/`:
+A committed suite exists (`eval.yaml` plus eight fixtures under `tasks/`:
 `normal.yaml`, `edge.yaml`, `injected-self-certification-probe.yaml`,
 `no-inferred-metadata.yaml`, `existing-skill-routes-away.yaml`,
-`no-direct-invocation.yaml`, `upstream-ambiguity-escalates.yaml`) --
-sized to match `SKILL.md`'s own 7 Stop-boundary bullets, per
+`no-direct-invocation.yaml`, `upstream-ambiguity-escalates.yaml`,
+`token-budget-trim-priority.yaml`) -- the first seven sized to match
+`SKILL.md`'s own 7 Stop-boundary bullets, per
 `.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py`'s
 decision-branch/fixture parity requirement (verified directly: 7
-branches counted, 7 fixtures present, gate exits 0).
+branches counted, 7 fixtures required, gate exits 0); the eighth is a
+voluntary addition covering Step 6's own trim-priority text (not itself
+a counted Stop-boundary bullet or named dispatch branch per that gate's
+own counter, verified directly: adding it did not change the 7/7
+count), added to close part of the previously-disclosed Step 6 coverage
+gap below.
 
 Issue #1619 re-scoped `drafting-a-skill` to a pipeline-only task
 (Mechanism-fit gate and four-axis elicitation migrated to
@@ -71,22 +77,24 @@ execution path than an intentional trial) is covered below.
 
 Disclosed gaps, not silently assumed solved: this corpus does not yet
 cover Step 4's collision/dependency-reconciliation check, Step 5's
-domain-gap sweep, or Step 6's deterministic-checker invocation as their
-own dedicated assertion targets -- including, as of the
-`--strict-token-budget` addition to Step 6's own checker invocation, the
-new hard-FAIL-on-over-budget-draft branch specifically: no fixture here
-exercises a draft that trips `body-token-budget` under that flag, or
-Step 6's own newly-stated trim-priority order for responding to it (this
-same file's "On a `body-token-budget` FAIL, trim in this order" bullet).
-`battle-testing-a-skill` flagged this gap directly (2026-09-03,
-independent dispatch); it was already covered by this paragraph's
-pre-existing Step 6 disclosure, not a defect introduced by that
-addition, but is named explicitly here rather than left folded into the
-general Step 6 statement. Nor does this corpus cover the Precondition's
-second
-route-away branch (target is already a finished draft -> route directly
-to `evaluating-skill-quality`/`battle-testing-a-skill` without
-re-entering at Step 1), nor the new Step 2 escalate-on-missing-axis
+domain-gap sweep, or most of Step 6's deterministic-checker invocation
+as their own dedicated assertion targets. `battle-testing-a-skill`
+flagged the Step 6 gap directly against the `--strict-token-budget`
+addition (2026-09-03, independent dispatch, two rounds): the first
+round's finding was addressed by adding
+`tasks/token-budget-trim-priority.yaml`, which exercises Step 6's own
+trim-priority order once references/-migration and sediment-pruning are
+both exhausted -- specifically, that a `body-token-budget` FAIL with no
+safe trim left escalates via `StageDeviated` rather than silently
+cutting a Stop boundary or other safety-relevant sentence. Not yet
+covered by any fixture: the more basic case of `--strict-token-budget`
+itself hard-FAILing a plainly over-budget draft (steps (1)/(2) not yet
+attempted), and Step 6's other checker
+(`gitapex_scan_execution_requirements_drift.py`). Nor does this corpus
+cover the Precondition's second route-away branch (target is already a
+finished draft -> route directly to
+`evaluating-skill-quality`/`battle-testing-a-skill` without re-entering
+at Step 1), nor the new Step 2 escalate-on-missing-axis
 branch this same PR added. `no-direct-invocation.yaml` and
 `upstream-ambiguity-escalates.yaml` have been checked only by
 `gitapex_validate_eval_yaml.py` and `gitapex_lint_fixture_assertions.py`
