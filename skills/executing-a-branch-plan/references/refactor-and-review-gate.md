@@ -70,8 +70,7 @@ silently does not catch what it claims to.
    `subagent_type: 'review-persona'` -- that agent's own 4th sanctioned
    call site, see `agents/review-persona.md`'s own "Sanctioned call
    sites" section) reviewing the full accumulated diff for correctness
-   bugs, and returning findings only. `review-persona`'s own `tools:
-   Read, Grep, Glob` allow-list means this dispatch cannot itself verify
+   bugs, and returning findings only. `review-persona`'s own `tools: Read, Grep, Glob` allow-list means this dispatch cannot itself verify
    a finding against a live check, apply a fix, or validate one -- it is
    read-only by construction, not merely by convention. That work
    happens outside this dispatch, in the calling main thread: verify

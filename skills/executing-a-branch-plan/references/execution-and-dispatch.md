@@ -77,8 +77,7 @@ its read-only sibling, not a per-wave dispatch: the refactor/simplify
 pass dispatches with `agentType: 'branch-plan-task'` (that agent type's
 own second sanctioned call site, per `agents/branch-plan-task.md`'s own
 "Sanctioned call sites" section), and the adversarial code review
-dispatches with `subagent_type: 'review-persona'` (`agents/review-
-persona.md`'s own "Sanctioned call sites" section, entry 4). Step 8 is
+dispatches with `subagent_type: 'review-persona'` (`agents/review-persona.md`'s own "Sanctioned call sites" section, entry 4). Step 8 is
 "Not itself parallelized" (`refactor-and-review-gate.md`'s own term) --
 a single dispatch each, run once after all waves complete, not per-wave
 -- so neither needs `isolation: 'worktree'`, the same omission this
