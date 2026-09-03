@@ -769,6 +769,12 @@ def test_load_python_dependent_hook_script_names_ignores_non_hooks_py_scripts(tm
     assert gate.load_python_dependent_hook_script_names(ssot_path) == frozenset()
 
 
+def test_load_python_dependent_hook_script_names_gates_key_not_a_list_returns_empty(tmp_path: pathlib.Path) -> None:
+    ssot_path = tmp_path / "ssot.json"
+    ssot_path.write_text(json.dumps({"gates": "not-a-list"}), encoding="utf-8")
+    assert gate.load_python_dependent_hook_script_names(ssot_path) == frozenset()
+
+
 def test_load_python_dependent_hook_script_names_missing_file_returns_empty(tmp_path: pathlib.Path) -> None:
     assert gate.load_python_dependent_hook_script_names(tmp_path / "does-not-exist.json") == frozenset()
 
