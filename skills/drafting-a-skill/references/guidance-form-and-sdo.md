@@ -70,9 +70,7 @@ Apply the test at two levels:
 outcomes in one Step means rewrite that Step (or split it into two
 numbered Steps); finding two outcomes across the whole draft means route
 back to Step 1 and draft two skills instead of one non-cohesive one. It is
-not, on its own, the authoritative cohesion finding `evaluating-skill-
-quality` produces at handoff -- see `references/mechanism-fit-and-
-cohesion.md`'s "Step 5 and Step 7 are advisory" section for why that
+not, on its own, the authoritative cohesion finding `evaluating-skill-quality` produces at handoff -- see `references/mechanism-fit-and-cohesion.md`'s "Step 5 and Step 7 are advisory" section for why that
 distinction matters and how it's worded.
 
 **A false failure is possible too.** Two Steps can look like they serve

@@ -45,6 +45,18 @@ Checks (the canonical list -- the manual fallback is to apply these):
     trigger the skill's own description claims; that semantic question stays
     with the model-judged Invocation-mode fit check in references/rubric.md.
   - SKILL.md body: <= 500 lines
+  - Code-span line-break integrity (code-span-integrity, and
+    code-span-integrity:{ref.name} for each references/*.md file): every
+    single-backtick inline code span opens and closes on the same line.
+    A double- or triple-backtick span is out of scope (design doc
+    docs/superpowers/specs/2026-09-02-skill-body-cost-controls-design.md,
+    Decision 1); see rubric.md's own subsection for the full rationale.
+  - SKILL.md body token budget (body-token-budget): an estimated
+    len(content) // 4 token count against BODY_MAX_TOKENS (5000),
+    SKILL.md body only -- references/*.md is exempt. Advisory
+    (passed=True, a warning in evidence) unless --strict-token-budget is
+    passed, in which case passed reflects the real comparison. See
+    rubric.md's own subsection (design doc Decision 3).
   - metadata sidecar (metadata/gitapex.yaml, under the skill directory):
     present; has no malformed top-level lines (manifest-parsable -- a
     column-0 line that is not blank/comment/document-marker and does not
@@ -553,6 +565,7 @@ Checks (the canonical list -- the manual fallback is to apply these):
 
 Usage:
   python3 gitapex_check_skill_shape.py <skill-dir-or-SKILL.md>
+  python3 gitapex_check_skill_shape.py --strict-token-budget <skill-dir-or-SKILL.md>
 
 Exit code: 0 if every check passes, 1 if any check fails, 2 on bad usage or
 when no readable SKILL.md is found.
@@ -588,6 +601,7 @@ from shape_checks.citation_checks import (
 from shape_checks.constants import (
     _INLINE_CITATION_CHECK_SPECS,
     BODY_MAX_LINES,
+    BODY_MAX_TOKENS,
     CAPABILITY_ASSUMPTIONS,
     DESCRIPTION_MAX_CHARS,
     EXEC_REQ_NETWORK_SUBKEYS,
@@ -615,6 +629,7 @@ from shape_checks.field_checks import (
 )
 from shape_checks.frontmatter import _parse_frontmatter, _unquote
 from shape_checks.lifecycle import _lifecycle_checks
+from shape_checks.line_integrity import _code_span_integrity_check
 from shape_checks.links_portability import (
     SidecarPortability,
     _body_after_frontmatter,
@@ -642,6 +657,7 @@ from shape_checks.orchestrator import (
 )
 from shape_checks.schema import _SCHEMA_VALIDATOR
 from shape_checks.skill_dependencies import _skill_dependency_checks
+from shape_checks.token_budget import _token_budget_result
 
 # Names this hub imports only to re-export -- never referenced by
 # check_shape()/format_report()/main() below, only by
@@ -665,6 +681,7 @@ from shape_checks.skill_dependencies import _skill_dependency_checks
 # access.
 __all__ = [
     "BODY_MAX_LINES",
+    "BODY_MAX_TOKENS",
     "DESCRIPTION_MAX_CHARS",
     "EXEC_REQ_NETWORK_SUBKEYS",
     "EXEC_REQ_TOOLS_SUBKEYS",
@@ -683,7 +700,7 @@ __all__ = [
 ]
 
 
-def check_shape(target: Path) -> list[CheckResult]:
+def check_shape(target: Path, *, strict_token_budget: bool = False) -> list[CheckResult]:
     skill_md = _resolve_skill_md(target)
     skill_dir = skill_md.parent
     results: list[CheckResult] = []
@@ -715,6 +732,8 @@ def check_shape(target: Path) -> list[CheckResult]:
     results.extend(_name_field_checks(fields))
     results.append(_invocation_mode_check(fields))
     results.append(_body_length_result(text))
+    results.append(_code_span_integrity_check("code-span-integrity", text))
+    results.append(_token_budget_result(text, strict=strict_token_budget))
 
     sidecar = skill_dir / SIDECAR_RELATIVE_PATH
     # Every well-formed spec.externalCitations item (path/role), populated
@@ -994,12 +1013,34 @@ def format_report(results: list[CheckResult]) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # function-body-test-coverage: WAIVED: this diff's own new
+    # test_main_strict_token_budget_flag_fails_over_budget_skill and
+    # test_main_strict_token_budget_flag_passes_under_budget_skill tests
+    # already call css.main(["--strict-token-budget", ...]) directly
+    # (skills/evaluating-skill-quality/scripts/test_gitapex_check_skill_
+    # shape.py), exercising this function's own new --strict-token-budget
+    # argv path end to end -- the identical gate-side path-resolution gap
+    # check_shape()'s own WAIVED comment above already documents (that
+    # gate's own _test_relative_paths() unconditionally resolves to
+    # top-level tests/test_{stem}.py, with no fallback for this
+    # repository's pre-existing co-located test convention this exact
+    # file/test pair uses), not a real coverage hole in this function.
     parser = argparse.ArgumentParser(description="Check one or more SKILL.md's deterministic shape (read-only).")
     parser.add_argument(
         "--allowed-root",
         help="Caller-approved directory that must contain every target; "
         "also rejects symlinks in the target skill. The caller must keep "
         "the snapshot immutable while the check runs.",
+    )
+    parser.add_argument(
+        "--strict-token-budget",
+        action="store_true",
+        help=f"Fail body-token-budget when the SKILL.md body's estimated "
+        f"token count exceeds BODY_MAX_TOKENS ({BODY_MAX_TOKENS}), instead "
+        "of the default advisory-only warning. Wired into drafting-a-skill's "
+        "own invocation so a brand-new draft is held to the real threshold; "
+        "an existing skill's shape check stays advisory unless this flag is "
+        "passed explicitly.",
     )
     parser.add_argument(
         "target",
@@ -1038,7 +1079,7 @@ def main(argv: list[str] | None = None) -> int:
             guard_error = True
             continue
         try:
-            results = check_shape(target)
+            results = check_shape(target, strict_token_budget=args.strict_token_budget)
         except (OSError, UnicodeDecodeError) as exc:
             print(f"error: could not read skill files: {exc}", file=sys.stderr)
             guard_error = True

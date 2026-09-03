@@ -166,8 +166,7 @@ unexamined.
 
 *Agentic operation mechanism-fit -- vehicle selection.* Four criteria,
 adapted from `evaluating-skill-quality`'s own Agentic operation
-mechanism-fit check (`skills/evaluating-skill-quality/references/
-rubric.md`, citing Anthropic's ["Steering Claude Code"][steering]
+mechanism-fit check (`skills/evaluating-skill-quality/references/ rubric.md`, citing Anthropic's ["Steering Claude Code"][steering]
 guidance). This is `drafting-a-skill`'s own former Step 2 vehicle-
 selection gate, migrated here in full (see
 <https://github.com/tvna/gitapex/issues/1619>; "Domain

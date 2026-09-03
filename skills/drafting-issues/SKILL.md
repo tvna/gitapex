@@ -104,9 +104,7 @@ pre-verified (Step 9 states the full rule; it is not repeated here).
    correct tool choice here, unlike an exact-label or exact-title
    lookup elsewhere in this repository's own tooling, since "is this a
    duplicate" is inherently a semantic judgment, not an exact-string
-   one. Disclose the result in the drafted body as a `Dedup: {query
-   used}, {N results reviewed}` line, or an explicit `Dedup: none
-   found` line when the search returns nothing. This is disclosure
+   one. Disclose the result in the drafted body as a `Dedup: {query used}, {N results reviewed}` line, or an explicit `Dedup: none found` line when the search returns nothing. This is disclosure
    only -- no mechanical similarity or duplicate-detection algorithm is
    attempted (see Stop boundaries); a genuinely similar existing issue
    found here is Step 2's classification question re-opened (is this
@@ -204,8 +202,7 @@ because it also happens to describe a defect.
    fail a body that (by design) carries no ACM table. Continue at Step
    9 to create the issue through the same validated template-aware
    creation path every other type uses.
-4. State this in the drafted output as the `Classification: defect
-   (issue not yet filed)` line; the `Next Move` line names
+4. State this in the drafted output as the `Classification: defect (issue not yet filed)` line; the `Next Move` line names
    `planning-a-branch-from-an-issue`'s own bare-defect-report path as
    the next skill -- it re-attempts live reproduction against the
    issue this step just anchored and, on success, builds the real
@@ -215,8 +212,7 @@ Worked example: a scheduled nightly workflow fails with no issue
 tracking it. Attempting the same steps that failed in CI does not
 reproduce the failure locally. Draft the body as reproduction-attempt
 notes -- "ran the nightly job's own steps locally against main; the
-reported timeout did not reproduce" -- plus `ACM: not-applicable
-(defect): unreproducible CI failure, recorded for investigation.`
+reported timeout did not reproduce" -- plus `ACM: not-applicable (defect): unreproducible CI failure, recorded for investigation.`
 Classification: `defect (issue not yet filed)`. Next Move: hand off to
 `planning-a-branch-from-an-issue`'s bare-defect-report path once
 someone can reproduce it or new evidence narrows the failure.

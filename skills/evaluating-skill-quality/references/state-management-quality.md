@@ -401,8 +401,7 @@ silently restart from zero and never silently assume nothing was done.
 succeed, since such a read is not evidence of what the record contains.
 Naming a specific destroyer and its recovery source illustrates that
 discipline rather than substituting for it: "`git clean -fdx` will destroy
-the ledger (it's git-ignored scratch); if that happens, recover from `git
-log`" [sdd]. A target that names only the loss modes it happened to think of
+the ledger (it's git-ignored scratch); if that happens, recover from `git log`" [sdd]. A target that names only the loss modes it happened to think of
 still fails for every mode it did not.
 
 **Fail** -- a record whose absence is indistinguishable from "the work was

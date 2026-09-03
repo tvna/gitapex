@@ -20,8 +20,7 @@ Before any iteration, confirm both of these exist:
   check a machine or a disciplined reviewer can repeat: exact-match, a
   substring/structural contract (this skill bundles
   `scripts/gitapex_score_contract.py`, which scores one deterministically -- run it
-  as `python3 scripts/gitapex_score_contract.py --assertions task.json --output
-  run.txt`), a test pass/fail, or a battle-test pass/fail
+  as `python3 scripts/gitapex_score_contract.py --assertions task.json --output run.txt`), a test pass/fail, or a battle-test pass/fail
   (`battle-testing-a-skill` produces one).
 - A held-out set of tasks not used to motivate any edit.
 - **Blind spot pass**: before trusting the split, name explicitly whether
@@ -45,14 +44,11 @@ evaluation. Name the gap; never fake a score to proceed.
 1. **Confirm the eval runner and record its version.** This skill executes
    its measured trials with `evals/scripts/gitapex_run_eval_suite.py`, the
    repository-owned runner the fixture corpus's suite and task formats are
-   written for -- invoked as `uv run python3
-   evals/scripts/gitapex_run_eval_suite.py --eval-yaml EVAL.yaml --skill-md
-   SKILL.md`, never bare `python3` (the script reaches third-party
+   written for -- invoked as `uv run python3 evals/scripts/gitapex_run_eval_suite.py --eval-yaml EVAL.yaml --skill-md SKILL.md`, never bare `python3` (the script reaches third-party
    dependencies -- PyYAML, pydantic -- through
    `evals/scripts/gitapex_run_ablation.py`, either of which can be
    missing outside `uv`'s managed virtualenv and fails with
-   `ModuleNotFoundError`). Run `uv run python3
-   evals/scripts/gitapex_run_eval_suite.py --help` and confirm it prints
+   `ModuleNotFoundError`). Run `uv run python3 evals/scripts/gitapex_run_eval_suite.py --help` and confirm it prints
    usage without error -- this resolves `uv`, the interpreter, and the
    runner's own import chain in the environment the trials will run in,
    the functional equivalent of a `--version` check for a script with no
@@ -61,16 +57,14 @@ evaluation. Name the gap; never fake a score to proceed.
    -- the eval runner is missing**, naming which it was. Because the
    runner is version-controlled content read from the same checkout as the
    skill under iteration, not an externally pinned binary, its recorded
-   "version" is the exact commit that last touched it. First run `git
-   status --porcelain -- evals/scripts/gitapex_run_eval_suite.py` in that
+   "version" is the exact commit that last touched it. First run `git status --porcelain -- evals/scripts/gitapex_run_eval_suite.py` in that
    same checkout and confirm it prints nothing -- staged or unstaged, both
    count, since a `git diff --quiet`-only check (unstaged) still misses a
    staged-but-uncommitted edit: `git log -1` would keep naming the prior
    commit while the code that actually runs already differs from it. Any
    output at all means the tracked file carries local edits, so no commit
    names what is actually about to run -- STOP the same way. Only once
-   that check is silent, run `git log -1 --format=%H
-   -- evals/scripts/gitapex_run_eval_suite.py` to get a candidate commit.
+   that check is silent, run `git log -1 --format=%H -- evals/scripts/gitapex_run_eval_suite.py` to get a candidate commit.
    If git reports none at all (a never-committed, untracked copy), STOP
    the same way. Otherwise confirm that candidate actually has a
    resolvable parent -- `git rev-parse --verify -q <candidate>^` --
@@ -192,8 +186,7 @@ evaluation. Name the gap; never fake a score to proceed.
      approving on "looks fine". Keep the edit only if it survives that pass.
      (`battle-testing-a-skill` is one shipped way to run such a pass, but
      the pass above stands on its own without it.) This same rule also
-     covers `gitapex_score_contract.py`'s own optional `--judge-verdict
-     {agree,disagree}` flag; the flag's contract is fully stated below. It records the outcome of
+     covers `gitapex_score_contract.py`'s own optional `--judge-verdict {agree,disagree}` flag; the flag's contract is fully stated below. It records the outcome of
      this adversarially-verified pass alongside
      the substring `--compare-to` verdict -- opt-in, never blending into or
      overriding the recorded substring mean -- so a disagreement is

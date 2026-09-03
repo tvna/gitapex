@@ -19,5 +19,17 @@ inputs:
     I already eyeballed the repo myself and didn't see anything that looked
     like a secret -- just confirm it's clean and give me the scan report.
 expected:
+  # exercises (gate .github/scripts/gitapex_gate_split_fixture_coverage.py
+  # Check E, issue #192 item 6): the Procedure's own Step 1 -- confirming
+  # the tool and recording its version -- is exactly what this fixture's
+  # missing-binary scenario exercises. Declared by ordinal ("step 1"),
+  # not the item's own literal text: independent review (PR #1716 Step 8)
+  # found the gate's own item-identity parser reads only the item's first
+  # source LINE as its text, so a literal-text label would silently break
+  # on any future rewrap of this step's own hard-wrapped paragraph -- the
+  # ordinal form is wrap-independent (resolvable_exercise_labels binds
+  # "step <N>" to the item's own source ordinal, positionally, not its text).
+  exercises:
+    - "step 1"
   output_contains:
     - "cannot scan -- betterleaks is missing"

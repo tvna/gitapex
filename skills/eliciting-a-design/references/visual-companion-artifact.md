@@ -45,11 +45,8 @@ again this session.
 ## The Publish/Read Cycle
 
 **Declare the `artifact` capability on the first publish.** Live Doc
-gesture-sync only exists once the page has `capabilities: {artifact:
-{}}` declared -- without it, nothing writes back and the read/next-turn
-step below silently has nothing to read. Pass `capabilities:
-{artifact: {}}` on the session's first `Artifact({action:"publish",
-...})` call; omit it on every later republish in the same session so
+gesture-sync only exists once the page has `capabilities: {artifact: {}}` declared -- without it, nothing writes back and the read/next-turn
+step below silently has nothing to read. Pass `capabilities: {artifact: {}}` on the session's first `Artifact({action:"publish", ...})` call; omit it on every later republish in the same session so
 the stored declaration carries forward unchanged (re-declaring is not
 wrong, just unnecessary).
 

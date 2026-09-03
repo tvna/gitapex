@@ -558,8 +558,7 @@ from the sibling repository `tvna/claude-md`, whose
 bullets in its own `.apm/instructions/master.instructions.md` to the
 literal marker phrase `non-exhaustive instances`. Confirmed on 2026-08-09
 by reading that file directly from a fresh clone of that repository, not
-from a summary of it: the module defines `MARKER = "non-exhaustive
-instances"` and a four-entry `REGISTERED_BULLETS` map (untrusted-data
+from a summary of it: the module defines `MARKER = "non-exhaustive instances"` and a four-entry `REGISTERED_BULLETS` map (untrusted-data
 sources, adversarial payloads, destructive operations, secret lifecycle),
 and its own docstring states the grounding -- "a closed list is a control
 that is merely *tedious* for an attacker to evade by finding an unlisted
