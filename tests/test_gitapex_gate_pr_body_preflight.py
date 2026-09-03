@@ -187,6 +187,19 @@ def test_check_provenance_disclosure_grades_diff_added_corpus_too(tmp_path: path
     assert not result.passed
 
 
+def test_check_provenance_disclosure_raises_when_sibling_missing(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    body = tmp_path / "body.txt"
+    body.write_text(_CLEAN_BODY, encoding="utf-8")
+    monkeypatch.setattr(preflight, "PROVENANCE_DISCLOSURE", tmp_path / "does-not-exist.py")
+    try:
+        preflight.check_provenance_disclosure(body, None)
+        raise AssertionError("expected PrBodyPreflightError")
+    except preflight.PrBodyPreflightError:
+        pass
+
+
 # --- check_skill_audit_disclosure ---
 
 
@@ -290,6 +303,48 @@ def test_build_diff_added_corpus_raises_on_bad_ref(tmp_path: pathlib.Path, monke
         pass
 
 
+def test_build_diff_added_corpus_raises_when_sibling_missing(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = init_git_repo(tmp_path / "repo")
+    (repo / "README.md").write_text("hello\n", encoding="utf-8")
+    run_git(["git", "add", "-A"], repo)
+    run_git(["git", "commit", "-q", "-m", "init"], repo)
+    run_git(["git", "tag", "base"], repo)
+
+    monkeypatch.setattr(preflight, "REPO_ROOT", repo)
+    monkeypatch.setattr(preflight, "EXTRACT_DIFF_ADDED_LINES", tmp_path / "does-not-exist.py")
+    try:
+        preflight.build_diff_added_corpus("base", "HEAD")
+        raise AssertionError("expected PrBodyPreflightError")
+    except preflight.PrBodyPreflightError:
+        pass
+
+
+def test_build_diff_added_corpus_raises_when_extract_script_fails(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = init_git_repo(tmp_path / "repo")
+    (repo / "README.md").write_text("hello\n", encoding="utf-8")
+    run_git(["git", "add", "-A"], repo)
+    run_git(["git", "commit", "-q", "-m", "base"], repo)
+    run_git(["git", "tag", "base"], repo)
+    (repo / "README.md").write_text("hello\nmore\n", encoding="utf-8")
+    run_git(["git", "add", "-A"], repo)
+    run_git(["git", "commit", "-q", "-m", "head"], repo)
+
+    broken_extractor = tmp_path / "broken_extract.py"
+    broken_extractor.write_text("import sys\nsys.exit(1)\n", encoding="utf-8")
+
+    monkeypatch.setattr(preflight, "REPO_ROOT", repo)
+    monkeypatch.setattr(preflight, "EXTRACT_DIFF_ADDED_LINES", broken_extractor)
+    try:
+        preflight.build_diff_added_corpus("base", "HEAD")
+        raise AssertionError("expected PrBodyPreflightError")
+    except preflight.PrBodyPreflightError:
+        pass
+
+
 # --- run_all_checks / main (end to end) ---
 
 
@@ -315,3 +370,81 @@ def test_main_errors_on_missing_body_file(tmp_path: pathlib.Path, capsys: pytest
     exit_code = preflight.main(["--body", str(tmp_path / "does-not-exist.txt")])
     assert exit_code == 1
     assert "not found" in capsys.readouterr().err
+
+
+def test_main_errors_on_invalid_utf8_body_file(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
+    body = tmp_path / "body.txt"
+    body.write_bytes(b"\xff\xfe not valid utf-8")
+    exit_code = preflight.main(["--body", str(body)])
+    assert exit_code == 1
+    assert "not valid UTF-8" in capsys.readouterr().err
+
+
+def test_main_with_check_diff_runs_the_diff_dependent_sub_checks(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Exercises main()'s own --check-diff branch end to end (argv parsing
+    through run_all_checks's own build_diff_added_corpus call and
+    check_skill_audit_disclosure's own --check-diff invocation), against a
+    scratch git repo and a stand-in skill-audit-disclosure gate -- the same
+    argv-contract stand-in test_check_skill_audit_disclosure_reconstructs_
+    1707_regex_break uses, reused here so this end-to-end path needs no
+    real git history from this checkout or its pydantic-backed flag module."""
+    repo = init_git_repo(tmp_path / "repo")
+    (repo / "README.md").write_text("hello\n", encoding="utf-8")
+    run_git(["git", "add", "-A"], repo)
+    run_git(["git", "commit", "-q", "-m", "base"], repo)
+    run_git(["git", "tag", "BASE"], repo)
+    (repo / "README.md").write_text("hello\nmore\n", encoding="utf-8")
+    run_git(["git", "add", "-A"], repo)
+    run_git(["git", "commit", "-q", "-m", "head"], repo)
+
+    dummy = tmp_path / "dummy_skill_audit_gate.py"
+    dummy.write_text(_STAND_IN_SKILL_AUDIT_GATE, encoding="utf-8")
+    monkeypatch.setattr(preflight, "REPO_ROOT", repo)
+    monkeypatch.setattr(preflight, "SKILL_AUDIT_DISCLOSURE", dummy)
+
+    body = tmp_path / "body.txt"
+    body.write_text("deterministic-gate-quality: RAN\n", encoding="utf-8")
+    assert preflight.main(["--body", str(body), "--check-diff", "BASE", "HEAD"]) == 0
+
+
+def test_main_reports_error_when_a_sub_check_cannot_run(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """main()'s own PrBodyPreflightError handling: a sub-check that cannot
+    run at all (here, a missing skill-audit-disclosure sibling script under
+    --check-diff) is reported as an error and exits 1, not crashed past
+    main()'s own try/except."""
+    repo = init_git_repo(tmp_path / "repo")
+    (repo / "README.md").write_text("hello\n", encoding="utf-8")
+    run_git(["git", "add", "-A"], repo)
+    run_git(["git", "commit", "-q", "-m", "init"], repo)
+    run_git(["git", "tag", "base"], repo)
+
+    monkeypatch.setattr(preflight, "REPO_ROOT", repo)
+    monkeypatch.setattr(preflight, "SKILL_AUDIT_DISCLOSURE", tmp_path / "does-not-exist.py")
+
+    body = tmp_path / "body.txt"
+    body.write_text(_CLEAN_BODY, encoding="utf-8")
+    exit_code = preflight.main(["--body", str(body), "--check-diff", "base", "HEAD"])
+    assert exit_code == 1
+    assert "error:" in capsys.readouterr().err
+
+
+def test_main_reports_error_when_a_sub_check_times_out(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """main()'s own subprocess.TimeoutExpired handling: a sub-check whose
+    own subprocess hangs past SUBPROCESS_TIMEOUT_SECONDS is reported as an
+    error and exits 1, not left to crash past main()'s own try/except."""
+    slow_script = tmp_path / "slow_provenance_scan.py"
+    slow_script.write_text("import time\ntime.sleep(5)\n", encoding="utf-8")
+    monkeypatch.setattr(preflight, "PROVENANCE_MARKER_SCAN", slow_script)
+    monkeypatch.setattr(preflight, "SUBPROCESS_TIMEOUT_SECONDS", 0.1)
+
+    body = tmp_path / "body.txt"
+    body.write_text(_CLEAN_BODY, encoding="utf-8")
+    exit_code = preflight.main(["--body", str(body)])
+    assert exit_code == 1
+    assert "timed out" in capsys.readouterr().err
