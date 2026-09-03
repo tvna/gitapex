@@ -183,17 +183,26 @@ def test_strip_fences_rejects_a_bare_cr_fenced_block_without_normalization() -> 
 
 
 def test_waiver_line_rejected_inside_a_blockquote_fenced_block() -> None:
-    """Regression test (issue #1714, adversarial-review follow-up): the
-    container prefix's own blockquote (`>`) alternative was live-verified
-    correct but exercised by none of this file's original five new tests
-    -- a coverage gap in what `defeat-test-disclosure` in this PR's own
-    body claims. A fence opened on the same line as a blockquote marker
-    (`> ```) is still a genuine CommonMark fence, the same way a list-item
-    marker is (see the list-item test above); a fabricated waiver line
-    inside it must still be rejected, and a real waiver line elsewhere in
-    the body must still be detected regardless of an unrelated
-    blockquote-fenced block."""
-    assert not checker.has_duplicate_waiver("> ```\n> Duplicate-PR-waiver: none\n> ```\n")
+    """Regression test (issue #1714, adversarial-review follow-up, twice
+    corrected): the container prefix's own blockquote (`>`) alternative
+    was live-verified correct but exercised by none of this file's
+    original five new tests -- a coverage gap in what
+    `defeat-test-disclosure` in this PR's own body claims.
+
+    An earlier version of this test asserted through
+    `has_duplicate_waiver()` alone and was vacuous: `_WAIVER_RE`'s own
+    line-prefix (`^[ \\t]*[-*]?[ \\t]*`) never permits a `>` marker at
+    all, so `not has_duplicate_waiver("> ``` \\n> Duplicate-PR-waiver:
+    ...")` passed regardless of whether the blockquote-fenced block was
+    ever actually stripped -- a second isolated review round caught this
+    by confirming, empirically, that removing the `>` alternative from
+    `_CONTAINER_PREFIX` left the test passing unchanged. This version
+    asserts on `_strip_fences()`'s own output directly (the same fix
+    already applied to the bare-CR test above), which does distinguish
+    "the blockquote-fenced block was stripped" from "`_WAIVER_RE` never
+    matched a `>`-prefixed line in the first place"."""
+    stripped = checker._strip_fences("> ```\n> Duplicate-PR-waiver: none\n> ```\n")
+    assert "Duplicate-PR-waiver" not in stripped
     assert checker.has_duplicate_waiver("> ```\n> pytest -q\n> ```\n\nDuplicate-PR-waiver: intentional second PR\n")
 
 
