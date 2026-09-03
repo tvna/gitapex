@@ -66,7 +66,7 @@ in the design doc rather than invented here. Two concrete caps for what
   sequential-dependent, never run in the same parallel wave.
 
 Write the task list in the same
-`docs/superpowers/plans/<date>-<branch-name>.md` shape this repository
+`docs/gitapex/plans/<date>-<branch-name>.md` shape this repository
 already uses for other design-then-implement passes (Task / Files /
 numbered Step). Each task line cites the
 ACM row(s) it satisfies, so the row-to-task mapping stays traceable in
