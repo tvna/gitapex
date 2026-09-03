@@ -408,10 +408,11 @@ def test_args_reject_a_root_that_does_not_exist(tmp_path: pathlib.Path) -> None:
 
 
 def test_args_root_must_exist_accepts_a_real_directory(tmp_path: pathlib.Path) -> None:
-    """Exercises `_root_must_exist` on the accepting path directly, not only
-    the rejecting path above."""
-    validated = gate.GateUnguardedShellPipeInDocsArgs(root=tmp_path)
-    assert validated.root == tmp_path
+    """Calls `_root_must_exist` directly on both its accepting and its
+    rejecting path, not only through the constructor above."""
+    assert gate.GateUnguardedShellPipeInDocsArgs._root_must_exist(tmp_path) == tmp_path
+    with pytest.raises(ValueError, match="must be an existing directory"):
+        gate.GateUnguardedShellPipeInDocsArgs._root_must_exist(tmp_path / "does-not-exist")
 
 
 # --- internal helpers, called directly ------------------------------------
