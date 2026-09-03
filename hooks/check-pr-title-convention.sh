@@ -110,6 +110,21 @@ if [ ! -f "$check_script" ]; then
   deny "Blocked by hooks/check-pr-title-convention.sh: cannot verify the PR title's Conventional Commits format -- gitapex_check_pr_title_convention.py was not found at $check_script (corrupted or incomplete plugin bundle). Failing closed."
 fi
 
+# Issue #1697/#1581: prefer this checkout's own uv-managed .venv over a
+# bare `python3` resolved from the calling shell's own ambient PATH --
+# see hooks/check-pr-skill-audit-disclosure.sh's own precondition-probe
+# fix for the PATH-nondeterminism class this closes. Falls back to a bare
+# `python3` for a consumer plugin install (only skills/ and hooks/ are
+# ever deployed there -- docs/repository-layout.md), where no uv
+# toolchain/lockfile exists -- $check_script is stdlib-only, so a bare
+# python3 has always been a correct answer there; this fallback keeps
+# that unchanged.
+plugin_root="$(dirname "$script_dir")"
+python3_cmd=(python3)
+if command -v uv >/dev/null 2>&1 && [ -f "$plugin_root/pyproject.toml" ] && [ -f "$plugin_root/uv.lock" ]; then
+  python3_cmd=(uv run --frozen --directory "$plugin_root" python3)
+fi
+
 # jq's output is piped straight into python3, never captured into a shell
 # variable first: `title=$(...)` command substitution unconditionally
 # strips every trailing newline, which silently defeats the very
@@ -122,7 +137,7 @@ fi
 # extra `\n` and false-reject every otherwise-valid title. `-j` emits the
 # string with no added newline, so only a newline genuinely present in
 # the title's own JSON value reaches the checker.
-if printf '%s' "$input" | jq -j '.tool_input.title // ""' | python3 "$check_script" >/dev/null 2>&1; then
+if printf '%s' "$input" | jq -j '.tool_input.title // ""' | "${python3_cmd[@]}" "$check_script" >/dev/null 2>&1; then
   exit 0
 fi
 

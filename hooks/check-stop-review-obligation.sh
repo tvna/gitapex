@@ -74,11 +74,30 @@ if [ ! -f "$check_script" ]; then
   deny "Blocked by hooks/check-stop-review-obligation.sh: gitapex_check_stop_review_obligation.py was not found at $check_script (corrupted or incomplete plugin bundle). Failing closed."
 fi
 
+# Issue #1697/#1581: prefer this checkout's own uv-managed .venv over a
+# bare `python3` resolved from the calling shell's own ambient PATH --
+# see hooks/check-pr-skill-audit-disclosure.sh's own precondition-probe
+# fix for the PATH-nondeterminism class this closes. Falls back to a bare
+# `python3` for a consumer plugin install (only skills/ and hooks/ are
+# ever deployed there -- docs/repository-layout.md), where no uv
+# toolchain/lockfile exists -- $check_script is stdlib-only, so a bare
+# python3 has always been a correct answer there; this fallback keeps
+# that unchanged. deny()'s own inline `python3 -c` above is left as a
+# bare interpreter deliberately: it only ever needs the stdlib json
+# module and must stay reachable even when this block's own uv/pyproject
+# lookup below has not run yet (it can fire before this point, from the
+# command -v python3 guard at the very top of this file).
+plugin_root="$(dirname "$script_dir")"
+python3_cmd=(python3)
+if command -v uv >/dev/null 2>&1 && [ -f "$plugin_root/pyproject.toml" ] && [ -f "$plugin_root/uv.lock" ]; then
+  python3_cmd=(uv run --frozen --directory "$plugin_root" python3)
+fi
+
 # Payload-shape validation (malformed JSON, non-object payload) happens
 # entirely inside gitapex_check_stop_review_obligation.py's own main() --
 # see that module's docstring -- so this wrapper does none of its own.
 check_exit=0
-check_output=$(python3 "$check_script" 2>&1) || check_exit=$?
+check_output=$("${python3_cmd[@]}" "$check_script" 2>&1) || check_exit=$?
 
 if [ "$check_exit" -eq 0 ]; then
   exit 0

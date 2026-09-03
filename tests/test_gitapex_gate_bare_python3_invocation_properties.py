@@ -30,6 +30,7 @@ suite).
 
 from __future__ import annotations
 
+import json
 import pathlib
 import tempfile
 
@@ -42,6 +43,8 @@ _PROPERTIES = settings(derandomize=True, max_examples=200, deadline=None)
 _VARNAMES = st.from_regex(r"[A-Za-z_][A-Za-z0-9_]{0,12}", fullmatch=True)
 _SCRIPT_STEMS = st.from_regex(r"[a-z][a-z0-9_]{0,16}", fullmatch=True)
 _PREFIXES = st.sampled_from(["", "${repo_root}", "$repo_root", "/abs/path"])
+_GATE_IDS = st.from_regex(r"[a-z][a-z0-9-]{0,20}", fullmatch=True)
+_PACKAGE_NAMES = st.from_regex(r"[a-z][a-z0-9_-]{0,16}", fullmatch=True)
 
 
 @_PROPERTIES
@@ -109,6 +112,80 @@ def test_commented_out_assignment_and_invocation_are_ignored(varname: str, stem:
         hook_path.write_text(content, encoding="utf-8")
         findings = gate._scan_hook(hook_path)
     assert findings == []
+
+
+@_PROPERTIES
+@given(gate_id=_GATE_IDS, stem=_SCRIPT_STEMS, package=_PACKAGE_NAMES)
+def test_load_python_dependent_hook_script_names_extracts_registered_hooks_py(
+    gate_id: str, stem: str, package: str
+) -> None:
+    """**Model-based property (issue #1697):** for ANY gate id,
+    hooks/*.py stem, and required-package name, a gate declaring a
+    non-empty `preconditions.requires_python_packages` must contribute
+    its own `hooks/<stem>.py` script's basename to the result -- the
+    exact shape `hooks/gitapex_check_python_precondition.py`'s own
+    missing `skill-audit-disclosure` registry entry needed to be caught
+    by this loader. A sibling `.github/scripts/*.py` entry on the same
+    gate must never itself be returned (this loader only ever tracks
+    `hooks/*.py` targets, since `.github/scripts/*.py` is already covered
+    by `find_bare_invocations`'s own workflow-level scan)."""
+    ssot = {
+        "gates": [
+            {
+                "id": gate_id,
+                "script": [f"hooks/{stem}.py", ".github/scripts/unrelated.py"],
+                "preconditions": {"requires_python_packages": [package]},
+            }
+        ]
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        ssot_path = pathlib.Path(tmp) / "ssot.json"
+        ssot_path.write_text(json.dumps(ssot), encoding="utf-8")
+        result = gate.load_python_dependent_hook_script_names(ssot_path)
+    assert result == frozenset({f"{stem}.py"})
+
+
+@_PROPERTIES
+@given(gate_id=_GATE_IDS, stem=_SCRIPT_STEMS)
+def test_load_python_dependent_hook_script_names_ignores_gates_without_required_packages(
+    gate_id: str, stem: str
+) -> None:
+    """The mirror-image property: for ANY gate id/stem, a gate with NO
+    `preconditions` key at all must never contribute its own `hooks/*.py`
+    script -- only a gate that actually declares a non-empty
+    `requires_python_packages` widens this scan's scope."""
+    ssot = {"gates": [{"id": gate_id, "script": [f"hooks/{stem}.py"]}]}
+    with tempfile.TemporaryDirectory() as tmp:
+        ssot_path = pathlib.Path(tmp) / "ssot.json"
+        ssot_path.write_text(json.dumps(ssot), encoding="utf-8")
+        result = gate.load_python_dependent_hook_script_names(ssot_path)
+    assert result == frozenset()
+
+
+@_PROPERTIES
+@given(gate_id=_GATE_IDS, stem=_SCRIPT_STEMS, package=_PACKAGE_NAMES)
+def test_load_python_dependent_hook_script_names_ignores_empty_requires_python_packages(
+    gate_id: str, stem: str, package: str
+) -> None:
+    """A gate whose `requires_python_packages` is present but empty must
+    be treated the same as one with no `preconditions` at all, for ANY
+    generated gate id/stem -- `package` here only pins the strategy type,
+    it is never actually placed in the empty list."""
+    del package
+    ssot = {
+        "gates": [
+            {
+                "id": gate_id,
+                "script": [f"hooks/{stem}.py"],
+                "preconditions": {"requires_python_packages": []},
+            }
+        ]
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        ssot_path = pathlib.Path(tmp) / "ssot.json"
+        ssot_path.write_text(json.dumps(ssot), encoding="utf-8")
+        result = gate.load_python_dependent_hook_script_names(ssot_path)
+    assert result == frozenset()
 
 
 @_PROPERTIES
