@@ -115,3 +115,11 @@ spec:
         baseCommit: "8e8366713ca047192eaa620bda145232de94bcaf"
         verdict: satisfied
         requirement_1_distinct_headings: met
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/1632"
+      summary: "a fresh isolated re-review (Round 17) found requirement 1's heading fix real but incomplete: decomposition-and-dispatch.md documents Step 8 using agentType: 'branch-plan-task' and subagent_type: 'review-persona', both Claude-Code-native, but porting-boundary-map.md's agentType row only listed Step 6 and had no review-persona row, and both SKILL.md's Portable section and this file's own closing line falsely claimed step 8 fully portable. Fixed: both corrected to exclude step 8."
+      outcome:
+        baseCommit: "978f38df5803fdce0d291a6abeee5f7c23804f82"
+        verdict: satisfied
+        requirement_1_distinct_headings: met
+        requirement_3_porting_boundary_map_file: met

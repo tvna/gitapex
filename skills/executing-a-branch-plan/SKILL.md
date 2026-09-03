@@ -413,9 +413,10 @@ Portability: **Mixed**.
 ### Non-portable (Claude-Code-specific)
 
 Step 6's primary path (`Workflow` tool, `agentType: 'branch-plan-task'`,
-`isolation: 'worktree'`), the `branch-plan-task` subagent type, and the
-worktree-base precondition backstop -- full inventory and each one's own
-portable substitute:
+`isolation: 'worktree'`), the `branch-plan-task` subagent type, Step 8's
+own two dispatches (`agentType: 'branch-plan-task'`,
+`subagent_type: 'review-persona'`), and the worktree-base precondition
+backstop -- full inventory and each one's own portable substitute:
 [porting-boundary-map.md](references/porting-boundary-map.md), read only
 at vendoring/porting time.
 
@@ -427,8 +428,8 @@ structural claim, not empirically verified beyond Claude Code itself;
 see
 [decomposition-and-dispatch.md](references/decomposition-and-dispatch.md#sequential-fallback)
 for the blocked attempt to verify it against OpenAI Codex. Steps 1, 2, 4,
-5, 7, 8, 9 use only GitHub-connector calls and skill-to-skill reuse, both
-portable.
+5, 7, 9 use only GitHub-connector calls and skill-to-skill reuse, both
+portable; step 8 does not (see Non-portable above).
 
 Install/vendoring-time integrity (whether this SKILL.md, its `references/`, its
 bundled `scripts/` (`check_task_bash_safety.sh`,
