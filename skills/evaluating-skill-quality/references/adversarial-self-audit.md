@@ -20,8 +20,11 @@ Procedure steps 1-6; it is not one more addition to
    - [Known entries](#known-entries)
    - [Unlisted platform](#unlisted-platform)
    - [No verified mechanism available](#no-verified-mechanism-available)
-8. [Contaminated-dispatch disclosure](#contaminated-dispatch-disclosure)
-9. [Downstream verdict consumption](#downstream-verdict-consumption)
+8. [Target-checkout verification](#target-checkout-verification)
+   - [The defect, disclosed with its own recurrence](#the-defect-disclosed-with-its-own-recurrence)
+   - [Checkout verification procedure](#checkout-verification-procedure)
+9. [Contaminated-dispatch disclosure](#contaminated-dispatch-disclosure)
+10. [Downstream verdict consumption](#downstream-verdict-consumption)
 
 ## Injection resistance and trust boundary
 
@@ -722,6 +725,77 @@ self-audit `SKILL.md`'s own eval-tooling-install Stop boundary already
 applies to itself. An environment with no such backing is currently
 prose-only and worth naming as an Agentic operation mechanism-fit gap the same way that Stop
 boundary already names its own, not a guarantee to assume holds.
+
+## Target-checkout verification
+
+Distinct from Isolation verification above: that section asks whether a
+dispatch's own *context* leaks the calling repository's own instruction
+files; this section asks whether a dispatch's own *working tree* holds
+the content the caller actually intended it to review at all. A dispatch
+that isolates cleanly but reviews the wrong commit produces a
+confidently-wrong verdict, not a contaminated one -- a different failure
+mode, caught by a different check.
+
+### The defect, disclosed with its own recurrence
+
+The Claude Code `Agent` tool's `isolation: 'worktree'` option creates a
+fresh git worktree for the dispatched subagent, but nothing in the
+tool's own contract or this repository's own tooling guarantees that
+worktree starts from a caller-specified branch or commit -- only from
+wherever the *calling session's own current checkout* happens to be. A
+dispatch prompt that merely *names* a target branch/commit in its own
+prose (e.g. "review this PR's actual head, commit `abc123`") does not
+itself cause the worktree to be there; the calling session's own current
+branch is what actually lands.
+
+This is not hypothetical: it produced a real, confirmed incident twice
+within the same PR review cycle
+(https://github.com/tvna/gitapex/pull/1632). A first isolated dispatch
+(that PR's own Round 14) silently reviewed the calling session's own
+local checkout rather than the PR branch, producing two false "content
+does not exist" alarms before the mismatch was caught. A second,
+independent recurrence (Round 17 of the same PR) hit the identical
+defect across three separate dispatches: two noticed the mismatch
+themselves and worked around it using two read-only commands that read
+the shared git object database directly, unaffected by which commit is
+checked out (`git show <sha>:<path>` and `git rev-parse <sha>^`) to
+still verify the true target content; the third did not notice, and
+returned a confidently-stated FAIL verdict -- citing a missing file, absent
+headings, and a stale shape-checker count -- entirely against the wrong
+tree. Only a caller-side re-dispatch with an explicit checkout step,
+followed by an independent `git rev-parse HEAD` confirmation, caught it.
+
+### Checkout verification procedure
+
+Unconditional, every isolated-worktree dispatch, before any review
+content is read or any finding is drawn:
+
+1. **State the exact target** in the dispatch prompt as a concrete,
+   resolvable ref -- a full commit SHA is strictly preferred over a
+   branch name, which can move between the prompt being written and the
+   dispatch actually starting.
+2. **Instruct the dispatch to fetch and check out that target itself**,
+   as its own first action, rather than trusting the worktree's default
+   state -- e.g. `git fetch origin <branch>` then `git checkout FETCH_HEAD`
+   (or `git checkout <sha>` directly when a SHA was given), run as
+   separate commands, never combined with a `cd` in the same invocation
+   per this platform's own bash-safety backstop.
+3. **Instruct the dispatch to confirm the result before proceeding** --
+   `git rev-parse HEAD` (or equivalent) compared against the exact
+   target from step 1 -- and to stop and report the mismatch as its own
+   finding, rather than silently reviewing whatever it landed on, if the
+   two do not match.
+4. **Treat a dispatch that skipped this check as unverified**, not as a
+   completed review with an unlucky target -- the same fail-closed
+   posture Isolation verification's own Known entries registry already
+   takes for an untested mechanism: an available-but-unchecked dispatch
+   is not evidence, and re-dispatching with the check embedded is the
+   fix, not accepting the result and noting the gap.
+
+This verification is orthogonal to, and does not substitute for,
+Isolation verification above -- a dispatch can pass this check and still
+leak `CLAUDE.md`/`AGENTS.md` content, or vice versa; both must hold
+before a dispatch's findings are trusted.
 
 ## Contaminated-dispatch disclosure
 
