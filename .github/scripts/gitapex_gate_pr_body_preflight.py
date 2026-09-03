@@ -40,6 +40,11 @@ Usage::
     printf '%s' "$PR_BODY" | uv run --frozen python3 \\
         .github/scripts/gitapex_gate_pr_body_preflight.py
 
+A bare pipe here masks `printf`'s own exit status in a non-`pipefail`
+shell (issue #1531) -- harmless for a literal `printf` producer, which
+cannot itself fail in ordinary use, but add `set -o pipefail` first if
+this recipe's producer is ever swapped for a command that can.
+
 `--body`/`--body-file` are accepted as aliases of each other (matching
 `gitapex_gate_skill_audit_disclosure.py`'s own `--body`/`--body-file`
 alias pair) so either spelling documented elsewhere in this repository

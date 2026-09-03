@@ -41,6 +41,46 @@ _1711_BODY = (
 )
 
 
+# --- CheckResult.status ---
+
+
+def test_check_result_status_reflects_passed_and_skipped() -> None:
+    assert preflight.CheckResult("a", True, False, "").status == "PASS"
+    assert preflight.CheckResult("a", False, False, "").status == "FAIL"
+    assert preflight.CheckResult("a", False, True, "skipped").status == "SKIPPED"
+    # skipped takes priority over passed when (implausibly) both are set,
+    # matching the property's own if-skipped-first branch order.
+    assert preflight.CheckResult("a", True, True, "skipped").status == "SKIPPED"
+
+
+# --- _run ---
+
+
+def test_run_executes_argv_with_no_shell_and_captures_output() -> None:
+    completed = preflight._run(("python3", "-c", "print('hello')"))
+    assert completed.returncode == 0
+    assert completed.stdout.strip() == "hello"
+
+
+def test_run_pipes_stdin_text_through_when_given() -> None:
+    completed = preflight._run(("python3", "-c", "import sys; print(sys.stdin.read().strip())"), stdin_text="piped")
+    assert completed.stdout.strip() == "piped"
+
+
+# --- run_all_checks ---
+
+
+def test_run_all_checks_runs_all_four_sub_checks_without_check_diff(tmp_path: pathlib.Path) -> None:
+    body_path = tmp_path / "body.txt"
+    body_path.write_text(_CLEAN_BODY, encoding="utf-8")
+    results = preflight.run_all_checks(body_path, _CLEAN_BODY, None)
+    names = {result.name for result in results}
+    assert names == {"skill-audit-disclosure", "provenance-disclosure", "ascii-only", "provenance-marker-scan"}
+    skill_audit_result = next(r for r in results if r.name == "skill-audit-disclosure")
+    assert skill_audit_result.skipped
+    assert all(result.passed for result in results if not result.skipped)
+
+
 # --- check_ascii_only ---
 
 
