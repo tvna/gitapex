@@ -230,7 +230,7 @@ spec:
       anchor: "https://github.com/tvna/gitapex/issues/1648"
       summary: "axis 7's TOCTOU residual closed via two regime-specific mechanisms, superseding the open entries above (kept as historical record): shared filesystem view -- Step 2 makes a bare mkdir (no -p, no side-effect file write; shell gains mkdir) the first write, its atomic EEXIST failure routing away per the Precondition's target-already-exists branch; isolated worktrees -- blind to a disk check but never silent: git's own add/add conflict at merge-back, and the file-ownership edge within one run"
       outcome:
-        baseCommit: "1b5626b6563a798e9b9479e841344d70bb67be4a"
+        baseCommit: "62b3615e9c62496fb5d018d7ce2cf7ef889f2e52"
     - kind: caveat
       anchor: "https://github.com/tvna/gitapex/issues/1648"
       summary: "an independent re-review found the entry above overclaims: the mkdir/git-conflict closure covers only the blank-page-creation writer class (two dispatches racing to create one new target), never named as scoped that narrowly. A second writer class -- two dispatches concurrently editing one existing target's sidecar -- is unaddressed. Step 2's own references-field paragraph now discloses this second class explicitly, not left silently uncovered by an unqualified 'closed' claim."
@@ -256,6 +256,11 @@ spec:
       summary: "a round-6 re-review found the resume-time sweep (axis 5) was scoped only to context 2, though Precondition item 1 lets context 1 also target an existing SKILL.md -- an equally in-scope resume case with no equivalent sweep. Broadened to either context. Also declared `git` in executionRequirements.tools.shell, undeclared though the sweep itself runs `git log`."
       outcome:
         baseCommit: "a0d3c270c341028d417ec046eb72b156f5f7ee6f"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1740"
+      summary: "this file's own baseCommit citation-convention dispute (issue https://github.com/tvna/gitapex/issues/1740) resolved: outcome.baseCommit cites the causally relevant antecedent, not a fixed git-parent rule -- see decision-log-discipline.md's new section for the three variants. The axis-7-TOCTOU entry above is a variant-1 case (its entry-adding commit 52213559 is itself the fix), so baseCommit is its true immediate parent -- corrected from 1b5626b6 to 62b3615e."
+      outcome:
+        baseCommit: "f47f554a164bf757ba7ebe2f9b7ad9ccbf41f56a"
   skillDependencies:
     requires:
       - evaluating-skill-quality

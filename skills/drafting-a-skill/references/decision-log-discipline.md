@@ -2,6 +2,18 @@
 
 Loaded on demand: `SKILL.md`'s own Step 2 already states the common-path rule directly in the body (append in the same edit round as the decision, read the sidecar before every edit, never trust it over ground truth) -- load this file for the resume-time and concurrent-dispatch detail that rule doesn't spell out.
 
+## What `outcome.baseCommit` cites
+
+`outcome.baseCommit` names the commit causally relevant to the specific decision an entry records -- not, by default, the entry-adding commit's own git parent. Three variants recur in this skill's own decision log (issue https://github.com/tvna/gitapex/issues/1740's own 28-entry investigation), and an entry's own summary text decides which applies:
+
+- **The entry-adding commit is itself the substantive fix.** Cite that commit's own true immediate git parent -- the state right before the fix landed. If that commit is itself a merge, its first-parent branch is the true immediate parent for this purpose. (Most single-decision, single-round entries take this shape.)
+- **The entry-adding commit only records a decision substantively made by an earlier commit** (a later round batches several already-made fixes into one logged entry). Cite that earlier substantive commit directly, not the batching commit's own parent.
+- **The entry is a caveat or correction reacting to a specific earlier entry** ("the entry above ..."). Cite the commit that added the entry being corrected, so a reader can jump straight to what is being revised.
+
+This is a human judgment call, not a mechanically-derivable one -- a mechanical sweep comparing every citation against "the entry-adding commit's own true immediate parent" alone will flag real, correct citations of the second and third kind as false positives (the sweep in issue https://github.com/tvna/gitapex/issues/1740 found 13 such cases in this file, all judged correct on inspection once checked against these three variants). Treat a mismatch against that narrow rule as a prompt to check the entry's own content against the three variants above, not as proof of a broken citation on its own. This convention stays advisory, not gate-enforced: the causal judgment it calls for cannot be checked mechanically without either false positives (as above) or false negatives (accepting any resolvable ancestor).
+
+Whichever variant applies, the cited commit must still resolve as a real, reachable commit -- an unresolvable `baseCommit` is a decision-log defect regardless of which variant its entry intends, per "Ground truth outranks the log" below.
+
 ## Ground truth outranks the log, in both directions
 
 The log ranks below ground truth: the draft's own current files and git history win on any disagreement; its own store still wins over bare git/PR history for provenance, since the log travels with the skill directory when vendored and git history alone does not.
