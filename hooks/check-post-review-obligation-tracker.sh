@@ -44,7 +44,20 @@ if [ ! -f "$tracker_script" ]; then
   exit 0
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
+# Issue #1697/#1581: prefer this checkout's own uv-managed .venv over a
+# bare `python3` resolved from the calling shell's own ambient PATH --
+# see hooks/check-pr-skill-audit-disclosure.sh's own precondition-probe
+# fix for the PATH-nondeterminism class this closes. Falls back to a bare
+# `python3` for a consumer plugin install (only skills/ and hooks/ are
+# ever deployed there -- docs/repository-layout.md), where no uv
+# toolchain/lockfile exists -- $tracker_script is stdlib-only, so a bare
+# python3 has always been a correct answer there; this fallback keeps
+# that unchanged.
+plugin_root="$(dirname "$script_dir")"
+python3_cmd=(python3)
+if command -v uv >/dev/null 2>&1 && [ -f "$plugin_root/pyproject.toml" ] && [ -f "$plugin_root/uv.lock" ]; then
+  python3_cmd=(uv run --frozen --directory "$plugin_root" python3)
+elif ! command -v python3 >/dev/null 2>&1; then
   printf '%s\n' "{\"systemMessage\": \"hooks/check-post-review-obligation-tracker.sh: python3 is not available on PATH. Skipping this cycle's obligation tracking.\"}"
   exit 0
 fi
@@ -53,7 +66,7 @@ fi
 # no ARG_MAX concern either. Payload-shape validation, tool_name dispatch,
 # and any systemMessage worth emitting for a malformed/irrelevant payload
 # all happen inside the tracker script itself (see header above).
-if ! python3 "$tracker_script" 2>/dev/null; then
+if ! "${python3_cmd[@]}" "$tracker_script" 2>/dev/null; then
   printf '%s\n' "{\"systemMessage\": \"hooks/check-post-review-obligation-tracker.sh: gitapex_check_post_review_obligation_tracker.py exited non-zero. Review-thread-resolution/mergeable_state tracking for this turn may be incomplete.\"}"
 fi
 

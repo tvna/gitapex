@@ -117,6 +117,21 @@ if [ ! -f "$classifier" ]; then
   deny "Blocked by hooks/check-bash-safety.sh: gitapex_check_bash_safety.py was not found at $classifier (corrupted or incomplete plugin bundle). Failing closed."
 fi
 
+# Issue #1697/#1581: prefer this checkout's own uv-managed .venv (uv on
+# PATH plus a pyproject.toml/uv.lock at plugin_root) over a bare `python3`
+# resolved from the calling shell's own ambient PATH -- closes the same
+# PATH-nondeterminism class hooks/check-pr-skill-audit-disclosure.sh's own
+# precondition probe hit. Falls back to a bare `python3` for a consumer
+# plugin install (only skills/ and hooks/ are ever deployed there --
+# docs/repository-layout.md), where no uv toolchain/lockfile exists --
+# $classifier is stdlib-only, so a bare python3 has always been a correct
+# answer there; this fallback keeps that unchanged.
+plugin_root="$(dirname "$script_dir")"
+python3_cmd=(python3)
+if command -v uv >/dev/null 2>&1 && [ -f "$plugin_root/pyproject.toml" ] && [ -f "$plugin_root/uv.lock" ]; then
+  python3_cmd=(uv run --frozen --directory "$plugin_root" python3)
+fi
+
 # $input is piped on stdin the whole way through, never re-passed as a
 # command-line argument -- same ARG_MAX rationale as deny()/warn() above.
 # The classifier re-validates tool_input/tool_input.command's own shape
@@ -130,7 +145,7 @@ classifier_exit=0
 # leak into this hook's own stderr channel -- deny()'s JSON envelope below
 # is the only thing this hook itself ever writes there, and a stray extra
 # line ahead of it would break Claude Code's own JSON parse of that stream.
-classifier_output=$(printf '%s' "$input" | python3 "$classifier" 2>/dev/null) || classifier_exit=$?
+classifier_output=$(printf '%s' "$input" | "${python3_cmd[@]}" "$classifier" 2>/dev/null) || classifier_exit=$?
 if [ "$classifier_exit" -ne 0 ]; then
   deny "Blocked by hooks/check-bash-safety.sh: gitapex_check_bash_safety.py exited non-zero ($classifier_exit) instead of returning a decision. Failing closed."
 fi
@@ -160,6 +175,13 @@ if [ "$is_git_push" = "true" ]; then
     deny "Blocked by hooks/check-bash-safety.sh: git push requires the outward-artifact-preflight scan, but gitapex_scan_provenance.py was not found at $scan_script."
   fi
 
+  # Same uv-preferred/bare-python3-fallback rationale as $classifier above,
+  # keyed on project_dir (this call's own root) rather than plugin_root.
+  scan_python3_cmd=(python3)
+  if command -v uv >/dev/null 2>&1 && [ -f "$project_dir/pyproject.toml" ] && [ -f "$project_dir/uv.lock" ]; then
+    scan_python3_cmd=(uv run --frozen --directory "$project_dir" python3)
+  fi
+
   # Determine the commit range being pushed. With an upstream, @{u}..HEAD is
   # exact. On a first push (`git push -u origin newbranch`) there is no
   # upstream, so @{u} errors and the range is empty. Fall back to the
@@ -187,7 +209,7 @@ if [ "$is_git_push" = "true" ]; then
   fi
 
   scan_exit=0
-  scan_output=$(printf '%s' "$content" | python3 "$scan_script" 2>&1) || scan_exit=$?
+  scan_output=$(printf '%s' "$content" | "${scan_python3_cmd[@]}" "$scan_script" 2>&1) || scan_exit=$?
 
   # gitapex_scan_provenance.py's own docstring says it "surfaces candidates, it does
   # not decide" -- a hard deny here would make this mechanical regex the

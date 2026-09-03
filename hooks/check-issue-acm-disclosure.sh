@@ -41,6 +41,21 @@ body=$(printf '%s' "$input" | jq -r '.tool_input.body // empty')
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 check_script="$script_dir/gitapex_check_acm_present_or_waiver.py"
 
+# Issue #1697/#1581: prefer this checkout's own uv-managed .venv over a
+# bare `python3` resolved from the calling shell's own ambient PATH --
+# see hooks/check-pr-skill-audit-disclosure.sh's own precondition-probe
+# fix for the PATH-nondeterminism class this closes. Falls back to a bare
+# `python3` for a consumer plugin install (only skills/ and hooks/ are
+# ever deployed there -- docs/repository-layout.md), where no uv
+# toolchain/lockfile exists -- $check_script is stdlib-only, so a bare
+# python3 has always been a correct answer there; this fallback keeps
+# that unchanged.
+plugin_root="$(dirname "$script_dir")"
+python3_cmd=(python3)
+if command -v uv >/dev/null 2>&1 && [ -f "$plugin_root/pyproject.toml" ] && [ -f "$plugin_root/uv.lock" ]; then
+  python3_cmd=(uv run --frozen --directory "$plugin_root" python3)
+fi
+
 deny() {
   local reason="$1"
   jq -n --arg msg "$reason" \
@@ -52,7 +67,7 @@ if [ ! -f "$check_script" ]; then
   deny "Blocked by hooks/check-issue-acm-disclosure.sh: cannot verify ACM disclosure -- gitapex_check_acm_present_or_waiver.py was not found at $check_script (corrupted or incomplete plugin bundle)."
 fi
 
-if printf '%s' "$body" | python3 "$check_script" >/dev/null 2>&1; then
+if printf '%s' "$body" | "${python3_cmd[@]}" "$check_script" >/dev/null 2>&1; then
   exit 0
 fi
 

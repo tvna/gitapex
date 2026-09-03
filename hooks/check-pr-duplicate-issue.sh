@@ -117,10 +117,25 @@ if [ ! -f "$check_script" ]; then
   deny "Blocked by hooks/check-pr-duplicate-issue.sh: cannot verify duplicate-PR status -- gitapex_check_pr_duplicate_issue.py was not found at $check_script (corrupted or incomplete plugin bundle). Failing closed."
 fi
 
+# Issue #1697/#1581: prefer this checkout's own uv-managed .venv over a
+# bare `python3` resolved from the calling shell's own ambient PATH --
+# see hooks/check-pr-skill-audit-disclosure.sh's own precondition-probe
+# fix for the PATH-nondeterminism class this closes. Falls back to a bare
+# `python3` for a consumer plugin install (only skills/ and hooks/ are
+# ever deployed there -- docs/repository-layout.md), where no uv
+# toolchain/lockfile exists -- $check_script is stdlib-only, so a bare
+# python3 has always been a correct answer there; this fallback keeps
+# that unchanged.
+plugin_root="$(dirname "$script_dir")"
+python3_cmd=(python3)
+if command -v uv >/dev/null 2>&1 && [ -f "$plugin_root/pyproject.toml" ] && [ -f "$plugin_root/uv.lock" ]; then
+  python3_cmd=(uv run --frozen --directory "$plugin_root" python3)
+fi
+
 payload=$(printf '%s' "$input" | jq -c \
   '{owner: (.tool_input.owner // ""), repo: (.tool_input.repo // ""), title: (.tool_input.title // ""), body: (.tool_input.body // "")}')
 
-if check_output=$(printf '%s' "$payload" | python3 "$check_script" 2>&1); then
+if check_output=$(printf '%s' "$payload" | "${python3_cmd[@]}" "$check_script" 2>&1); then
   check_exit=0
 else
   check_exit=$?

@@ -99,10 +99,25 @@ if [ ! -f "$check_script" ]; then
   report "hooks/check-post-write-provenance.sh could not verify the stored PR/issue body: gitapex_check_post_write_provenance.py was not found at $check_script (corrupted or incomplete plugin bundle). The artifact this call just published is UNVERIFIED."
 fi
 
+# Issue #1697/#1581: prefer this checkout's own uv-managed .venv over a
+# bare `python3` resolved from the calling shell's own ambient PATH --
+# see hooks/check-pr-skill-audit-disclosure.sh's own precondition-probe
+# fix for the PATH-nondeterminism class this closes. Falls back to a bare
+# `python3` for a consumer plugin install (only skills/ and hooks/ are
+# ever deployed there -- docs/repository-layout.md), where no uv
+# toolchain/lockfile exists -- $check_script is stdlib-only, so a bare
+# python3 has always been a correct answer there; this fallback keeps
+# that unchanged.
+plugin_root="$(dirname "$script_dir")"
+python3_cmd=(python3)
+if command -v uv >/dev/null 2>&1 && [ -f "$plugin_root/pyproject.toml" ] && [ -f "$plugin_root/uv.lock" ]; then
+  python3_cmd=(uv run --frozen --directory "$plugin_root" python3)
+fi
+
 # $input is piped on stdin the whole way through, never re-passed as a
 # command-line argument -- same ARG_MAX rationale as report() above, and
 # the same reason a tool-controlled title/body never reaches an argv slot.
-if check_output=$(printf '%s' "$input" | python3 "$check_script" 2>&1); then
+if check_output=$(printf '%s' "$input" | "${python3_cmd[@]}" "$check_script" 2>&1); then
   exit 0
 fi
 
