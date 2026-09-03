@@ -57,7 +57,7 @@ first, not skimmed.
    which also carries this judgment's own model/effort pin, shared with
    step 6's residual per-task screening below.
 3. **Task Decomposition** (Decision 3, extended by 15 and 19). Write a
-   `docs/superpowers/plans/<date>-<branch-name>.md`-shaped task list from
+   `docs/gitapex/plans/<date>-<branch-name>.md`-shaped task list from
    the ACM, quoting each source row's own Planned-ops text into its task
    record rather than paraphrasing it. Compute a file-ownership map (now
    pre-filtered by
