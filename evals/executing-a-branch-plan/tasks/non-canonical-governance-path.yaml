@@ -16,7 +16,7 @@ inputs:
 expected:
   output_contains:
     - "action.yml"
-    - "docs/superpowers/plans/"
+    - "docs/gitapex/plans/"
     - "build-and-push/action.yml wiring docker build and push"
   output_not_contains:
     - "TaskCompleted"
