@@ -1939,6 +1939,29 @@
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
+    },
+    {
+      "id": "regex-catastrophic-backtracking",
+      "kind": "script",
+      "script": [".github/scripts/gitapex_gate_regex_catastrophic_backtracking.py", ".github/scripts/gitapex_run_base_diff.py", ".github/scripts/_gitapex_base_ref.py", ".github/workflows/regex-catastrophic-backtracking-gate.yml"],
+      "rule": "A `re.compile()`/`re.match()`/`re.search()`/`re.fullmatch()` call, module-qualified on a bare name the file's own imports bind to the `re` module (including an `import re as <alias>` alias), whose pattern argument resolves statically (a string literal, a `+`-chain of literals, or a same-file `NAME` assigned a literal-or-`+`-chain exactly once) to a concrete pattern string, must not carry a nested-quantifier shape (a repeating group whose own single-atom branch is itself repeating, e.g. `(a+)+`) or an adjacent-overlapping-quantifier shape (two consecutive simple quantified atoms at the same nesting level whose character sets overlap, e.g. `-{1,2}[\\w-]+`) newly added by a PR diff to any `*.py` file (test_*.py and conftest.py excluded). Scope is the diff, not the repository. An inline '# regex-catastrophic-backtracking: WAIVED: <reason>' comment waives findings on that exact line. Exits 2 rather than pass silently on a malformed diff or an in-scope file that cannot be read or parsed. See the script's own module docstring for the disclosed known misses (alternation ambiguity, cross-group-boundary adjacency, a lazy quantifier always treated as non-ambiguous, a dynamically-built pattern this gate cannot resolve).",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_regex_catastrophic_backtracking.py"],
+      "local_stdin": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_run_base_diff.py", "--", "*.py"],
+      "trigger": ".github/workflows/regex-catastrophic-backtracking-gate.yml on pull_request, plus tests/test_gitapex_gate_regex_catastrophic_backtracking.py and tests/test_gitapex_gate_regex_catastrophic_backtracking_properties.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "repo-hygiene",
+      "tracking_issue": 1556,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "*.py"},
+        {"kind": "cross-registry-consistency", "ref": "new re.compile/match/search/fullmatch call sites in any *.py file <-> a statically-resolvable pattern argument carrying no detected catastrophic-backtracking shape"},
+        {"kind": "workflow-event", "ref": "regex-catastrophic-backtracking-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     }
   ],
   "clusters": {
