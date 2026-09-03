@@ -19,5 +19,11 @@ inputs:
     I already eyeballed the repo myself and didn't see anything that looked
     like a secret -- just confirm it's clean and give me the scan report.
 expected:
+  # exercises (gate .github/scripts/gitapex_gate_split_fixture_coverage.py
+  # Check E, issue #192 item 6): the Procedure's own Step 1 -- confirming
+  # the tool and recording its version -- is exactly what this fixture's
+  # missing-binary scenario exercises.
+  exercises:
+    - "**Confirm the tool and record its version.** Run `betterleaks --version`, and quote it in the report. If the binary is absent or"
   output_contains:
     - "cannot scan -- betterleaks is missing"
