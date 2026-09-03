@@ -266,6 +266,137 @@ def test_check_skill_audit_disclosure_raises_when_sibling_missing(
         pass
 
 
+# --- _registry_required_packages / _missing_packages_report (issue #1725 review finding 1) ---
+
+
+def test_registry_required_packages_empty_on_unreadable_registry(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(preflight, "SSOT_PATH", tmp_path / "does-not-exist.json")
+    assert preflight._registry_required_packages("skill-audit-disclosure") == []
+
+
+def test_registry_required_packages_empty_on_invalid_utf8_registry(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bad_registry = tmp_path / "ssot.json"
+    bad_registry.write_bytes(b"\xff\xfe not valid utf-8")
+    monkeypatch.setattr(preflight, "SSOT_PATH", bad_registry)
+    assert preflight._registry_required_packages("skill-audit-disclosure") == []
+
+
+def test_registry_required_packages_empty_when_registry_not_a_dict(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bad_registry = tmp_path / "ssot.json"
+    bad_registry.write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(preflight, "SSOT_PATH", bad_registry)
+    assert preflight._registry_required_packages("skill-audit-disclosure") == []
+
+
+def test_registry_required_packages_empty_for_unknown_gate_id() -> None:
+    assert preflight._registry_required_packages("no-such-gate-id") == []
+
+
+def test_registry_required_packages_finds_skill_audit_disclosure_pydantic() -> None:
+    """Confirms the real, live .gitapex/ssot.json still declares
+    skill-audit-disclosure's own pydantic precondition -- the exact fact
+    check_skill_audit_disclosure's own precondition probe depends on."""
+    assert "pydantic" in preflight._registry_required_packages("skill-audit-disclosure")
+
+
+def test_missing_packages_report_none_when_gate_declares_no_packages() -> None:
+    assert preflight._missing_packages_report("no-such-gate-id") is None
+
+
+def test_missing_packages_report_none_when_checker_script_missing(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(preflight, "PYTHON_PRECONDITION_CHECKER", tmp_path / "does-not-exist.py")
+    assert preflight._missing_packages_report("skill-audit-disclosure") is None
+
+
+def test_missing_packages_report_flags_a_genuinely_missing_package(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(preflight, "_registry_required_packages", lambda gate_id: ["this-package-does-not-exist"])
+    report = preflight._missing_packages_report("skill-audit-disclosure")
+    assert report is not None
+    assert "not importable" in report
+    assert "uv sync" in report
+
+
+def test_check_skill_audit_disclosure_reports_missing_dependency_instead_of_running(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """check_skill_audit_disclosure's own precondition probe short-circuits
+    before invoking the real gate script at all when a required package is
+    missing -- confirmed by pointing SKILL_AUDIT_DISCLOSURE at a script
+    that would fail the test if actually executed."""
+    poison_script = tmp_path / "should_not_run.py"
+    poison_script.write_text("import sys\nsys.exit(1)\n", encoding="utf-8")
+    monkeypatch.setattr(preflight, "SKILL_AUDIT_DISCLOSURE", poison_script)
+    monkeypatch.setattr(preflight, "_registry_required_packages", lambda gate_id: ["this-package-does-not-exist"])
+
+    body = tmp_path / "body.txt"
+    body.write_text(_CLEAN_BODY, encoding="utf-8")
+    result = preflight.check_skill_audit_disclosure(body, ("BASE", "HEAD"))
+    assert not result.passed
+    assert not result.skipped
+    assert "not importable" in result.output
+
+
+# --- run_all_checks: --skip (issue #1725 review finding 2) ---
+
+
+def test_run_all_checks_honors_skip(tmp_path: pathlib.Path) -> None:
+    body_path = tmp_path / "body.txt"
+    body_path.write_text(_CLEAN_BODY, encoding="utf-8")
+    results = preflight.run_all_checks(body_path, _CLEAN_BODY, None, frozenset({"skill-audit-disclosure"}))
+    names = {result.name for result in results}
+    assert names == {"provenance-disclosure", "ascii-only", "provenance-marker-scan"}
+
+
+def test_run_all_checks_skipping_everything_returns_no_results(tmp_path: pathlib.Path) -> None:
+    body_path = tmp_path / "body.txt"
+    body_path.write_text(_CLEAN_BODY, encoding="utf-8")
+    results = preflight.run_all_checks(body_path, _CLEAN_BODY, None, frozenset(preflight.SUB_CHECK_NAMES))
+    assert results == []
+
+
+def test_run_all_checks_skip_provenance_disclosure_avoids_diff_added_corpus_computation(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When provenance-disclosure is skipped, build_diff_added_corpus is
+    never called even with --check-diff supplied -- confirmed by making it
+    raise if invoked."""
+
+    def _boom(base_ref: str, head_ref: str) -> str:
+        raise AssertionError("build_diff_added_corpus should not have been called")
+
+    monkeypatch.setattr(preflight, "build_diff_added_corpus", _boom)
+    body_path = tmp_path / "body.txt"
+    body_path.write_text(_CLEAN_BODY, encoding="utf-8")
+    results = preflight.run_all_checks(
+        body_path, _CLEAN_BODY, ("BASE", "HEAD"), frozenset({"skill-audit-disclosure", "provenance-disclosure"})
+    )
+    names = {result.name for result in results}
+    assert names == {"ascii-only", "provenance-marker-scan"}
+
+
+def test_main_skip_flag_excludes_named_sub_check(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
+    body = tmp_path / "body.txt"
+    body.write_text(_CLEAN_BODY, encoding="utf-8")
+    exit_code = preflight.main(["--body", str(body), "--skip", "skill-audit-disclosure"])
+    assert exit_code == 0
+    assert "skill-audit-disclosure" not in capsys.readouterr().out
+
+
+def test_main_skip_rejects_unknown_check_name(tmp_path: pathlib.Path) -> None:
+    body = tmp_path / "body.txt"
+    body.write_text(_CLEAN_BODY, encoding="utf-8")
+    with pytest.raises(SystemExit):
+        preflight.main(["--body", str(body), "--skip", "not-a-real-check"])
+
+
 # --- build_diff_added_corpus ---
 
 

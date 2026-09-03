@@ -19,6 +19,16 @@
 # remains the deterministic backstop regardless of what this hook can
 # determine locally.
 #
+# Passes --skip skill-audit-disclosure to the CLI: hooks/check-pr-skill-
+# audit-disclosure.sh already wraps that same gate as its own PreToolUse
+# hook on the identical two matchers, so without this both hooks would
+# independently recompute the identical verdict (including a duplicated
+# git merge-base resolution) on every single call -- found by an
+# independent adversarial review of this issue's own implementation. The
+# other three sub-checks (provenance-disclosure, ascii-only, provenance-
+# marker-scan) have no other PreToolUse hook, so this hook remains their
+# only local coverage.
+#
 # Denies via the PreToolUse hookSpecificOutput JSON on stdout AND exit 2 /
 # stderr (both conventions, for defense in depth), same as
 # hooks/check-pr-skill-audit-disclosure.sh.
@@ -128,7 +138,7 @@ if command -v uv >/dev/null 2>&1 && [ -f "${repo_root}/pyproject.toml" ] && [ -f
 fi
 
 if preflight_output=$(cd "$repo_root" && "${python3_cmd[@]}" "$preflight_script" \
-    --check-diff "$merge_base" HEAD --body-file "$body_file" 2>&1); then
+    --check-diff "$merge_base" HEAD --body-file "$body_file" --skip skill-audit-disclosure 2>&1); then
   preflight_exit=0
 else
   preflight_exit=$?
@@ -146,7 +156,7 @@ fi
 # identical reason: `-q` dropped, output redirected instead so grep
 # always reads to completion.
 if printf '%s' "$preflight_output" | grep '^FAIL ' >/dev/null; then
-  deny "Blocked by hooks/check-pr-body-preflight.sh: this PR body fails the consolidated local preflight (skill-audit-disclosure, provenance-disclosure, ASCII-only, provenance-marker scan). This is the same coverage CI enforces across its own separate gates, computed locally before the push. Re-check with:
+  deny "Blocked by hooks/check-pr-body-preflight.sh: this PR body fails the consolidated local preflight (provenance-disclosure, ASCII-only, provenance-marker scan -- skill-audit-disclosure is covered separately by hooks/check-pr-skill-audit-disclosure.sh). This is the same coverage CI enforces across its own separate gates, computed locally before the push. Re-check with:
 
   uv run --frozen python3 .github/scripts/gitapex_gate_pr_body_preflight.py --check-diff ${merge_base} HEAD --body-file <path>
 

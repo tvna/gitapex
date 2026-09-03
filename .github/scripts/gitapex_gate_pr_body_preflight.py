@@ -54,6 +54,7 @@ keeps working here.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -68,6 +69,15 @@ SKILL_AUDIT_DISCLOSURE = SCRIPTS_DIR / "gitapex_gate_skill_audit_disclosure.py"
 PROVENANCE_DISCLOSURE = SCRIPTS_DIR / "gitapex_gate_provenance_disclosure.py"
 EXTRACT_DIFF_ADDED_LINES = SCRIPTS_DIR / "gitapex_extract_diff_added_lines.py"
 PROVENANCE_MARKER_SCAN = REPO_ROOT / "skills" / "outward-artifact-preflight" / "scripts" / "gitapex_scan_provenance.py"
+PYTHON_PRECONDITION_CHECKER = REPO_ROOT / "hooks" / "gitapex_check_python_precondition.py"
+SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
+
+# Every sub-check name run_all_checks can produce, for --skip's own CLI
+# validation -- kept as a plain tuple (not derived from CheckResult
+# instances, which do not exist until a check actually runs) so an
+# unrecognized --skip value is rejected before any sub-check starts,
+# rather than silently matching nothing.
+SUB_CHECK_NAMES = ("skill-audit-disclosure", "provenance-disclosure", "ascii-only", "provenance-marker-scan")
 
 # Same pathspec provenance-disclosure-gate.yml itself scopes to (the
 # diff-added corpus its own gate script grades) -- see
@@ -197,11 +207,75 @@ def check_provenance_disclosure(body_path: Path, diff_added_corpus: str | None) 
     return CheckResult("provenance-disclosure", completed.returncode == 0, False, output)
 
 
+def _registry_required_packages(gate_id: str) -> list[str]:
+    """Read ``gate_id``'s own ``preconditions.requires_python_packages``
+    from the live ``.gitapex/ssot.json`` registry -- e.g.
+    ``skill-audit-disclosure``'s own ``pydantic`` dependency, transitively
+    needed by its ``--check-diff`` mode's ``gitapex_compute_skill_audit_flags``
+    import. Returns an empty list (never raises) when the registry is
+    unreadable, malformed, or names no such gate: this probe is a
+    best-effort early warning, not itself a source of truth the caller
+    should treat as authoritative -- a missing dependency still surfaces,
+    just less specifically, once the wrapped gate script's own import
+    fails."""
+    try:
+        registry = json.loads(SSOT_PATH.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return []
+    if not isinstance(registry, dict):
+        return []
+    for gate in registry.get("gates", []):
+        if isinstance(gate, dict) and gate.get("id") == gate_id:
+            packages = gate.get("preconditions", {}).get("requires_python_packages", [])
+            return packages if isinstance(packages, list) else []
+    return []
+
+
+def _missing_packages_report(gate_id: str) -> str | None:
+    """Return a human-readable FAIL message naming any of ``gate_id``'s own
+    registered required Python packages that ``sys.executable`` cannot
+    import, or ``None`` when every required package is importable (or none
+    are declared, or the precondition checker itself is unavailable --
+    fails open on the *probe*, matching
+    ``hooks/check-pr-skill-audit-disclosure.sh``'s own tier-1 precondition
+    check: an unprobable precondition is not itself evidence of a missing
+    dependency, and the wrapped gate script's own import failure is still
+    the fail-closed backstop if this probe cannot run).
+
+    Reuses ``hooks/gitapex_check_python_precondition.py`` (issue #1566)
+    rather than re-deriving its own separate-subprocess-per-module probe
+    logic -- the same script `hooks/check-pr-skill-audit-disclosure.sh`'s
+    own tier 1 already calls for the identical reason (issue #1566, closes
+    #1547(a)): a missing dependency previously crashed a bare gate
+    invocation with an unlabeled ``ImportError``, silently misread as an
+    unrelated failure rather than a clear "install this" message.
+    """
+    required = _registry_required_packages(gate_id)
+    if not required or not PYTHON_PRECONDITION_CHECKER.is_file():
+        return None
+    completed = _run((sys.executable, str(PYTHON_PRECONDITION_CHECKER), *required))
+    if completed.returncode == 0:
+        return None
+    output = f"{completed.stdout}{completed.stderr}".strip()
+    return (
+        f"FAIL: this sub-check's own dependencies are not importable by {sys.executable}: {output}. "
+        "Run 'uv sync --group dev' to install them, then re-run this preflight."
+    )
+
+
 def check_skill_audit_disclosure(body_path: Path, check_diff: tuple[str, str] | None) -> CheckResult:
     """Run ``gitapex_gate_skill_audit_disclosure.py --check-diff`` against
     the body file. SKIPPED (not PASS) when no ``--check-diff`` was given --
     see this module's own docstring for why a body-only invocation would
-    otherwise silently read as trivially satisfied."""
+    otherwise silently read as trivially satisfied.
+
+    Probes this gate's own registered Python-package precondition
+    (``_missing_packages_report``) before invoking it: without this, a
+    missing ``pydantic`` surfaced only as a generic, easy-to-misread
+    ``FAIL`` from the wrapped gate script's own crashed import -- the exact
+    defect issue #1566/#1547(a) already fixed once for
+    ``hooks/check-pr-skill-audit-disclosure.sh``'s own tier 1, reintroduced
+    here by wrapping that same gate without carrying the fix over."""
     if check_diff is None:
         return CheckResult(
             "skill-audit-disclosure",
@@ -212,6 +286,9 @@ def check_skill_audit_disclosure(body_path: Path, check_diff: tuple[str, str] | 
         )
     if not SKILL_AUDIT_DISCLOSURE.is_file():
         raise PrBodyPreflightError(f"skill-audit-disclosure sibling script not found at {SKILL_AUDIT_DISCLOSURE}")
+    missing_packages_report = _missing_packages_report("skill-audit-disclosure")
+    if missing_packages_report is not None:
+        return CheckResult("skill-audit-disclosure", False, False, missing_packages_report)
     base_ref, head_ref = check_diff
     completed = _run(
         (sys.executable, str(SKILL_AUDIT_DISCLOSURE), "--check-diff", base_ref, head_ref, "--body-file", str(body_path))
@@ -257,21 +334,43 @@ def build_diff_added_corpus(base_ref: str, head_ref: str) -> str:
     return extract_completed.stdout
 
 
-def run_all_checks(body_path: Path, body_text: str, check_diff: tuple[str, str] | None) -> list[CheckResult]:
-    """Run every sub-check and return all results -- deliberately runs all
-    of them even after an earlier one fails, same rationale as
-    ``gitapex_gate_local_preflight.py``'s own ``run_checks``: reporting the
-    whole set in one pass is the entire point of a consolidated check."""
+def run_all_checks(
+    body_path: Path, body_text: str, check_diff: tuple[str, str] | None, skip: frozenset[str] = frozenset()
+) -> list[CheckResult]:
+    """Run every sub-check not named in ``skip`` and return all results --
+    deliberately runs all of them even after an earlier one fails, same
+    rationale as ``gitapex_gate_local_preflight.py``'s own ``run_checks``:
+    reporting the whole set in one pass is the entire point of a
+    consolidated check.
+
+    ``skip`` exists for exactly one caller today:
+    ``hooks/check-pr-body-preflight.sh`` passes
+    ``--skip skill-audit-disclosure`` because
+    ``hooks/check-pr-skill-audit-disclosure.sh`` already wraps that same
+    gate as its own PreToolUse hook on the identical matchers -- without
+    this, both hooks independently recomputed the identical
+    skill-audit-disclosure verdict (including a duplicated
+    ``git merge-base`` resolution) on every single
+    ``create_pull_request``/``update_pull_request`` call, doubling that
+    sub-check's own latency for no additional coverage. This CLI's own
+    default (``skip`` empty) still runs all four when invoked directly --
+    the single-command convenience issue #1725 asks for is unaffected;
+    only the hook-wired path narrows.
+    """
     diff_added_corpus: str | None = None
-    if check_diff is not None:
+    if check_diff is not None and "provenance-disclosure" not in skip:
         diff_added_corpus = build_diff_added_corpus(*check_diff)
 
-    return [
-        check_skill_audit_disclosure(body_path, check_diff),
-        check_provenance_disclosure(body_path, diff_added_corpus),
-        check_ascii_only(body_text),
-        check_provenance_marker_scan(body_path),
-    ]
+    checks: list[CheckResult] = []
+    if "skill-audit-disclosure" not in skip:
+        checks.append(check_skill_audit_disclosure(body_path, check_diff))
+    if "provenance-disclosure" not in skip:
+        checks.append(check_provenance_disclosure(body_path, diff_added_corpus))
+    if "ascii-only" not in skip:
+        checks.append(check_ascii_only(body_text))
+    if "provenance-marker-scan" not in skip:
+        checks.append(check_provenance_marker_scan(body_path))
+    return checks
 
 
 def format_report(results: list[CheckResult]) -> str:
@@ -321,6 +420,15 @@ def main(argv: list[str] | None = None) -> int:
         "provenance-disclosure's own diff-added corpus), computed locally via git against this ref pair. "
         "Without this, those two sub-checks report SKIPPED rather than a potentially-false PASS.",
     )
+    parser.add_argument(
+        "--skip",
+        action="append",
+        default=[],
+        choices=SUB_CHECK_NAMES,
+        metavar="CHECK_NAME",
+        help="Skip a named sub-check (repeatable). For a caller that already wraps a given check some other "
+        "way (e.g. a separate PreToolUse hook), avoiding a redundant re-run of it here.",
+    )
     args = parser.parse_args(argv)
 
     try:
@@ -345,7 +453,7 @@ def main(argv: list[str] | None = None) -> int:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(body_text)
         try:
-            results = run_all_checks(body_path, body_text, check_diff)
+            results = run_all_checks(body_path, body_text, check_diff, frozenset(args.skip))
         except PrBodyPreflightError as error:
             print(f"error: {error}", file=sys.stderr)
             return 1
