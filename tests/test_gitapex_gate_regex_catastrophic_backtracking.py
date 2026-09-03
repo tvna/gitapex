@@ -389,6 +389,35 @@ def test_a_dynamic_pattern_is_out_of_scope() -> None:
     assert gate._regex_literal_calls(tree) == []
 
 
+def test_defeat_a_function_local_name_never_collides_with_a_module_level_constant() -> None:
+    """Independent review live-confirmed a real false negative in an
+    earlier revision: `_string_constants` walked the whole tree with no
+    scope distinction, so an unrelated function-local `_TMP` in one
+    function collided with (and, via the "assigned more than once" rule,
+    silently dropped resolution of) a genuinely dangerous *module-level*
+    `_TMP` constant sharing that name -- the module-level compile call
+    went ungraded. `_string_constants` now scopes to `tree.body` only, so
+    a function-local assignment of the same name never reaches it at
+    all."""
+    source = (
+        'import re\n\n_TMP = r"-{1,2}[\\w-]+"\n_RE = re.compile(_TMP)\n\n\n'
+        'def build_one():\n    _TMP = "harmless"\n    return _TMP\n'
+    )
+    tree = __import__("ast").parse(source)
+    assert gate._regex_literal_calls(tree) == [(4, r"-{1,2}[\w-]+")]
+
+
+def test_a_function_local_name_assignment_is_never_resolved() -> None:
+    """The other half of the same scoping fix: a function-local `NAME =
+    <literal>` composed into a `re.compile` call inside that same
+    function is deliberately never resolved either (disclosed in the
+    module docstring's own "Known misses") -- `_string_constants` never
+    descends into a function body at all, module-level idiom only."""
+    source = 'import re\n\n\ndef build():\n    _TMP = r"-{1,2}[\\w-]+"\n    return re.compile(_TMP)\n'
+    tree = __import__("ast").parse(source)
+    assert gate._regex_literal_calls(tree) == []
+
+
 def test_a_non_name_assignment_target_is_never_collected() -> None:
     """Tuple-unpacking and attribute assignment are not the simple `NAME =
     <literal>` shape `_string_constants` resolves -- neither crashes it,

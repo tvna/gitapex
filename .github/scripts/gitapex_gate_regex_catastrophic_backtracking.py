@@ -108,6 +108,15 @@ Known misses, disclosed rather than found later
 * A pattern built at runtime from non-literal input (an f-string, string
   formatting, a value read from a file) is never graded -- this gate reads
   source text statically, never executes anything.
+* ``_string_constants`` resolves a reusable prefix constant only at module
+  scope, deliberately: a function-local ``NAME = <literal>`` composed into
+  a ``re.compile`` call inside that same function is never resolved,
+  since walking into function bodies once let an unrelated same-named
+  local variable in a *different* function silently suppress detection
+  of a genuinely dangerous module-level constant sharing that name
+  (live-confirmed during independent review, fixed by narrowing scope
+  rather than by threading full lexical-scope tracking through this
+  gate's own single-pass extraction).
 
 Waiver
 ------
@@ -549,15 +558,26 @@ def _re_module_names(tree: ast.Module) -> frozenset[str]:
 
 
 def _string_constants(tree: ast.Module) -> dict[str, str]:
-    """Collect every `NAME = <string-literal-or-`+`-chain>` assignment in
-    `tree`, keyed by name. A name assigned more than once anywhere in the
-    file is dropped (unresolvable, rather than guessed at from whichever
-    assignment is seen), matching the module docstring's own "Known
-    misses" trade.
+    """Collect every module-level `NAME = <string-literal-or-`+`-chain>`
+    assignment in `tree`, keyed by name. Deliberately module-level only
+    (`tree.body`'s own direct statements, never a descent into a nested
+    function or class body): the documented idiom this resolves is a
+    reusable *module*-level prefix constant (e.g. `_UV_RUN_PREFIX`
+    composed into `_UV_WRAPPED_INVOCATION_RE`). An earlier revision
+    walked the whole tree (`ast.walk`) with no scope distinction at all,
+    which let an unrelated function-local variable in a different
+    function, reusing a common name (`_tmp`, `_pattern`), collide with --
+    and, via the "assigned more than once" rule below, silently drop --
+    resolution of a genuinely dangerous module-level constant sharing
+    that same name; live-confirmed as a real false negative during
+    independent review, not merely hypothesised. A name assigned more
+    than once at module level is dropped (unresolvable, rather than
+    guessed at from whichever assignment is seen), matching the module
+    docstring's own "Known misses" trade.
     """
     resolved: dict[str, str] = {}
     seen_more_than_once: set[str] = set()
-    for node in ast.walk(tree):
+    for node in tree.body:
         if not isinstance(node, ast.Assign) or len(node.targets) != 1:
             continue
         target = node.targets[0]
