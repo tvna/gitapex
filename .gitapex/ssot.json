@@ -218,6 +218,7 @@
       "script": [
         "hooks/check-pr-skill-audit-disclosure.sh",
         "hooks/gitapex_check_skill_audit_disclosure_or_waiver.py",
+        "hooks/gitapex_check_python_precondition.py",
         ".github/scripts/gitapex_gate_skill_audit_disclosure.py",
         ".github/scripts/gitapex_compute_skill_audit_flags.py",
         ".github/scripts/gitapex_skill_description_diff.py",
