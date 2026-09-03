@@ -42,7 +42,8 @@ jobs:
       # provenance-disclosure-gate.yml already uses for its own doc/eval/
       # skill Markdown scope. -U1000000 requests enough diff context that
       # git never needs to split one file's changes into more than one
-      # hunk for any realistic docs/superpowers/specs/*.md file size.
+      # hunk for any realistic docs/superpowers/specs/*.md or
+      # docs/gitapex/specs/*.md file size.
       - name: Extract added lines from changed design docs
         id: diff
         env:

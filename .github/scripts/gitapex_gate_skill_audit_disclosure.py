@@ -34,9 +34,9 @@ check here) instead of a PASS/FAIL-style verdict:
   on the skill's own frontmatter block, computed by the workflow -- this
   script only grades PR-body text, never skill content).
 - `design-doc-adversarial-review`: required when the calling workflow's
-  diff touches a `docs/superpowers/specs/*.md` design doc (added or
-  modified). This is why the workflow's `paths:` trigger list grew to
-  include that glob alongside `skills/**/SKILL.md`.
+  diff touches a `docs/superpowers/specs/*.md` or `docs/gitapex/specs/*.md`
+  design doc (added or modified). This is why the workflow's `paths:`
+  trigger list grew to include those globs alongside `skills/**/SKILL.md`.
 
 Issue #565 (refs #560 repair 5): a fourth process-disclosure check, same
 RAN/NOT-RUN/WAIVED shape as the two above.
@@ -150,8 +150,9 @@ every conditional extension to CI; an agent therefore learned it owed an
 a required check failed on an already-open PR.
 
 The calling workflow decides applicability. It is invoked when the PR's
-diff touches a skills/*/SKILL.md file, a docs/superpowers/specs/*.md
-design doc, a deterministic checker script, or a deterministic gate --
+diff touches a skills/*/SKILL.md file, a docs/superpowers/specs/*.md or
+docs/gitapex/specs/*.md design doc, a deterministic checker script, or a
+deterministic gate --
 the last of which is an *independent* condition, not a subset of the
 checker-script one, even though the two overlap heavily today. The
 workflow's own applicability test keeps them independent deliberately, so
@@ -299,8 +300,9 @@ _PROCESS_DISCLOSURE_CHECKS = (
         cli_flag="--changed-design-docs",
         cli_dest="changed_design_docs",
         help_text=(
-            "Comma-separated docs/superpowers/specs/*.md filenames added "
-            "or modified in this diff (issue #517, refs #277)."
+            "Comma-separated docs/superpowers/specs/*.md or "
+            "docs/gitapex/specs/*.md filenames added or modified in this "
+            "diff (issue #517, refs #277)."
         ),
         fail_subject="changed design doc",
         fail_hint="",

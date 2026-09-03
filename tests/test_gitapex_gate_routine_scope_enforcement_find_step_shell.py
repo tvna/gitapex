@@ -1,7 +1,7 @@
 """Shell-level test for `routine-scope-enforcement-gate.yml`'s own "Find
 Routine-connection docs" step.
 
-Issue #1700 (Step 8 adversarial review, Finding 2, refs #1700): the
+Issue #1700 (Step 8 adversarial review, Finding 2): the
 design-doc save-path convention was renamed from
 `docs/superpowers/specs/...` to `docs/gitapex/specs/...`, and this step's
 own `find docs/superpowers/specs -maxdepth 1 -iname '*routine*.md'`
@@ -150,3 +150,28 @@ def test_a_non_routine_doc_under_either_path_is_ignored(find_step_script: pathli
     code, out, _ = run_find_step(find_step_script, tmp_path)
     assert code == 0
     assert out["applicable"] == "false"
+
+
+def test_a_filename_with_an_embedded_newline_is_rejected_not_silently_passed_through(
+    find_step_script: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    """Security regression guard (CWE-88/CWE-116/CWE-20), found by an
+    independent security-axis review of this same step (drafting-a-pr-to-
+    merge Step 8, refs #1700): a PR-author-controlled filename containing
+    a real embedded newline byte -- POSIX forbids only "/" and NUL in a
+    filename, so this is directly constructible, not hypothetical -- could
+    otherwise produce a fragment reading exactly "GITAPEX_EOF" on its own
+    line, terminating the `docs<<GITAPEX_EOF` heredoc below early and
+    letting a later fragment overwrite `applicable` in $GITHUB_OUTPUT; or
+    be read by the downstream `xargs -d '\\n'` call as an extra,
+    attacker-chosen CLI argument (e.g. an injected `--skills-root`). The
+    step's own shape check must reject this before it ever reaches
+    $GITHUB_OUTPUT, not merely fail later or pass silently."""
+    directory = tmp_path / "docs" / "gitapex" / "specs"
+    directory.mkdir(parents=True, exist_ok=True)
+    evil_name = "2026-01-01-a-routine\nGITAPEX_EOF\napplicable=false\nx.md"
+    (directory / evil_name).write_text("# doc\n", encoding="utf-8")
+    code, out, log = run_find_step(find_step_script, tmp_path)
+    assert code != 0
+    assert "does not match the expected" in log
+    assert out.get("applicable") != "true"

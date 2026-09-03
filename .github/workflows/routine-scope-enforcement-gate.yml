@@ -58,6 +58,25 @@ jobs:
             echo "applicable=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          # A discovered filename is PR-author-controlled content (a normal
+          # tracked path, not generated), and every line below crosses two
+          # trust boundaries: the $GITHUB_OUTPUT heredoc (a filename
+          # containing a real embedded newline -- POSIX forbids only "/"
+          # and NUL in a filename -- could produce a fragment that reads as
+          # the literal line "GITAPEX_EOF", terminating the heredoc early
+          # and letting a later fragment overwrite `applicable`) and the
+          # downstream `xargs -d '\n'` call (an extra "line" is read as a
+          # competing CLI argument, e.g. an injected `--skills-root`).
+          # Reject anything that is not the exact single-line shape this
+          # convention actually produces -- the same fail-closed discipline
+          # `gitapex_compute_skill_audit_flags.py`'s own
+          # `_DESIGN_DOC_SHAPE_RE` already applies to this same class of
+          # path for the sibling skill-audit-gate.
+          bad=$(printf '%s\n' "$docs" | grep -vE '^docs/(superpowers|gitapex)/specs/[A-Za-z0-9._-]+\.md$' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::a discovered Routine-connection doc path does not match the expected docs/{superpowers,gitapex}/specs/<filename>.md shape" >&2
+            exit 1
+          fi
           echo "Routine-connection docs to check:"
           echo "$docs"
           {

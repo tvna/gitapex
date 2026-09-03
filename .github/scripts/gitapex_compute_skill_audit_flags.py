@@ -467,9 +467,10 @@ def compute_flags(
 
     if not (skill_md_lines or design_doc_lines or checker_lines or gate_scripts):
         print(
-            "No added/modified skills/*/SKILL.md, docs/superpowers/specs/*.md, "
-            "or deterministic checker script, and no changed deterministic "
-            "gate, in this diff; skipping disclosure check.",
+            "No added/modified skills/*/SKILL.md, docs/superpowers/specs/*.md "
+            "or docs/gitapex/specs/*.md, or deterministic checker script, "
+            "and no changed deterministic gate, in this diff; skipping "
+            "disclosure check.",
             file=sys.stderr,
         )
         return SkillAuditFlags(applicable=False)
