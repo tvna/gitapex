@@ -132,7 +132,7 @@ OUTPUT_KEYS = (
 # would accept a newline-bearing path into the single-line
 # `$GITHUB_OUTPUT` sink. `gitapex_detect_changed_gate_scripts.py`
 # documents the same pitfall and resolves it the same way.
-_DESIGN_DOC_SHAPE_RE = re.compile(r"docs/superpowers/specs/[A-Za-z0-9._-]+\.md")
+_DESIGN_DOC_SHAPE_RE = re.compile(r"docs/(?:superpowers|gitapex)/specs/[A-Za-z0-9._-]+\.md")
 _CHECKER_SCRIPT_SHAPE_RE = re.compile(
     r"skills/[A-Za-z0-9_-]+/scripts/[A-Za-z0-9._-]+\.py"
     r"|evals/scripts/[A-Za-z0-9._-]+\.py"
@@ -143,7 +143,7 @@ _SKILL_NAME_RE = re.compile(r"[A-Za-z0-9_-]+")
 
 _SKILL_MD_PATHSPECS = ("skills/*/SKILL.md",)
 # No `:(glob)`, deliberately -- see this module's docstring.
-_DESIGN_DOC_PATHSPECS = ("docs/superpowers/specs/*.md",)
+_DESIGN_DOC_PATHSPECS = ("docs/superpowers/specs/*.md", "docs/gitapex/specs/*.md")
 _CHECKER_SCRIPT_PATHSPECS = (
     ":(glob)skills/*/scripts/*.py",
     ":(glob)evals/scripts/*.py",

@@ -251,6 +251,20 @@ def test_a_changed_design_doc_is_reported(diff_step_script, repo, outdir):
     assert out["changed-design-docs"] == "docs/superpowers/specs/2026-01-01-thing.md"
 
 
+def test_a_changed_design_doc_under_the_new_gitapex_specs_path_is_reported(diff_step_script, repo, outdir):
+    """Issue #1700: the design-doc save-path convention was renamed from
+    `docs/superpowers/specs/...` to `docs/gitapex/specs/...`; this step
+    (through `gitapex_compute_skill_audit_flags.py`'s own detection
+    pattern, extended additively) must recognize the new path too,
+    end-to-end through the shipped `run:` block, not only at the
+    module's own unit-test level."""
+    _write(repo, "docs/gitapex/specs/2026-01-01-thing.md", "# doc\n")
+    _commit(repo)
+    code, out, _ = run_diff_step(diff_step_script, repo, outdir)
+    assert code == 0
+    assert out["changed-design-docs"] == "docs/gitapex/specs/2026-01-01-thing.md"
+
+
 def test_a_nested_design_doc_hard_fails_rather_than_being_dropped(diff_step_script, repo, outdir):
     """Deliberately the opposite of the checker-script case above: the
     design-doc pathspec carries no `:(glob)`, so an undecided path shape is

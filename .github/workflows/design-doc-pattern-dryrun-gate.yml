@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, reopened, edited]
     paths:
       - "docs/superpowers/specs/*.md"
+      - "docs/gitapex/specs/*.md"
 
 permissions:
   contents: read
@@ -50,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           added_file="$RUNNER_TEMP/added_design_doc_lines.txt"
-          if ! git diff -U1000000 "$BASE_SHA...$HEAD_SHA" -- 'docs/superpowers/specs/*.md' \
+          if ! git diff -U1000000 "$BASE_SHA...$HEAD_SHA" -- 'docs/superpowers/specs/*.md' 'docs/gitapex/specs/*.md' \
               | uv run -qq --frozen python3 .github/scripts/gitapex_extract_diff_added_lines.py > "$added_file"; then
             echo "::error::git diff/extraction failed between $BASE_SHA and $HEAD_SHA" >&2
             exit 1
