@@ -796,21 +796,53 @@ def test_load_python_dependent_hook_script_names_non_mapping_top_level_returns_n
     assert gate.load_python_dependent_hook_script_names(weird) is None
 
 
-def test_load_python_dependent_hook_script_names_malformed_gate_entries_are_skipped(tmp_path: pathlib.Path) -> None:
+def test_load_python_dependent_hook_script_names_malformed_gate_entries_without_hooks_py_are_skipped(
+    tmp_path: pathlib.Path,
+) -> None:
     """Defeat case: a `gates` array containing shapes this loader must not
-    crash on -- a non-mapping entry, a non-list `script`, a non-mapping
-    `preconditions`, and a non-list `requires_python_packages` -- none of
-    which should raise or contribute a name."""
+    crash on -- a non-mapping entry and a non-list `script` -- neither of
+    which names a `hooks/*.py` target, so neither is "cannot verify":
+    there is nothing here this scan needs to widen its scope with."""
     ssot_path = _write_ssot(
         tmp_path,
         [
             "not-a-mapping",  # type: ignore[list-item]
             {"id": "a", "script": "not-a-list", "preconditions": {"requires_python_packages": ["x"]}},
-            {"id": "b", "script": ["hooks/foo.py"], "preconditions": "not-a-mapping"},
-            {"id": "c", "script": ["hooks/bar.py"], "preconditions": {"requires_python_packages": "not-a-list"}},
         ],
     )
     assert gate.load_python_dependent_hook_script_names(ssot_path) == frozenset()
+
+
+def test_load_python_dependent_hook_script_names_hooks_py_gate_with_malformed_preconditions_returns_none(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Regression, adversarial-review finding (issue #1697): a `gates`
+    entry that DOES name a `hooks/*.py` script but whose own
+    `preconditions` is present and malformed (not a mapping) must fail
+    closed (`None`), not silently skip -- this is the exact per-gate,
+    narrower-trigger mirror of the whole-file fail-open bug this loader
+    was already fixed for once. Skipping this case previously let a
+    single corrupted `preconditions` field mask a real bare invocation
+    of the registered hooks/*.py target while still reporting a false
+    "clean" exit 0."""
+    ssot_path = _write_ssot(
+        tmp_path,
+        [{"id": "b", "script": ["hooks/foo.py"], "preconditions": "not-a-mapping"}],
+    )
+    assert gate.load_python_dependent_hook_script_names(ssot_path) is None
+
+
+def test_load_python_dependent_hook_script_names_hooks_py_gate_with_malformed_requires_packages_returns_none(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Same regression as above, one field narrower: `preconditions` is a
+    mapping, but its own `requires_python_packages` is present and
+    malformed (not a list) -- also fails closed (`None`), not skipped."""
+    ssot_path = _write_ssot(
+        tmp_path,
+        [{"id": "c", "script": ["hooks/bar.py"], "preconditions": {"requires_python_packages": "not-a-list"}}],
+    )
+    assert gate.load_python_dependent_hook_script_names(ssot_path) is None
 
 
 # --- HARD-FAIL promotion of hooks/*.py targets (issue #1697) ---

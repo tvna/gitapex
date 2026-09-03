@@ -296,13 +296,21 @@ def load_python_dependent_hook_script_names(ssot_path: pathlib.Path = SSOT_PATH)
 
     Returns `None` (never an empty result masquerading as "nothing
     registered") when the registry is missing, unreadable, or does not
-    parse to the expected shape: the caller must treat that the same
-    fail-closed way `find_bare_invocations`/`_scan_workflow` already treat
-    an unreadable workflow file -- a "cannot verify" finding, not a
-    silent "no additional targets" pass (adversarial-review finding,
-    issue #1697: a malformed `.gitapex/ssot.json` alongside a real bare
-    invocation of a registered `hooks/*.py` target previously made this
-    whole gate report "No ... bare invocations found" and exit 0)."""
+    parse to the expected shape -- whole-file, or scoped to one `gates`
+    entry that does name a `hooks/*.py` script but whose own
+    `preconditions`/`requires_python_packages` shape is malformed: the
+    caller must treat either the same fail-closed way
+    `find_bare_invocations`/`_scan_workflow` already treat an unreadable
+    workflow file -- a "cannot verify" finding, not a silent "no
+    additional targets" pass (adversarial-review finding, issue #1697: a
+    malformed `.gitapex/ssot.json`, or a single gate entry's own malformed
+    `preconditions`, alongside a real bare invocation of a registered
+    `hooks/*.py` target previously made this whole gate report "No ...
+    bare invocations found" and exit 0 either way). A gate entry that
+    names no `hooks/*.py` script at all, or that genuinely omits
+    `preconditions`/`requires_python_packages` or leaves the latter
+    empty, is not malformed -- it legitimately contributes nothing and is
+    skipped, not fail-closed."""
     try:
         data = json.loads(ssot_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
@@ -317,16 +325,24 @@ def load_python_dependent_hook_script_names(ssot_path: pathlib.Path = SSOT_PATH)
     for gate in gates:
         if not isinstance(gate, dict):
             continue
-        preconditions = gate.get("preconditions")
-        packages = preconditions.get("requires_python_packages") if isinstance(preconditions, dict) else None
-        if not isinstance(packages, list) or not packages:
-            continue
         scripts = gate.get("script")
         if not isinstance(scripts, list):
             continue
-        for script in scripts:
-            if isinstance(script, str) and script.startswith("hooks/") and script.endswith(".py"):
-                names.add(pathlib.PurePosixPath(script).name)
+        hooks_py_scripts = [s for s in scripts if isinstance(s, str) and s.startswith("hooks/") and s.endswith(".py")]
+        if not hooks_py_scripts:
+            continue
+        preconditions = gate.get("preconditions")
+        if preconditions is None:
+            continue
+        if not isinstance(preconditions, dict):
+            return None
+        packages = preconditions.get("requires_python_packages")
+        if packages is None or packages == []:
+            continue
+        if not isinstance(packages, list):
+            return None
+        for script in hooks_py_scripts:
+            names.add(pathlib.PurePosixPath(script).name)
     return frozenset(names)
 
 
