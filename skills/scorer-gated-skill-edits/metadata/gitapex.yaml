@@ -96,22 +96,27 @@ spec:
       anchor: "https://github.com/tvna/gitapex/issues/1648"
       summary: "Redivides the drafting-a-skill/scorer-gated-skill-edits boundary along a how-to-rewrite-vs-evaluate axis (design doc, 2026-08-31). Step 3 names drafting-a-skill as patch author, through its Step 6 only, Step 7 deferred. New required Step 9 dispatches drafting-a-skill's Step 7 once pre-ship, distinct from step 8's recommended pass. Two Stop boundaries reworded: step 9 as where review happens, drafting-a-skill as sole editor."
       outcome:
-        baseCommit: "2ff00c34c897074a619d390c208d66e9c52cf7d3"
+        baseCommit: "be3b3ddd61666ea460d580555255b99ce3428716"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1648"
       summary: "state-management axis 7 (writer-class-B, concurrent edits to one existing target from two peer dispatches sharing a checkout) closed for real this round: the Precondition gate's Relocate sub-step adds the missing explicit `cd` into the self-established worktree, then re-runs the Check comparison as its own completion criterion. An independent re-review confirmed this is a genuine, checkable construction, not restated assertion."
       outcome:
-        baseCommit: "83eb216ebfda43d930a4a6a164545411fd9201e1"
+        baseCommit: "52213559dba876361a97683949e1cfa78dc218a9"
     - kind: caveat
       anchor: "https://github.com/tvna/gitapex/issues/1648"
       summary: "the same round's Cleanup sub-step named `git worktree prune` as the way to clear a stale self-established worktree; per git's own docs, prune only clears admin metadata for a working tree already removed by other means, it does not remove one still on disk. Corrected to `git worktree remove <path>` (+ `git branch -d`), prune's real scope stated."
       outcome:
-        baseCommit: "83eb216ebfda43d930a4a6a164545411fd9201e1"
+        baseCommit: "c13c64376d330d37aeef1b6120a0e98f354c4e5b"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1648"
       summary: "a round-9 re-review found two minor gaps: Cleanup's `git worktree remove`/`git branch -d` have real refusal preconditions (uncommitted changes; an unmerged branch) with no fallback stated -- added, never silently force-overridden. Step 5's rejected-edit log never named its own file locus -- stated as `evals/<skill>/split.md`, the same file step 4's own worked example already cites for the Kept-edit log."
       outcome:
-        baseCommit: "a0d3c270c341028d417ec046eb72b156f5f7ee6f"
+        baseCommit: "1ef5add89cbc4181ac1363ef3d4c31b86024ec9d"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/1632"
+      summary: "an independent fresh review found all four outcome.baseCommit values above pointed at unrelated commits in other skills -- broken citations, though each entry's substantive claim independently checks out. Corrected each to its own entry-adding commit's true immediate parent. Also fixed Step 5's misattribution: the `split.md` Kept-edit-log citation lives in this file's own step 7, not step 4's worked example, which never mentions `split.md`."
+      outcome:
+        baseCommit: "8e8366713ca047192eaa620bda145232de94bcaf"
   skillDependencies:
     requires:
       - drafting-a-skill
