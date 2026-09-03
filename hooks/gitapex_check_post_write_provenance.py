@@ -142,6 +142,11 @@ Usage (matches the JSON the .sh wrapper pipes in)::
                   "tool_input":{"owner":"tvna","repo":"gitapex","pullNumber":1}}' \\
         | python3 hooks/gitapex_check_post_write_provenance.py
 
+A bare pipe here masks `printf`'s own exit status in a non-`pipefail`
+shell (issue #1531) -- harmless for a literal `printf` producer, which
+cannot itself fail in ordinary use, but add `set -o pipefail` first if
+this recipe's producer is ever swapped for a command that can.
+
 Exit codes:
     0  PASS (the stored body scanned clean), or SKIP (the payload names a
        tool this gate does not cover -- self-revalidation, dimension 3).

@@ -31,6 +31,11 @@ Usage:
   python3 gitapex_check_canonical_governance_paths.py --files <path-to-file-list>
   git diff --name-only BASE HEAD | python3 gitapex_check_canonical_governance_paths.py
 
+A bare pipe here masks `git diff`'s own exit status in a non-`pipefail`
+shell (issue #1531): add `set -o pipefail` first, or check `git diff`'s own
+exit code separately, if the caller must detect an upstream failure rather
+than silently classifying whatever partial path list reached stdin.
+
 Input: one file path per line (a file, via --files, or stdin).
 
 Exit code: 0 on a successful run (this is an informational classifier,

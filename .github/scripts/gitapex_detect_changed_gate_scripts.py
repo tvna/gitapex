@@ -121,6 +121,12 @@ Usage::
 
     git diff --name-status BASE...HEAD | uv run --frozen python3 gitapex_detect_changed_gate_scripts.py
 
+A bare pipe here masks `git diff`'s own exit status in a non-`pipefail`
+shell (issue #1531): add `set -o pipefail` first, or check `git diff`'s own
+exit code separately, if the caller must detect an upstream failure rather
+than silently scanning whatever partial `--name-status` output reached
+stdin.
+
 Reads `--name-status` lines on stdin, writes the comma-joined selection to
 stdout (empty line when nothing matched) and diagnostics to stderr, so the
 machine-read channel carries only the payload (dimension 14).

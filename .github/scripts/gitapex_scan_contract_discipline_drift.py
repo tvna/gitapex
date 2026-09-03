@@ -47,6 +47,12 @@ Usage::
            'skills/drafting-a-skill/references/contract-structure.md' \\
       | uv run --frozen python3 .github/scripts/gitapex_scan_contract_discipline_drift.py --diff -
 
+A bare pipe in the second form masks `git diff`'s own exit status in a
+non-`pipefail` shell (issue #1531): add `set -o pipefail` first, or check
+`git diff`'s own exit code separately, if the caller must detect an
+upstream failure rather than silently scanning whatever partial diff
+reached stdin.
+
 Exit codes:
     0  Content lock holds; diff (if any) shows no unacknowledged drift.
     1  A lock drifted, or the diff shows the section changed without the
