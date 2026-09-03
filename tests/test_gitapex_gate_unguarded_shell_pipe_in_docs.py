@@ -293,6 +293,29 @@ def test_no_module_docstring_is_not_a_violation(tmp_path: pathlib.Path) -> None:
     assert gate.find_violations(root) == []
 
 
+def test_empty_python_file_has_no_module_docstring(tmp_path: pathlib.Path) -> None:
+    """An empty file has no statements at all -- `tree.body` is empty, a
+    distinct case from a file whose first statement merely isn't a
+    docstring."""
+    root = _repo(tmp_path)
+    text = ""
+    assert gate._module_docstring_with_start_line(text, pathlib.Path("empty.py")) is None
+    _write(root, "hooks/gitapex_check_empty.py", text)
+    assert gate.find_violations(root) == []
+
+
+def test_non_string_first_statement_has_no_module_docstring(tmp_path: pathlib.Path) -> None:
+    """The first statement can be a bare expression that is not a string
+    constant (here, a bare integer literal) -- distinct from `import sys`
+    (not an `Expr` at all) and from a real docstring (an `Expr` wrapping a
+    string `Constant`)."""
+    root = _repo(tmp_path)
+    text = "42\n"
+    assert gate._module_docstring_with_start_line(text, pathlib.Path("x.py")) is None
+    _write(root, "hooks/gitapex_check_non_string_first.py", text)
+    assert gate.find_violations(root) == []
+
+
 def test_python_file_outside_the_checker_gate_scope_is_not_scanned(tmp_path: pathlib.Path) -> None:
     root = _repo(tmp_path)
     _write(root, "hooks/gitapex_check_example.py", '"""ok\n"""\n')
