@@ -824,7 +824,7 @@ spec:
       anchor: "https://github.com/tvna/gitapex/issues/1531"
       summary: "Unrelated docs-hygiene fix: added a `<!-- gitapex-allow-unguarded-shell-pipe: ... -->` exception marker to gitapex-worked-examples.md's own live-measurement timing transcript, one line, so a new documentation-lint gate (https://github.com/tvna/gitapex/issues/1531) does not misread that transcript's illustrative pipe as an undisclosed merge-gate invocation risk. Recorded here, not by editing the prior branch-final entry above, since this change is not part of this skill's own audit history."
       outcome:
-        lines: "gitapex-worked-examples.md 598->599 (one exception-marker line added); net back to 598 once merged with an unrelated cross-skill code-span-line-break-integrity fix (https://github.com/tvna/gitapex/issues/1698) that independently removed one split-code-span line elsewhere in the same file -- measured directly against the post-merge working tree, not inferred"
+        lines: "gitapex-worked-examples.md 598->599 (one exception-marker line added), then gitapex-worked-examples.md 599->598 once merged with an unrelated cross-skill code-span-line-break-integrity fix (https://github.com/tvna/gitapex/issues/1698) that independently removed one split-code-span line elsewhere in the same file -- measured directly against the post-merge working tree, not inferred"
   skillDependencies:
     requires:
       - evaluating-skill-quality
