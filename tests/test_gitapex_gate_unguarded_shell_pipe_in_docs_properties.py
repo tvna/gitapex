@@ -30,7 +30,8 @@ Which properties are model-based
   Confirmed live against an injected defect: dropping the trailing ``\\b``
   makes a non-consumer word that merely *starts* with a consumer token
   (``pythonic``) match, and this property catches it.
-* :func:`test_has_pipefail_disclosure_is_a_case_insensitive_substring_search`
+* :func:`test_has_pipefail_disclosure_finds_a_planted_case_insensitive_occurrence`
+  and :func:`test_has_pipefail_disclosure_is_false_with_no_planted_occurrence`
   -- **model-based**. The generator plants (or withholds) ``pipefail`` in a
   randomly-cased spelling at a random position in otherwise random text, so
   the oracle (whether it planted the substring) is independent of the
