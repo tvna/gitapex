@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, reopened, edited]
     paths:
       - "docs/superpowers/specs/*.md"
+      - "docs/gitapex/specs/*.md"
 
 permissions:
   contents: read
@@ -41,7 +42,8 @@ jobs:
       # provenance-disclosure-gate.yml already uses for its own doc/eval/
       # skill Markdown scope. -U1000000 requests enough diff context that
       # git never needs to split one file's changes into more than one
-      # hunk for any realistic docs/superpowers/specs/*.md file size.
+      # hunk for any realistic docs/superpowers/specs/*.md or
+      # docs/gitapex/specs/*.md file size.
       - name: Extract added lines from changed design docs
         id: diff
         env:
@@ -50,7 +52,7 @@ jobs:
         run: |
           set -euo pipefail
           added_file="$RUNNER_TEMP/added_design_doc_lines.txt"
-          if ! git diff -U1000000 "$BASE_SHA...$HEAD_SHA" -- 'docs/superpowers/specs/*.md' \
+          if ! git diff -U1000000 "$BASE_SHA...$HEAD_SHA" -- 'docs/superpowers/specs/*.md' 'docs/gitapex/specs/*.md' \
               | uv run -qq --frozen python3 .github/scripts/gitapex_extract_diff_added_lines.py > "$added_file"; then
             echo "::error::git diff/extraction failed between $BASE_SHA and $HEAD_SHA" >&2
             exit 1

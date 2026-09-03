@@ -19,6 +19,7 @@ on:
     paths:
       - "skills/**/SKILL.md"
       - "docs/superpowers/specs/*.md"
+      - "docs/gitapex/specs/*.md"
       - "skills/*/scripts/*.py"
       - "evals/scripts/*.py"
       - ".github/scripts/*.py"
