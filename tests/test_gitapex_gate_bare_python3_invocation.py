@@ -805,6 +805,37 @@ def test_load_python_dependent_hook_script_names_malformed_gate_entries_are_skip
 # --- HARD-FAIL promotion of hooks/*.py targets (issue #1697) ---
 
 
+def test_scan_hook_directly_flags_a_registered_hooks_py_target(tmp_path: pathlib.Path) -> None:
+    """Calls `_scan_hook` directly (not through
+    `find_hooks_shell_indirected_invocations`'s directory-level wrapper)
+    to cover its own new `hard_fail_hooks_py_names` parameter -- the same
+    real defect shape as `test_hooks_shell_indirected_registered_hooks_py_target_is_flagged`
+    below, exercised at the function this repository's own diff actually
+    changed."""
+    hook = tmp_path / "check-pr-skill-audit-disclosure.sh"
+    hook.write_text(
+        "#!/bin/bash\n"
+        'script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"\n'
+        'precondition_script="$script_dir/gitapex_check_python_precondition.py"\n'
+        'precondition_json=$(python3 "$precondition_script" -- pydantic)\n',
+        encoding="utf-8",
+    )
+    findings = gate._scan_hook(hook, frozenset({"gitapex_check_python_precondition.py"}))
+    assert len(findings) == 1
+    assert "precondition_script" in findings[0][2]
+
+
+def test_scan_hook_directly_leaves_an_unregistered_hooks_py_target_unflagged(tmp_path: pathlib.Path) -> None:
+    hook = tmp_path / "check-bash-safety.sh"
+    hook.write_text(
+        "#!/bin/bash\n"
+        'classifier="${repo_root}/hooks/gitapex_check_bash_safety.py"\n'
+        'classifier_output=$(printf %s "$input" | python3 "$classifier" 2>/dev/null)\n',
+        encoding="utf-8",
+    )
+    assert gate._scan_hook(hook, frozenset({"gitapex_check_python_precondition.py"})) == []
+
+
 def test_hooks_shell_indirected_registered_hooks_py_target_is_flagged(tmp_path: pathlib.Path) -> None:
     """Reproduces hooks/check-pr-skill-audit-disclosure.sh's own real
     defect (issue #1697): a bare `python3 "$precondition_script"`
