@@ -38,9 +38,20 @@ implementation is deferred to a follow-up issue via `drafting-issues`.
 ### Evidence: line-break corruption
 
 A line-length histogram over every `skills/*/SKILL.md` and
-`skills/*/references/*.md` file in this repository (≈400 files) peaks
-sharply at 71-72 characters (2,071 and 1,973 lines respectively) and falls
-off fast past 80 (38 lines total above 80). This is consistent with a
+`skills/*/references/*.md` file in this repository (92 files: 30
+`SKILL.md` + 62 `references/*.md`) peaks sharply at 71-72 characters
+(2,071 and 1,973 lines respectively). **Correction (independent
+adversarial review, 2026-09-03):** an earlier draft of this document
+misstated the corpus size as "≈400 files" (an artifact of a `head -400`
+cap on the file-listing command that, in fact, never truncated the real
+92-file list) and understated the count of lines over 80 characters as
+"38" (that number was actually the histogram's own per-length bin count
+*at exactly 80 characters*, not a cumulative count of lines *longer
+than* 80). The real count of lines over 80 characters, excluding fenced
+code blocks, is 851 (measured independently at commit `5111a267`) --
+the peak-at-71-72/before-80 shape itself still holds (this is a
+soft-wrap habit, not a hard 80-character ceiling), but the drop-off
+past 80 is not as sharp as originally claimed. This is consistent with a
 habitual ~74-character soft target, not an enforced rule -- no
 `.editorconfig`, `.markdownlint*`, or `.prettierrc*` exists in this
 repository, and `gitapex_check_skill_shape.py` has no line-length check
@@ -143,9 +154,19 @@ Applying the same `len(content) // 4` estimate to every
 | Metric | Value |
 |---|---|
 | Min / Max | 784 / 10,485 tokens |
-| Mean / Median | 5,027 / 4,496 tokens |
+| Mean / Median | 5,027 / 4,465 tokens |
 | Skills over 5,000 tokens | 13 / 30 (43%) |
-| Skills over 500 lines (existing `BODY_MAX_LINES`) | 4 / 30 (13%) |
+| Skills at or over 500 lines | 4 / 30 (13%) |
+| Skills actually failing `BODY_MAX_LINES` (`<= 500`) today | 3 / 30 (10%) |
+
+**Correction (independent adversarial review, 2026-09-03):** the median
+was previously misstated as 4,496 (an index-based approximation); the
+statistically correct median of an even-sized 30-value set is 4,465. The
+"4/30" line-count figure was also ambiguous as first written -- one of
+those four skills sits at exactly 500 lines, which the existing
+`<= 500` check still passes, so only 3/30 actually fail it today; both
+rows are now shown separately rather than conflating "at the ceiling"
+with "over the ceiling."
 
 The gap between the two percentages is the concrete evidence for why an
 earlier, undocumented attempt to adopt SkillEvaluator was shelved as "too
@@ -175,6 +196,27 @@ false-positive rate, unlike a heuristic that tries to detect "a hyphenated
 word was split" in plain prose generally, which cannot reliably
 distinguish a real compound identifier from an ordinary English word
 wrapped at a hyphenation point.
+
+**Enforcement tier -- unconditional, unlike Decision 3.** Unlike the
+token budget (Decision 3 below), this check carries no advisory/strict
+split: a split code span always FAILs the shape check, for every skill,
+new or existing. **Correction (independent adversarial review,
+2026-09-03):** this document's original draft did not size or authorize
+that choice's own blast radius. Shipping the check unconditionally meant
+every real, pre-existing split code span in the corpus had to be fixed
+first or the check would have broken `test_committed_skill_passes_shape`
+for roughly 20 already-shipped skills -- 106 splits across 30 files, most
+of them outside the three skills this design otherwise touches. Each fix
+is the same mechanical space-join a Markdown renderer already applies to
+the split source (disclosed in the implementing commit, `ee97cca8`), not
+a content rewrite, and it was independently verified (same adversarial
+review) that no skill's actual wording, `## Notes` content, or
+token-budget-advisory status changed as a side effect. The corpus-wide
+sweep itself, however, should have been named as an explicit,
+sized consequence of choosing unconditional enforcement here, the way
+Decision 3's advisory tier was explicitly reasoned through -- recorded
+now as a gap in this document's own process, not only in its
+implementation.
 
 **Rejected alternatives** (see the options history in this document's own
 Evidence section above for the full three-way tradeoff already agreed with
@@ -306,9 +348,11 @@ the repository owner's own account of it.
    Capability-assumption-declaration rationale migrated out of `## Notes`
    under Decision 2? Needs checking against real migrated content during
    implementation, not decided here.
-2. Exact module/function placement for the two new
-   `gitapex_check_skill_shape.py` checks (Decision 1's code-span check,
-   Decision 3's token-budget check) -- left to the implementing PR.
+2. ~~Exact module/function placement for the two new
+   `gitapex_check_skill_shape.py` checks~~ -- **resolved by the
+   implementing PR**: `shape_checks/line_integrity.py`'s
+   `_code_span_integrity_check` (Decision 1) and
+   `shape_checks/token_budget.py`'s `_token_budget_result` (Decision 3).
 
 ## References
 
