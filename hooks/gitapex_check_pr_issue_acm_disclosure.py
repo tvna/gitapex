@@ -116,6 +116,11 @@ Usage (matches the JSON the .sh wrapper pipes in)::
     printf '%s' '{"owner":"tvna","repo":"gitapex","title":"...","body":"Closes #1"}' \\
         | python3 hooks/gitapex_check_pr_issue_acm_disclosure.py
 
+A bare pipe here masks `printf`'s own exit status in a non-`pipefail`
+shell (issue #1531) -- harmless for a literal `printf` producer, which
+cannot itself fail in ordinary use, but add `set -o pipefail` first if
+this recipe's producer is ever swapped for a command that can.
+
 Exit codes:
     0  Allow -- every resolving-cited issue passed, or none was cited but
        some other citation form (Refs/#N) was.

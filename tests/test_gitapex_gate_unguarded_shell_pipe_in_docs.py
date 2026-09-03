@@ -210,6 +210,28 @@ def test_non_reference_markdown_under_skills_is_not_scanned(tmp_path: pathlib.Pa
     assert gate.find_violations(root) == []
 
 
+def test_doubly_nested_skill_md_is_not_scanned(tmp_path: pathlib.Path) -> None:
+    """`skills/*/SKILL.md` must not let `*` cross a `/` -- a SKILL.md nested
+    two levels deep is not `skills/<name>/SKILL.md` and is out of scope.
+    Without the `:(glob)` pathspec magic, git's own default pathspec
+    matching lets a bare `*` span `/`, live-confirmed to otherwise match
+    this exact shape."""
+    root = _repo(tmp_path)
+    _write(root, "hooks/gitapex_check_placeholder.py", '"""ok\n"""\n')
+    _write(root, "skills/foo/nested/SKILL.md", "```bash\ngit log | python3 x.py\n```\n")
+    assert gate.find_violations(root) == []
+
+
+def test_doubly_nested_reference_file_is_not_scanned(tmp_path: pathlib.Path) -> None:
+    """`skills/*/references/*.md` must likewise not let `*` cross a `/` --
+    a file nested one level deeper than skills/<name>/references/ is out of
+    scope, the same class of gap the SKILL.md case above pins."""
+    root = _repo(tmp_path)
+    _write(root, "hooks/gitapex_check_placeholder.py", '"""ok\n"""\n')
+    _write(root, "skills/foo/references/sub/deep.md", "```bash\ngit log | python3 x.py\n```\n")
+    assert gate.find_violations(root) == []
+
+
 # --- Python docstrings: violations -----------------------------------------
 
 
@@ -486,3 +508,112 @@ def test_read_text_called_directly(tmp_path: pathlib.Path) -> None:
     path = tmp_path / "a.md"
     path.write_text("hello\n", encoding="utf-8")
     assert gate._read_text(path) == "hello\n"
+
+
+# --- shell line-continuation (issue #1531 blast-radius review finding) ----
+
+
+def test_pipe_split_across_a_line_continuation_is_caught_in_a_docstring(tmp_path: pathlib.Path) -> None:
+    """The exact live gap a blast-radius review found: this repository's
+    own `Usage::` convention commonly wraps a long producer command onto
+    its own line ending in a backslash, with `| <consumer>` starting the
+    next line -- `_pipe_match`'s own same-line `\\S` requirement would
+    otherwise never see this. Confirmed against real, previously-
+    undetected instances in this repository (e.g.
+    `.github/scripts/gitapex_extract_diff_added_lines.py`) before this
+    fix, all now disclosed via a pipefail caveat in the same change."""
+    root = _repo(tmp_path)
+    _write(
+        root,
+        "hooks/gitapex_check_continuation.py",
+        '"""Usage::\n\n    git diff --name-only BASE HEAD \\\\\n      | python3 gitapex_check_continuation.py\n"""\n',
+    )
+    violations = gate.find_violations(root)
+    assert len(violations) == 1
+    assert violations[0].line == 4
+
+
+def test_pipe_split_across_a_line_continuation_is_caught_in_a_fence(tmp_path: pathlib.Path) -> None:
+    root = _repo(tmp_path)
+    _write(
+        root,
+        "skills/foo/SKILL.md",
+        "```bash\ngit diff --name-only BASE HEAD \\\n  | python3 check.py\n```\n",
+    )
+    violations = gate.find_violations(root)
+    assert len(violations) == 1
+    assert violations[0].line == 3
+
+
+def test_escaped_backslash_at_line_end_is_not_a_continuation(tmp_path: pathlib.Path) -> None:
+    """A literal `\\\\` (two backslashes) at end of line is an escaped
+    backslash, not a shell line-continuation -- the following line's own
+    leading pipe must not be joined to it."""
+    root = _repo(tmp_path)
+    _write(
+        root,
+        "hooks/gitapex_check_escaped.py",
+        '"""Usage::\n\n    echo "literal backslash: \\\\\\\\"\n    | python3 gitapex_check_escaped.py\n"""\n',
+    )
+    assert gate.find_violations(root) == []
+
+
+def test_effective_line_called_directly_on_a_continuation() -> None:
+    """The join keeps whatever whitespace already preceded the backslash
+    (here, a real space) and adds one more before the next line's own
+    (left-stripped) content -- `_PIPE_RE`'s own `[ \\t]*` tolerates either
+    count, so this is a formatting detail, not a correctness requirement."""
+    lines = ["git diff --name-only BASE HEAD \\", "  | python3 x.py"]
+    assert gate._effective_line(lines, 1) == "git diff --name-only BASE HEAD  | python3 x.py"
+
+
+def test_effective_line_called_directly_on_the_first_line() -> None:
+    """Index 0 has no predecessor to join with -- returned unchanged."""
+    lines = ["| python3 x.py"]
+    assert gate._effective_line(lines, 0) == "| python3 x.py"
+
+
+# --- disclosed known gaps, pinned rather than silently left untested -----
+
+
+def test_a_table_cell_equal_to_a_consumer_token_is_a_disclosed_over_report(tmp_path: pathlib.Path) -> None:
+    """Pins a limitation this gate's own docstring discloses rather than
+    claims closed: a Markdown table row whose own cell value happens to
+    equal a `_PIPE_CONSUMERS` token still matches, since nothing here
+    distinguishes a table's `|` column separator from a shell pipe."""
+    root = _repo(tmp_path)
+    _write(root, "skills/foo/SKILL.md", "```text\n| Parser | jq |\n```\n")
+    assert len(gate.find_violations(root)) == 1
+
+
+def test_backtick_exclusion_is_whole_line_not_span_aware_disclosed_gap(tmp_path: pathlib.Path) -> None:
+    """Pins another disclosed limitation: the backtick exclusion for a
+    Python docstring checks whether the LINE carries any backtick at all,
+    not whether the matched pipe itself sits inside one -- an unrelated
+    backtick-quoted term earlier on the same line as a real, unquoted
+    recipe silently exempts that recipe too."""
+    root = _repo(tmp_path)
+    _write(
+        root,
+        "hooks/gitapex_check_mixed_line.py",
+        '"""Usage: run `gitapex_check_mixed_line.py` via: '
+        'git diff --name-only BASE HEAD | python3 gitapex_check_mixed_line.py\n"""\n',
+    )
+    assert gate.find_violations(root) == []
+
+
+def test_marker_exempts_every_match_in_the_block_disclosed_gap(tmp_path: pathlib.Path) -> None:
+    """Pins the disclosed whole-block exemption scope: one allow marker,
+    with a reason describing only the first match, also silently clears a
+    second, unrelated match in the same fenced block."""
+    root = _repo(tmp_path)
+    _write(
+        root,
+        "skills/foo/SKILL.md",
+        "<!-- gitapex-allow-unguarded-shell-pipe: the sed pipe below is formatting only -->\n"
+        "```bash\n"
+        "echo x | sed 's/a/b/'\n"
+        "git log --oneline | python3 unrelated_check.py\n"
+        "```\n",
+    )
+    assert gate.find_violations(root) == []

@@ -5,11 +5,14 @@
 detection logic that gate introduces.
 
 Four properties, one per trigger-bearing helper function -- the example
-suite next door (``tests/test_gitapex_gate_unguarded_shell_pipe_in_docs.py``,
-36 tests) enumerates specific input shapes by hand; these properties instead
+suite next door (``tests/test_gitapex_gate_unguarded_shell_pipe_in_docs.py``)
+enumerates specific input shapes by hand; these properties instead
 generate the shape space each helper's own regex is meant to accept or
 reject, so a boundary condition no hand-written example happens to hit still
-gets exercised.
+gets exercised. Deliberately no test count cited here -- a hardcoded count
+drifts the moment either file gains a test, exactly the staleness this same
+review found in the sibling ``tests/test_gitapex_gate_no_raw_gh_cli_in_docs_
+properties.py``'s own "32 tests" claim (real count higher).
 
 Which properties are model-based
 ---------------------------------

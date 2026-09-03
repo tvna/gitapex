@@ -40,10 +40,12 @@ Two file kinds, discovered via `git ls-files` (tracked files only, matching
   help string or an inline comment quoting the same shape is out of scope,
   deliberately; see "Known gaps" below) of every tracked
   `.github/scripts/*.py`, `skills/*/scripts/*.py`, `evals/scripts/*.py` and
-  `hooks/*.py` file -- the same checker/gate-script glob union
+  `hooks/*.py` file -- the three globs match
   `gitapex_compute_skill_audit_flags.py`'s own `_CHECKER_SCRIPT_PATHSPECS`
-  plus `hooks/**` already treat as this repository's disclosure-bearing
-  script surface.
+  exactly, widened here to also include `hooks/*.py` (that flag-computation
+  module tracks `hooks/**` separately, as a gate-membership signal rather
+  than a checker-script one; this gate folds both into one disclosure-
+  bearing script surface).
 
 Detection
 ---------
@@ -57,7 +59,14 @@ type-hint quoted in prose (`` `list[str] | None` ``, a real, common shape in
 this repository's own docstrings -- confirmed live during this gate's own
 authoring, not assumed) and on an ordinary Markdown table row. Requiring a
 recognized shell-consumer token on the right closes both false-positive
-classes without needing real shell tokenization.
+classes for every real instance found in this repository at authoring
+time, without needing real shell tokenization -- but not in general: a
+table cell (or a type-hint-like phrase) whose own literal value happens to
+equal one of `_PIPE_CONSUMERS` (e.g. a table row documenting the `jq`
+tool, `| Parser | jq |`) still matches, live-confirmed, since nothing here
+distinguishes a table's `|` column separator from a shell pipe. Closing
+that residual case needs table-syntax awareness this gate does not
+implement; see "Known gaps" below.
 
 A match is a violation unless "nearby disclosure" is found, meaning either:
 
@@ -91,7 +100,9 @@ Known gaps, disclosed rather than claimed closed
   recipe line -- the shape #1531's own motivating defect took, and the one
   this gate exists to catch -- is never backtick-wrapped in this
   repository's existing docstring convention, confirmed live against every
-  in-scope script at authoring time (7 real matches, all standalone; every
+  in-scope script at authoring time (20 real matches -- 7 found by the
+  single-line match alone, 13 more found only once `_effective_line`'s own
+  shell-line-continuation join was added -- all standalone; every
   backtick-wrapped candidate was illustrative prose, none a documented
   recipe).
 * Only the *module* docstring is scanned for a Python file -- an argparse
@@ -114,11 +125,30 @@ Known gaps, disclosed rather than claimed closed
   agent performs matches the documented one (issue #1531's own stated
   residual risk) -- it can only flag an unsafe documented example for a
   human/agent to notice.
+* Every exemption below is scoped to the whole enclosing unit, not to the
+  individual matched line: `pipefail` disclosure and the allow marker both
+  clear every match in the same fenced block (Markdown) or the same module
+  docstring (Python), not only the one match adjacent to the disclosure.
+  A block/docstring carrying two unrelated pipe examples, only one of them
+  genuinely covered by the stated disclosure or marker reason, silently
+  clears both -- this gate does not check that a marker's own reason text
+  actually corresponds to every match it exempts. The backtick exclusion
+  for a Python docstring line is likewise a whole-line check (`` "`" in
+  line ``), not position-aware: an unrelated backtick-quoted term earlier
+  on the same line as a real, unquoted recipe would exempt that recipe
+  too. Closing either gap needs a position-aware span check this gate does
+  not implement; a human reviewer reading the stated reason against the
+  block's actual content remains the backstop, the same trust this
+  gate's own sibling already places in `gitapex-allow-raw-gh-cli`'s
+  reason text.
 
 Exit codes: 0 clean, 1 violation(s) found, 2 the scan could not be trusted
 (no in-scope file discovered in either category, or a file could not be
 read/decoded as UTF-8 or parsed as Python) -- the same 0/1/2 split
 `gitapex_gate_no_raw_gh_cli_in_docs.py` uses.
+
+Run via `uv run` (needed for the pydantic import) or via the pytest gate in
+tests/test_gitapex_gate_unguarded_shell_pipe_in_docs.py.
 """
 
 from __future__ import annotations
@@ -175,7 +205,7 @@ _PIPE_RE = re.compile(
 )
 
 # Same CommonMark run-length rule as gitapex_gate_no_raw_gh_cli_in_docs.py's
-# own `_FENCE_OPEN_RE`/`_FENCE_CLOSE_RE": a fence opens on a run of >= 3 of
+# own `_FENCE_OPEN_RE`/`_FENCE_CLOSE_RE`: a fence opens on a run of >= 3 of
 # the same marker character and closes only on a bare run of that same
 # character at least as long.
 _FENCE_OPEN_RE = re.compile(r"^(`{3,}|~{3,})")
@@ -185,7 +215,7 @@ _PIPEFAIL_RE = re.compile(r"pipefail", re.IGNORECASE)
 
 _ALLOW_MARKER_RE = re.compile(r"^[ \t]*<!--[ \t]*gitapex-allow-unguarded-shell-pipe[ \t]*:[ \t]*\S.*-->[ \t]*$")
 
-_MARKDOWN_PATHSPECS = ("skills/*/SKILL.md", "skills/*/references/*.md")
+_MARKDOWN_PATHSPECS = (":(glob)skills/*/SKILL.md", ":(glob)skills/*/references/*.md")
 _PYTHON_PATHSPECS = (
     ":(glob).github/scripts/*.py",
     ":(glob)skills/*/scripts/*.py",
@@ -215,6 +245,29 @@ class Violation:
 def _pipe_match(line: str) -> re.Match[str] | None:
     """The first `cmd | <consumer>`-shaped match on `line`, or None."""
     return _PIPE_RE.search(line)
+
+
+def _effective_line(lines: list[str], index: int) -> str:
+    """`lines[index]` (0-indexed), prefixed with the previous line's own
+    content when that previous line ends in a shell line-continuation
+    backslash.
+
+    This repository's own `Usage::` convention commonly wraps a long
+    producer command onto its own line ending in `\\`, with the `|
+    <consumer>` continuation starting the next line -- `_pipe_match`'s own
+    `\\S` requirement before the pipe would otherwise never see a pipe that
+    is the first token on its own line. Joining the two lines here, the
+    same way a shell itself joins a backslash-continued command before
+    executing it, lets the existing single-line match still find it. A
+    literal `\\\\` (an escaped backslash, not a continuation) is
+    deliberately excluded.
+    """
+    if index == 0:
+        return lines[index]
+    previous = lines[index - 1].rstrip()
+    if previous.endswith("\\") and not previous.endswith("\\\\"):
+        return previous[:-1] + " " + lines[index].lstrip()
+    return lines[index]
 
 
 def _has_pipefail_disclosure(text: str) -> bool:
@@ -277,9 +330,8 @@ def markdown_violations_in_text(text: str) -> list[tuple[int, str]]:
         if _has_pipefail_disclosure(block_text):
             continue
         for lineno in range(open_line + 1, close_line):
-            line = lines[lineno - 1]
-            if _pipe_match(line):
-                found.append((lineno, line.strip()))
+            if _pipe_match(_effective_line(lines, lineno - 1)):
+                found.append((lineno, lines[lineno - 1].strip()))
     return found
 
 
@@ -294,7 +346,7 @@ def docstring_violations_in_text(doc_text: str) -> list[tuple[int, str]]:
     lines = doc_text.split("\n")
     found: list[tuple[int, str]] = []
     for i, line in enumerate(lines, start=1):
-        if not _pipe_match(line):
+        if not _pipe_match(_effective_line(lines, i - 1)):
             continue
         if "`" in line:
             continue
@@ -390,7 +442,22 @@ def find_violations(root: pathlib.Path = REPO_ROOT) -> list[Violation]:
     violations. Raises `ScanError` when neither corpus can be trusted to
     have been checked -- an empty combined match set most plausibly means
     the scan ran against the wrong root, and this gate would otherwise pass
-    while checking nothing."""
+    while checking nothing.
+
+    Deliberately AND-gated, not per-corpus: a real checkout always matches
+    at least this gate's own script under `.github/scripts/*.py`, so a
+    hypothetical future typo narrowing `_MARKDOWN_PATHSPECS` to zero
+    matches would not raise here even under a per-corpus check's own
+    intent -- and gating on either corpus alone breaks every test fixture
+    below that legitimately populates only one category to isolate what it
+    tests (confirmed live: 30 of this file's own tests failed against a
+    per-corpus version of this check, tried and reverted during this
+    gate's own authoring). `test_repository_scan_reaches_a_real_tracked_set`
+    is this repository's own real backstop for that regression instead --
+    it asserts a real file-count floor for each corpus against the actual
+    checkout, so a pathspec narrowed to empty fails CI immediately rather
+    than silently passing this gate.
+    """
     markdown_paths = discover_markdown(root)
     python_paths = discover_python(root)
     if not markdown_paths and not python_paths:
