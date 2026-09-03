@@ -13,11 +13,18 @@
 # consolidated command, wired the same way
 # hooks/check-pr-skill-audit-disclosure.sh already wires its own
 # individual gate -- fail OPEN (exit 0, warning to stderr) on any
-# inconclusive local git state (unresolvable base branch, an unfetched
+# inconclusive local git state that keeps the preflight script from ever
+# being invoked at all (unresolvable base branch, an unfetched
 # origin/<base>, a checkout outside this repository's own .github/
-# scripts) rather than block on a check that could not actually run; CI
-# remains the deterministic backstop regardless of what this hook can
-# determine locally.
+# scripts, a stacked PR with no explicit base -- narrows to the two
+# body-only sub-checks there rather than blocking outright); CI remains
+# the deterministic backstop regardless of what this hook can determine
+# locally. Once the preflight script actually runs, though, fail CLOSED
+# (deny) on any exit it cannot recognize as a genuine per-sub-check
+# verdict -- the same "denying either way is still the safe default"
+# policy hooks/check-pr-skill-audit-disclosure.sh already applies for the
+# identical situation (PR #1213): a check script crashing is a bug to
+# fix, not grounds to silently wave the PR body through.
 #
 # Passes --skip skill-audit-disclosure to the CLI: hooks/check-pr-skill-
 # audit-disclosure.sh already wraps that same gate as its own PreToolUse
@@ -76,12 +83,20 @@ fi
 
 body=$(printf '%s' "$input" | jq -r '.tool_input.body // empty')
 
-# Same empty-body bypass as hooks/check-pr-skill-audit-disclosure.sh: an
-# update_pull_request call not touching the body has nothing new to
-# check locally. create_pull_request's body is optional too, but an
-# absent/empty body on a create call is itself the violation every
-# sub-check here would flag (no disclosure, trivially non-ASCII-clean),
-# so only update_pull_request gets the bypass.
+# Same empty-body bypass shape as hooks/check-pr-skill-audit-disclosure.sh
+# (an update_pull_request call not touching the body has nothing new to
+# check locally), but NOT the same rationale for withholding it from
+# create_pull_request: unlike that sibling hook's own skill-audit-
+# disclosure check (which does flag a body with no disclosure at all),
+# every sub-check this hook actually runs (provenance-disclosure, ascii-
+# only, provenance-marker-scan; skill-audit-disclosure is skipped here)
+# trivially PASSes an empty body -- verified directly against each
+# check's own behavior on "" input, corrected after an independent
+# adversarial review of this issue's own implementation found the
+# original copy-pasted claim did not hold for this hook's own check set.
+# create_pull_request still gets no bypass regardless: it is harmless
+# (a guaranteed-PASS preflight run costs only latency, no false deny/pass
+# risk), and CI enforces the same checks independently either way.
 if [ "$tool_name" = "mcp__github__update_pull_request" ] && [ -z "$body" ]; then
   exit 0
 fi
@@ -102,12 +117,22 @@ if [ ! -f "$preflight_script" ]; then
   exit 0
 fi
 
-# Same base-branch resolution as hooks/check-pr-skill-audit-disclosure.sh:
-# tool_input.base when explicitly supplied (create_pull_request always
-# sends it; update_pull_request only when changing the base), else the
-# repo's own default branch.
+# Same base-branch resolution as hooks/check-pr-skill-audit-disclosure.sh,
+# base_is_explicit tracking included: tool_input.base when explicitly
+# supplied (create_pull_request always sends it; update_pull_request only
+# when changing the base), else the repo's own default branch. On a
+# stacked PR (this PR's real base is another feature branch, not the
+# default branch), falling back to the default branch would compute
+# merge_base against the wrong ancestor and drag the parent branch's own
+# already-reviewed changes into --check-diff's scope -- a false deny on
+# an outward-facing operation caused entirely by the widened scope, the
+# same failure mode hooks/check-pr-skill-audit-disclosure.sh's own
+# base_is_explicit gate already exists to prevent (found here by an
+# independent adversarial review of this issue's own implementation).
 base_branch=$(printf '%s' "$input" | jq -r '.tool_input.base // empty')
+base_is_explicit=yes
 if [ -z "$base_branch" ]; then
+  base_is_explicit=no
   base_branch=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed -E 's#^origin/##') || true
 fi
 
@@ -119,6 +144,19 @@ fi
 if ! merge_base=$(git merge-base "origin/${base_branch}" HEAD 2>/dev/null); then
   echo "Warning: hooks/check-pr-body-preflight.sh could not resolve origin/${base_branch} locally (not fetched?); skipping the local pre-check (CI remains authoritative)." >&2
   exit 0
+fi
+
+# base_is_explicit=no means base_branch is only a guessed default-branch
+# fallback -- on a stacked PR this is the wrong ancestor. Narrow to the
+# two body-only sub-checks (ascii-only, provenance-marker-scan; skill-
+# audit-disclosure is always skipped here regardless) rather than pass a
+# possibly-wrong --check-diff pair, matching hooks/check-pr-skill-audit-
+# disclosure.sh's own degrade-to-narrower-check precedent for the
+# identical situation.
+check_diff_args=(--check-diff "$merge_base" HEAD)
+if [ "$base_is_explicit" = "no" ]; then
+  echo "Notice: hooks/check-pr-body-preflight.sh is skipping the diff-dependent provenance-disclosure sub-check because this call supplied no explicit base branch; a stacked PR would otherwise be graded against the wrong ancestor. Falling back to the two body-only sub-checks (CI's own gates always use the PR's real base regardless)." >&2
+  check_diff_args=()
 fi
 
 if ! body_file=$(mktemp 2>/dev/null); then
@@ -138,7 +176,7 @@ if command -v uv >/dev/null 2>&1 && [ -f "${repo_root}/pyproject.toml" ] && [ -f
 fi
 
 if preflight_output=$(cd "$repo_root" && "${python3_cmd[@]}" "$preflight_script" \
-    --check-diff "$merge_base" HEAD --body-file "$body_file" --skip skill-audit-disclosure 2>&1); then
+    "${check_diff_args[@]}" --body-file "$body_file" --skip skill-audit-disclosure 2>&1); then
   preflight_exit=0
 else
   preflight_exit=$?
@@ -163,7 +201,18 @@ if printf '%s' "$preflight_output" | grep '^FAIL ' >/dev/null; then
 $preflight_output"
 fi
 
-# Not a verdict on the body: the preflight script itself could not
-# complete (a missing sibling script, an unresolvable diff). Fail open --
-# CI remains authoritative regardless.
-echo "Warning: hooks/check-pr-body-preflight.sh could not complete the local pre-check (exit $preflight_exit); skipping (CI remains authoritative). Output: $preflight_output" >&2
+# Every genuinely inconclusive local-git-state case (missing base branch,
+# an unfetched origin/<base>, a plugin-only install with no .github/,
+# mktemp failure) already exited 0 above, before the preflight script was
+# ever invoked. Reaching here means the script actually ran and exited
+# non-zero without a recognized 'FAIL ' line -- gitapex_gate_pr_body_
+# preflight.py only ever exits 0 (all sub-checks passed/skipped) or 1
+# (at least one 'FAIL '-prefixed line, or its own top-level 'error: ...'
+# defensive backstop), so this is the check script itself crashing, not a
+# genuine disclosure failure. Denying either way is still the safe
+# default (an unverifiable body should not silently pass) -- same policy
+# hooks/check-pr-skill-audit-disclosure.sh already applies for the
+# identical situation (PR #1213); this hook previously failed open here
+# instead, an inconsistency an independent adversarial review of this
+# issue's own implementation found.
+deny "Blocked by hooks/check-pr-body-preflight.sh: gitapex_gate_pr_body_preflight.py exited $preflight_exit without a recognized 'FAIL ' line -- this looks like a bug in the check script itself, not a genuine disclosure failure in your PR body. Output: $preflight_output"

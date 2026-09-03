@@ -23,6 +23,7 @@ directly, so re-deriving it here would just be a slower, duplicate copy.
 from __future__ import annotations
 
 import pathlib
+import subprocess
 
 import gitapex_gate_pr_body_preflight as preflight
 import pytest
@@ -65,6 +66,56 @@ def test_run_executes_argv_with_no_shell_and_captures_output() -> None:
 def test_run_pipes_stdin_text_through_when_given() -> None:
     completed = preflight._run(("python3", "-c", "import sys; print(sys.stdin.read().strip())"), stdin_text="piped")
     assert completed.stdout.strip() == "piped"
+
+
+# --- _temp_text_file ---
+
+
+def test_temp_text_file_yields_a_path_holding_the_given_text() -> None:
+    with preflight._temp_text_file("gitapex-test-", "hello world\n") as path:
+        assert path.is_file()
+        assert path.read_text(encoding="utf-8") == "hello world\n"
+        assert path.name.startswith("gitapex-test-")
+    # Unlinked on normal exit -- the whole point of factoring this out of
+    # main()'s own body-file handling and check_provenance_disclosure's own
+    # diff-added-file handling.
+    assert not path.exists()
+
+
+def test_temp_text_file_is_unlinked_even_when_the_with_block_raises() -> None:
+    with pytest.raises(ValueError, match="boom"), preflight._temp_text_file("gitapex-test-", "x") as path:
+        captured_path = path
+        raise ValueError("boom")
+    assert not captured_path.exists()
+
+
+# --- _isolated ---
+
+
+def test_isolated_returns_the_wrapped_check_result_on_success() -> None:
+    result = preflight._isolated("a", lambda: preflight.CheckResult("a", True, False, ""))
+    assert result.passed
+
+
+def test_isolated_converts_a_prbodypreflighterror_into_a_failing_result() -> None:
+    def _boom() -> preflight.CheckResult:
+        raise preflight.PrBodyPreflightError("sibling script missing")
+
+    result = preflight._isolated("some-check", _boom)
+    assert result.name == "some-check"
+    assert not result.passed
+    assert not result.skipped
+    assert "sibling script missing" in result.output
+
+
+def test_isolated_converts_a_timeout_into_a_failing_result() -> None:
+    def _boom() -> preflight.CheckResult:
+        raise subprocess.TimeoutExpired(cmd=["python3"], timeout=1)
+
+    result = preflight._isolated("some-check", _boom)
+    assert result.name == "some-check"
+    assert not result.passed
+    assert "timed out" in result.output
 
 
 # --- run_all_checks ---
@@ -540,13 +591,17 @@ def test_main_with_check_diff_runs_the_diff_dependent_sub_checks(
     assert preflight.main(["--body", str(body), "--check-diff", "BASE", "HEAD"]) == 0
 
 
-def test_main_reports_error_when_a_sub_check_cannot_run(
+def test_main_isolates_a_sub_check_that_cannot_run_from_the_rest(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """main()'s own PrBodyPreflightError handling: a sub-check that cannot
-    run at all (here, a missing skill-audit-disclosure sibling script under
-    --check-diff) is reported as an error and exits 1, not crashed past
-    main()'s own try/except."""
+    """A sub-check that cannot run at all (here, a missing skill-audit-
+    disclosure sibling script under --check-diff) is reported as a FAIL for
+    that sub-check alone and exits 1 -- the other three sub-checks still
+    run and are reported too, not silently lost. Before _isolated existed,
+    this exact scenario raised PrBodyPreflightError straight out of
+    run_all_checks, aborting every other sub-check's own result -- found by
+    an independent adversarial review of this issue's own implementation,
+    reconstructed here as a defeat test against that regression."""
     repo = init_git_repo(tmp_path / "repo")
     (repo / "README.md").write_text("hello\n", encoding="utf-8")
     run_git(["git", "add", "-A"], repo)
@@ -560,20 +615,122 @@ def test_main_reports_error_when_a_sub_check_cannot_run(
     body.write_text(_CLEAN_BODY, encoding="utf-8")
     exit_code = preflight.main(["--body", str(body), "--check-diff", "base", "HEAD"])
     assert exit_code == 1
-    assert "error:" in capsys.readouterr().err
+    out = capsys.readouterr().out
+    assert "FAIL  skill-audit-disclosure" in out
+    assert "sibling script not found" in out
+    # The other three sub-checks still ran and reported PASS -- the whole
+    # point of this isolation.
+    assert "PASS  provenance-disclosure" in out
+    assert "PASS  ascii-only" in out
+    assert "PASS  provenance-marker-scan" in out
 
 
-def test_main_reports_error_when_a_sub_check_times_out(
+def test_main_isolates_a_sub_check_that_times_out_from_the_rest(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """main()'s own subprocess.TimeoutExpired handling: a sub-check whose
-    own subprocess hangs past SUBPROCESS_TIMEOUT_SECONDS is reported as an
-    error and exits 1, not left to crash past main()'s own try/except."""
+    """A sub-check whose own subprocess hangs past SUBPROCESS_TIMEOUT_SECONDS
+    is reported as a FAIL for that sub-check alone -- the other three still
+    run and are reported, via run_all_checks's own _isolated wrapper."""
     slow_script = tmp_path / "slow_provenance_scan.py"
     slow_script.write_text("import time\ntime.sleep(5)\n", encoding="utf-8")
     monkeypatch.setattr(preflight, "PROVENANCE_MARKER_SCAN", slow_script)
     monkeypatch.setattr(preflight, "SUBPROCESS_TIMEOUT_SECONDS", 0.1)
 
+    body = tmp_path / "body.txt"
+    body.write_text(_CLEAN_BODY, encoding="utf-8")
+    exit_code = preflight.main(["--body", str(body)])
+    assert exit_code == 1
+    out = capsys.readouterr().out
+    assert "FAIL  provenance-marker-scan" in out
+    assert "timed out" in out
+    assert "PASS  provenance-disclosure" in out
+    assert "PASS  ascii-only" in out
+
+
+def test_run_all_checks_isolates_build_diff_added_corpus_failure_from_the_rest(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When build_diff_added_corpus itself raises (here, its own
+    diff-added-lines sibling script is missing), only provenance-
+    disclosure is reported as failed (via the diff_added_corpus_error path,
+    the same isolation _isolated applies to every other sub-check) --
+    skill-audit-disclosure, ascii-only, and provenance-marker-scan still
+    run, on the same --check-diff ref pair."""
+    repo = init_git_repo(tmp_path / "repo")
+    (repo / "README.md").write_text("hello\n", encoding="utf-8")
+    run_git(["git", "add", "-A"], repo)
+    run_git(["git", "commit", "-q", "-m", "base"], repo)
+    run_git(["git", "tag", "BASE"], repo)
+    (repo / "README.md").write_text("hello\nmore\n", encoding="utf-8")
+    run_git(["git", "add", "-A"], repo)
+    run_git(["git", "commit", "-q", "-m", "head"], repo)
+
+    dummy = tmp_path / "dummy_skill_audit_gate.py"
+    dummy.write_text(_STAND_IN_SKILL_AUDIT_GATE, encoding="utf-8")
+    monkeypatch.setattr(preflight, "REPO_ROOT", repo)
+    monkeypatch.setattr(preflight, "SKILL_AUDIT_DISCLOSURE", dummy)
+    monkeypatch.setattr(preflight, "EXTRACT_DIFF_ADDED_LINES", tmp_path / "does-not-exist.py")
+
+    body_text = "deterministic-gate-quality: RAN\n"
+    body_path = tmp_path / "body.txt"
+    body_path.write_text(body_text, encoding="utf-8")
+    results = preflight.run_all_checks(body_path, body_text, ("BASE", "HEAD"))
+    by_name = {result.name: result for result in results}
+    assert not by_name["provenance-disclosure"].passed
+    assert "error:" in by_name["provenance-disclosure"].output
+    assert by_name["ascii-only"].passed
+    assert by_name["provenance-marker-scan"].passed
+    assert by_name["skill-audit-disclosure"].passed
+
+
+def test_run_all_checks_reports_a_timed_out_diff_added_corpus_build(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """build_diff_added_corpus's own subprocess.TimeoutExpired is caught
+    the same way its PrBodyPreflightError sibling case already is (see
+    test_run_all_checks_isolates_build_diff_added_corpus_failure_from_the_rest)
+    -- reported as a failing provenance-disclosure result via _isolated's
+    own diff_added_corpus_error path, not raised out of run_all_checks."""
+
+    def _timed_out(base_ref: str, head_ref: str) -> str:
+        raise subprocess.TimeoutExpired(cmd=["git", "diff"], timeout=1)
+
+    monkeypatch.setattr(preflight, "build_diff_added_corpus", _timed_out)
+    body_path = tmp_path / "body.txt"
+    body_path.write_text(_CLEAN_BODY, encoding="utf-8")
+    results = preflight.run_all_checks(body_path, _CLEAN_BODY, ("BASE", "HEAD"), frozenset({"skill-audit-disclosure"}))
+    by_name = {result.name: result for result in results}
+    assert not by_name["provenance-disclosure"].passed
+    assert "timed out" in by_name["provenance-disclosure"].output
+    assert by_name["ascii-only"].passed
+
+
+# --- main(): the outer try/except backstop (run_all_checks itself no longer
+# raises in normal operation -- see _isolated -- but this defensive path
+# stays in place for a future sub-check added without going through it) ---
+
+
+def test_main_backstop_reports_prbodypreflighterror_from_run_all_checks(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def _boom(*args: object, **kwargs: object) -> list[preflight.CheckResult]:
+        raise preflight.PrBodyPreflightError("simulated: a future sub-check bypassed _isolated")
+
+    monkeypatch.setattr(preflight, "run_all_checks", _boom)
+    body = tmp_path / "body.txt"
+    body.write_text(_CLEAN_BODY, encoding="utf-8")
+    exit_code = preflight.main(["--body", str(body)])
+    assert exit_code == 1
+    assert "error: simulated" in capsys.readouterr().err
+
+
+def test_main_backstop_reports_timeoutexpired_from_run_all_checks(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def _boom(*args: object, **kwargs: object) -> list[preflight.CheckResult]:
+        raise subprocess.TimeoutExpired(cmd=["python3"], timeout=1)
+
+    monkeypatch.setattr(preflight, "run_all_checks", _boom)
     body = tmp_path / "body.txt"
     body.write_text(_CLEAN_BODY, encoding="utf-8")
     exit_code = preflight.main(["--body", str(body)])

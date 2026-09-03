@@ -60,6 +60,8 @@ import re
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -97,11 +99,18 @@ PROVENANCE_DIFF_PATHSPECS = (
 # ` `-`~` (0x20-0x7E) are the only characters excluded from the flag.
 _NON_ASCII_RE = re.compile(r"[^ -~\t]")
 
-# Per-subprocess ceiling -- generous for a single PR-body-sized input
-# against a handful of already-fast gate scripts, well under
-# gitapex_gate_local_preflight.py's own 1800s hang guard for a much larger
-# wired set.
-SUBPROCESS_TIMEOUT_SECONDS = 120
+# Per-subprocess ceiling. Bounded by hooks/check-pr-body-preflight.sh's
+# own 30s harness-level PreToolUse timeout (hooks/hooks.json), not by
+# gitapex_gate_local_preflight.py's much larger wired-gate set: that
+# hook can run up to four of these sub-checks sequentially in one call,
+# so a per-subprocess ceiling anywhere near 30s would starve this
+# module's own graceful "a sub-check timed out" handling of any chance
+# to run before the harness kills the whole hook process first (found by
+# an independent adversarial review of this issue's own implementation).
+# 8s leaves comfortable headroom over these already-fast scripts' normal
+# runtime while still fitting multiple sequential sub-checks inside the
+# hook's own 30s budget.
+SUBPROCESS_TIMEOUT_SECONDS = 8
 
 
 class PrBodyPreflightError(Exception):
@@ -149,6 +158,24 @@ def _run(argv: tuple[str, ...], stdin_text: str | None = None) -> subprocess.Com
     )
 
 
+@contextmanager
+def _temp_text_file(prefix: str, text: str) -> Iterator[Path]:
+    """Write ``text`` to a new temp file under ``prefix`` and yield its
+    path, unlinking it on exit regardless of how the ``with`` block ends.
+    Factors out the mkstemp-write-unlink shape both ``main``'s own body
+    file and ``check_provenance_disclosure``'s own diff-added file need,
+    rather than duplicating the same handful of lines twice in this one
+    module."""
+    fd, name = tempfile.mkstemp(prefix=prefix)
+    path = Path(name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        yield path
+    finally:
+        path.unlink(missing_ok=True)
+
+
 def check_ascii_only(body_text: str) -> CheckResult:
     """Every line of ``body_text`` must be ASCII-only (plus bare tabs),
     matching ``skills/outward-artifact-preflight``'s own check 2 default.
@@ -191,18 +218,12 @@ def check_provenance_disclosure(body_path: Path, diff_added_corpus: str | None) 
     if not PROVENANCE_DISCLOSURE.is_file():
         raise PrBodyPreflightError(f"provenance-disclosure sibling script not found at {PROVENANCE_DISCLOSURE}")
     argv = [sys.executable, str(PROVENANCE_DISCLOSURE), "--body", str(body_path)]
-    diff_added_file: Path | None = None
-    try:
-        if diff_added_corpus is not None:
-            fd, name = tempfile.mkstemp(prefix="gitapex-pr-body-preflight-diff-added-")
-            diff_added_file = Path(name)
-            with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                handle.write(diff_added_corpus)
+    if diff_added_corpus is not None:
+        with _temp_text_file("gitapex-pr-body-preflight-diff-added-", diff_added_corpus) as diff_added_file:
             argv.extend(["--diff-added", str(diff_added_file)])
+            completed = _run(tuple(argv))
+    else:
         completed = _run(tuple(argv))
-    finally:
-        if diff_added_file is not None:
-            diff_added_file.unlink(missing_ok=True)
     output = f"{completed.stdout}{completed.stderr}".strip()
     return CheckResult("provenance-disclosure", completed.returncode == 0, False, output)
 
@@ -218,6 +239,14 @@ def _registry_required_packages(gate_id: str) -> list[str]:
     should treat as authoritative -- a missing dependency still surfaces,
     just less specifically, once the wrapped gate script's own import
     fails."""
+    # Not routed through _gitapex_schema_validation.load_json_or_raise
+    # (which pulls in jsonschema): this script is deliberately stdlib-only
+    # and self-contained, matching gitapex_gate_provenance_disclosure.py's
+    # own documented .github/scripts/*.py convention -- adding an
+    # undeclared, unguarded third-party import here would reintroduce the
+    # exact unlabeled-ImportError-crash defect class _missing_packages_report
+    # exists to prevent, for a package this gate's own registry entry does
+    # not even declare a precondition for.
     try:
         registry = json.loads(SSOT_PATH.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
@@ -253,7 +282,14 @@ def _missing_packages_report(gate_id: str) -> str | None:
     required = _registry_required_packages(gate_id)
     if not required or not PYTHON_PRECONDITION_CHECKER.is_file():
         return None
-    completed = _run((sys.executable, str(PYTHON_PRECONDITION_CHECKER), *required))
+    # `--` before the package names, same as hooks/check-pr-skill-audit-
+    # disclosure.sh's own tier-1 call to this identical script (issue
+    # #1566's own fix): without it, argparse's `nargs="*"` would read a
+    # future hyphen-leading package name as an option rather than a
+    # positional value -- the same defeat-tested defect class that fix
+    # already closed for the sibling hook, found again here by an
+    # independent adversarial review of this issue's own implementation.
+    completed = _run((sys.executable, str(PYTHON_PRECONDITION_CHECKER), "--", *required))
     if completed.returncode == 0:
         return None
     output = f"{completed.stdout}{completed.stderr}".strip()
@@ -334,6 +370,29 @@ def build_diff_added_corpus(base_ref: str, head_ref: str) -> str:
     return extract_completed.stdout
 
 
+def _isolated(name: str, run_check: Callable[[], CheckResult]) -> CheckResult:
+    """Run one sub-check, converting a ``PrBodyPreflightError`` (a sibling
+    script genuinely missing, or ``build_diff_added_corpus``'s own ``git
+    diff`` failing) or a ``subprocess.TimeoutExpired`` into a failing
+    ``CheckResult`` for ``name`` instead of letting it propagate out of
+    ``run_all_checks`` and abort every other sub-check -- the same
+    per-check isolation ``gitapex_gate_local_preflight.py``'s own
+    ``run_check`` already applies (any way a check can fail to produce a
+    real verdict becomes a FAIL carrying the error text, never a crash
+    past the rest of the run). Before this helper existed, one sub-check's
+    own setup failure (e.g. an unresolvable ``--check-diff`` ref) silently
+    lost every other sub-check's result too -- direct contradiction of
+    this module's own docstring, which promises the whole set always
+    reports, found by an independent adversarial review of this issue's
+    own implementation."""
+    try:
+        return run_check()
+    except PrBodyPreflightError as error:
+        return CheckResult(name, False, False, f"error: {error}")
+    except subprocess.TimeoutExpired as error:
+        return CheckResult(name, False, False, f"error: a sub-check timed out: {error}")
+
+
 def run_all_checks(
     body_path: Path, body_text: str, check_diff: tuple[str, str] | None, skip: frozenset[str] = frozenset()
 ) -> list[CheckResult]:
@@ -341,7 +400,9 @@ def run_all_checks(
     deliberately runs all of them even after an earlier one fails, same
     rationale as ``gitapex_gate_local_preflight.py``'s own ``run_checks``:
     reporting the whole set in one pass is the entire point of a
-    consolidated check.
+    consolidated check. Every sub-check dispatch below goes through
+    ``_isolated`` so one sub-check's own setup failure never costs the
+    other three their own results.
 
     ``skip`` exists for exactly one caller today:
     ``hooks/check-pr-body-preflight.sh`` passes
@@ -358,18 +419,31 @@ def run_all_checks(
     only the hook-wired path narrows.
     """
     diff_added_corpus: str | None = None
+    diff_added_corpus_error: CheckResult | None = None
     if check_diff is not None and "provenance-disclosure" not in skip:
-        diff_added_corpus = build_diff_added_corpus(*check_diff)
+        try:
+            diff_added_corpus = build_diff_added_corpus(*check_diff)
+        except PrBodyPreflightError as error:
+            diff_added_corpus_error = CheckResult("provenance-disclosure", False, False, f"error: {error}")
+        except subprocess.TimeoutExpired as error:
+            diff_added_corpus_error = CheckResult(
+                "provenance-disclosure", False, False, f"error: a sub-check timed out: {error}"
+            )
 
     checks: list[CheckResult] = []
     if "skill-audit-disclosure" not in skip:
-        checks.append(check_skill_audit_disclosure(body_path, check_diff))
+        checks.append(_isolated("skill-audit-disclosure", lambda: check_skill_audit_disclosure(body_path, check_diff)))
     if "provenance-disclosure" not in skip:
-        checks.append(check_provenance_disclosure(body_path, diff_added_corpus))
+        if diff_added_corpus_error is not None:
+            checks.append(diff_added_corpus_error)
+        else:
+            checks.append(
+                _isolated("provenance-disclosure", lambda: check_provenance_disclosure(body_path, diff_added_corpus))
+            )
     if "ascii-only" not in skip:
         checks.append(check_ascii_only(body_text))
     if "provenance-marker-scan" not in skip:
-        checks.append(check_provenance_marker_scan(body_path))
+        checks.append(_isolated("provenance-marker-scan", lambda: check_provenance_marker_scan(body_path)))
     return checks
 
 
@@ -447,11 +521,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.check_diff:
         check_diff = (args.check_diff[0], args.check_diff[1])
 
-    fd, name = tempfile.mkstemp(prefix="gitapex-pr-body-preflight-body-")
-    body_path = Path(name)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(body_text)
+    with _temp_text_file("gitapex-pr-body-preflight-body-", body_text) as body_path:
+        # run_all_checks isolates every sub-check's own PrBodyPreflightError/
+        # subprocess.TimeoutExpired internally (see _isolated) so this
+        # try/except is now a defensive backstop, not the primary path --
+        # kept in case a future sub-check is added without going through
+        # that same isolation.
         try:
             results = run_all_checks(body_path, body_text, check_diff, frozenset(args.skip))
         except PrBodyPreflightError as error:
@@ -460,8 +535,6 @@ def main(argv: list[str] | None = None) -> int:
         except subprocess.TimeoutExpired as error:
             print(f"error: a sub-check timed out: {error}", file=sys.stderr)
             return 1
-    finally:
-        body_path.unlink(missing_ok=True)
 
     print(format_report(results))
     return 1 if any(not result.skipped and not result.passed for result in results) else 0

@@ -394,7 +394,13 @@
       "kind": "script",
       "script": [
         "hooks/check-pr-body-preflight.sh",
-        ".github/scripts/gitapex_gate_pr_body_preflight.py"
+        ".github/scripts/gitapex_gate_pr_body_preflight.py",
+        ".github/scripts/gitapex_gate_skill_audit_disclosure.py",
+        ".github/scripts/gitapex_gate_provenance_disclosure.py",
+        ".github/scripts/gitapex_extract_diff_added_lines.py",
+        "skills/outward-artifact-preflight/scripts/gitapex_scan_provenance.py",
+        "hooks/gitapex_check_python_precondition.py",
+        "hooks/hooks.json"
       ],
       "rule": "Before a create_pull_request/update_pull_request call proceeds, runs the consolidated local PR-body preflight (.github/scripts/gitapex_gate_pr_body_preflight.py) against the exact draft body: provenance-disclosure (body plus diff-added corpus), an ASCII-only scan, and the provenance-marker scan (skills/outward-artifact-preflight checks 1 and 2), one aggregate PASS/FAIL verdict. The hook itself passes --skip skill-audit-disclosure -- that sub-check is already covered by hooks/check-pr-skill-audit-disclosure.sh's own separate PreToolUse hook on the identical matchers, so this hook does not recompute it a second time; the CLI's own default (no --skip) still runs all four sub-checks including skill-audit-disclosure for a standalone invocation. Issue #1725 (consolidating #1707 and #1711): no single local command previously ran every PR-body-affecting gate together, so an editing session's own memory of which individual script applied to a given body edit was the only thing standing between a locally-passing check and a CI-side failure on a different gate. The diff-dependent provenance-disclosure sub-check reports SKIPPED, not a false PASS, when no base branch/merge-base can be resolved locally -- the hook itself fails OPEN (warns, does not block) on the same inconclusive-local-git-state cases hooks/check-pr-skill-audit-disclosure.sh already fails open on. CI remains the authoritative merge gate for every wrapped sub-check regardless of what this hook determines locally.",
       "planes": ["pretooluse"],
