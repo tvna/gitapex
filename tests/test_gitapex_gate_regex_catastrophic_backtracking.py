@@ -183,6 +183,15 @@ def test_defeat_negation_overlaps_a_set_not_fully_contained_in_its_base() -> Non
     assert gate.has_catastrophic_shape(r"\S+[a-z]+") == "adjacent-overlap"
 
 
+def test_overlaps_direct_calls_true_and_false_cases() -> None:
+    """Direct calls to `_overlaps` (not merely through `has_catastrophic_
+    shape`'s own indirection) -- a plain overlap, a plain disjoint pair, and
+    the unknown-class `None` fail-closed default."""
+    assert gate._overlaps(frozenset("a"), frozenset("ab")) is True
+    assert gate._overlaps(frozenset("a"), frozenset("b")) is False
+    assert gate._overlaps(None, frozenset("a")) is True
+
+
 def test_malformed_character_class_raises_scan_error() -> None:
     with pytest.raises(gate.ScanError):
         gate.has_catastrophic_shape(r"[a-z")
@@ -283,7 +292,59 @@ def test_reversed_range_inside_a_bracket_class_is_treated_as_wide() -> None:
     assert gate.has_catastrophic_shape(r"[z-a]+[0-9]+") == "adjacent-overlap"
 
 
+def test_class_member_set_direct_call_resolves_bracket_members() -> None:
+    """Direct call to `_class_member_set` -- the parser edge-case tests
+    above only reach it through `_parse_branches`'s own indirection."""
+    members, next_index = gate._class_member_set("[abc]", 0)
+    assert members == frozenset("abc")
+    assert next_index == 5
+
+
+def test_nested_quantifier_findings_direct_call() -> None:
+    """Direct call to `_nested_quantifier_findings` on a hand-built
+    `(a+)+`-shaped branch list -- `has_catastrophic_shape`'s own tests
+    above only reach it through the full parse pipeline."""
+    inner = gate._Atom(is_group=False, char_set=frozenset("a"), repeats=True)
+    group = gate._Atom(is_group=True, char_set=None, repeats=True, group_branches=((inner,),))
+    assert gate._nested_quantifier_findings([[group]]) is True
+    non_repeating = gate._Atom(is_group=False, char_set=frozenset("a"), repeats=False)
+    assert gate._nested_quantifier_findings([[non_repeating]]) is False
+
+
+def test_overlapping_adjacent_findings_direct_call() -> None:
+    """Direct call to `_overlapping_adjacent_findings` on a hand-built pair
+    of adjacent overlapping repeating atoms."""
+    first = gate._Atom(is_group=False, char_set=frozenset("a"), repeats=True)
+    second = gate._Atom(is_group=False, char_set=frozenset("a"), repeats=True)
+    assert gate._overlapping_adjacent_findings([[first, second]]) is True
+    disjoint = gate._Atom(is_group=False, char_set=frozenset("b"), repeats=True)
+    assert gate._overlapping_adjacent_findings([[first, disjoint]]) is False
+
+
 # --- AST extraction: which regex literals are graded ------------------------
+
+
+def test_string_constants_direct_call() -> None:
+    """Direct call to `_string_constants` -- the AST-extraction tests above
+    only reach it through `_regex_literal_calls`'s own indirection."""
+    tree = __import__("ast").parse('X = "abc"\nY = X + "def"\n')
+    assert gate._string_constants(tree) == {"X": "abc", "Y": "abcdef"}
+
+
+def test_resolve_literal_string_direct_call() -> None:
+    tree = __import__("ast").parse('X = "abc"\n')
+    assert gate._resolve_literal_string(tree.body[0].value, {}) == "abc"
+    unresolvable = __import__("ast").parse("X = some_call()\n").body[0].value
+    assert gate._resolve_literal_string(unresolvable, {}) is None
+
+
+def test_pattern_argument_direct_call() -> None:
+    positional = __import__("ast").parse('re.compile("abc")').body[0].value
+    assert isinstance(gate._pattern_argument(positional), __import__("ast").Constant)
+    keyword_only = __import__("ast").parse('re.compile(pattern="abc")').body[0].value
+    assert isinstance(gate._pattern_argument(keyword_only), __import__("ast").Constant)
+    no_pattern = __import__("ast").parse("re.compile()").body[0].value
+    assert gate._pattern_argument(no_pattern) is None
 
 
 def test_module_qualified_compile_call_is_graded() -> None:
@@ -429,6 +490,15 @@ def test_regression_the_actual_fix_is_clean(tmp_path: pathlib.Path) -> None:
     `gitapex_gate_bare_python3_invocation.py` -- already fixed -- must not
     be flagged."""
     assert _grade(tmp_path, _ACTUAL_FIX_SOURCE) == []
+
+
+def test_findings_for_source_direct_call() -> None:
+    """Direct call to `findings_for_source` -- the other end-to-end tests in
+    this section only reach it through `find_violations`'s own indirection."""
+    violations, waived = gate.findings_for_source("x.py", _NESTED_QUANTIFIER_SOURCE, {3})
+    assert waived == []
+    assert len(violations) == 1
+    assert violations[0].shape == "nested-quantifier"
 
 
 def test_waived_finding_is_reported_separately(tmp_path: pathlib.Path) -> None:
@@ -657,6 +727,14 @@ def test_main_exits_2_on_a_root_that_does_not_exist(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr("sys.stdin", _FakeStdin(b""))
     exit_code = gate.main(["--root", "/no/such/directory"])
     assert exit_code == 2
+
+
+def test_root_must_exist_direct_call_rejects_a_non_directory() -> None:
+    """Direct call to the pydantic field validator `_root_must_exist` --
+    the exit-2 test above only reaches it through `main`'s own
+    `GateRegexCatastrophicBacktrackingArgs` construction."""
+    with pytest.raises(ValueError, match="must be an existing directory"):
+        gate.GateRegexCatastrophicBacktrackingArgs._root_must_exist(pathlib.Path("/no/such/directory"))
 
 
 def test_main_reads_diff_from_a_file(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:

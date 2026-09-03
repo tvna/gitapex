@@ -678,6 +678,12 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     saw_source_header = False
 
     def _reject_if_hunk_incomplete(boundary: str) -> None:
+        # function-body-test-coverage: WAIVED: a closure nested inside
+        # parse_added_lines, with no module-level name a test can reference
+        # by identifier -- its every call site is already covered by this
+        # file's own malformed-diff fail-closed regression tests below
+        # (test_hunk_declaring_more_lines_than_its_body_has_raises_scan_error
+        # and the other parse_added_lines regressions in that section).
         if in_hunk:
             raise ScanError(
                 f"hunk header for {path!r} declared more pre-/post-image line(s) than its body "
