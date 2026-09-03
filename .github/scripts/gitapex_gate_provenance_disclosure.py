@@ -94,6 +94,11 @@ Usage::
         --body PR_BODY.txt --diff-added ADDED_LINES.txt [--diff-added ...]
     printf '%s' "$PR_BODY" | python3 .github/scripts/gitapex_gate_provenance_disclosure.py
 
+A bare pipe here masks `printf`'s own exit status in a non-`pipefail` shell
+(issue #1531) -- harmless for a literal `printf` producer, which cannot
+itself fail in ordinary use, but add `set -o pipefail` first if this
+recipe's producer is ever swapped for a command that can.
+
 Exit codes:
     0  No offending paragraph in the combined corpus, or a disclosure
        marker is present.

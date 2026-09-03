@@ -33,6 +33,11 @@ Usage:
   python3 gitapex_check_file_ownership_conflicts.py --input <path-to-json>
   echo '{"task-a": ["a.py"], "task-b": ["a.py"]}' | python3 gitapex_check_file_ownership_conflicts.py
 
+A bare pipe here masks `echo`'s own exit status in a non-`pipefail` shell
+(issue #1531) -- harmless for a literal `echo` producer, which cannot
+itself fail in ordinary use, but add `set -o pipefail` first if this
+recipe's producer is ever swapped for a command that can.
+
 Input JSON shape: an object mapping each task ID (string) to a list of
 file paths (strings) that task will write.
 

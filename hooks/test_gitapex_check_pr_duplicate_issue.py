@@ -121,6 +121,120 @@ def test_waiver_line_case_insensitive_and_bulleted() -> None:
     assert checker.has_duplicate_waiver("- duplicate-pr-waiver: intentional second PR, see #99")
 
 
+def test_waiver_line_accepts_a_fence_shaped_reason() -> None:
+    """Regression test (issue #1714, porting issue #1432/PR #1440's own fix
+    for the sibling `skills/drafting-issues/scripts/gitapex_check_acm_present.py`):
+    a `Duplicate-PR-waiver:` line whose own disclosed reason is itself
+    shaped like a fence marker must still be detected -- the marker sits
+    mid-line after "Duplicate-PR-waiver: ", never as the first
+    non-whitespace content of its own line, so per CommonMark/GitHub fence
+    syntax it opens no real code fence and `_strip_fences()` must leave the
+    reason alone.
+
+    Before the fix both fence regexes matched a marker anywhere in the
+    text, so each swallowed the reason before `_WAIVER_RE` ever saw it; the
+    two cases below pin one regex apiece -- the first
+    `_UNTERMINATED_FENCE_RE`, the second `_FENCE_RE`."""
+    assert checker.has_duplicate_waiver("Some PR description.\n\nDuplicate-PR-waiver: ~~~\n")
+    assert checker.has_duplicate_waiver("Duplicate-PR-waiver: ```\nreal content after\n```\n")
+
+
+def test_waiver_line_rejected_inside_a_list_item_fenced_block() -> None:
+    """Regression test (issue #1714, porting issue #1432's own adversarial
+    review): a fence opened on the same line as a list-item marker (`- ```)
+    is still a genuine CommonMark fence -- the marker is the first
+    non-whitespace content of the list item's own content, not merely of
+    the raw line. A fabricated waiver line inside the list-fenced block
+    must still be rejected, and a real waiver line elsewhere in the body
+    must still be detected regardless of an unrelated list-fenced block."""
+    assert not checker.has_duplicate_waiver(
+        "## Facts\n\n- The requester wrote, verbatim:\n- ```\n  Duplicate-PR-waiver: none\n  ```\n"
+    )
+    assert checker.has_duplicate_waiver(
+        "- Reproduction:\n- ```\n  pytest -q\n  ```\n\nDuplicate-PR-waiver: intentional second PR\n"
+    )
+
+
+def test_waiver_line_rejected_inside_a_bare_cr_fenced_block() -> None:
+    """Regression test (issue #1714, porting issue #1432's own adversarial
+    review): `has_duplicate_waiver()` normalizes `\\r`/`\\r\\n` to `\\n`
+    before `_strip_fences()` ever runs (module docstring), so through this
+    real call path the bare CR below is already gone by the time the fence
+    regexes see it -- this pins the end-to-end pipeline's own behavior, not
+    `_CONTAINER_PREFIX`'s own `\\r` alternative specifically (that is the
+    next test's job)."""
+    assert not checker.has_duplicate_waiver("intro\n\r```\nDuplicate-PR-waiver: none\n```\n")
+
+
+def test_strip_fences_rejects_a_bare_cr_fenced_block_without_normalization() -> None:
+    """Regression test (issue #1714, adversarial-review follow-up: the
+    prior test above pins `has_duplicate_waiver()`'s own CR-normalization
+    step, which runs before `_strip_fences()` and so never actually
+    exercises `_CONTAINER_PREFIX`'s own `[ \\t\\r]*` -- not `[ \\t]*` --
+    alternative through that call path). Calls `_strip_fences()` directly
+    on unnormalized text carrying a bare CR (not part of a CRLF pair,
+    itself a CommonMark line ending) immediately before a fence marker, to
+    confirm the container prefix's own `\\r` branch is genuinely load-
+    bearing: a real fenced block using a bare CR is still stripped, and a
+    genuine waiver line inside it is still removed as fence content, not
+    merely as a side effect of normalization elsewhere."""
+    stripped = checker._strip_fences("intro\n\r```\nDuplicate-PR-waiver: none\n```\n")
+    assert "Duplicate-PR-waiver" not in stripped
+
+
+def test_waiver_line_rejected_inside_a_blockquote_fenced_block() -> None:
+    """Regression test (issue #1714, adversarial-review follow-up, twice
+    corrected): the container prefix's own blockquote (`>`) alternative
+    was live-verified correct but exercised by none of this file's
+    original five new tests -- a coverage gap in what
+    `defeat-test-disclosure` in this PR's own body claims.
+
+    An earlier version of this test asserted through
+    `has_duplicate_waiver()` alone and was vacuous: `_WAIVER_RE`'s own
+    line-prefix (`^[ \\t]*[-*]?[ \\t]*`) never permits a `>` marker at
+    all, so `not has_duplicate_waiver("> ``` \\n> Duplicate-PR-waiver:
+    ...")` passed regardless of whether the blockquote-fenced block was
+    ever actually stripped -- a second isolated review round caught this
+    by confirming, empirically, that removing the `>` alternative from
+    `_CONTAINER_PREFIX` left the test passing unchanged. This version
+    asserts on `_strip_fences()`'s own output directly (the same fix
+    already applied to the bare-CR test above), which does distinguish
+    "the blockquote-fenced block was stripped" from "`_WAIVER_RE` never
+    matched a `>`-prefixed line in the first place"."""
+    stripped = checker._strip_fences("> ```\n> Duplicate-PR-waiver: none\n> ```\n")
+    assert "Duplicate-PR-waiver" not in stripped
+    assert checker.has_duplicate_waiver("> ```\n> pytest -q\n> ```\n\nDuplicate-PR-waiver: intentional second PR\n")
+
+
+def test_waiver_line_rejected_inside_an_ordered_or_plus_fenced_block() -> None:
+    """Regression test (issue #1714, porting issue #1432's own second
+    adversarial review): the ordered-list (`1. `) and `+`-bullet branches
+    of the container prefix are exercised here too, not only the `-`
+    bullet and bare-CR paths above."""
+    assert not checker.has_duplicate_waiver("1. ```\n  Duplicate-PR-waiver: none\n  ```\n")
+    assert not checker.has_duplicate_waiver("+ ```\n  Duplicate-PR-waiver: none\n  ```\n")
+
+
+def test_waiver_line_does_not_catastrophically_backtrack_on_a_whitespace_padded_container_prefix() -> None:
+    """Regression test (issue #1714, porting issue #1432's own second
+    adversarial review, security-tier CWE-1333): the container prefix
+    hoists its leading whitespace out of the repeated group rather than
+    placing it inside each alternative, which was found exploitable as a
+    ReDoS (clean exponential blowup, a sub-100-byte adversarial input
+    already exceeding several seconds). Asserts the fix holds by giving the
+    adversarial input a hard wall-clock budget a catastrophic-backtracking
+    regex could never meet, rather than merely asserting on the output
+    value."""
+    import time
+
+    payload = "-  " * 200 + "x"
+    start = time.perf_counter()
+    result = checker.has_duplicate_waiver(payload)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 2.0, f"took {elapsed:.3f}s on a {len(payload)}-char adversarial input -- possible ReDoS regression"
+    assert result is False
+
+
 # --- fetch_open_pull_requests -------------------------------------------
 
 

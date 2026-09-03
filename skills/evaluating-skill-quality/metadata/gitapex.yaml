@@ -581,6 +581,15 @@ spec:
         verdict: fixed
         before: 0.666667
         after: 1.0
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1698"
+      summary: "Portability rationale (migrated from SKILL.md Notes per the new Notes-vs-metadata axis): self-contained -- carries its own rubric and bundled read-only gitapex_check_skill_shape.py, with no control dependency outside its own directory; evals/docs citations are barred unconditionally."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1698"
+      summary: "Downstream verdict consumption (migrated from SKILL.md Notes): gitapex_gate_skill_audit_disclosure.py (wired by skill-audit-gate.yml) parses a PR body Skill audit evidence section for the literal verdict tokens WELL-FORMED-AND-MATURE / WELL-FORMED-NOT-MATURE / NOT-WELL-FORMED or WAIVED: reason, blocking the PR when absent -- checks disclosure only, not soundness, per adversarial-self-audit.md: a green gate is not confirmation this review judgment was sound."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1698"
+      summary: "Terminology substitution only in the Contract discipline section: Mechanism fit -> Agentic operation mechanism-fit (see https://github.com/tvna/gitapex/issues/1619), no change to either rules substance; the sibling drafting-a-skill/references/contract-structure.md needed no matching edit. Migrated from an inline rubric.md HTML comment per the new Notes-vs-metadata axis."
   skillDependencies:
     requires: []
     relatedTo:

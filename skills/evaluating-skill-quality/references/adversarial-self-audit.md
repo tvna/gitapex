@@ -167,8 +167,7 @@ back, so it holds two populations, and the difference is load-bearing:
   through whatever review gate governs the repository carrying it.
 - **Same-run** -- an entry this run appended, per step 4 below. It passed
   no gate. The file's own provenance does not transfer to a line added
-  mid-run, and fact-shaped wording (`Result: fails isolation`, `Verified
-  alternative:`) does not make it one.
+  mid-run, and fact-shaped wording (`Result: fails isolation`, `Verified alternative:`) does not make it one.
 
 A later step in the same run must not read a Same-run entry back as an
 established record. It relies instead on the two control outcomes that run
@@ -260,8 +259,7 @@ check does not rely on.
 - **Identifying signal**: a `CLAUDE_CODE_REMOTE=true` environment variable
   is present, and the harness exposes an `Agent` tool for subagent dispatch
   whose subagents run inside the same session/environment as the caller
-  (observed `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default`; `claude
-  --version` reported `2.1.220 (Claude Code)` at time of test).
+  (observed `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default`; `claude --version` reported `2.1.220 (Claude Code)` at time of test).
 - **Mechanism tested**: dispatching a subagent through the harness's `Agent`
   tool, pointed only at a project-instruction-file-free scratch copy of the
   target material (the scratch directory's own full ancestry was
@@ -287,9 +285,7 @@ check does not rely on.
   re-run that procedure in full on any mismatch -- never extend this
   entry's conclusion to a platform or version it was not actually tested on.
 - **Reconfirmed 2026-07-28**: same identifying signals as above
-  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
-  cloud_default`, `claude --version` again reported `2.1.220 (Claude
-  Code)`). Positive control, run from this repository's own root, quoted
+  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE= cloud_default`, `claude --version` again reported `2.1.220 (Claude Code)`). Positive control, run from this repository's own root, quoted
   real project-instruction content; negative control, run from a working
   directory whose full parent chain was directly confirmed to contain no
   `CLAUDE.md`/`AGENTS.md`, reported none loaded. The verified alternative
@@ -336,8 +332,7 @@ check does not rely on.
   version suffix here per this repository's own illustrative-model-
   identifier rule), plus a methodology pitfall found along the way.**
   Same identifying signals as
-  above (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
-  cloud_default`, `claude --version` again `2.1.220 (Claude Code)`). Run
+  above (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE= cloud_default`, `claude --version` again `2.1.220 (Claude Code)`). Run
   while battle-testing a sibling skill in this repository whose Procedure
   needed that same fable-tier model selected for the cold-enumeration step
   (see `battle-testing-a-skill`'s own citation of fable for blind-spot/
@@ -369,9 +364,7 @@ check does not rely on.
     does not repeat the same mistake.
 - **Reconfirmed 2026-08-08, at a newer CLI version, with a second
   methodology pitfall found.** Same identifying signals as above
-  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
-  cloud_default`), except `claude --version` now reports `2.1.226 (Claude
-  Code)` rather than the `2.1.220` every entry above was pinned to -- so
+  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE= cloud_default`), except `claude --version` now reports `2.1.226 (Claude Code)` rather than the `2.1.220` every entry above was pinned to -- so
   this is a fresh run of the Verification procedure at a version none of
   those entries covered, not a restatement of them. Positive control, run
   from this repository's own root with the real `$HOME`, quoted a real,
@@ -398,16 +391,14 @@ check does not rely on.
     `CLAUDE.md`/`AGENTS.md` and that the dispatched agent's self-report
     still says none loaded. Both were re-run and both held for the
     2026-08-08 run above.
-  - **Caveat on "read-only" when the dispatch runs as uid 0:** a `chmod -R
-    a-w` snapshot is advisory only for a root process, which bypasses the
+  - **Caveat on "read-only" when the dispatch runs as uid 0:** a `chmod -R a-w` snapshot is advisory only for a root process, which bypasses the
     mode bits. Under that condition "read-only snapshot" means
     caller-created and not written by the dispatch, not an OS-enforced
     guarantee; state which of the two a given run actually had rather than
     implying the stronger one.
 - **Reconfirmed 2026-08-30, at a newer CLI version, Same-run, unreviewed.**
   Same identifying signals as above (`CLAUDE_CODE_REMOTE=true`,
-  `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default`), except `claude
-  --version` now reports `2.1.251 (Claude Code)`, a version none of the
+  `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default`), except `claude --version` now reports `2.1.251 (Claude Code)`, a version none of the
   entries above cover, so this is a fresh Verification procedure run, not a
   restatement. Run while battle-testing `executing-a-branch-plan` via
   `battle-testing-a-skill`. Auth check first: `claude -p` authenticated
@@ -433,8 +424,8 @@ check does not rely on.
   Step 8's inner layer, via `reviewing-an-artifact`'s Step 0 specialist
   deferral). Positive control (real `$HOME`, cwd holding a synthetic
   sentinel `CLAUDE.md` outside any real repository): correctly quoted the
-  sentinel phrase, both with a plain read-only ask and with `--allowedTools
-  "Read"` used to have the dispatch invoke the `Read` tool on the file
+  sentinel phrase, both with a plain read-only ask and with
+  `--allowedTools "Read"` used to have the dispatch invoke the `Read` tool on the file
   itself rather than relying on automatic context injection alone -- both
   variants correctly surfaced the sentinel content. Negative control
   (identical cwd change, no `CLAUDE.md`/`AGENTS.md` anywhere in its full
@@ -532,15 +523,13 @@ check does not rely on.
   simulated dispatch, not this skill's own real `Subagent dispatch`
   procedure -- and the resulting scores were reported as genuine. Once
   caught mid-cycle, a genuine re-dispatch of the same fixtures, this time
-  with `.claude-plugin/marketplace.json` copied into the target and `claude
-  plugin marketplace add`/`claude plugin install gitapex@gitapex` actually
+  with `.claude-plugin/marketplace.json` copied into the target and `claude plugin marketplace add`/`claude plugin install gitapex@gitapex` actually
   run first, retracted the prior "zero regressions" claim for two of three
   motivating fixtures. Full before/after numbers, and the retraction
   writeup: this skill's own `eval-status.md` and `metadata/gitapex.yaml`
   sidecar's decision/audit/caveat/deferral entries for that cycle.
 - **Companion flags, also verified necessary in that same re-dispatch**: run
-  the dispatch itself with `--permission-mode acceptEdits --allowedTools
-  "Bash(python3 *)" "Bash(git *)"` (narrowly scoped, not a blanket bypass) --
+  the dispatch itself with `--permission-mode acceptEdits --allowedTools "Bash(python3 *)" "Bash(git *)"` (narrowly scoped, not a blanket bypass) --
   without it, the shape-checker step this skill's own Procedure step 3
   requires hits a Bash-approval prompt the default permission mode blocks
   on, which silently truncates the dispatch's output to a bare approval
@@ -567,9 +556,7 @@ check does not rely on.
   later reader must not treat it as established without re-running the
   Verification procedure itself, or confirming it has since merged).
 - **Identifying signal**: same platform as the entries above
-  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
-  cloud_default`), but `claude --version` now reports `2.1.233 (Claude
-  Code)`, newer than any entry above (last: `2.1.226`, 2026-08-08) -- a
+  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE= cloud_default`), but `claude --version` now reports `2.1.233 (Claude Code)`, newer than any entry above (last: `2.1.226`, 2026-08-08) -- a
   fresh run of the Verification procedure at a version none of those
   entries covered, not a restatement of them.
 - **Mechanism tested**: `claude -p` reading its prompt from stdin, invoked
@@ -577,14 +564,12 @@ check does not rely on.
   full parent-directory ancestry, directly confirmed), with **no**
   `--dangerously-skip-permissions` and no other permission-mode flag --
   every earlier entry in this section relied on some form of permission
-  bypass (`--dangerously-skip-permissions`, or `--permission-mode
-  acceptEdits`/`dontAsk` plus `--allowedTools`) to avoid a non-interactive
+  bypass (`--dangerously-skip-permissions`, or `--permission-mode acceptEdits`/`dontAsk` plus `--allowedTools`) to avoid a non-interactive
   dispatch stalling on an approval prompt it can never answer.
 - **Result: `--dangerously-skip-permissions` is itself blocked outright on
   this session, a new finding distinct from the isolation question.**
   Invoking `claude -p` with a review prompt and this flag added returned
-  immediately with `Permission for this action was denied by the Claude
-  Code auto mode classifier. Reason: Blocked by classifier` -- no dispatch
+  immediately with `Permission for this action was denied by the Claude Code auto mode classifier. Reason: Blocked by classifier` -- no dispatch
   occurred at all. Retrying the identical prompt with the bypass flag
   dropped entirely was **not** blocked and completed normally. The
   two-control isolation test was therefore run with the plain (no-bypass)
@@ -628,9 +613,7 @@ check does not rely on.
   Verification procedure on any identifying-signal mismatch (see the
   unconditional check above).
 - **Reconfirmed 2026-08-25**: same identifying signals as above
-  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
-  cloud_default`), but `claude --version` now reports `2.1.241 (Claude
-  Code)`, newer than the `2.1.233` the entry above covers -- a fresh run of
+  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE= cloud_default`), but `claude --version` now reports `2.1.241 (Claude Code)`, newer than the `2.1.233` the entry above covers -- a fresh run of
   the Verification procedure at a version that entry did not cover, run
   ahead of a same-session round of `battle-testing-a-skill`/
   `evaluating-skill-quality` dispatches that used this mechanism. Same
@@ -646,9 +629,7 @@ check does not rely on.
   permission-bypass flag. Scratch directories deleted after recording the
   outcome, per the Verification procedure's own step 1.
 - **Same-run, unreviewed**: same identifying signals as above
-  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
-  cloud_default`), but `claude --version` now reports `2.1.246 (Claude
-  Code)`, newer than the `2.1.241` the entry above covers -- a fresh run of
+  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE= cloud_default`), but `claude --version` now reports `2.1.246 (Claude Code)`, newer than the `2.1.241` the entry above covers -- a fresh run of
   the Verification procedure ahead of a `scorer-gated-skill-edits` held-out
   gate cycle for two rubric.md edits addressing dimension 5 and dimension 6
   NOT-MATURE findings. Same variant (prompt
@@ -666,9 +647,7 @@ check does not rely on.
 
 - **Reconfirmed 2026-08-25 (later run, same day), at a newer CLI version.**
   Same identifying signals as the entry immediately above
-  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=
-  cloud_default`), but `claude --version` now reports `2.1.245 (Claude
-  Code)`, newer than the `2.1.241` that entry covers -- a fresh run of the
+  (`CLAUDE_CODE_REMOTE=true`, `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE= cloud_default`), but `claude --version` now reports `2.1.245 (Claude Code)`, newer than the `2.1.241` that entry covers -- a fresh run of the
   Verification procedure at a version that entry did not cover, run ahead
   of a same-session `battle-testing-a-skill`/`evaluating-skill-quality`
   round for this repository's own `executing-a-branch-plan` and
@@ -687,8 +666,7 @@ check does not rely on.
   describes -- deleted once the round's dispatches completed.
 - **Same-run, unreviewed** (per Trust class above): same identifying
   signals as the entries above (`CLAUDE_CODE_REMOTE=true`,
-  `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default`), but `claude
-  --version` now reports `2.1.251 (Claude Code)`, newer than the `2.1.246`
+  `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default`), but `claude --version` now reports `2.1.251 (Claude Code)`, newer than the `2.1.246`
   the entry above covers -- a fresh run of the new unconditional
   identifying-signal comparison this Verification procedure section now
   requires (rather than a discretionary "looks stale" judgment), run ahead

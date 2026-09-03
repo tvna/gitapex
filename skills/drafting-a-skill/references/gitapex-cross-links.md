@@ -15,7 +15,7 @@ Loaded when this copy of the skill's own files lives in the gitapex repository -
 ## Deterministic-checker commands (Step 6)
 
 ```
-python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py --allowed-root <repo-root> skills/<new-skill-name>
+python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py --strict-token-budget --allowed-root <repo-root> skills/<new-skill-name>
 python3 skills/evaluating-skill-quality/scripts/gitapex_scan_execution_requirements_drift.py skills/<new-skill-name>
 ```
 

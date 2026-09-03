@@ -81,6 +81,11 @@ Usage (matches the JSON the .sh wrapper pipes in)::
     printf '%s' '{"owner":"tvna","repo":"gitapex","title":"...","body":"Closes #1"}' \\
         | python3 hooks/gitapex_check_pr_duplicate_issue.py
 
+A bare pipe here masks `printf`'s own exit status in a non-`pipefail`
+shell (issue #1531) -- harmless for a literal `printf` producer, which
+cannot itself fail in ordinary use, but add `set -o pipefail` first if
+this recipe's producer is ever swapped for a command that can.
+
 Exit codes:
     0  Allow -- no resolving citation on the new PR, a waiver is present,
        or no other open PR cites the same issue(s).
@@ -130,7 +135,31 @@ _PER_PAGE = 100
 # closed" to "fails open on hook-runner cancellation" again.
 _MAX_PAGES = 10
 
-_FENCE_RE = re.compile(r"```.*?```|~~~.*?~~~", re.DOTALL)
+# The CommonMark "block container" prefix that can precede a fence marker
+# and still have it open a real fence: zero or more list-item markers
+# (`- `/`* `/`+ `/`1. `/`1) `) and/or blockquote markers (`>`), plus any
+# leading/trailing whitespace. `[ \t\r]*`, not `[ \t]*`: a bare CR (not
+# part of a CRLF pair) is itself a CommonMark line ending, so a marker
+# following one still opens a genuine fence. Ported verbatim (issue #1714)
+# from `skills/drafting-issues/scripts/gitapex_check_acm_present.py`'s own
+# `_CONTAINER_PREFIX` (issue #1432 / PR #1440), which this module's own
+# `_FENCE_RE`/`_UNTERMINATED_FENCE_RE` used to mirror exactly before that
+# fix diverged the two -- not re-derived here, to avoid reintroducing
+# either gap that fix's own two adversarial-review rounds already found
+# and closed: a fence opened on the same line as a list-item/blockquote
+# marker inverting which side of the fence survives, and a ReDoS shape
+# (CWE-1333) from putting the leading whitespace inside the repeated
+# group instead of hoisting it out once, outside the group.
+_CONTAINER_PREFIX = r"[ \t\r]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+|>[ \t]?)*"
+# A well-paired fenced code block (``` or ~~~, opened and closed with the
+# same marker -- hence the backreference), anchored to line start (issue
+# #1714, mirroring issue #1432's own fix for the sibling file above): per
+# CommonMark/GitHub fence syntax a marker opens a fence only as the first
+# non-whitespace content of its own line (allowing for the container
+# prefix above), so a form unanchored to line start at all swallows a
+# `Duplicate-PR-waiver:` line whose disclosed reason merely contains
+# fence-marker characters.
+_FENCE_RE = re.compile(rf"^{_CONTAINER_PREFIX}(```|~~~).*?^{_CONTAINER_PREFIX}\1", re.DOTALL | re.MULTILINE)
 # An *unterminated* fence opener (no matching close anywhere in the rest of
 # the body) is not covered by `_FENCE_RE` above, which requires a matching
 # close to match at all -- deterministic-gate-quality audit, PR #1215,
@@ -141,8 +170,10 @@ _FENCE_RE = re.compile(r"```.*?```|~~~.*?~~~", re.DOTALL)
 # after `_FENCE_RE` (so a well-paired fence is stripped as such, not
 # double-counted here) and before `_INLINE_CODE_RE` below (a bare "```" is
 # itself two single backticks; running inline-code stripping first would
-# eat into it before this pattern ever saw it).
-_UNTERMINATED_FENCE_RE = re.compile(r"```.*\Z|~~~.*\Z", re.DOTALL)
+# eat into it before this pattern ever saw it). Anchored to line start
+# (allowing the same container prefix) for the same reason as `_FENCE_RE`
+# above.
+_UNTERMINATED_FENCE_RE = re.compile(rf"^{_CONTAINER_PREFIX}(?:```|~~~).*\Z", re.DOTALL | re.MULTILINE)
 _INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 
 _WAIVER_RE = re.compile(

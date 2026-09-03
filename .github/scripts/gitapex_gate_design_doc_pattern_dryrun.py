@@ -113,11 +113,17 @@ Deliberately stdlib-only, matching this repository's existing
 
 Usage::
 
-    git diff -U1000000 "$BASE_SHA...$HEAD_SHA" -- 'docs/superpowers/specs/*.md' \\
+    git diff -U1000000 "$BASE_SHA...$HEAD_SHA" -- 'docs/superpowers/specs/*.md' 'docs/gitapex/specs/*.md' \\
       | python3 .github/scripts/gitapex_extract_diff_added_lines.py > added_lines.txt
     python3 .github/scripts/gitapex_gate_design_doc_pattern_dryrun.py \\
         --diff-added added_lines.txt [--diff-added ...] [--body PR_BODY.txt] \\
         [--repo-root .] [--corpus-glob 'skills/**/*.md']
+
+A bare pipe in the first line masks `git diff`'s own exit status in a
+non-`pipefail` shell (issue #1531): add `set -o pipefail` first, or check
+`git diff`'s own exit code separately, if the caller must detect an
+upstream failure rather than silently extracting whatever partial diff
+reached stdin.
 
 Exit codes:
     0  No stated literal-text-search pattern found, every stated pattern

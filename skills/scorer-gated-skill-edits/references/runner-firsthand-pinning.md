@@ -24,12 +24,12 @@ fallback](#vendoring-fallback-an-externally-pinned-runner) below, and
 
 This skill executes its measured trials with
 `evals/scripts/gitapex_run_eval_suite.py`, the repository-owned runner
-the fixture corpus's suite and task formats are written for -- invoked
-as `uv run python3 evals/scripts/gitapex_run_eval_suite.py --eval-yaml
-EVAL.yaml --skill-md SKILL.md`, never bare `python3`: the script reaches
-third-party dependencies -- PyYAML, pydantic -- through
-`evals/scripts/gitapex_run_ablation.py`, either of which can be missing
-outside `uv`'s managed virtualenv and fails with `ModuleNotFoundError`.
+the fixture corpus's suite and task formats are written for -- invoked as
+`uv run python3 evals/scripts/gitapex_run_eval_suite.py --eval-yaml EVAL.yaml --skill-md SKILL.md`,
+never bare `python3`: the script reaches third-party dependencies --
+PyYAML, pydantic -- through `evals/scripts/gitapex_run_ablation.py`,
+either of which can be missing outside `uv`'s managed virtualenv and
+fails with `ModuleNotFoundError`.
 
 Step 1's runner-resolution check, for this runner: run
 `uv run python3 evals/scripts/gitapex_run_eval_suite.py --help` and

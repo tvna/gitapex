@@ -69,5 +69,4 @@ dependency kind) exist precisely because the earliest divergence can sit
 at any of them. A trace that dead-ends at a boundary you cannot see past
 (a third-party library's internals, a system call) is itself a valid
 stopping point -- route it through `grounding-in-primary-sources` before
-concluding the boundary itself is the cause, per `probing-boundary-
-contracts.md`.
+concluding the boundary itself is the cause, per `probing-boundary-contracts.md`.

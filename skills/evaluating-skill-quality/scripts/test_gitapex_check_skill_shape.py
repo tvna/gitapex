@@ -492,6 +492,211 @@ def test_overlong_body_fails(tmp_path):
     assert _by_name(css.check_shape(d))["body-length"].passed is False
 
 
+def test_split_code_span_in_skill_md_fails(tmp_path):
+    d = _write_skill(tmp_path)
+    skill_md = d / "SKILL.md"
+    text = skill_md.read_text(encoding="utf-8")
+    text += "\nSee `references/some-file.\nmd` for detail.\n"
+    skill_md.write_text(text, encoding="utf-8")
+    assert _by_name(css.check_shape(d))["code-span-integrity"].passed is False
+
+
+def test_normal_code_span_in_skill_md_passes(tmp_path):
+    d = _write_skill(tmp_path)
+    skill_md = d / "SKILL.md"
+    text = skill_md.read_text(encoding="utf-8")
+    text += "\nSee `references/some-file.md` for detail.\n"
+    skill_md.write_text(text, encoding="utf-8")
+    assert _by_name(css.check_shape(d))["code-span-integrity"].passed is True
+
+
+def test_split_code_span_in_reference_fails(tmp_path):
+    d = _write_skill(tmp_path, references={"note.md": "See `a-split-\ncode-span` here.\n"})
+    assert _by_name(css.check_shape(d))["code-span-integrity:note.md"].passed is False
+
+
+def test_normal_code_span_in_reference_passes(tmp_path):
+    d = _write_skill(tmp_path, references={"note.md": "See `a-normal-code-span` here.\n"})
+    assert _by_name(css.check_shape(d))["code-span-integrity:note.md"].passed is True
+
+
+def test_over_budget_skill_md_body_passes_advisory_without_flag(tmp_path):
+    d = _write_skill(tmp_path, body_lines=5000)
+    result = _by_name(css.check_shape(d))["body-token-budget"]
+    assert result.passed is True
+    assert "over budget" in result.evidence
+
+
+def test_over_budget_skill_md_body_fails_with_strict_flag(tmp_path):
+    d = _write_skill(tmp_path, body_lines=5000)
+    result = _by_name(css.check_shape(d, strict_token_budget=True))["body-token-budget"]
+    assert result.passed is False
+    assert "over budget" in result.evidence
+
+
+def test_under_budget_skill_md_body_passes_either_way(tmp_path):
+    d = _write_skill(tmp_path)
+    assert _by_name(css.check_shape(d))["body-token-budget"].passed is True
+    assert _by_name(css.check_shape(d, strict_token_budget=True))["body-token-budget"].passed is True
+
+
+def test_main_strict_token_budget_flag_fails_over_budget_skill(tmp_path):
+    # Exercises the new --strict-token-budget flag through main()'s own
+    # real argv/argparse path, distinct from the check_shape()-level
+    # tests above -- confirms the CLI flag actually threads through, not
+    # only the Python-level keyword argument. Long-but-few lines (not
+    # css.BODY_MAX_LINES + 5, unlike test_overlong_body_fails above) push
+    # the estimated token count over budget while staying well under
+    # BODY_MAX_LINES, isolating the flag's own effect on main()'s exit
+    # code from body-length's own separate, always-hard FAIL.
+    d = _write_skill(tmp_path)
+    skill_md = d / "SKILL.md"
+    padding = "\n".join("x" * 60 for _ in range(400))
+    skill_md.write_text(skill_md.read_text(encoding="utf-8") + "\n" + padding + "\n", encoding="utf-8")
+    assert css.main([str(d)]) == 0  # advisory-only without the flag
+    assert css.main(["--strict-token-budget", str(d)]) == 1
+
+
+def test_main_strict_token_budget_flag_passes_under_budget_skill(tmp_path):
+    d = _write_skill(tmp_path)
+    assert css.main(["--strict-token-budget", str(d)]) == 0
+
+
+def test_references_are_exempt_from_token_budget(tmp_path):
+    # A references/*.md file well over BODY_MAX_TOKENS worth of chars must
+    # not gain a body-token-budget:*-shaped check at all -- BODY_MAX_TOKENS
+    # applies to the SKILL.md body only, never to references/*.md, even
+    # under --strict-token-budget.
+    big_ref = "\n".join(f"line {i}" for i in range(5000))
+    d = _write_skill(tmp_path, references={"big.md": big_ref})
+    names = _by_name(css.check_shape(d, strict_token_budget=True))
+    assert not any(k.startswith("body-token-budget:") for k in names)
+    assert names["body-token-budget"].passed is True  # SKILL.md's own short body is unaffected
+
+
+def test_double_backtick_span_crossing_line_break_does_not_false_positive(tmp_path):
+    # Adversarial defeat test (independent review, not in the original
+    # diff): line_integrity.py's own module docstring names a real,
+    # already-shipped corpus example -- planning-a-branch-from-an-issue/
+    # SKILL.md's own double-backtick span quoting a re-verification
+    # marker -- that legitimately opens and closes on DIFFERENT lines,
+    # and states flagging it would be a false positive. No test in this
+    # file exercised that path before this one (coverage confirmed the
+    # gap: line_integrity.py line 68's `continue` for a non-single-width
+    # backtick run was unreached by this test module, covered only
+    # incidentally by tests/test_gitapex_repository_skill_shape.py's
+    # whole-corpus sweep). code-span-integrity is scoped to
+    # single-backtick spans only, so a double-backtick span crossing a
+    # line break must still PASS.
+    d = _write_skill(tmp_path)
+    skill_md = d / "SKILL.md"
+    text = skill_md.read_text(encoding="utf-8")
+    text += "\nA marker: ``open here\nand close here`` in the doc.\n"
+    skill_md.write_text(text, encoding="utf-8")
+    assert _by_name(css.check_shape(d))["code-span-integrity"].passed is True
+
+
+def test_split_single_backtick_lookalike_inside_fence_does_not_false_positive(tmp_path):
+    # Adversarial defeat test: a triple-backtick fenced code block whose
+    # own content happens to contain what LOOKS like a single-backtick
+    # span split across a line break must not be flagged -- fenced
+    # content is already-illustrative, out of code-span-integrity's own
+    # scope (blanked via _blank_fenced_blocks before the line-break scan
+    # ever runs), the same way it is for every other citation check in
+    # this package. Without _blank_fenced_blocks, the `foo`/`bar` pair
+    # below would misparse as a genuine split span the way
+    # test_split_code_span_in_skill_md_fails' near-identical content does
+    # outside a fence.
+    d = _write_skill(tmp_path)
+    skill_md = d / "SKILL.md"
+    text = skill_md.read_text(encoding="utf-8")
+    text += "\n```\nSee `foo\nbar` inside a fence.\n```\n"
+    skill_md.write_text(text, encoding="utf-8")
+    assert _by_name(css.check_shape(d))["code-span-integrity"].passed is True
+
+
+def test_single_backtick_never_closed_anywhere_fails(tmp_path):
+    # Adversarial defeat test: a single backtick that opens and then
+    # never finds ANY later single-backtick close in the whole document
+    # (not merely a same-line close) is still a violation -- it certainly
+    # never closed on its own opening line either. Exercises
+    # _split_single_backtick_span_lines' own post-loop
+    # `if open_line is not None` branch (line_integrity.py line 81),
+    # otherwise unreached by this test module per the coverage report.
+    d = _write_skill(tmp_path)
+    skill_md = d / "SKILL.md"
+    text = skill_md.read_text(encoding="utf-8")
+    text += "\nAn open `code span that never closes anywhere in this file.\n"
+    skill_md.write_text(text, encoding="utf-8")
+    result = _by_name(css.check_shape(d))["code-span-integrity"]
+    assert result.passed is False
+    assert "split across a line break" in result.evidence
+
+
+def test_nested_single_backtick_inside_cross_line_double_backtick_span_does_not_false_positive(tmp_path):
+    # Adversarial defeat test (independent review, PR #1716 Step 8): a
+    # legitimately cross-line double-backtick span (already covered by
+    # test_double_backtick_span_crossing_line_break_does_not_false_positive
+    # above) whose own content happens to contain a NESTED single-backtick
+    # pair that itself straddles the same line break must still PASS --
+    # those two single backticks are inert literal content inside the
+    # outer double-backtick span (exactly the "quote a literal backtick"
+    # use case the module docstring names), not an independent
+    # single-backtick span of their own. An earlier revision blanked the
+    # outer double-backtick span per LINE rather than across the whole
+    # document, so it never blanked the cross-line span at all and
+    # mis-flagged the nested single backticks as a genuine split span --
+    # reproduced directly against _split_single_backtick_span_lines before
+    # this fix, confirmed fixed after it.
+    d = _write_skill(tmp_path)
+    skill_md = d / "SKILL.md"
+    text = skill_md.read_text(encoding="utf-8")
+    text += "\n``quote: `first\nsecond` end`` in the doc.\n"
+    skill_md.write_text(text, encoding="utf-8")
+    assert _by_name(css.check_shape(d))["code-span-integrity"].passed is True
+
+
+def test_token_budget_at_exact_threshold_passes_even_under_strict(tmp_path):
+    # Adversarial defeat test: the off-by-one edge of the ">" comparison
+    # in _token_budget_result -- exactly BODY_MAX_TOKENS*4 characters
+    # (estimated_tokens == BODY_MAX_TOKENS exactly) must still PASS, even
+    # under --strict-token-budget, since the stated rule is "<=
+    # BODY_MAX_TOKENS". test_over_budget_skill_md_body_fails_with_strict_
+    # flag above uses a body_lines=5000 fixture that lands thousands of
+    # tokens past the threshold and would not catch a ">" vs. ">="
+    # mistake at the exact boundary the way this test does.
+    d = _write_skill(tmp_path)
+    skill_md = d / "SKILL.md"
+    target_len = css.BODY_MAX_TOKENS * 4
+    text = skill_md.read_text(encoding="utf-8")
+    padded = (text + "x" * max(0, target_len - len(text)))[:target_len]
+    assert len(padded) == target_len
+    skill_md.write_text(padded, encoding="utf-8")
+    result = _by_name(css.check_shape(d, strict_token_budget=True))["body-token-budget"]
+    assert result.passed is True
+    assert result.evidence == f"{css.BODY_MAX_TOKENS} tokens"
+
+
+def test_token_budget_one_token_over_threshold_fails_under_strict(tmp_path):
+    # Sibling of the exact-threshold test above: the fewest possible
+    # extra characters (4, since the estimator floors len(content)//4)
+    # that push estimated_tokens to BODY_MAX_TOKENS + 1 must FAIL under
+    # --strict-token-budget and stay advisory-only without it.
+    d = _write_skill(tmp_path)
+    skill_md = d / "SKILL.md"
+    target_len = css.BODY_MAX_TOKENS * 4 + 4
+    text = skill_md.read_text(encoding="utf-8")
+    padded = (text + "x" * max(0, target_len - len(text)))[:target_len]
+    assert len(padded) // 4 == css.BODY_MAX_TOKENS + 1
+    skill_md.write_text(padded, encoding="utf-8")
+    strict_result = _by_name(css.check_shape(d, strict_token_budget=True))["body-token-budget"]
+    assert strict_result.passed is False
+    assert strict_result.evidence == f"over budget: {css.BODY_MAX_TOKENS + 1} tokens > {css.BODY_MAX_TOKENS}"
+    advisory_result = _by_name(css.check_shape(d))["body-token-budget"]
+    assert advisory_result.passed is True
+    assert "advisory only" in advisory_result.evidence
+
+
 def test_nested_references_fail(tmp_path):
     d = _write_skill(tmp_path, references={"sub/deep.md": "x\n"})
     assert _by_name(css.check_shape(d))["references-flat"].passed is False
@@ -583,7 +788,7 @@ def test_check_shape_raising_is_a_guard_error_not_a_crash(tmp_path, monkeypatch,
     # escaping exception into a reported guard error, never propagate.
     d = _write_skill(tmp_path)
 
-    def _raise(_target):
+    def _raise(_target, **_kwargs):
         raise OSError("simulated unreadable skill file")
 
     monkeypatch.setattr(css, "check_shape", _raise)

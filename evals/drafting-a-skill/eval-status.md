@@ -1,14 +1,18 @@
 # drafting-a-skill eval status
 
-A committed suite exists (`eval.yaml` plus eight fixtures under `tasks/`:
+A committed suite exists (`eval.yaml` plus nine fixtures under `tasks/`:
 `normal.yaml`, `edge.yaml`, `injected-self-certification-probe.yaml`,
 `no-inferred-metadata.yaml`, `no-direct-invocation.yaml`,
 `upstream-ambiguity-escalates.yaml`, `not-the-scorer-loop.yaml`,
-`mkdir-eexist-routes-away.yaml`) --
-sized to match `SKILL.md`'s own 8 Stop-boundary bullets, per
-`.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py`'s
+`mkdir-eexist-routes-away.yaml`, `token-budget-trim-priority.yaml`) --
+the first eight sized to match `SKILL.md`'s own 8 Stop-boundary bullets,
+per `.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py`'s
 decision-branch/fixture parity requirement (verified directly: 8
-branches counted, 8 fixtures present, gate exits 0).
+branches counted, 8 fixtures required, gate exits 0); the ninth is a
+voluntary addition covering Step 6's own trim-priority text (not itself
+a counted Stop-boundary bullet or named dispatch branch per that gate's
+own counter, verified directly: adding it did not change the 8/8 count),
+covering part of the previously-disclosed Step 6 coverage gap below.
 
 Issue #1648 closed the decision log's disclosed axis-7 TOCTOU residual
 (a simultaneous blank-page start) with a Step 2 bare-mkdir-first rule
@@ -36,6 +40,15 @@ scorer-gated-skill-edits-shaped iterative editing" into the current
 "never treat this skill as itself the scorer-gated iterative-editing
 loop" -- `not-the-scorer-loop.yaml` (new) covers that reworded bullet,
 which no prior fixture in this suite exercised.
+
+Independently, `evaluating-skill-quality` gained a `--strict-token-budget`
+flag now wired into this skill's own Step 6 invocation (a brand-new draft
+is held to the real `body-token-budget` threshold, not merely the
+advisory default), with a Step 6 trim-priority order and a hard
+never-cut-a-safety-sentence rule on top of it -- `token-budget-trim-priority.yaml`
+(new, voluntary per above) exercises that a `body-token-budget` FAIL with
+no safe trim left escalates via `StageDeviated` rather than silently
+cutting a Stop boundary or other safety-relevant sentence.
 
 Issue #1619 re-scoped `drafting-a-skill` to a pipeline-only task
 (Mechanism-fit gate and four-axis elicitation migrated to
@@ -100,11 +113,24 @@ execution path than an intentional trial) is covered below.
 
 Disclosed gaps, not silently assumed solved: this corpus does not yet
 cover Step 4's collision/dependency-reconciliation check, Step 5's
-domain-gap sweep, or Step 6's deterministic-checker invocation as their
-own dedicated assertion targets, nor the Precondition's one remaining
-route-away branch (target is already a finished draft -> route directly
-to `evaluating-skill-quality`/`battle-testing-a-skill` without
-re-entering at Step 1), nor the new Step 2 escalate-on-missing-axis
+domain-gap sweep, or most of Step 6's deterministic-checker invocation
+as their own dedicated assertion targets. `battle-testing-a-skill`
+flagged the Step 6 gap directly against the `--strict-token-budget`
+addition (2026-09-03, independent dispatch, two rounds): the first
+round's finding was addressed by adding
+`tasks/token-budget-trim-priority.yaml`, which exercises Step 6's own
+trim-priority order once references/-migration and sediment-pruning are
+both exhausted -- specifically, that a `body-token-budget` FAIL with no
+safe trim left escalates via `StageDeviated` rather than silently
+cutting a Stop boundary or other safety-relevant sentence. Not yet
+covered by any fixture: the more basic case of `--strict-token-budget`
+itself hard-FAILing a plainly over-budget draft (steps (1)/(2) not yet
+attempted), and Step 6's other checker
+(`gitapex_scan_execution_requirements_drift.py`). Nor does this corpus
+cover the Precondition's one remaining route-away branch (target is
+already a finished draft -> route directly to
+`evaluating-skill-quality`/`battle-testing-a-skill` without re-entering
+at Step 1), nor the new Step 2 escalate-on-missing-axis
 branch this same PR added. `no-direct-invocation.yaml` and
 `upstream-ambiguity-escalates.yaml` have been checked only by
 `gitapex_validate_eval_yaml.py` and `gitapex_lint_fixture_assertions.py`

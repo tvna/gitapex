@@ -125,9 +125,10 @@ used to be discovered one red check at a time on an already-open PR.
 
 The same `uv run prek install -t pre-commit -t pre-push -t commit-msg` above also installs
 a **pre-push** hook that runs every gate with a working-tree-only form in
-one pass, before the push leaves your machine. A warm run of all 44 wired
-gates measures roughly 15 seconds end to end (the
-prior 43-gate set measured roughly 15 seconds, the 42-gate set before that
+one pass, before the push leaves your machine. A warm run of all 45 wired
+gates measures roughly 14 seconds end to end (the
+prior 44-gate set measured roughly 15 seconds, the 43-gate set before that
+measured roughly 15 seconds, the 42-gate set before that
 measured roughly 18 seconds, the 41-gate set before that
 measured roughly 18 seconds, the 40-gate set before that
 measured roughly 17 seconds, the 39-gate set before that
@@ -163,7 +164,7 @@ it up, then confirm both shims with the check in the previous section.
 The runner itself also resolves through `uv` (issue #1485: it imports
 `_gitapex_schema_validation.py`, which needs `jsonschema` -- a real,
 non-stdlib dependency a bare system `python3` is not guaranteed to have),
-and so do all 44 wired gates (the same `uv run` pins CI uses). Without `uv`
+and so do all 45 wired gates (the same `uv run` pins CI uses). Without `uv`
 on PATH every one of them reports `FAIL ... failed to run` -- that is one
 missing tool, not a whole broken wired set.
 

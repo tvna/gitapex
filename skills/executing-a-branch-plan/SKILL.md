@@ -8,8 +8,7 @@ description: Use when a Branch Plan and Acceptance Criteria Map (from planning-a
 Turns an approved Branch Plan and Acceptance Criteria Map into committed
 code, a decomposed task history, and an opened PR that
 `drafting-a-pr-to-merge` picks up from its own "PR has just been opened"
-entry point. Design source: `docs/superpowers/specs/2026-07-22-plan-
-execution-handoff-design.md` (20 Decisions; this SKILL.md and its
+entry point. Design source: `docs/superpowers/specs/2026-07-22-plan-execution-handoff-design.md` (20 Decisions; this SKILL.md and its
 `references/` implement the doc's own "New skill: consolidated sequence"
 section verbatim in structure, citing each Decision by number rather than
 re-deriving it).
@@ -56,7 +55,7 @@ first, not skimmed.
    which also carries this judgment's own model/effort pin, shared with
    step 6's residual per-task screening below.
 3. **Task Decomposition** (Decision 3, extended by 15 and 19). Write a
-   `docs/superpowers/plans/<date>-<branch-name>.md`-shaped task list from
+   `docs/gitapex/plans/<date>-<branch-name>.md`-shaped task list (new-file convention; distinct from the existing `docs/superpowers/...` file the "Design source" line above cites) from
    the ACM, quoting each source row's own Planned-ops text into its task
    record rather than paraphrasing it. Compute a file-ownership map (now
    pre-filtered by
@@ -75,8 +74,7 @@ first, not skimmed.
    step 5 requires.
 5. **Open a draft PR and subscribe** (Decision 8). Open a draft PR
    carrying the ACM, a seeded `## Execution log` section (`PlanApproved`
-   event), and `.github/PULL_REQUEST_TEMPLATE.md`'s own `## Merge gate:
-   independent review` note verbatim -- carry it forward rather than
+   event), and `.github/PULL_REQUEST_TEMPLATE.md`'s own `## Merge gate: independent review` note verbatim -- carry it forward rather than
    dropping it, the same way the ACM and `## Execution log` sections are
    carried into the opened body. **Before applying it, check the same
    fetch for a concurrent invocation**: `branch-plan-executing` already
@@ -94,8 +92,7 @@ first, not skimmed.
    `drafting-a-pr-to-merge`. Event vocabulary and log format: [domain events reference](references/events-and-review-gate.md#domain-events-and-failure-handling).
 6. **Execute, one Workflow run per wave** (Decision 16, 4, 13, 14). For
    each wave from step 3: dispatch one Workflow run containing only that
-   wave's task `agent()` calls, each with `agentType:
-   'branch-plan-task'` (the Decision 17 backstop -- no `mcp__github__*`
+   wave's task `agent()` calls, each with `agentType: 'branch-plan-task'` (the Decision 17 backstop -- no `mcp__github__*`
    tools available to it in either deployment; a hook-backed, empirically
    verified `gh`/`git push`/install exclusion in the project-local
    variant, a weaker prompt-plus-session-hook exclusion in the
@@ -146,8 +143,7 @@ first, not skimmed.
    Once a wave's run returns, in the main thread (the Workflow script itself has no
    filesystem/shell access): screen each
    task's own `BASE..HEAD` diff -- `scripts/gitapex_check_canonical_governance_paths.py`
-   pre-filters the literal/canonical cases first, then `screening-a-low-trust-
-   contribution`'s checks 2-8, dispatched to `review-persona`,
+   pre-filters the literal/canonical cases first, then `screening-a-low-trust-contribution`'s checks 2-8, dispatched to `review-persona`,
    still run regardless of that pre-filter's result. **Also scan that
    same task's own new commit messages** (issue `#1477`, gate-proposal,
    directly together (a `git log` failure must not be masked as an empty,
@@ -192,8 +188,7 @@ first, not skimmed.
    not zero times. Never mid-wave, since a wave's own task worktrees are
    forked from one head and merging `origin/main` in mid-wave would fork
    later tasks from a different base than earlier ones in the same wave.
-   Run `uv run --frozen python3
-   .github/scripts/gitapex_gate_behind_base.py` (exit 0: clean, proceed;
+   Run `uv run --frozen python3 .github/scripts/gitapex_gate_behind_base.py` (exit 0: clean, proceed;
    exit 1: behind; exit 2: the fetch/comparison itself cannot be trusted).
    On exit 1: fetch and merge (or fast-forward) `origin/main` into the
    shared branch. A clean merge needs no further action. A conflicted one

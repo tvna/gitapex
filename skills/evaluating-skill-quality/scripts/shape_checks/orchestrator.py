@@ -44,6 +44,7 @@ from shape_checks.constants import (
 )
 from shape_checks.field_checks import _length_check, _no_xml_check, _yaml_plain_scalar_safety_check
 from shape_checks.frontmatter import FrontmatterParse
+from shape_checks.line_integrity import _code_span_integrity_check
 from shape_checks.links_portability import (
     _body_after_frontmatter,
     _broken_anchor_targets,
@@ -421,11 +422,11 @@ def _lifecycle_reason_citation_sources(lifecycle_dict: dict[str, object]) -> lis
 
 
 def _references_dir_checks(skill_dir: Path, anchor_slug_cache: dict[Path, frozenset[str] | None]) -> list[CheckResult]:
-    """references/'s own flatness/TOC/links/anchor checks, extracted
-    verbatim from ``check_shape`` -- mutates ``anchor_slug_cache`` in place
-    exactly as the original inline loop did (shared with the SKILL.md-level
-    anchor check above it there), and returns ``[]`` when there is no
-    references/ directory at all."""
+    """references/'s own flatness/code-span-integrity/TOC/links/anchor
+    checks, extracted verbatim from ``check_shape`` -- mutates
+    ``anchor_slug_cache`` in place exactly as the original inline loop did
+    (shared with the SKILL.md-level anchor check above it there), and
+    returns ``[]`` when there is no references/ directory at all."""
     results: list[CheckResult] = []
     refs_dir = skill_dir / "references"
     if not refs_dir.is_dir():
@@ -458,6 +459,7 @@ def _references_dir_checks(skill_dir: Path, anchor_slug_cache: dict[Path, frozen
             ref_text = ref.read_text(encoding="utf-8")
         except (UnicodeDecodeError, OSError):
             continue  # skip binary/unreadable junk, don't abort the run
+        results.append(_code_span_integrity_check(f"code-span-integrity:{ref.name}", ref_text))
         n = len(ref_text.splitlines())
         if n > TOC_MIN_LINES:
             has_toc = bool(TOC_RE.search(ref_text))

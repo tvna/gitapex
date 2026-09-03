@@ -125,6 +125,12 @@ Usage::
     python3 .github/scripts/gitapex_detect_touched_eval_skills.py \\
         evals/foo/tasks/x.yaml evals/bar/eval.yaml
 
+A bare pipe in the first form masks `git diff`'s own exit status in a
+non-`pipefail` shell (issue #1531): add `set -o pipefail` first, or check
+`git diff`'s own exit code separately, if the caller must detect an
+upstream failure rather than silently classifying whatever partial path
+list reached stdin.
+
 `--nul`/`-0` (matching the `-0` convention of `xargs -0`/`grep -z`) reads
 raw NUL-delimited bytes from `sys.stdin.buffer`, decoding each piece with
 `os.fsdecode` (POSIX-safe, round-trips non-UTF-8-but-valid path bytes via

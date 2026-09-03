@@ -481,20 +481,7 @@ actually specifies.
 
 ## Notes
 
-Portability rationale: self-contained -- carries its own rubric and bundled
-read-only `gitapex_check_skill_shape.py`, with no control dependency outside
-its own directory; the next paragraph names an output destination, not a
-control input (rubric.md's Portability level section). `evals`/`docs`
-citations are barred unconditionally. Declared level: `metadata/gitapex.yaml`.
-
-Downstream verdict consumption, for readers working in this repository
-(gitapex): `.github/scripts/gitapex_gate_skill_audit_disclosure.py`, wired by
-`.github/workflows/skill-audit-gate.yml`, parses a PR body's `## Skill
-audit evidence` section for the literal verdict tokens
-`WELL-FORMED-AND-MATURE`, `WELL-FORMED-NOT-MATURE`, `NOT-WELL-FORMED`, or a
-`WAIVED: <reason>` line, and blocks the PR when the section or a valid
-token is absent -- by its own docstring, "it checks that disclosure was
-made, not that the audits actually passed," matching
-[references/adversarial-self-audit.md](references/adversarial-self-audit.md)'s
-non-authoritative principle: a green gate is not itself confirmation this
-review's judgment was sound.
+Portability: **Portable**. Rationale and how a PR body's verdict
+disclosure is consumed downstream by this repository's own CI gate are
+recorded in `metadata/gitapex.yaml`'s `spec.references`, per this file's
+own Notes-vs-metadata placement axis (see references/rubric.md).

@@ -60,6 +60,11 @@ Usage::
     git diff -U0 "$BASE_SHA...$HEAD_SHA" -- '.github/scripts/*.py' 'evals/scripts/*.py' \\
       | uv run --frozen python3 .github/scripts/gitapex_gate_stdlib_only_claim_drift.py
 
+A bare pipe here masks `git diff`'s own exit status in a non-`pipefail`
+shell (issue #1531): add `set -o pipefail` first, or check `git diff`'s
+own exit code separately, if the caller must detect an upstream failure
+rather than silently grading whatever partial diff reached stdin.
+
 Exit codes: 0 clean (including "no file in this diff gained a third-party
 import" -- a legitimate pass, not an error), 1 stale claim(s) found, 2 the
 scan could not be trusted (a malformed diff, an unreadable file, or a

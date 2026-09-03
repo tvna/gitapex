@@ -483,8 +483,7 @@ boundary this dimension asks about. No test in this file spawns the
 script as an actual subprocess, so this remains a genuine, still-open
 integration-level gap, not one narrowed away by how thoroughly `main()`
 itself is unit-tested. (This repository's own `pyproject.toml` coverage
-config does separately exclude the two-line `if __name__ ==
-"__main__":` dispatch from statement-coverage measurement -- a standard
+config does separately exclude the two-line `if __name__ == "__main__":` dispatch from statement-coverage measurement -- a standard
 idiom, and accurate on its own terms -- but that is a coverage-accounting
 convention, unrelated to whether integration-level testing occurred. The
 lines actually reported missing near there, `3095-3097`, are a different
@@ -599,8 +598,7 @@ across all 13: uniformly mild, no case rises to a blocking finding, but
 naming all 13 rather than a partial sample is what this dimension's own
 "never silently skip" discipline requires. **Assertion Roulette**: not present
 as a general pattern -- most multi-part assertions in this file carry an
-explicit message argument identifying the case (e.g. `assert parsed_value
-is None, (key, body, parsed_value)`), which is this dimension's own
+explicit message argument identifying the case (e.g. `assert parsed_value is None, (key, body, parsed_value)`), which is this dimension's own
 prescribed mitigation already in active use. Net read: strong on fixture
 isolation and Creation Method discipline, and zero classic test doubles
 correctly rather than by omission; the 13 Conditional Test Logic instances

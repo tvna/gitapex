@@ -151,8 +151,7 @@ itself grounds to skip the model's own full review below.
   `agent()` call returns, before that task's own commit or
   `TaskCompleted` event): run `scripts/gitapex_check_canonical_governance_paths.py`
   against that task's own changed-file list first (the deterministic
-  pre-filter above), then screen the full diff via `screening-a-low-trust-
-  contribution`'s checks 2-8 regardless of the pre-filter's own result --
+  pre-filter above), then screen the full diff via `screening-a-low-trust-contribution`'s checks 2-8 regardless of the pre-filter's own result --
   checks 2-8's full model review still runs even when the pre-filter finds
   nothing. **Checks 2-8 dispatch to the `review-persona` subagent type**
   (`agents/review-persona.md` -- a `tools: Read, Grep, Glob` allow-list,
@@ -160,8 +159,7 @@ itself grounds to skip the model's own full review below.
   about directly in the main thread, which at this point holds
   `mcp__github` write access, `git push`, and unrestricted Bash (issue
   `#1558`): the main thread already holds the task's own literal
-  `BASE..HEAD` diff at this point, satisfying `screening-a-low-trust-
-  contribution`'s own dispatch precondition (its Procedure's own
+  `BASE..HEAD` diff at this point, satisfying `screening-a-low-trust-contribution`'s own dispatch precondition (its Procedure's own
   Execution-context-per-check paragraph). Check 1 does not apply here --
   the diff is already the platform's own artifact (a `git diff` against
   the task's own worktree, not a paraphrase), not a fetch this step needs
@@ -177,8 +175,8 @@ itself grounds to skip the model's own full review below.
   hook/script changes, dependency additions, and instruction-bearing
   content are each an independent hard flag regardless of how
   "reasonable" the surrounding change looks. A flagged diff never
-  proceeds to commit -- it dispatches as `StageDeviated{run_id, task_id,
-  reason, action: escalate}` (the same closed-set schema [domain events
+  proceeds to commit -- it dispatches as
+  `StageDeviated{run_id, task_id, reason, action: escalate}` (the same closed-set schema [domain events
   and failure-handling](events-and-review-gate.md#domain-events-and-failure-handling) defines)
   regardless of whether the task's own proof method would otherwise have
   passed.
@@ -241,8 +239,7 @@ plugin-agent schema, not a plausible-sounding claim.
    restriction is whole-server granularity, not per-method, so denying
    reads along with writes is the correct, stricter instantiation, not a
    gap) plus an embedded `hooks.PreToolUse` block (matcher `"Bash"`)
-   invoking `skills/executing-a-branch-plan/scripts/check_task_bash_
-   safety.sh` -- scoped, per Claude Code's own subagent-hooks
+   invoking `skills/executing-a-branch-plan/scripts/check_task_bash_ safety.sh` -- scoped, per Claude Code's own subagent-hooks
    documentation, to fire only while that specific subagent type is
    active, not session-wide, and independent of `CLAUDE_PLUGIN_ROOT`
    (Decision 7's own open question).
@@ -271,16 +268,27 @@ plugin-agent schema, not a plausible-sounding claim.
    `disallowedTools: mcp__github` actually removes the tool from that
    agent type's registry, not merely from its listing.
 
-   **The hook also fires correctly under `isolation: 'worktree'`**
-   (step 6's actual multi-task-wave configuration, not just `agentType`
-   alone), empirically verified live. Inside a worktree-isolated
-   subagent, `CLAUDE_PROJECT_DIR` is unset, so the hook command's own
-   `${CLAUDE_PROJECT_DIR:-$(pwd)}` fallback resolves to the worktree's
-   own `$(pwd)` -- and since a git worktree checks out the full working
-   tree at its own path, the relative path to
-   `check_task_bash_safety.sh` still resolves there for any branch that
-   has the file committed, so the deny still fired with the identical
-   `systemMessage`.
+   **Second, separate probe: does the hook still fire when the subagent
+   also runs `isolation: 'worktree'` (step 6's actual multi-task-wave
+   configuration, not just `agentType` alone)?** This was flagged as an
+   untested gap after the first probe (that dispatch carried no
+   `isolation` option) -- re-run with `isolation: 'worktree'` added,
+   rather than left as a standing "unknown," since the platform's own
+   `Agent` tool exposes the same option this skill's own Workflow-tool
+   invocation uses. Result: **the hook still fires correctly.**
+   `pwd` inside the worktree-isolated subagent returned a path under
+   `.claude/worktrees/agent-<id>/`, not the main project root, and
+   `printenv CLAUDE_PROJECT_DIR` returned empty (unset) inside that
+   worktree -- so the hook command's own `${CLAUDE_PROJECT_DIR:-$(pwd)}`
+   fallback resolved to the *worktree's own* `$(pwd)`, not the main
+   repository root. `pip install --help` was still denied with the
+   identical `systemMessage` quoted above. This works because a git
+   worktree checks out the full working tree at its own path -- the
+   relative path `skills/executing-a-branch-plan/scripts/check_task_ bash_safety.sh` exists inside the worktree copy too, for any branch
+   that has the file committed, so the fallback's own relative-path
+   resolution still finds the script even with `CLAUDE_PROJECT_DIR`
+   unset. This closes the specific residual risk the row-2 ACM entry
+   (see the implementation PR) named as untested; not left open.
 
    **What "empirically verified" and "hard deny" above do NOT cover,
    stated explicitly rather than left for a reader to assume
@@ -300,12 +308,9 @@ plugin-agent schema, not a plausible-sounding claim.
    disclosed there and pinned by that script's own test suite as
    `KNOWN_BYPASS_COMMANDS`: verb-token-splitting that never places the
    tool/verb name as its own literal token anywhere in the command, e.g.
-   string-slice reconstruction (`cmd=pipinstall; eval "${cmd:0:3}
-   ${cmd:3}"`) or array-literal-assignment indirection (`A=(pip);
-   V=(install); "${A[@]}" "${V[@]}"`); and, in `_rule_fetch_exec`'s own
+   string-slice reconstruction (`cmd=pipinstall; eval "${cmd:0:3} ${cmd:3}"`) or array-literal-assignment indirection (`A=(pip); V=(install); "${A[@]}" "${V[@]}"`); and, in `_rule_fetch_exec`'s own
    wrapper-skip logic specifically, a wrapper flag that takes a SEPARATE
-   value argument rather than being boolean (`sudo -u root bash`, `env
-   VAR=1 bash`) -- every "hard deny"/"empirically verified" claim in this
+   value argument rather than being boolean (`sudo -u root bash`, `env VAR=1 bash`) -- every "hard deny"/"empirically verified" claim in this
    section should be read as bounded by those narrower ceilings, not as
    complete coverage against a task agent acting on an injected
    instruction that survived per-task screening. Stage 2
@@ -391,8 +396,7 @@ before ever reporting done.
 
 **The fix: an exit condition, not only a later screening step.** Before a
 task-level dispatch may report complete, the full repo verification suite
-must pass inside that task's own worktree: `uv run --frozen python3 -m
-pytest --no-cov -q` (with the same four real-bash-oracle test files
+must pass inside that task's own worktree: `uv run --frozen python3 -m pytest --no-cov -q` (with the same four real-bash-oracle test files
 excluded that `.github/workflows/test.yml`'s own `pytest` job already
 excludes, issue `#1365` -- each spawns genuine `bash -c` subprocesses under
 this runner's own eBPF tracer and has caused resource-exhaustion flakes
@@ -401,8 +405,7 @@ task-level worktree, potentially several concurrently per wave, would
 multiply exactly the contention that job split exists to avoid, for files
 this gate's own motivating defect never involved -- a deliberate,
 disclosed deviation from issue `#1476`'s own literal proof-method text,
-not an oversight), then `uv run --frozen python3
-.github/scripts/gitapex_gate_local_preflight.py` -- the existing
+not an oversight), then `uv run --frozen python3 .github/scripts/gitapex_gate_local_preflight.py` -- the existing
 consolidated runner for every deterministic gate carrying a working-tree-
 only form (issue `#876`), which already *is* "every deterministic
 shape/gate checker" the issue's own proof method names, not a new
@@ -570,11 +573,9 @@ about to start). The earliest deterministic enforcement point actually
 available is therefore the SAME embedded `PreToolUse` "Bash" hook Decision
 17's own backstop already uses -- this mechanism is chained into
 `check_task_bash_safety.sh` as a second sibling classifier call (the
-identical pattern that script already uses to invoke `gitapex_check_task_
-bash_safety.py`), not a second `hooks.PreToolUse` frontmatter entry (no
+identical pattern that script already uses to invoke `gitapex_check_task_ bash_safety.py`), not a second `hooks.PreToolUse` frontmatter entry (no
 such second entry exists in the shipped frontmatter for any hook event in
-this agent type -- confirmed by reading `.claude/agents/branch-plan-
-task.md` directly before choosing this shape).
+this agent type -- confirmed by reading `.claude/agents/branch-plan-task.md` directly before choosing this shape).
 
 **Same two-variant asymmetry as the two mechanisms above, for the same
 reason, and stated with the identical precision.**
@@ -610,8 +611,7 @@ two-variant asymmetry, disclosed above rather than overclaimed) of naming
 an enforcement gap precisely instead of describing this mechanism as
 covering more than it does.
 
-**Fail-open by design, the opposite default from `gitapex_check_task_
-bash_safety.py`'s own fail-closed classifier immediately above it in the
+**Fail-open by design, the opposite default from `gitapex_check_task_ bash_safety.py`'s own fail-closed classifier immediately above it in the
 same hook chain.** This backstop denies ONLY on a clean, confirmed
 mismatch; every other outcome -- the shared plan branch's own name cannot
 be resolved at all (no worktree, a detached HEAD, an unrelated worktree's

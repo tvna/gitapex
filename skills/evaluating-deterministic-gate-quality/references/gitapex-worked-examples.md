@@ -374,6 +374,7 @@ real script with bash's own `time` builtin (copy-pasteable and reproducible
 as written; substitute a different repository checkout's own path if
 re-running elsewhere):
 
+<!-- gitapex-allow-unguarded-shell-pipe: a copy-pasteable timing transcript, not a documented gate invocation -- the pipe only feeds `sed`'s own line-prefixing for display, and the measurement's own pass/fail is read from the printed `real`/`exit=` values below, not from this pipeline's own exit status (https://github.com/tvna/gitapex/issues/1531) -->
 ```
 $ payload='{"tool_name":"mcp__github__issue_write","tool_input":{"method":"create","body":"ACM: not-applicable (docs): example"}}'
 $ for i in 1 2 3 4 5; do
@@ -557,8 +558,7 @@ from the sibling repository `tvna/claude-md`, whose
 bullets in its own `.apm/instructions/master.instructions.md` to the
 literal marker phrase `non-exhaustive instances`. Confirmed on 2026-08-09
 by reading that file directly from a fresh clone of that repository, not
-from a summary of it: the module defines `MARKER = "non-exhaustive
-instances"` and a four-entry `REGISTERED_BULLETS` map (untrusted-data
+from a summary of it: the module defines `MARKER = "non-exhaustive instances"` and a four-entry `REGISTERED_BULLETS` map (untrusted-data
 sources, adversarial payloads, destructive operations, secret lifecycle),
 and its own docstring states the grounding -- "a closed list is a control
 that is merely *tedious* for an attacker to evade by finding an unlisted
