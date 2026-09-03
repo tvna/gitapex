@@ -4,7 +4,7 @@
 ``detection-logic-property-coverage`` gate requires one for the regex-based
 detection logic that gate introduces.
 
-Four properties, one per trigger-bearing helper function -- the example
+Five properties, one per trigger-bearing helper function -- the example
 suite next door (``tests/test_gitapex_gate_unguarded_shell_pipe_in_docs.py``)
 enumerates specific input shapes by hand; these properties instead
 generate the shape space each helper's own regex is meant to accept or
@@ -44,6 +44,15 @@ Which properties are model-based
   (same marker grammar, different token name). The generator knows which
   line is a well-formed marker and where it placed it, so both an
   over-permissive regex and an off-by-one in the inspected line fail.
+* :func:`test_effective_line_joins_a_real_continuation` and
+  :func:`test_effective_line_does_not_join_a_non_continuation` --
+  **model-based**. Added after a blast-radius review found this gate's
+  own regex could not see a pipe split across a shell line-continuation
+  (live-confirmed against 13 real, previously-undetected instances of
+  issue #1531's own defect class already in this repository). The
+  generator holds which previous-line shape is a genuine continuation and
+  which is not (plain text, empty, an escaped ``\\\\``), independently of
+  `_effective_line`'s own join logic.
 
 Reproducibility: ``derandomize=True`` with an explicit ``max_examples`` and
 ``deadline=None``, applied per property rather than as a global Hypothesis
@@ -416,3 +425,65 @@ def test_has_allow_marker_accepts_only_a_valid_marker_directly_above(
     expected = index >= 2 and candidates[index - 2][0]
 
     assert gate._has_allow_marker(lines, index) is expected
+
+
+# ==========================================================================
+# `_effective_line` -- model-based.
+# ==========================================================================
+
+_CONTINUATION_TRAILING = ("\\", "\\  ", "\\\t")
+_NON_CONTINUATION_LINES = ("plain line", "", "ends in backslash-backslash \\\\", "trailing space \\  x")
+# Letters/digits/spaces only (no backslash, no leading/trailing whitespace of
+# their own) so the join arithmetic below is unambiguous -- an alphabet wide
+# enough to include internal whitespace would make "where did next_body's own
+# leading space go" ambiguous between the two lines, a question about the
+# generator's own construction, not about `_effective_line`.
+_WORD_TEXT = st.text(alphabet=st.characters(whitelist_categories=("Ll", "Lu", "Nd")), max_size=12)
+
+
+@_PROPERTIES
+@given(
+    prefix=_WORD_TEXT,
+    trailing=st.sampled_from(_CONTINUATION_TRAILING),
+    next_leading=st.sampled_from(("", " ", "  ", "\t")),
+    next_body=_WORD_TEXT,
+)
+def test_effective_line_joins_a_real_continuation(
+    prefix: str, trailing: str, next_leading: str, next_body: str
+) -> None:
+    """A previous line ending in a bare backslash (optionally followed by
+    only whitespace) is joined with the next line's own left-stripped
+    content -- the same join a shell performs before executing a
+    backslash-continued command.
+
+    **Model-based**: the generator holds the intended previous/next split
+    and the expected joined form independently of `_effective_line`
+    itself, so a regression that failed to strip the trailing backslash,
+    or that failed to strip the next line's own leading whitespace, fails
+    against it.
+    """
+    lines = [prefix + trailing, next_leading + next_body]
+    expected = prefix + " " + next_body
+    assert gate._effective_line(lines, 1) == expected
+
+
+@_PROPERTIES
+@given(non_continuation=st.sampled_from(_NON_CONTINUATION_LINES), next_line=_WORD_TEXT)
+def test_effective_line_does_not_join_a_non_continuation(non_continuation: str, next_line: str) -> None:
+    """The mirror property: a previous line that does not end in a bare
+    backslash -- plain text, empty, an escaped `\\\\`, or a backslash
+    followed by non-whitespace -- leaves the next line unchanged.
+
+    Confirmed live: dropping the `not previous.endswith("\\\\\\\\")` guard
+    makes an escaped-backslash line (`ends in backslash-backslash \\\\`)
+    wrongly join with its successor, and this property catches it.
+    """
+    lines = [non_continuation, next_line]
+    assert gate._effective_line(lines, 1) == next_line
+
+
+@_PROPERTIES
+@given(line=_WORD_TEXT)
+def test_effective_line_returns_the_first_line_unchanged(line: str) -> None:
+    """Index 0 has no predecessor to join with."""
+    assert gate._effective_line([line], 0) == line
