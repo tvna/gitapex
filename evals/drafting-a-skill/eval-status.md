@@ -72,7 +72,18 @@ execution path than an intentional trial) is covered below.
 Disclosed gaps, not silently assumed solved: this corpus does not yet
 cover Step 4's collision/dependency-reconciliation check, Step 5's
 domain-gap sweep, or Step 6's deterministic-checker invocation as their
-own dedicated assertion targets, nor the Precondition's second
+own dedicated assertion targets -- including, as of the
+`--strict-token-budget` addition to Step 6's own checker invocation, the
+new hard-FAIL-on-over-budget-draft branch specifically: no fixture here
+exercises a draft that trips `body-token-budget` under that flag, or
+Step 6's own newly-stated trim-priority order for responding to it (this
+same file's "On a `body-token-budget` FAIL, trim in this order" bullet).
+`battle-testing-a-skill` flagged this gap directly (2026-09-03,
+independent dispatch); it was already covered by this paragraph's
+pre-existing Step 6 disclosure, not a defect introduced by that
+addition, but is named explicitly here rather than left folded into the
+general Step 6 statement. Nor does this corpus cover the Precondition's
+second
 route-away branch (target is already a finished draft -> route directly
 to `evaluating-skill-quality`/`battle-testing-a-skill` without
 re-entering at Step 1), nor the new Step 2 escalate-on-missing-axis
