@@ -405,3 +405,60 @@ def test_main_returns_one_and_explains_the_failure(tmp_path: pathlib.Path, capsy
 def test_args_reject_a_root_that_does_not_exist(tmp_path: pathlib.Path) -> None:
     with pytest.raises(ValueError, match="must be an existing directory"):
         gate.GateUnguardedShellPipeInDocsArgs(root=tmp_path / "does-not-exist")
+
+
+def test_args_root_must_exist_accepts_a_real_directory(tmp_path: pathlib.Path) -> None:
+    """Exercises `_root_must_exist` on the accepting path directly, not only
+    the rejecting path above."""
+    validated = gate.GateUnguardedShellPipeInDocsArgs(root=tmp_path)
+    assert validated.root == tmp_path
+
+
+# --- internal helpers, called directly ------------------------------------
+
+
+def test_violation_describe_names_the_path_line_and_location() -> None:
+    violation = gate.Violation(
+        path="skills/foo/SKILL.md", line=7, matched="git log | python3 x.py", location="fenced code block"
+    )
+    described = violation.describe()
+    assert "skills/foo/SKILL.md:7" in described
+    assert "fenced code block" in described
+    assert "git log | python3 x.py" in described
+
+
+def test_markdown_violations_in_text_called_directly(tmp_path: pathlib.Path) -> None:
+    text = "```bash\ngit log | python3 x.py\n```\n"
+    assert gate.markdown_violations_in_text(text) == [(2, "git log | python3 x.py")]
+
+
+def test_violations_in_markdown_file_called_directly(tmp_path: pathlib.Path) -> None:
+    root = _repo(tmp_path)
+    path = _write(root, "skills/foo/SKILL.md", "```bash\ngit log | python3 x.py\n```\n")
+    violations = gate.violations_in_markdown_file(path, root)
+    assert [v.path for v in violations] == ["skills/foo/SKILL.md"]
+
+
+def test_violations_in_python_file_called_directly(tmp_path: pathlib.Path) -> None:
+    root = _repo(tmp_path)
+    path = _write(
+        root,
+        "hooks/gitapex_check_direct.py",
+        '"""Usage::\n\n    git diff --name-only BASE HEAD | python3 gitapex_check_direct.py\n"""\n',
+    )
+    violations = gate.violations_in_python_file(path, root)
+    assert len(violations) == 1
+    assert violations[0].location == "module docstring"
+
+
+def test_tracked_files_called_directly(tmp_path: pathlib.Path) -> None:
+    root = _repo(tmp_path)
+    _write(root, "skills/foo/SKILL.md", "clean\n")
+    found = gate._tracked_files(root, ("skills/*/SKILL.md",))
+    assert [p.relative_to(root).as_posix() for p in found] == ["skills/foo/SKILL.md"]
+
+
+def test_read_text_called_directly(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "a.md"
+    path.write_text("hello\n", encoding="utf-8")
+    assert gate._read_text(path) == "hello\n"
