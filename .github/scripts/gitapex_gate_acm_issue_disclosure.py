@@ -80,6 +80,11 @@ Usage (the check alone, no network calls, no side effects)::
     uv run --frozen python3 .github/scripts/gitapex_gate_acm_issue_disclosure.py --check-only --body <path>
     printf '%s' "$ISSUE_BODY" | uv run --frozen python3 .github/scripts/gitapex_gate_acm_issue_disclosure.py --check-only
 
+A bare pipe here masks `printf`'s own exit status in a non-`pipefail` shell
+(issue #1531) -- harmless for a literal `printf` producer, which cannot
+itself fail in ordinary use, but add `set -o pipefail` first if this
+recipe's producer is ever swapped for a command that can.
+
 Usage (full run: check, then label/comment as needed)::
 
     uv run --frozen python3 .github/scripts/gitapex_gate_acm_issue_disclosure.py \\
