@@ -284,7 +284,7 @@ def _scan_workflow(workflow: pathlib.Path) -> list[tuple[str, int, str]]:
     return findings
 
 
-def load_python_dependent_hook_script_names(ssot_path: pathlib.Path = SSOT_PATH) -> frozenset[str]:
+def load_python_dependent_hook_script_names(ssot_path: pathlib.Path = SSOT_PATH) -> frozenset[str] | None:
     """Return the basenames of every `hooks/*.py` file registered in
     `.gitapex/ssot.json` under a gate whose own
     `preconditions.requires_python_packages` is non-empty (issue #1697): a
@@ -294,20 +294,24 @@ def load_python_dependent_hook_script_names(ssot_path: pathlib.Path = SSOT_PATH)
     package that gate needs), the same reason a bare `python3
     .github/scripts/*.py` invocation is already a hard failure below.
 
-    Degrades to an empty result (never raises) when the registry is
-    missing, unreadable, or does not parse to the expected shape -- the
-    caller then simply has no additional `hooks/*.py` targets to widen its
-    existing `.github/scripts/*.py`-only scope with, rather than crashing
-    this whole gate on an unreadable registry."""
+    Returns `None` (never an empty result masquerading as "nothing
+    registered") when the registry is missing, unreadable, or does not
+    parse to the expected shape: the caller must treat that the same
+    fail-closed way `find_bare_invocations`/`_scan_workflow` already treat
+    an unreadable workflow file -- a "cannot verify" finding, not a
+    silent "no additional targets" pass (adversarial-review finding,
+    issue #1697: a malformed `.gitapex/ssot.json` alongside a real bare
+    invocation of a registered `hooks/*.py` target previously made this
+    whole gate report "No ... bare invocations found" and exit 0)."""
     try:
         data = json.loads(ssot_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return frozenset()
+        return None
     if not isinstance(data, dict):
-        return frozenset()
+        return None
     gates = data.get("gates")
     if not isinstance(gates, list):
-        return frozenset()
+        return None
 
     names: set[str] = set()
     for gate in gates:
@@ -372,10 +376,17 @@ def _scan_hook(
     # literal `hooks/<name>.py` substring (that literal-substring shape is
     # what `_GITHUB_SCRIPTS_PATH_RE` matches for `.github/scripts/*.py`
     # instead, since those are always written relative to repo_root).
+    # `(?:^|/)` anchors the match to a real path-component boundary --
+    # without it, an unregistered file whose own name merely ENDS with a
+    # registered name as a substring (e.g.
+    # "my_other_gitapex_check_python_precondition.py" against registered
+    # "gitapex_check_python_precondition.py") would false-positive, since
+    # a bare trailing `$` allows any preceding character (adversarial-
+    # review finding, issue #1697).
     hooks_py_target_re = None
     if hard_fail_hooks_py_names:
         hooks_py_target_re = re.compile(
-            r"(?:" + "|".join(re.escape(name) for name in sorted(hard_fail_hooks_py_names)) + r")$"
+            r"(?:^|/)(?:" + "|".join(re.escape(name) for name in sorted(hard_fail_hooks_py_names)) + r")$"
         )
 
     # Pass 1: which variables get assigned a `.github/scripts/*.py` path,
@@ -453,7 +464,22 @@ def main() -> int:
     # target whose own gate declares a non-empty
     # `preconditions.requires_python_packages`, now fails this gate the
     # same way a workflow-level bare invocation always has.
+    #
+    # `None` (registry missing/unreadable/malformed) is itself a hard
+    # failure here, not a silent "nothing extra to widen with" pass --
+    # adversarial-review finding, issue #1697: without this, a malformed
+    # .gitapex/ssot.json made this whole gate report a false "clean"
+    # verdict even with a real bare invocation of a registered target
+    # present, the exact silent-degrade class this gate exists to close.
+    # The `.github/scripts/*.py`-only scan below still runs against an
+    # empty hooks/*.py scope rather than being skipped entirely, matching
+    # find_bare_invocations's own "still scan what you can, but report the
+    # inability to verify" precedent.
     hard_fail_hooks_py_names = load_python_dependent_hook_script_names(ssot_path)
+    if hard_fail_hooks_py_names is None:
+        print(f"Could not read or parse {ssot_path} to determine hooks/*.py third-party-dependent targets.")
+        exit_code = 1
+        hard_fail_hooks_py_names = frozenset()
     hooks_findings = find_hooks_shell_indirected_invocations(hooks_dir, hard_fail_hooks_py_names)
     if hooks_findings:
         print(

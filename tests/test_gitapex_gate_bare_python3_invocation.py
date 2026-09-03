@@ -769,26 +769,31 @@ def test_load_python_dependent_hook_script_names_ignores_non_hooks_py_scripts(tm
     assert gate.load_python_dependent_hook_script_names(ssot_path) == frozenset()
 
 
-def test_load_python_dependent_hook_script_names_gates_key_not_a_list_returns_empty(tmp_path: pathlib.Path) -> None:
+def test_load_python_dependent_hook_script_names_gates_key_not_a_list_returns_none(tmp_path: pathlib.Path) -> None:
+    """A malformed registry returns None (a "cannot verify" signal), never
+    an empty frozenset that a caller could mistake for "nothing
+    registered" -- issue #1697 adversarial-review finding: the latter
+    shape let a malformed .gitapex/ssot.json silently mask a real bare
+    invocation of a registered hooks/*.py target."""
     ssot_path = tmp_path / "ssot.json"
     ssot_path.write_text(json.dumps({"gates": "not-a-list"}), encoding="utf-8")
-    assert gate.load_python_dependent_hook_script_names(ssot_path) == frozenset()
+    assert gate.load_python_dependent_hook_script_names(ssot_path) is None
 
 
-def test_load_python_dependent_hook_script_names_missing_file_returns_empty(tmp_path: pathlib.Path) -> None:
-    assert gate.load_python_dependent_hook_script_names(tmp_path / "does-not-exist.json") == frozenset()
+def test_load_python_dependent_hook_script_names_missing_file_returns_none(tmp_path: pathlib.Path) -> None:
+    assert gate.load_python_dependent_hook_script_names(tmp_path / "does-not-exist.json") is None
 
 
-def test_load_python_dependent_hook_script_names_invalid_json_returns_empty(tmp_path: pathlib.Path) -> None:
+def test_load_python_dependent_hook_script_names_invalid_json_returns_none(tmp_path: pathlib.Path) -> None:
     bad = tmp_path / "bad.json"
     bad.write_text("not valid json{", encoding="utf-8")
-    assert gate.load_python_dependent_hook_script_names(bad) == frozenset()
+    assert gate.load_python_dependent_hook_script_names(bad) is None
 
 
-def test_load_python_dependent_hook_script_names_non_mapping_top_level_returns_empty(tmp_path: pathlib.Path) -> None:
+def test_load_python_dependent_hook_script_names_non_mapping_top_level_returns_none(tmp_path: pathlib.Path) -> None:
     weird = tmp_path / "weird.json"
     weird.write_text("[1, 2, 3]", encoding="utf-8")
-    assert gate.load_python_dependent_hook_script_names(weird) == frozenset()
+    assert gate.load_python_dependent_hook_script_names(weird) is None
 
 
 def test_load_python_dependent_hook_script_names_malformed_gate_entries_are_skipped(tmp_path: pathlib.Path) -> None:
@@ -938,6 +943,31 @@ def test_hooks_shell_indirected_hooks_py_name_substring_does_not_cross_match(tmp
     assert findings == []
 
 
+def test_hooks_shell_indirected_unregistered_name_ending_in_a_registered_name_is_not_flagged(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Mirror-image defeat case (adversarial-review finding, issue
+    #1697): a decoy file `my_other_gitapex_check_python_precondition.py`
+    must not be treated as a match merely because the registered name
+    `gitapex_check_python_precondition.py` is a SUFFIX of the decoy's own
+    name -- the `(?:^|/)` boundary requires the registered name to start
+    right after a path separator (or the start of the value), not merely
+    end the value. Without that boundary, a bare trailing `$` anchor
+    alone would wrongly flag this decoy, over-blocking a target that was
+    never registered."""
+    hooks_dir = _write_hook(
+        tmp_path,
+        "decoy2.sh",
+        "#!/bin/bash\n"
+        'decoy_script="$script_dir/my_other_gitapex_check_python_precondition.py"\n'
+        'python3 "$decoy_script"\n',
+    )
+    findings = gate.find_hooks_shell_indirected_invocations(
+        hooks_dir, frozenset({"gitapex_check_python_precondition.py"})
+    )
+    assert findings == []
+
+
 def test_main_flags_a_registered_hooks_py_target_and_exits_one(
     tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -991,6 +1021,41 @@ def test_main_returns_zero_when_no_gate_requires_a_python_package(
     assert gate.main() == 0
 
 
+def test_main_hard_fails_on_an_unreadable_ssot_registry_even_with_no_other_findings(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression for the issue #1697 adversarial-review finding: before
+    this fix, a malformed .gitapex/ssot.json made
+    load_python_dependent_hook_script_names degrade to an empty
+    frozenset, which find_hooks_shell_indirected_invocations then read as
+    "nothing registered" -- so a real bare invocation of a registered
+    hooks/*.py target went completely undetected AND main() printed a
+    false "No ... bare invocations found" while exiting 0. This asserts
+    main() now hard-fails on the unreadable registry itself, matching
+    find_bare_invocations's own established "cannot verify" convention,
+    even though the hooks/*.sh scan below it finds nothing (since it has
+    no registered names to check against)."""
+    workflows_dir = _write(
+        tmp_path,
+        "clean.yml",
+        "jobs:\n  a:\n    steps:\n      - name: run\n        run: uv run --frozen python3 .github/scripts/x.py\n",
+    )
+    hooks_dir = _write_hook(
+        tmp_path,
+        "check-pr-skill-audit-disclosure.sh",
+        "#!/bin/bash\n"
+        'precondition_script="$script_dir/gitapex_check_python_precondition.py"\n'
+        'python3 "$precondition_script" -- pydantic\n',
+    )
+    bad_ssot_path = tmp_path / "bad_ssot.json"
+    bad_ssot_path.write_text("not valid json{", encoding="utf-8")
+    monkeypatch.setattr("sys.argv", ["prog", str(workflows_dir), str(hooks_dir), str(bad_ssot_path)])
+    assert gate.main() == 1
+    out = capsys.readouterr().out
+    assert "Could not read or parse" in out
+    assert str(bad_ssot_path) in out
+
+
 # --- live proof against this repository's own real ssot.json + hooks/ ---
 
 
@@ -999,5 +1064,6 @@ def test_this_repositorys_own_hooks_have_no_hard_fail_indirected_invocation() ->
     backstop: scan this repository's REAL hooks/ directory against its
     REAL ssot.json, exactly as CI/local-preflight will."""
     hard_fail_names = gate.load_python_dependent_hook_script_names(REPO_ROOT / ".gitapex" / "ssot.json")
+    assert hard_fail_names is not None, "this repository's own .gitapex/ssot.json must be readable"
     findings = gate.find_hooks_shell_indirected_invocations(REPO_ROOT / "hooks", hard_fail_names)
     assert findings == [], findings
