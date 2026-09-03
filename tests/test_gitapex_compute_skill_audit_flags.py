@@ -210,6 +210,43 @@ def test_design_doc_and_checker_script_signals_are_collected(repo: pathlib.Path)
     assert flags.changed_checker_scripts == ("skills/foo/scripts/gitapex_check_thing.py",)
 
 
+def test_design_doc_detection_recognizes_the_new_gitapex_specs_path(repo: pathlib.Path) -> None:
+    """Issue #1700: newly-authored design specs save under
+    `docs/gitapex/specs/...` from now on (renamed from
+    `docs/superpowers/specs/...`); the detection pattern must recognize
+    the new path too."""
+    _write(repo, "docs/gitapex/specs/2026-01-01-thing.md", "# doc\n")
+    _commit(repo)
+    flags = _flags(repo)
+    assert flags.changed_design_docs == ("docs/gitapex/specs/2026-01-01-thing.md",)
+
+
+def test_design_doc_detection_still_recognizes_the_old_superpowers_specs_path(repo: pathlib.Path) -> None:
+    """Regression guard for issue #1700's additive extension: the old
+    `docs/superpowers/specs/...` path (still in active use -- this
+    Branch Plan's Non-goals keep existing files un-moved) must keep
+    triggering detection unchanged, not be silently narrowed out in
+    favor of the new `docs/gitapex/specs/...` path."""
+    _write(repo, "docs/superpowers/specs/2026-01-01-thing.md", "# doc\n")
+    _commit(repo)
+    flags = _flags(repo)
+    assert flags.changed_design_docs == ("docs/superpowers/specs/2026-01-01-thing.md",)
+
+
+def test_design_doc_detection_recognizes_both_old_and_new_paths_together(repo: pathlib.Path) -> None:
+    """Both roots recognized simultaneously (sorted union), the shape a
+    real migration-period PR is likely to actually produce -- some
+    design docs still under the old root, new ones under the new root."""
+    _write(repo, "docs/superpowers/specs/2026-01-01-old.md", "# doc\n")
+    _write(repo, "docs/gitapex/specs/2026-01-02-new.md", "# doc\n")
+    _commit(repo)
+    flags = _flags(repo)
+    assert flags.changed_design_docs == (
+        "docs/gitapex/specs/2026-01-02-new.md",
+        "docs/superpowers/specs/2026-01-01-old.md",
+    )
+
+
 def test_checker_or_gate_union_includes_a_gate_path_no_checker_glob_matches(repo: pathlib.Path) -> None:
     """Issue #998: `hooks/check-*.sh` is a gate (rule 1 of
     `gitapex_detect_changed_gate_scripts.py`) but matches none of the
@@ -255,6 +292,16 @@ def test_an_unsupported_skill_directory_name_is_an_error(repo: pathlib.Path) -> 
 
 def test_a_nested_design_doc_is_an_error_rather_than_being_dropped(repo: pathlib.Path) -> None:
     _write(repo, "docs/superpowers/specs/sub/thing.md", "# doc\n")
+    _commit(repo)
+    with pytest.raises(flags_module.FlagComputationError, match="unsupported design doc filename"):
+        _flags(repo)
+
+
+def test_a_nested_design_doc_under_the_new_gitapex_specs_path_is_also_an_error(repo: pathlib.Path) -> None:
+    """Same single-level-only enforcement (issue #1700's regex extension
+    only added a second path root -- `docs/(?:superpowers|gitapex)/specs/` --
+    it deliberately did not widen the no-nested-subdirectory shape)."""
+    _write(repo, "docs/gitapex/specs/sub/thing.md", "# doc\n")
     _commit(repo)
     with pytest.raises(flags_module.FlagComputationError, match="unsupported design doc filename"):
         _flags(repo)
@@ -409,6 +456,25 @@ def test_cli_emits_every_output_key_in_order(repo: pathlib.Path, capsys: pytest.
     assert code == 0
     keys = [line.partition("=")[0] for line in out.strip().splitlines()]
     assert tuple(keys) == flags_module.OUTPUT_KEYS
+
+
+def test_not_applicable_stderr_message_names_both_design_doc_paths(
+    repo: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Issue #1700: `compute_flags`'s own skip-diagnostic message named
+    only the old `docs/superpowers/specs/*.md` path even after
+    `_DESIGN_DOC_SHAPE_RE`/`_DESIGN_DOC_PATHSPECS` were widened to also
+    accept `docs/gitapex/specs/*.md` -- a contributor reading this
+    stderr line got an incomplete picture of what the gate actually
+    covers. Pins the fixed wording, calling `compute_flags` directly
+    (the print lives inside it, not only reachable through the CLI)."""
+    _write(repo, "README.md")
+    _commit(repo)
+    flags = flags_module.compute_flags("HEAD~1", "HEAD", repo)
+    err = capsys.readouterr().err
+    assert flags.applicable is False
+    assert "docs/superpowers/specs/*.md" in err
+    assert "docs/gitapex/specs/*.md" in err
 
 
 def test_cli_json_format_round_trips(repo: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:

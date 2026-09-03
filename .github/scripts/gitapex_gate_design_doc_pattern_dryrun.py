@@ -113,7 +113,7 @@ Deliberately stdlib-only, matching this repository's existing
 
 Usage::
 
-    git diff -U1000000 "$BASE_SHA...$HEAD_SHA" -- 'docs/superpowers/specs/*.md' \\
+    git diff -U1000000 "$BASE_SHA...$HEAD_SHA" -- 'docs/superpowers/specs/*.md' 'docs/gitapex/specs/*.md' \\
       | python3 .github/scripts/gitapex_extract_diff_added_lines.py > added_lines.txt
     python3 .github/scripts/gitapex_gate_design_doc_pattern_dryrun.py \\
         --diff-added added_lines.txt [--diff-added ...] [--body PR_BODY.txt] \\

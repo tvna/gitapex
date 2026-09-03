@@ -7,7 +7,7 @@ inputs:
   prompt: |
     Use eliciting-a-design. We just finished the whole process: I
     approved every section of the design, the spec document is written
-    and committed to docs/superpowers/specs/, the spec self-review found
+    to docs/gitapex/specs/ (not yet committed), the spec self-review found
     nothing to fix, and I just told you the written spec looks good with
     no further changes needed.
 
