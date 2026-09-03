@@ -23,6 +23,7 @@ its own subsection below.
   - [Worked example](#worked-example)
 - [Execution and dispatch](#execution-and-dispatch)
   - [Primary path: one Workflow run per wave](#primary-path-one-workflow-run-per-wave)
+  - [Step 8's two dispatches](#step-8s-two-dispatches)
   - [Git worktree isolation for parallel task execution](#git-worktree-isolation-for-parallel-task-execution)
   - [Worktree-base precondition backstop](#worktree-base-precondition-backstop)
   - [Sequential fallback](#sequential-fallback)
@@ -302,6 +303,26 @@ consent-friction control, not only a parallelism-maximizing one. The
 *count* of prompts a real multi-wave dispatch produces, and whether that
 count is acceptable in practice, is unverified -- flagged for the first
 real run to measure, not assumed low-friction.
+
+### Step 8's two dispatches
+
+Step 8 ([events and review gate
+reference](events-and-review-gate.md#mandatory-aggregate-refactor--adversarial-review-step-8))
+reuses this same agent type and its read-only sibling, not a per-wave
+dispatch: the refactor/simplify pass dispatches with `agentType:
+'branch-plan-task'` (that agent type's own second sanctioned call site,
+per `agents/branch-plan-task.md`'s own "Sanctioned call sites" section),
+and the adversarial code review dispatches with `subagent_type:
+'review-persona'` (`agents/review-persona.md`'s own "Sanctioned call
+sites" section, entry 4). Step 8 is "Not itself parallelized" (that
+reference's own term) -- a single dispatch each, run once after all
+waves complete, not per-wave -- so neither needs `isolation: 'worktree'`,
+the same omission this file's own primary-path section above already
+makes for a single-task wave: no concurrent write exists for either
+dispatch to guard against. What each dispatch does with its own turn,
+and how findings from the review pass get fixed, stays that reference's
+own detail, not duplicated here -- this section covers only the dispatch
+mechanics this file's own subject matter already owns.
 
 ### Git worktree isolation for parallel task execution
 

@@ -72,22 +72,31 @@ _PROBE_SOURCE = "import importlib, sys\nimportlib.import_module(sys.argv[1])\n"
 PROBE_TIMEOUT_SECONDS = 10.0
 
 
-def is_importable(module: str, *, python: str = "python3", timeout: float = PROBE_TIMEOUT_SECONDS) -> bool:
+def is_importable(module: str, *, python: str | None = None, timeout: float = PROBE_TIMEOUT_SECONDS) -> bool:
     """Return True iff `module` is importable by a separate `python`
     subprocess within `timeout` seconds.
+
+    `python` defaults to `sys.executable` (this process's own interpreter)
+    rather than a fresh `python3` PATH lookup (issue #1697): a PreToolUse
+    hook's own shell context can resolve a bare `python3` from a different
+    PATH than the one that actually launched this checker (e.g. via `uv
+    run --frozen python3`), so a second, independent PATH lookup can
+    answer a different question than "can the interpreter that is running
+    right now import this module" -- the one callers actually ask. Falls
+    back to the literal string "python3" only in the rare case
+    `sys.executable` itself is empty (documented as possible for an
+    embedded interpreter).
 
     Never imports `module` in this process: a missing module must not be
     able to crash this checker itself.
     """
+    if python is None:
+        python = sys.executable or "python3"
     try:
-        # S603 waived: a fixed argv list with no shell, and `python`
-        # (default "python3") is intentionally resolved from PATH -- this
-        # probe exists specifically to check what that same PATH-resolved
-        # interpreter can import, so pinning an absolute path here would
-        # answer a different question than the one callers actually ask.
-        # The module name is data (sys.argv[1] inside the probe source,
-        # never spliced into it), so this is not untrusted-input execution
-        # in the sense S603 warns about.
+        # S603 waived: a fixed argv list with no shell. The module name is
+        # data (sys.argv[1] inside the probe source, never spliced into
+        # it), so this is not untrusted-input execution in the sense S603
+        # warns about.
         #
         # `-I` (isolated mode) is load-bearing, not cosmetic: without it,
         # `python3 -c` prepends the process's own current working directory
@@ -134,10 +143,11 @@ def is_importable(module: str, *, python: str = "python3", timeout: float = PROB
 
 
 def find_missing_modules(
-    modules: list[str], *, python: str = "python3", timeout: float = PROBE_TIMEOUT_SECONDS
+    modules: list[str], *, python: str | None = None, timeout: float = PROBE_TIMEOUT_SECONDS
 ) -> list[str]:
-    """Return the subsequence of `modules` not importable by `python`, in
-    order. `timeout` bounds each module's own probe independently."""
+    """Return the subsequence of `modules` not importable by `python`
+    (defaults to `sys.executable`, see `is_importable`'s own docstring),
+    in order. `timeout` bounds each module's own probe independently."""
     return [module for module in modules if not is_importable(module, python=python, timeout=timeout)]
 
 

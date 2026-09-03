@@ -36,6 +36,14 @@ adds the new call site, rather than reusing this definition silently.
    respectively, neither performable by this dispatch's read-only,
    file-scoped tool set) -- while the rest of checks 2-8, check 5
    included, still dispatch normally.
+4. `executing-a-branch-plan` Step 8's adversarial code review pass
+   (Decision 12) -- a single dispatch over the full accumulated diff
+   after all Step 6 tasks complete, reviewing for correctness bugs.
+   Read-only: this dispatch returns findings only; it does NOT verify,
+   fix, or validate them -- see
+   `skills/executing-a-branch-plan/references/events-and-review-gate.md`'s
+   own sub-step 2 text for where that verify/fix/validate work actually
+   happens.
 
 ## What this dispatch does and does not do
 
