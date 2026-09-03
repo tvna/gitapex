@@ -121,6 +121,78 @@ def test_waiver_line_case_insensitive_and_bulleted() -> None:
     assert checker.has_duplicate_waiver("- duplicate-pr-waiver: intentional second PR, see #99")
 
 
+def test_waiver_line_accepts_a_fence_shaped_reason() -> None:
+    """Regression test (issue #1714, porting issue #1432/PR #1440's own fix
+    for the sibling `skills/drafting-issues/scripts/gitapex_check_acm_present.py`):
+    a `Duplicate-PR-waiver:` line whose own disclosed reason is itself
+    shaped like a fence marker must still be detected -- the marker sits
+    mid-line after "Duplicate-PR-waiver: ", never as the first
+    non-whitespace content of its own line, so per CommonMark/GitHub fence
+    syntax it opens no real code fence and `_strip_fences()` must leave the
+    reason alone.
+
+    Before the fix both fence regexes matched a marker anywhere in the
+    text, so each swallowed the reason before `_WAIVER_RE` ever saw it; the
+    two cases below pin one regex apiece -- the first
+    `_UNTERMINATED_FENCE_RE`, the second `_FENCE_RE`."""
+    assert checker.has_duplicate_waiver("Some PR description.\n\nDuplicate-PR-waiver: ~~~\n")
+    assert checker.has_duplicate_waiver("Duplicate-PR-waiver: ```\nreal content after\n```\n")
+
+
+def test_waiver_line_rejected_inside_a_list_item_fenced_block() -> None:
+    """Regression test (issue #1714, porting issue #1432's own adversarial
+    review): a fence opened on the same line as a list-item marker (`- ```)
+    is still a genuine CommonMark fence -- the marker is the first
+    non-whitespace content of the list item's own content, not merely of
+    the raw line. A fabricated waiver line inside the list-fenced block
+    must still be rejected, and a real waiver line elsewhere in the body
+    must still be detected regardless of an unrelated list-fenced block."""
+    assert not checker.has_duplicate_waiver(
+        "## Facts\n\n- The requester wrote, verbatim:\n- ```\n  Duplicate-PR-waiver: none\n  ```\n"
+    )
+    assert checker.has_duplicate_waiver(
+        "- Reproduction:\n- ```\n  pytest -q\n  ```\n\nDuplicate-PR-waiver: intentional second PR\n"
+    )
+
+
+def test_waiver_line_rejected_inside_a_bare_cr_fenced_block() -> None:
+    """Regression test (issue #1714, porting issue #1432's own adversarial
+    review): per CommonMark 2.1, a bare CR (not part of a CRLF pair) is
+    itself a line ending, so a fence marker immediately following one still
+    opens a genuine fence. `[ \\t]*` alone cannot cross that CR to reach
+    the marker; the container prefix must accept a leading `\\r` too."""
+    assert not checker.has_duplicate_waiver("intro\n\r```\nDuplicate-PR-waiver: none\n```\n")
+
+
+def test_waiver_line_rejected_inside_an_ordered_or_plus_fenced_block() -> None:
+    """Regression test (issue #1714, porting issue #1432's own second
+    adversarial review): the ordered-list (`1. `) and `+`-bullet branches
+    of the container prefix are exercised here too, not only the `-`
+    bullet and bare-CR paths above."""
+    assert not checker.has_duplicate_waiver("1. ```\n  Duplicate-PR-waiver: none\n  ```\n")
+    assert not checker.has_duplicate_waiver("+ ```\n  Duplicate-PR-waiver: none\n  ```\n")
+
+
+def test_waiver_line_does_not_catastrophically_backtrack_on_a_whitespace_padded_container_prefix() -> None:
+    """Regression test (issue #1714, porting issue #1432's own second
+    adversarial review, security-tier CWE-1333): the container prefix
+    hoists its leading whitespace out of the repeated group rather than
+    placing it inside each alternative, which was found exploitable as a
+    ReDoS (clean exponential blowup, a sub-100-byte adversarial input
+    already exceeding several seconds). Asserts the fix holds by giving the
+    adversarial input a hard wall-clock budget a catastrophic-backtracking
+    regex could never meet, rather than merely asserting on the output
+    value."""
+    import time
+
+    payload = "-  " * 200 + "x"
+    start = time.perf_counter()
+    result = checker.has_duplicate_waiver(payload)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 2.0, f"took {elapsed:.3f}s on a {len(payload)}-char adversarial input -- possible ReDoS regression"
+    assert result is False
+
+
 # --- fetch_open_pull_requests -------------------------------------------
 
 
