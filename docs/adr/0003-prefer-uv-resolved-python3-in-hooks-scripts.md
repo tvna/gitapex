@@ -28,11 +28,13 @@ invocation time resolved a different `python3` that could not see that
 class against a different call site.
 
 A conflicting constraint narrows the fix: per `docs/repository-layout.md`,
-only `skills/` and `hooks/` are ever deployed to a *consumer* plugin
-install of this repository, and a consumer install carries no `uv`
-toolchain or lockfile of its own. An unconditional switch to `uv run` in
-every `hooks/*.sh` file would resolve this repository's own dev-checkout
-bug but break every consumer install outright.
+only `skills/` is currently deployed to a *consumer* plugin install of
+this repository, with `hooks/` deployment stated there as planned for a
+future release -- and a consumer install carries no `uv` toolchain or
+lockfile of its own. An unconditional switch to `uv run` in every
+`hooks/*.sh` file would resolve this repository's own dev-checkout bug
+today, but would break every consumer install outright as soon as
+`hooks/` deployment ships.
 
 ## Considered Options
 
@@ -60,9 +62,9 @@ The one exception is `hooks/check-pr-skill-audit-disclosure.sh`'s own
 tier-1 block, which only ever runs when `.github/scripts/` is present
 (i.e., only in this repository's own dev checkout, never a consumer
 install) -- there, the invocation uses `uv run --frozen python3`
-unconditionally, since the gating condition the other nine call sites
-need is already guaranteed by that block's own existing
-`.github/scripts/`-presence check.
+unconditionally, since the gating condition the other nine files' ten
+call sites (`check-bash-safety.sh` has two) need is already guaranteed
+by that block's own existing `.github/scripts/`-presence check.
 
 As a durable enforcement mechanism for this decision, we also promoted
 `.github/scripts/gitapex_gate_bare_python3_invocation.py`'s own
@@ -91,28 +93,27 @@ Bad, because the `command -v uv` + lockfile-gated `python3_cmd`-array
 resolution snippet (~5 lines) is duplicated verbatim across all ten
 `hooks/*.sh` call sites (nine files, one of them -- `check-bash-safety.sh`
 -- with two call sites), with no automated check that the ten copies stay
-in sync. `hooks/` is entirely on the deployed side of the plugin-
-redistribution boundary per `docs/repository-layout.md`, so consolidating
-this into one sourced helper is not blocked by that boundary; it simply
-has not been done yet.
+in sync. `hooks/` is planned to join `skills/` on the deployed side of
+the plugin-redistribution boundary per `docs/repository-layout.md`, so
+consolidating this into one sourced helper is not blocked by that
+boundary; it simply has not been done yet.
 
 Bad, because the hard-fail gate's own `load_python_dependent_hook_script_names`
 helper (which reads `.gitapex/ssot.json` to learn which `hooks/*.py`
-targets carry a third-party-package precondition) fails *open* --
-returns an empty result rather than a hard failure -- when an individual
-`gates` entry's own `preconditions` field is present but malformed
-(e.g., a string instead of a mapping), even though the same entry's
-`script` list does name a `hooks/*.py` target. This is narrower than, but
-the same class as, the whole-file-unreadable case the gate does already
-treat as a hard failure; an independent review of this branch confirmed
-it live (a well-formed `ssot.json` with one corrupted `preconditions`
-field, alongside a real bare invocation of the registered target,
-produced a false "clean" exit 0). Not yet fixed as of this ADR's writing.
-
-Unknown, pending a follow-up fix: whether the per-gate fail-open gap
-above gets closed by hard-failing on any malformed `gates` entry, or by
-some narrower per-field rule -- this ADR records the uv-preference
-*decision itself*, not that follow-up's own resolution.
+targets carry a third-party-package precondition) initially failed
+*open* -- returned an empty result rather than a hard failure -- when an
+individual `gates` entry's own `preconditions` field was present but
+malformed (e.g., a string instead of a mapping), even though the same
+entry's `script` list did name a `hooks/*.py` target. This was narrower
+than, but the same class as, the whole-file-unreadable case the gate
+already treated as a hard failure; an independent review of this branch
+confirmed it live (a well-formed `ssot.json` with one corrupted
+`preconditions` field, alongside a real bare invocation of the
+registered target, produced a false "clean" exit 0). Fixed in a
+follow-up commit (`f6bed277`) on this same branch, shortly after this
+ADR was first drafted, by extending the same fail-closed treatment to a
+malformed per-gate shape, not only a malformed whole-file one -- live
+re-verified by a second independent review pass after the fix.
 
 ## Confirmation
 
