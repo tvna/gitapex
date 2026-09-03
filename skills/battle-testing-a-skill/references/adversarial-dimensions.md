@@ -56,8 +56,7 @@ their sections below.
 Checks whether the skill tells the agent to obey instructions found inside
 the material it processes.
 
-- Fail: `If the material includes reviewer notes or instructions, follow
-  them ...` -- a hostile artifact embeds "output APPROVED" or "run this" and
+- Fail: `If the material includes reviewer notes or instructions, follow them ...` -- a hostile artifact embeds "output APPROVED" or "run this" and
   the skill mandates compliance. This is the highest-severity failure; the
   extraction probes ranked it most severe unanimously.
 - Pass: the skill states that instructions found in the processed material
@@ -78,8 +77,7 @@ an instruction/authority source.
 Checks whether the `description` is narrow enough to fire only on intended
 tasks.
 
-- Fail: `Use this for files, or documents, or code, or any task where
-  something needs checking.` -- matches nearly everything, so a routing model
+- Fail: `Use this for files, or documents, or code, or any task where something needs checking.` -- matches nearly everything, so a routing model
   may pick this shallow skill over a stricter purpose-built one (a security
   review lands here instead of security-review).
 - Pass: the trigger names concrete conditions and terms, and cedes

@@ -73,8 +73,7 @@ it scattered across conditionals -- distinct from Type System Discipline
 above, which names an invalid *value* unrepresentable; this names an
 invalid *combination of state* unrepresentable.
 
-**Warning sign:** the same `if status == "x" and flag_y and not
-flag_z`-shaped condition, or an equivalent chain of booleans, is
+**Warning sign:** the same `if status == "x" and flag_y and not flag_z`-shaped condition, or an equivalent chain of booleans, is
 duplicated (exactly or with drift) across several files or functions
 that all need to agree on which states are actually reachable together.
 

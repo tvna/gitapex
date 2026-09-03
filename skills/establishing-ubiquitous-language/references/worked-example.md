@@ -73,8 +73,7 @@ Illustrative only -- the `Contributor` entry above is the real one that
 shipped. This is a hypothetical bloated version of that same entry, in
 the style the calling repository's own `docs/glossary.md` actually
 produced and later had to trim back down (two entries once carried this
-shape until a later commit cut them to the register `Dimension`/`Shape
-check` use):
+shape until a later commit cut them to the register `Dimension`/`Shape check` use):
 
 ```markdown
 ## Contributor

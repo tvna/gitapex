@@ -41,8 +41,7 @@ skill's hook does.
 
 After Class B provisioning and the prek install, the same hook makes a
 third, unrelated best-effort attempt: non-interactively registering
-gitapex's own plugin marketplace and installing its own plugin (`claude
-plugin marketplace add`, `claude plugin install gitapex@gitapex`), so
+gitapex's own plugin marketplace and installing its own plugin (`claude plugin marketplace add`, `claude plugin install gitapex@gitapex`), so
 gitapex's own `skills/*` become invocable via the self-referential
 marketplace declared in `.claude/settings.json` -- separate from
 `apm install`, which only ever
@@ -101,8 +100,7 @@ binaries without running `apm install` afterward. Add `--tool NAME`
   problem"; here, `SKIPPED` means "could not run, this is a failure."
   Same word, two different meanings; both matter. If `apm` was excluded
   by a `--tool` filter (so this phase was never eligible to run), it
-  instead prints `apm install not attempted (apm was not in --tool
-  selection)` on stdout, which is not a failure.
+  instead prints `apm install not attempted (apm was not in --tool selection)` on stdout, which is not a failure.
 - With `--verify`: `PASS: <tool>: <version>` or `FAIL: <tool>: <reason>`
   per tool, both on stdout -- note this differs from the default path's
   per-tool `FAIL`, which goes to stderr.
@@ -170,8 +168,7 @@ succeeded, not that the *current* session's own skill list reflects it.
 
 Directly observed, reproduced across two separate sessions while building
 this mitigation: `claude plugin marketplace add` itself rewrites the
-committed `.claude/settings.json` in place -- `extraKnownMarketplaces.
-gitapex.source.path` gets resolved from the committed relative `"."` to
+committed `.claude/settings.json` in place -- `extraKnownMarketplaces. gitapex.source.path` gets resolved from the committed relative `"."` to
 this session's own container-specific absolute path, and top-level keys
 get reordered -- a second, independent cause of the same
 not-to-be-committed-drift shape the previous section already documents

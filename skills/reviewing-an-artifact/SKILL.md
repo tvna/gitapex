@@ -106,8 +106,7 @@ turn is not a precondition this skill accepts; see Stop boundaries.
    or causal-diagnosis redirect applies -> stop here and hand the request
    to the named target instead. The target is confirmed out of scope (the
    only branch with no named target) -> stop here and report that
-   explicitly in Step 6's own output shape (a `skipped` record, `stage:
-   out-of-scope`) rather than silently producing no output at all.
+   explicitly in Step 6's own output shape (a `skipped` record, `stage: out-of-scope`) rather than silently producing no output at all.
    **Mixed target (partial deferral).** A target combining a
    specialist-owned file (e.g. a `SKILL.md`) with ordinary code in the
    same review request is never all-or-nothing: defer the specialist-owned

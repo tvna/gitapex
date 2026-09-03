@@ -61,8 +61,7 @@ produces a confident false failure when missed. actionlint reads workflow
 files only. zizmor additionally collects and audits composite action
 definitions (`action.yml` / `action.yaml`). Handing a composite action
 definition to actionlint does not simply return nothing -- it reports
-`"jobs" section is missing in workflow` and `"on" section is missing in
-workflow` as syntax errors and exits non-zero, because it is parsing an
+`"jobs" section is missing in workflow` and `"on" section is missing in workflow` as syntax errors and exits non-zero, because it is parsing an
 action definition against the workflow schema. Those are artifacts of
 the wrong input, not findings, and the Procedure below routes inputs so
 they never arise.
@@ -133,8 +132,7 @@ nothing" for "zizmor checked everything."
    is empty. actionlint emits `3` there in two different shapes, and a
    reader matching on only one of them will misclassify the other --
    `no YAML file was found in "..."` when the workflow directory exists
-   but holds nothing, and `no project was found in any parent
-   directories of "..."` when there is no workflow directory at all.
+   but holds nothing, and `no project was found in any parent directories of "..."` when there is no workflow directory at all.
    Either way it means "nothing for this tool to read", not a failure.
    When the composite-action list is non-empty, run zizmor over it alone
    and say in the report that actionlint had no input -- neither a

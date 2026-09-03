@@ -19,7 +19,7 @@ one.
 ## Deterministic-checker commands (Step 6)
 
 ```
-python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py --allowed-root <repo-root> skills/<new-skill-name>
+python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py --strict-token-budget --allowed-root <repo-root> skills/<new-skill-name>
 python3 skills/evaluating-skill-quality/scripts/gitapex_scan_execution_requirements_drift.py skills/<new-skill-name>
 ```
 
@@ -66,8 +66,7 @@ by `skill-audit-gate.yml`'s own disclosure requirement automatically,
 before it is even registered. This is a rare case for a freshly drafted
 skill -- most bundled scripts check only their own skill's shape, per
 `references/mechanism-fit-and-cohesion.md`'s bundled-script placement
-policy -- but when it applies, route through `evaluating-deterministic-
-gate-quality` directly before shipping it (this skill's own former Step 2
+policy -- but when it applies, route through `evaluating-deterministic-gate-quality` directly before shipping it (this skill's own former Step 2
 vehicle-selection redirect now lives in `eliciting-a-design`'s Agentic
 operation mechanism-fit check -- see that skill's own Checklist item 4 --
 since this skill only drafts once that call has already landed on
