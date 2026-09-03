@@ -108,3 +108,10 @@ spec:
         requirement_1_distinct_headings: met
         requirement_2_notes_declaration: met
         requirement_3_porting_boundary_map_file: met
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/1632"
+      summary: "an independent fresh review found the entry above overclaimed requirement 1: the Notes section used bold inline lead-ins, never an actual Markdown heading -- this SKILL.md carried no `###` anywhere, and `rubric.md`'s own internal 'heading' usage elsewhere supports a literal reading. Promoted both to real `### Non-portable (Claude-Code-specific)` / `### Portable` subheadings; net-zero body-line growth held via tighter prose rewrap elsewhere in this same section."
+      outcome:
+        baseCommit: "8e8366713ca047192eaa620bda145232de94bcaf"
+        verdict: satisfied
+        requirement_1_distinct_headings: met
