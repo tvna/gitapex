@@ -6,6 +6,8 @@ on:
     paths:
       - "docs/superpowers/specs/*routine*.md"
       - "docs/superpowers/specs/*Routine*.md"
+      - "docs/gitapex/specs/*routine*.md"
+      - "docs/gitapex/specs/*Routine*.md"
       - "skills/**/metadata/gitapex.yaml"
 
 permissions:
@@ -50,7 +52,7 @@ jobs:
         id: find
         run: |
           set -euo pipefail
-          docs=$(find docs/superpowers/specs -maxdepth 1 -iname '*routine*.md' 2>/dev/null | sort || true)
+          docs=$( { find docs/superpowers/specs -maxdepth 1 -iname '*routine*.md' 2>/dev/null || true; find docs/gitapex/specs -maxdepth 1 -iname '*routine*.md' 2>/dev/null || true; } | sort)
           if [ -z "$docs" ]; then
             echo "No Routine-connection docs found; skipping."
             echo "applicable=false" >> "$GITHUB_OUTPUT"

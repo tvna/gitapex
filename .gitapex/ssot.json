@@ -244,6 +244,7 @@
         {"kind": "workflow-event", "ref": "skill-audit-gate.yml:pull_request"},
         {"kind": "file-glob", "ref": "skills/*/SKILL.md"},
         {"kind": "file-glob", "ref": "docs/superpowers/specs/*.md"},
+        {"kind": "file-glob", "ref": "docs/gitapex/specs/*.md"},
         {"kind": "file-glob", "ref": "skills/*/scripts/*.py"},
         {"kind": "file-glob", "ref": "evals/scripts/*.py"},
         {"kind": "file-glob", "ref": ".github/scripts/*.py"},
@@ -427,6 +428,7 @@
       "bypass_review_status": "not-yet-reviewed",
       "target": [
         {"kind": "file-glob", "ref": "docs/superpowers/specs/*routine*.md"},
+        {"kind": "file-glob", "ref": "docs/gitapex/specs/*routine*.md"},
         {"kind": "file-glob", "ref": "skills/*/metadata/gitapex.yaml"},
         {"kind": "workflow-event", "ref": "routine-scope-enforcement-gate.yml:pull_request"},
         {"kind": "cross-registry-consistency", "ref": "referenced_skill_names() in the routine-connection doc <-> capability_assumption() read from skills/<name>/metadata/gitapex.yaml"}
@@ -1837,6 +1839,7 @@
       "bypass_review_status": "not-yet-reviewed",
       "target": [
         {"kind": "file-glob", "ref": "docs/superpowers/specs/*.md"},
+        {"kind": "file-glob", "ref": "docs/gitapex/specs/*.md"},
         {"kind": "file-glob", "ref": "skills/**/*.md"},
         {"kind": "runtime-resolved-reference", "ref": "github.event.pull_request.body"},
         {"kind": "workflow-event", "ref": "design-doc-pattern-dryrun-gate.yml:pull_request"}
