@@ -185,6 +185,11 @@ Usage (matches the JSON the .sh wrapper pipes in)::
 
     printf '%s' '{"session_id":"abc","tool_name":"Bash","tool_input":{"command":"git push"}}' \\
         | python3 hooks/gitapex_check_post_review_obligation_tracker.py
+
+A bare pipe here masks `printf`'s own exit status in a non-`pipefail`
+shell (issue #1531) -- harmless for a literal `printf` producer, which
+cannot itself fail in ordinary use, but add `set -o pipefail` first if
+this recipe's producer is ever swapped for a command that can.
 """
 
 from __future__ import annotations

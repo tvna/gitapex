@@ -85,6 +85,11 @@ Usage::
         --body PR_BODY.txt --head-sha <sha>
     printf '%s' "$PR_BODY" | python3 .github/scripts/gitapex_gate_independent_review_pending.py --head-sha <sha>
 
+A bare pipe here masks `printf`'s own exit status in a non-`pipefail` shell
+(issue #1531) -- harmless for a literal `printf` producer, which cannot
+itself fail in ordinary use, but add `set -o pipefail` first if this
+recipe's producer is ever swapped for a command that can.
+
 Exit codes:
     0  A Verdict: CLEAN verdict naming the given head SHA is present.
     1  No verdict section, an incomplete one, a non-CLEAN verdict, a

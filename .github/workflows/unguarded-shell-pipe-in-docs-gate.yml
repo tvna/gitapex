@@ -1,0 +1,48 @@
+# Issue #1531 (refs #1567, gate-proposal-umbrella: local-hook fail-open
+# remediation): the documented invocation `git log ... | python3
+# gitapex_check_task_commit_provenance.py` piped two commands directly
+# together; a bare shell pipeline's own exit status is the RIGHT-hand
+# command's, not the LEFT's, so an upstream `git log` failure silently
+# reported a clean result instead of a blocked merge -- discovered only by
+# an adversarial security-focused review, not by any deterministic check.
+# No lint checked documentation/script-docstring files for this pattern
+# before this gate.
+#
+# Deliberately no `paths:` filter, following no-raw-gh-cli-in-docs-gate.yml's
+# own rationale: a workflow that never fires for a given PR leaves a
+# required status check Pending forever, whereas a job that runs and passes
+# is safe to promote to required later. The scan (a real `pydantic` import,
+# same as that sibling gate) runs unconditionally over every in-scope
+# tracked file and still costs only a few seconds.
+name: Unguarded shell pipe in docs gate
+
+on:
+  pull_request: {}
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unguarded-shell-pipe-in-docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Check for unguarded shell pipe examples in docs/script docstrings
+        run: |
+          set -euo pipefail
+          uv run --frozen python3 .github/scripts/gitapex_gate_unguarded_shell_pipe_in_docs.py

@@ -1912,6 +1912,36 @@
         {"kind": "workflow-event", "ref": "retrospective-gate-drift.yml:schedule"},
         {"kind": "workflow-event", "ref": "retrospective-gate-drift.yml:workflow_dispatch"}
       ]
+    },
+    {
+      "id": "unguarded-shell-pipe-in-docs",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_gate_unguarded_shell_pipe_in_docs.py",
+      "rule": "No skills/*/SKILL.md, skills/*/references/*.md, or checker/gate script's own module docstring may carry an unguarded `cmd1 | cmd2`-shaped shell pipe example (a real command token, a single `|`, and one of a fixed shell-consumer vocabulary such as python3/bash/uv/jq) with no nearby `pipefail` disclosure -- either `pipefail` mentioned inside the same fenced block (Markdown) or the same module docstring (Python), or an explicit `<!-- gitapex-allow-unguarded-shell-pipe: <reason> -->` marker directly above the fence (Markdown) or the flagged line (Python docstring). A single-backtick or double-backtick-quoted inline example in a docstring is never in scope. Exits 2, never a silent pass, when no in-scope file is discovered in either category or a file cannot be read/decoded as UTF-8 or parsed as Python.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_unguarded_shell_pipe_in_docs.py"],
+      "trigger": ".github/workflows/unguarded-shell-pipe-in-docs-gate.yml on pull_request and workflow_dispatch, plus tests/test_gitapex_gate_unguarded_shell_pipe_in_docs.py and tests/test_gitapex_gate_unguarded_shell_pipe_in_docs_properties.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "repo-hygiene",
+      "tracking_issue": [1531, 1567],
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "preconditions": {
+        "requires_python_packages": ["pydantic"]
+      },
+      "target": [
+        {"kind": "file-glob", "ref": "skills/*/SKILL.md"},
+        {"kind": "file-glob", "ref": "skills/*/references/*.md"},
+        {"kind": "file-glob", "ref": ".github/scripts/*.py"},
+        {"kind": "file-glob", "ref": "skills/*/scripts/*.py"},
+        {"kind": "file-glob", "ref": "evals/scripts/*.py"},
+        {"kind": "file-glob", "ref": "hooks/*.py"},
+        {"kind": "workflow-event", "ref": "unguarded-shell-pipe-in-docs-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "unguarded-shell-pipe-in-docs-gate.yml:workflow_dispatch"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     }
   ],
   "clusters": {
