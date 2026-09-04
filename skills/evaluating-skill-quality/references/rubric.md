@@ -2476,14 +2476,13 @@ likely to run under, rather than being tuned for and only verified on one.
 A skill's effect depends on the model running it. Judge against a
 three-tier spread, using the same three qualities Anthropic's own
 best-practices doc names for its current Haiku/Sonnet/Opus lineup,
-decoupled here from those specific model names since they will drift
-with future model releases:
+decoupled here from those specific model names:
 
 - **Economical tier (fast, cost-efficient):** does the skill give *enough* guidance?
 - **Balanced tier:** is the skill clear and efficient?
 - **Frontier-capable tier (powerful reasoning):** does the skill avoid *over*-explaining?
 
-As of this writing (2026-09-04), the economical tier's floor is
+The economical tier's floor is
 Claude Haiku 4.5 or an
 equivalent-capability model; a model below that floor is outside this
 repository's supported scope. This tier mapping is provisional.
