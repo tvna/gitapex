@@ -2473,14 +2473,11 @@ questions and neither substitutes for the other.
 Checks whether the skill's guidance holds across the model tiers it is
 likely to run under, rather than being tuned for and only verified on one.
 
-A skill's effect depends on the model running it. Judge against a
-three-tier spread, using the same three qualities Anthropic's own
-best-practices doc names for its current Haiku/Sonnet/Opus lineup,
-decoupled here from those specific model names:
+Judge against a three-tier spread:
 
-- **Economical tier (fast, cost-efficient):** does the skill give *enough* guidance?
-- **Balanced tier:** is the skill clear and efficient?
-- **Frontier-capable tier (powerful reasoning):** does the skill avoid *over*-explaining?
+- **Economical tier (fast, cost-efficient), e.g. Haiku:** does the skill give *enough* guidance?
+- **Balanced tier, e.g. Sonnet:** is the skill clear and efficient?
+- **Frontier-capable tier (powerful reasoning), e.g. Opus:** does the skill avoid *over*-explaining?
 
 The economical tier's floor is Claude Haiku 4.5 or an
 equivalent-capability model; a model below that floor is outside this
