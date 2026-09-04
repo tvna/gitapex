@@ -8,9 +8,11 @@ The first three properties below are ported near-verbatim from
 own `parse_added_lines` and `_looks_like_real_header_pair` are verbatim ports
 of that sibling gate's identically-named functions (same state machine, same
 hardening -- see this gate's own module docstring), so the identical
-properties apply unchanged. The last two are new, covering the two
-functions this gate does not share with that sibling: `in_scope` (a
-narrower, two-directory scope than the sibling's four) and `_waived_lines`
+properties apply unchanged. The rest are new -- covering `_diff_target_path`
+(also a verbatim-ported function, per this gate's own module docstring, but
+one the sibling's own property file has no property coverage for) and the
+two functions this gate does not share with that sibling at all: `in_scope`
+(a narrower, two-directory scope than the sibling's four) and `_waived_lines`
 (byte-identical logic, but a distinct module-level `_WAIVER_RE`).
 
 ``derandomize=True`` with an explicit ``max_examples`` and ``deadline=None``,
