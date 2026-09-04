@@ -726,16 +726,48 @@ discipline](#contract-discipline) above) -- the three-level definition
 (Portable / Repository-scoped / Mixed) lives in `SKILL.md`, checkable
 without opening this file, precisely because establishing it is a cheap
 precondition step, not part of the expensive dimension walk. This
-section is the elaboration: why the classification is a design decision
-rather than a quality defect by default, and how each level changes
-grading below.
+section is the elaboration: the precise conditions and triggers behind
+each level, why the classification is a design decision rather than a
+quality defect by default, and how each level changes grading below.
 
-- **Portable** -- grade dimension 6 (durability) at full strictness: any
-  behavior-controlling reference outside the skill's own folder is a real
-  defect, not a style nit. References to the origin repository as
-  *context* or a *worked example* remain fine; only references the
-  *procedure* depends on to function are graded this strictly.
-  - **The portability litmus test, applied to every sentence, not only
+**Portable requires all four of the conditions below**, and grades
+dimension 6 (durability) at full strictness: any behavior-controlling
+reference outside the skill's own folder is a real defect under
+condition (b) or (c), not a style nit. References to the origin
+repository as *context* or a *worked example* remain fine; only
+references the *procedure* depends on to function are graded this
+strictly. A target failing exactly one condition, in one of the narrow
+ways stated under Mixed below, is Mixed; a wider failure -- more than
+one condition failing, or a single failure that does not fit any of the
+narrow Mixed shapes -- is Repository-scoped, via the matching trigger
+stated under Repository-scoped below.
+
+- **(a) No real sibling-skill dependency**, declared or textual -- no
+  other skill's own content is read, applied, or binding on this
+  target's procedure. See [Sibling-skill dependency
+  portability](#sibling-skill-dependency-portability) below for exactly
+  what counts as a real dependency, as opposed to a bare mention that
+  never reaches this condition at all.
+- **(b) No hard dependency on a specific non-skill file living outside
+  this skill's own directory** -- no bundled script, schema, config
+  template, or data fixture the procedure treats as authoritative
+  resolves at a path a plugin install or a vendoring copy will not carry
+  along. See [Dependency file portability](#dependency-file-portability)
+  below for the exact boundary -- including its own Fix B caveat that a
+  bundled file sitting fully *inside* the skill's own directory (so this
+  condition is clear) can still cost Portable status on *content*
+  grounds under condition (c) below, a distinct question from where the
+  file lives.
+- **(c) Passes the sentence-level litmus test below.**
+- **(d) Not inherently repo-bound in purpose** -- the skill's own reason
+  for existing does not name, target, or presuppose this specific
+  repository's own identity, tooling, or workflow. See trigger 1 under
+  Repository-scoped below for the failing case stated precisely; there
+  is no narrow Mixed shape for a condition-(d) failure, because an
+  inherently repo-bound purpose leaves no portable core to split a
+  Mixed classification's file-level split from.
+
+  - **The portability litmus test (condition c), applied to every
     executed steps**: for Portable-declared content, ask of each claim --
     including one the model never executes as a step, such as a Stop
     boundary or an Agentic operation mechanism-fit assertion -- *"would this exact sentence
@@ -773,6 +805,21 @@ grading below.
     exception that itself reproduced the "recurs for the next unlisted
     case" problem this rule exists to close; both roots now get identical
     treatment.
+    - **Fix A -- this rule's own scope, stated explicitly.** The
+      hedge-vocabulary mechanism below (and the
+      `portable-no-repo-path-citation`/`portable-no-inline-path-citation`
+      checks that enforce it) is scoped only to a citation of a path
+      *outside* the skill's own directory -- `evals/`, `docs/`, a
+      sibling skill, a CI-only location. It was never scoped to cover a
+      citation of the skill's
+      own bundled `references/...` or `scripts/...` file, regardless of
+      the surrounding prose's wording: a citation to the skill's own
+      bundled file is graded under [Dependency file
+      portability](#dependency-file-portability) below instead (that
+      section's own boundary is where the file *lives*, not how the
+      citing sentence is hedged), never under this hedge-phrase
+      mechanism. Applying this rule's hedge vocabulary to an in-directory
+      citation is a scope-misapplication, not a stricter reading of it.
     - **What the underlying defect actually is**: a repo-external path is
       a real dimension-6 defect only when the skill's own *control* -- its
       procedure or judgment logic -- depends on that path to decide how to
@@ -845,28 +892,157 @@ grading below.
       check (`portable-no-repo-path-citation`) stays unconditional with no
       rescue of any kind, and the inline-code issue/PR-number check keeps
       its own separate, unrelated hedge vocabulary untouched.
-- **Repository-scoped** -- a repository-scoped skill that reads as if it
-  were portable is a dimension-1/6 defect (it misleads a future vendoring
-  decision), not the scoping choice itself. An undeclared level that
-  turns out to be repository-scoped is itself a finding, not something to
-  silently infer and move past. Declared as the `portability` field in
-  the skill's `metadata/gitapex.yaml` sidecar (the
-  `portability-declared` shape check enforces presence and value); the
-  declaration itself may get a one-line `## Notes` mention, but any
-  extended rationale follows the [Notes vs. metadata placement
-  axis](#notes-vs-metadata-placement-axis) above and belongs in
-  `metadata/gitapex.yaml`'s `spec.references` instead.
-- **Mixed** -- dimension 5 (progressive disclosure) requires the actual
-  split, not just the intent to split: the repository-specific part
-  belongs in a clearly named reference file (e.g.
-  `references/this-repo-only.md`) a consumer can identify and drop, not
-  blended into the portable core. This classification step only
-  establishes that the ordinary rule applies; a narrow substitute for a
-  target that also clears dimension 5's own cohesion-confirmed
-  sequential-pipeline exemption is graded entirely within dimension 5's
-  own walk below, not here -- see dimension 5's own Mixed-portability
-  substitute, since its first gating condition is a dimension-5 finding
-  this earlier classification step has no access to yet.
+- **Mixed** -- always clears condition (d) above (a Mixed skill's
+  purpose is not inherently repo-bound; see trigger 1 below for why that
+  failure has no Mixed path at all). It fails exactly one of (a), (b),
+  or (c) in one of the three narrow ways below, clearing the other two.
+  A wider failure -- more than one condition failing, or a single
+  failure that does not fit any of these three narrow shapes -- is
+  Repository-scoped instead, via the matching trigger below, not Mixed.
+
+  - **Mixed-via-file** -- fails condition (b) in exactly one narrow way:
+    a single hard dependency on one non-skill file living outside this
+    skill's own directory, cleanly named (a reader can tell what it is
+    and why it lives where it does from its name and one citing sentence
+    alone), carrying no undisclosed baggage (no second, unnamed
+    repo-specific assumption riding along inside that same dependency).
+  - **Mixed-via-clean-sibling** -- fails condition (a) in exactly one
+    narrow way: a single sibling-skill dependency clearing all three of
+    no-fan-out, a clean interface, and uncleaned-baggage-free. See
+    [Sibling-skill dependency
+    portability](#sibling-skill-dependency-portability) below for the
+    exact narrowness conditions.
+  - **Mixed-via-bundled-convention** -- clears both (a) and (b) (no
+    sibling-skill dependency; no non-skill file living outside this
+    skill's own directory), but fails condition (c) in one narrow,
+    disclosed way: the skill's only repo-specific content is confined
+    entirely to one or more distinctly-named bundled reference files --
+    living inside this skill's own directory, so condition (b) itself
+    stays clear -- that this skill's own `SKILL.md` explicitly instructs
+    a vendoring consumer to replace or drop wholesale (e.g.
+    `drafting-an-adr`'s `references/this-repo-only.md`,
+    `auditing-agent-product-scope`'s `references/gitapex-cross-links.md`,
+    `scanning-attack-surfaces` Mode B's own equivalent). Distinguished
+    from a merely-illustrative bundled file, which stays Portable, by a
+    control test: does a procedure step actually read the file to decide
+    how to behave? If yes, the file's repo-specific content is a real
+    condition-(c) failure -- Mixed-via-bundled-convention. If the file
+    is cited only as a worked example or background color no step
+    depends on, condition (c) is unaffected and the target stays
+    Portable on this count. This sub-type's own dimension-5 file-level-
+    split obligation (stated below) is already satisfied by
+    construction: the very thing that makes it Mixed-via-bundled-
+    convention -- a distinctly-named, disclosed, replace-or-drop bundled
+    file -- is the same split dimension 5 would otherwise require a
+    Mixed skill to perform.
+
+  Any repository-specific content besides the one narrow dependency or
+  bundled file that earns a target one of the three Mixed sub-types
+  above must still be cleanly split into its own distinctly-named
+  reference file per the ordinary Mixed rule stated next, not blended
+  into the portable core -- this applies uniformly across all three
+  sub-types, not only Mixed-via-clean-sibling's own explicit
+  "uncleaned-baggage-free" wording.
+
+  Dimension 5 (progressive disclosure) requires the actual split, not
+  just the intent to split: the repository-specific part belongs in a
+  clearly named reference file (e.g. `references/this-repo-only.md`) a
+  consumer can identify and drop, not blended into the portable core.
+  This classification step only establishes that the ordinary rule
+  applies; a narrow substitute for a target that also clears dimension
+  5's own cohesion-confirmed sequential-pipeline exemption is graded
+  entirely within dimension 5's own walk below, not here -- see
+  dimension 5's own Mixed-portability substitute, since its first
+  gating condition is a dimension-5 finding this earlier classification
+  step has no access to yet. **A sibling-skill seam is graded by this
+  section's own classification triggers, not by dimension 5's
+  substitute** -- see that substitute's own scoping note there for the
+  same rule stated from dimension 5's side.
+- **Repository-scoped** -- fails condition (c) or (d) outright, or fails
+  Mixed's own narrowness conditions above, via one of three triggers. A
+  repository-scoped skill that reads as if it were portable is a
+  dimension-1/6 defect (it misleads a future vendoring decision), not
+  the scoping choice itself. An undeclared level that turns out to be
+  repository-scoped is itself a finding, not something to silently infer
+  and move past. Declared as the `portability` field in the skill's
+  `metadata/gitapex.yaml` sidecar (the `portability-declared` shape
+  check enforces presence and value); the declaration itself may get a
+  one-line `## Notes` mention, but any extended rationale follows the
+  [Notes vs. metadata placement axis](#notes-vs-metadata-placement-axis)
+  above and belongs in `metadata/gitapex.yaml`'s `spec.references`
+  instead.
+
+  - **Trigger 1 -- inherently repo-bound purpose**: the skill's own
+    reason for existing presupposes this specific repository's identity,
+    tooling, or workflow -- not merely touches it in passing, but could
+    not be restated as a general procedure without changing what the
+    skill is for (e.g. a skill whose entire point is auditing this
+    repository's own plugin-distribution surface). Fails condition (d)
+    directly; no narrow Mixed path exists for this trigger, because an
+    inherently repo-bound purpose leaves no portable core left to split
+    the repo-bound purpose away from.
+  - **Trigger 2 -- sibling dependency failing fan-out or the
+    clean-interface test**: more than one real sibling-skill dependency,
+    or a single one that fails the no-fan-out, clean-interface, or
+    uncleaned-baggage-free condition Mixed-via-clean-sibling requires
+    (e.g. citing a sibling's own internal section number or bundled file
+    path, not just its public contract). See [Sibling-skill dependency
+    portability](#sibling-skill-dependency-portability) below.
+  - **Trigger 3 -- non-skill-file dependency with no fallback**: a hard
+    dependency on a non-skill file living outside this skill's own
+    directory, where the target discloses no fallback a vendoring
+    consumer could use once that outside file does not travel with the
+    copy (no adaptation note, no stated "replace this with your own
+    equivalent" convention). A target with a stated fallback at this
+    step is Mixed-via-file instead, not this trigger. See [Dependency
+    file portability](#dependency-file-portability) below for this
+    trigger's own fallback predicate and the porting-boundary-map path
+    that can satisfy it.
+
+### Sibling-skill dependency portability
+
+Conditions (a) (Portable), Mixed-via-clean-sibling, and trigger 2
+(Repository-scoped) all turn on the same underlying question: does this
+skill have a *real* dependency on a sibling skill, and if so, is it
+narrow enough to stay Mixed? This section states that line once, reused
+by all three.
+
+- **What counts as a real dependency at all.** Only a connection that
+  involves reading, applying, or being bound by the sibling's real
+  content counts -- a procedure step that consults the sibling's own
+  Steps/Output, follows a rule it states, or treats its verdict as
+  binding. A bare `relatedTo` metadata listing, or a "route to X for a
+  different situation" handoff mention naming a sibling only to
+  distinguish this skill's own trigger from it, is not a dependency at
+  all and never reaches the narrowness tests below -- most of a
+  skill's own Related-skills section is exactly this non-dependency
+  kind of mention, not a condition-(a) failure waiting to be graded.
+- **No fan-out.** Exactly one real sibling-skill dependency. A second
+  one, of any kind, moves the target to Repository-scoped via trigger 2
+  regardless of how clean each individual dependency otherwise is --
+  narrowness is evaluated per skill, not per dependency.
+- **A clean interface.** The one real dependency touches only the
+  sibling's top-level public contract -- its stated Steps/Output shape,
+  its description-level trigger, a verdict it returns -- never the
+  sibling's own internal section structure, its own bundled file layout,
+  or a specific line/heading inside it that could move without the
+  sibling's own public contract changing. Citing a sibling's own
+  internal section number or one of its bundled `references/*.md` paths
+  fails this condition even when there is still only one dependency.
+- **Uncleaned-baggage-free.** Any other repository-specific content the
+  target carries besides this one sibling dependency is itself cleanly
+  split into its own distinctly-named, disclosed file (the Mixed
+  classification's own ordinary file-level-split requirement, applied to
+  that separate content) -- not blended into the portable core, and not
+  silently riding along inside the sibling-dependency prose itself.
+
+A target clearing all three narrowness conditions for its one real
+dependency is Mixed-via-clean-sibling. A target with no real dependency
+at all (per the first bullet above) never reaches these three tests and
+is not thereby Mixed on sibling-dependency grounds -- it stays wherever
+conditions (b)-(d) otherwise place it. A target failing any one of the
+three narrowness conditions, or carrying more than one real dependency,
+is Repository-scoped via trigger 2, not Mixed.
 
 ### Dependency file portability
 
@@ -881,6 +1057,17 @@ travels together with `SKILL.md` when the skill is copied or installed
 as a plugin elsewhere -- or at a path outside the skill (a CI-only
 location, a repository-governance directory, another skill's own
 folder) that a plugin install or a vendoring copy will not carry along.
+
+**Fix B -- what this section asks, and what it does not.** This section
+asks only *where* a bundled dependency file lives, never whether its
+*content* is repository-specific. A file resolving inside the skill's
+own directory clears this section regardless of what it says --
+clearing it does not by itself make the skill Portable. Whether that
+same file's content survives condition (c)'s sentence-level litmus test
+is a separate question, graded there: a bundled file with
+repository-specific content that a procedure step reads to decide
+behavior is Mixed-via-bundled-convention (see Mixed above) even though
+it fully clears this section's own location test.
 
 - **Portable** -- every dependency file the procedure treats as
   authoritative must resolve inside the skill's own directory. One that
@@ -897,6 +1084,24 @@ folder) that a plugin install or a vendoring copy will not carry along.
   reading (so the full dependency surface is visible in one place
   alongside any prose citations); any extended justification beyond that
   belongs in `metadata/gitapex.yaml`'s `spec.references` instead.
+
+**Trigger 3's own fallback predicate.** A hard dependency on a file
+living outside the skill's own directory is Mixed-via-file when the
+target discloses a fallback a vendoring consumer could use once that
+file does not travel with the copy (an adaptation note, a stated
+"replace this with your own equivalent" convention); it is
+Repository-scoped via trigger 3 instead when no such fallback is
+disclosed. A dimension-6 [porting-boundary
+map](#6-durability) -- naming the outside dependency, why it exists, and
+what a vendoring consumer should substitute -- satisfies this predicate
+directly wherever one exists: it is checkable at this same
+classification step by reading the entry itself, unlike dimension 5's
+own Mixed-portability substitute, whose first condition requires that
+later dimension-5 walk to have already run. The map is never required
+to reach Mixed-via-file -- an inline `## Notes` fallback line is
+equally sufficient -- and its absence never by itself demotes a target
+that already has one; see dimension 6 for the map's own optional,
+never-label-deciding status.
 
 A worked example already in this repository: this skill's own grading of
 a target's `metadata/gitapex.yaml` sidecar -- the contract this section,
@@ -1803,10 +2008,18 @@ presence by shape.
   itself every-use, has a narrow substitute for the Portability level
   section's own ordinary Mixed file-level-split requirement -- but only
   under two conditions, checked here, not there, because the first one
-  is this dimension's own finding.** The Portability level section's
-  Mixed bullet prices a *choice*: an author who could relocate the
-  repository-specific part into a dedicated reference file, and
-  simply has not done so yet. A target that has already cleared the
+  is this dimension's own finding.** **This substitute discharges the
+  Mixed bullet's split obligation for a target whose step-4 level is
+  already Mixed on the Portability level section's own terms; it never
+  revises that level, and a target the classification step has placed
+  at Repository-scoped never reaches it.** In particular, a sibling-skill
+  seam is graded entirely by that section's own classification triggers
+  (trigger 2, and Mixed-via-clean-sibling's own narrowness conditions) --
+  never by this substitute, which has no bearing on whether a sibling
+  dependency is narrow enough to stay Mixed in the first place. The
+  Portability level section's Mixed bullet prices a *choice*: an author
+  who could relocate the repository-specific part into a dedicated
+  reference file, and simply has not done so yet. A target that has already cleared the
   cohesion-confirmed sequential-pipeline exemption immediately above has
   no such choice available for its every-use non-portable content
   specifically: physically relocating that content into a new every-use
@@ -1960,6 +2173,23 @@ rotting or breaking once copied or revisited later.
   fact-claim** exactly as strictly as to an executed step -- see the
   portability litmus test in [Portability level](#portability-level)
   above.
+- **A porting-boundary map, for a skill declared (or read as)
+  Repository-scoped.** Optional, never label-deciding: a
+  Repository-scoped skill with no such map is not thereby a lesser
+  Repository-scoped skill, and authoring one does not itself promote the
+  skill to Mixed or Portable. When a target does author one -- a
+  dedicated section or reference file enumerating every outside-
+  directory dependency (a non-skill file, a sibling-skill seam) the
+  skill actually carries, why each exists, and what a vendoring consumer
+  should substitute for it -- its one concrete effect is narrower: a
+  complete entry for a specific non-skill-file dependency satisfies the
+  Portability level section's own trigger 3 "fallback exists" predicate
+  for that dependency (see [Portability level](#portability-level)
+  above and that section's own [Dependency file
+  portability](#dependency-file-portability) subsection), checkable at
+  this same dimension-6 pass by reading the entry directly -- unlike
+  dimension 5's own Mixed-portability substitute, whose first condition
+  requires that dimension-5 walk to have already run.
 
 - **Fail:** "before August 2025 use the old API" stated as current
   guidance with no explicit historical marking, or a bare `#149`
