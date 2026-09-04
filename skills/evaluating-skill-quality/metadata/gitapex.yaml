@@ -590,6 +590,9 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1698"
       summary: "Terminology substitution only in the Contract discipline section: Mechanism fit -> Agentic operation mechanism-fit (see https://github.com/tvna/gitapex/issues/1619), no change to either rules substance; the sibling drafting-a-skill/references/contract-structure.md needed no matching edit. Migrated from an inline rubric.md HTML comment per the new Notes-vs-metadata axis."
+    - kind: deferral
+      anchor: "https://github.com/tvna/gitapex/issues/1794"
+      summary: "Dimension 9's decoupled tier-to-model mapping is a provisional name-based placeholder; re-derive the tier boundaries from actual behavioral evidence across models once a multi-model evaluation harness exists."
   skillDependencies:
     requires: []
     relatedTo:
