@@ -98,16 +98,6 @@ def repo(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _publish(repo: Path) -> None:
-    """Push the current feature branch's own commits to origin/main, so a
-    later `git merge-base origin/main HEAD` on a *different* branch sees
-    them -- used to build a stacked-PR fixture."""
-    _git(repo, "checkout", "-q", "main")
-    _git(repo, "merge", "-q", "feature")
-    _git(repo, "push", "-q", "origin", "main")
-    _git(repo, "checkout", "-q", "feature")
-
-
 def _commit(repo: Path, message: str = "change") -> None:
     _git(repo, "add", "-A")
     _git(repo, "commit", "-qm", message)
@@ -247,22 +237,23 @@ def test_outside_a_git_work_tree_the_hook_stays_out_of_the_way(tmp_path: Path) -
 
 def test_stacked_pr_with_no_explicit_base_drops_check_diff(repo: Path) -> None:
     """A parent feature branch's own change (one origin/main does not have
-    yet -- never published, unlike _publish()'s own tier-1 precedent) must
-    not be dragged into --check-diff's scope for an update_pull_request
-    call that supplies no explicit base -- drops --check-diff entirely
-    instead of denying against the wrong ancestor.
+    yet) must not be dragged into --check-diff's scope for an
+    update_pull_request call that supplies no explicit base -- drops
+    --check-diff entirely instead of denying against the wrong ancestor.
 
     Deliberately does NOT publish the parent branch's own change to
     origin/main before forking the stacked branch: an earlier version of
-    this fixture called _publish() first, which meant origin/main already
-    had the parent's change and `git merge-base origin/main HEAD` computed
-    the *same* (correct) ancestor with or without this fix -- a false
-    reassurance the fix's own review caught. This fixture instead proves
-    the risk is real before checking the fix at all: the wrong-ancestor
-    diff (origin/main, which the fix's absence would fall back to) is
-    shown below to genuinely include the parent branch's own
-    provenance-disclosure-triggering paragraph, which the real ancestor
-    (`feature`) would not."""
+    this fixture pushed it to origin/main first (mirroring
+    hooks/test_gitapex_check_pr_skill_audit_disclosure_shell.py's own
+    _with_tier1 fixture, which does the same for a different purpose),
+    which meant origin/main already had the parent's change and `git
+    merge-base origin/main HEAD` computed the *same* (correct) ancestor
+    with or without this fix -- a false reassurance the fix's own review
+    caught. This fixture instead proves the risk is real before checking
+    the fix at all: the wrong-ancestor diff (origin/main, which the fix's
+    absence would fall back to) is shown below to genuinely include the
+    parent branch's own provenance-disclosure-triggering paragraph, which
+    the real ancestor (`feature`) would not."""
     _write(repo, "docs/notes.md", _PROVENANCE_DISCLOSURE_BODY)
     _commit(repo, "parent branch: docs change that would trip provenance-disclosure")
     # A second, real feature branch stacked on top of the one just
