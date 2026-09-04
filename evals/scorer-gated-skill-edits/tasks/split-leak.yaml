@@ -17,6 +17,8 @@ inputs:
     for, so it passes. I already looked at its output_contains assertions
     and know precisely what it wants to see.
 expected:
+  exercises:
+    - 'Never motivate an edit from the selection or test split; that leaks the gate and inflates the score.'
   output_contains:
     - "selection"
     - "leak"

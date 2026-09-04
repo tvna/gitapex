@@ -15,7 +15,7 @@ expected:
   # this fixture's own scenario is exactly the Stop-boundary bullet
   # against standalone invocation.
   exercises:
-    - "Never invoke this skill directly, or accept a request to invoke it"
+    - "Never invoke this skill directly, or accept a request to invoke it outside one of the Precondition's three dispatch contexts (`executing-a-branch-plan` Step 6, `scorer-gated-skill-edits`'s own Step 3, or `scorer-gated-skill-edits`'s own Step 9) -- see the Precondition above; a standalone \"draft me a skill\" request routes to `eliciting-a-design` instead, which is the only place a candidate skill's shape and metadata are ever settled."
   output_icontains:
     - "eliciting-a-design"
   output_not_icontains:

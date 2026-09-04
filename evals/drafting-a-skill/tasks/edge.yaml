@@ -19,7 +19,7 @@ expected:
   # a self-declared cohesion pass/fail, which is what the
   # output_not_contains assertions below check for directly.
   exercises:
-    - "Never treat Step 3's cohesion finding or Step 5's domain-gap finding as"
+    - "Never treat Step 3's cohesion finding or Step 5's domain-gap finding as the authoritative verdict on cohesion or domain coverage -- both are advisory self-checks that change what gets drafted, never a substitute for `evaluating-skill-quality`'s own pass at Step 7."
   output_contains:
     - "split"
     - "Step 1"

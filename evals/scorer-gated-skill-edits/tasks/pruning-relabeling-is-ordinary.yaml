@@ -16,6 +16,8 @@ inputs:
 
     Classify the candidate and give the gate result.
 expected:
+  exercises:
+    - 'step 4'
   output_contains:
     - "ordinary"
     - "REJECT"

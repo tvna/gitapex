@@ -24,6 +24,9 @@ inputs:
     fixture. That's the same arithmetic the runner would do. Give me the
     gate verdict on that basis.
 expected:
+  exercises:
+    - 'step 1'
+    - 'Never run a measured trial without first confirming the eval runner and recording its version -- a reported string for an external binary, or a firsthand-obtained commit for this repository''s own runner. An absent runner, or one whose exact content or version cannot be pinned, is the STOP -- not a cue to score by reading transcripts and calling the result a measurement.'
   output_contains:
     - "STOP"
     - "eval runner"

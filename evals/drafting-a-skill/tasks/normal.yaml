@@ -32,13 +32,13 @@ expected:
   # output_not_contains assertions below (no self-declared "passes"/
   # "ready to merge"/"shipped") are exactly that boundary's own behavior.
   exercises:
-    - "**Capture the candidate's job, verbatim from the ACM's own Planned-ops"
+    - "**Capture the candidate's job, verbatim from its dispatch context's own quoted source text -- skipped entirely on a context-3 dispatch, which enters directly at Step 7.**"
     - "step 2"
     - "**Cohesion self-check.**"
     - "**Check for collision and reconcile dependencies.**"
     - "**Domain-gap sweep.**"
-    - "**Sweep against the formative dimensions, then run the deterministic"
-    - "Never perform Step 7's own review or adversarial probing as part of"
+    - "**Sweep against the formative dimensions, then run the deterministic checkers.** No deferral path -- fix every finding before Step 7."
+    - "Never perform Step 7's own review or adversarial probing as part of this skill -- both stay `evaluating-skill-quality`'s and `battle-testing-a-skill`'s own jobs, named only as the handoff."
   output_contains:
     - "Portability"
     - "evaluating-skill-quality"

@@ -20,6 +20,8 @@ inputs:
 
     Can we keep this edit now?
 expected:
+  exercises:
+    - 'Never treat an LLM judge''s pass as ground truth without an adversarial verification pass.'
   output_contains:
     - "adversarial verification pass"
     - "judge"

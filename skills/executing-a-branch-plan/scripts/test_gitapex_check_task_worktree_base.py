@@ -201,7 +201,7 @@ def test_stale_base_is_NOT_detected_when_the_worktree_was_created_from_a_remote_
     plan branch's name threaded in from the dispatching thread -- a
     design change this module explicitly does not make (see its own
     "Disclosed, unverified assumption" section) -- so it is disclosed
-    there, in references/execution-and-dispatch.md, and in
+    there, in references/decomposition-and-dispatch.md, and in
     references/threat-model-and-authorization.md rather than papered over.
 
     Comparing against `origin/main` instead would NOT be a fix: `main` is

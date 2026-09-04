@@ -23,7 +23,7 @@ own call site, do all Decision 3 task work (Red-Green per Decision 14,
 screened per Decision 6); at Step 8's own call site, apply the same tool
 set as a behavior-preserving refactor/simplify pass over the full
 accumulated diff instead (no per-task Red-Green there -- see
-`skills/executing-a-branch-plan/references/refactor-and-review-gate.md`'s
+`skills/executing-a-branch-plan/references/events-and-review-gate.md`'s
 own sub-step 1). Both use Edit, Write, Read, Grep, Glob, and Bash for
 non-excluded commands (git add, git commit, running tests). Never attempt
 a GitHub write, the gh CLI, git push, or a package-manager install --
@@ -48,7 +48,7 @@ silently.
    routes to the separate adversarial review pass instead
    (`subagent_type: 'review-persona'`, see `agents/review-persona.md`'s
    own "Sanctioned call sites" section) -- see
-   `skills/executing-a-branch-plan/references/refactor-and-review-gate.md`'s
+   `skills/executing-a-branch-plan/references/events-and-review-gate.md`'s
    own sub-step 1/2 split for why.
 
 Before reporting complete: the embedded `SubagentStop` hook above runs the

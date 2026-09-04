@@ -165,6 +165,102 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1583"
       summary: "merging origin/main (22 commits, incl. the hedge-phrase fix above) found both branches had independently written a rule 5 into docs/skill-authoring-standards.md: origin/main's hedge-phrase rule and this branch's own body-is-behavior-not-disclosure rule. Kept origin/main's as rule 5 (already cited verbatim above); renumbered this branch's own to 6. SKILL.md's Step 4 merged both paragraphs, the hedge phrase now a worked instance of the conditional-reference-before-elision principle"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1630"
+      summary: "formative-quality-dimensions.md rows 4-7 extended to name every requirement their mapped rubric dimension states; row 8 rewritten from the mislabeled 'Concrete example coverage' into 'Eval preparation' (3+ scenarios including the guardrail case, plus an evals/<skill>/ fixture skeleton), its concrete-example instruction folded into row 4. SKILL.md Step 2 gained a row-4 pointer, Step 6 a scaffold sub-step, the Worked example Step-keyed lists; numbering (1-9) unchanged."
+      outcome:
+        baseCommit: "39f3344a1af7c0fe12c3e92670f58ab5417eaf3b"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1630"
+      summary: "the same issue's independent Step 8 adversarial review fixed three defects: row 8 named a fixture layout this repository does not use (a per-scenario *.md prompt file directly under evals/<skill>/), where the real shape is evals/<skill>/eval.yaml beside tasks/<scenario>.yaml; Step 6's scaffold sub-step was absent from that Step's own completion criterion, so a draft could finish with no scaffold; and the 'not required reading before Step 2' note contradicted Step 2's row-4 pointer."
+      outcome:
+        baseCommit: "39f3344a1af7c0fe12c3e92670f58ab5417eaf3b"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1630"
+      summary: "repository owner: the Related-skills Live-collision bullet's routing-risk framing is unnecessary, since this skill is dispatched via executing-a-branch-plan Step 6's own explicit branch-plan-task agent() call, not model description-routing -- a still-present vendored writing-skills/skill-creator copy creates no actual collision. Bullet removed; its never-import-RED-GREEN-REFACTOR fact folded into the existing Notes Attribution bullet"
+      outcome:
+        baseCommit: "b383faf966166a6bb6c2165e5ed73be3229727c6"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1630"
+      summary: "repository owner: a description's 'what it does' clause should be minimized wherever possible, and its 'when' clause may be omitted entirely for a pipeline-only skill like this one, since no model ever reads it to make a live routing decision. Applying that to this skill's own description: dropped the workflow-summary sentence and all three Distinct-from clauses, keeping only the pipeline-only dispatch-condition sentence. description now 250/1024 chars (24.4%, was 675)"
+      outcome:
+        baseCommit: "ad834c94f784dfdd5605934e69bd28a0a956914a"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1630"
+      summary: "Step 4's remedy conflated two things -- Distinct-from is a fallback for triggers still adjacent after narrowing, not a routine response to merely similar functionality; blanket insertion defeats its own purpose (this skill's own removed clauses were that misuse). Reworded to state narrow-first, Distinct-from-as-fallback explicitly. Also trimmed the Worked example's curl-command-explainer sample description to its trigger clause only, as a second worked instance"
+      outcome:
+        baseCommit: "ad834c94f784dfdd5605934e69bd28a0a956914a"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "redivided responsibility with scorer-gated-skill-edits along a how-to-rewrite-vs-evaluate-the-result axis: this skill now owns every SKILL.md rewrite, new or existing, dispatched by executing-a-branch-plan Step 6 (ordinary path, Step 7 runs unconditionally) or scorer-gated-skill-edits's Step 3 (one iteration, Step 7 deferred to its pre-ship step -- gated on dispatch identity, never a claim). Removed the routing-away-if-existing bullet; Postcondition/Output/Stop boundaries/Related skills updated"
+      outcome:
+        baseCommit: "2ff00c34c897074a619d390c208d66e9c52cf7d3"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1619"
+      summary: "pipeline-only re-scope: former Step 2 (mechanism-fit vehicle-selection gate) and Step 3 (four-axis elicitation) deleted, migrated to eliciting-a-design; former Step 9 (requester-acknowledgment gate) deleted as unreachable once direct invocation was removed; references/tacit-knowledge-elicitation.md removed with it. Surviving Steps renumbered into a copyable-checklist shape, per rubric.md Dimension 4."
+      outcome:
+        baseCommit: "5552931b26f0dafa5667a34b5b58b9bc87196d04"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1619"
+      summary: "supersedes every entry above describing the deleted apparatus's own evolution -- the Step 2 Part A/B split under issue https://github.com/tvna/gitapex/issues/1379; the Step 9 gate's correction rounds and tacit-knowledge-elicitation.md's own elision entries under issue https://github.com/tvna/gitapex/issues/1583. Those entries remain historical record, not retroactively edited."
+      outcome:
+        baseCommit: "5552931b26f0dafa5667a34b5b58b9bc87196d04"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "the same re-scope also deleted state-management content from Step 2's own references-field paragraph -- a locus/precedence statement, a trust-boundary statement, and a store-fit rationale -- with no decision-log entry recording the removal. Restored, expanded with read-back-reconciliation and loss-handling rules the original text never had."
+      outcome:
+        baseCommit: "5552931b26f0dafa5667a34b5b58b9bc87196d04"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "the same re-scope left three stale cross-references behind: contract-structure.md and guidance-form-and-sdo.md both cited the deleted apparatus's own former Step numbering (the advisory-Step pair, and deleted Step 2 content) as if still current. Fixed all three to name the current Steps and a live example."
+      outcome:
+        baseCommit: "5552931b26f0dafa5667a34b5b58b9bc87196d04"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "these two entries and the one above were backfilled once an independent evaluating-skill-quality re-review caught them -- the same class of lapse this file's own entries already disclosed once for the Step 2/3/9 apparatus, a second, undetected piece of collateral damage from the same re-scope commit. Disclosed here rather than left silent."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1619"
+      summary: "skillDependencies.relatedTo's evaluating-context-channel-maturity entry -- the review-side mirror of the old Step 2 mechanism-fit judgment -- is removed in the same reconciliation, since that judgment no longer lives in this skill (it migrated to eliciting-a-design)."
+      outcome:
+        baseCommit: "5552931b26f0dafa5667a34b5b58b9bc87196d04"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1619"
+      summary: "the three entries above were backfilled once an independent evaluating-skill-quality re-review (issue https://github.com/tvna/gitapex/issues/1648) caught their absence -- the re-scope commit (5552931b) landed with no decision-log entry, leaving this file narrating a Step 2/3/9 apparatus the current content no longer contains. A process lapse against this file's own Step 3 claim that entries are never silently backfilled, disclosed here rather than left silent."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "axis 7's TOCTOU residual closed via two regime-specific mechanisms, superseding the open entries above (kept as historical record): shared filesystem view -- Step 2 makes a bare mkdir (no -p, no side-effect file write; shell gains mkdir) the first write, its atomic EEXIST failure routing away per the Precondition's target-already-exists branch; isolated worktrees -- blind to a disk check but never silent: git's own add/add conflict at merge-back, and the file-ownership edge within one run"
+      outcome:
+        baseCommit: "62b3615e9c62496fb5d018d7ce2cf7ef889f2e52"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "an independent re-review found the entry above overclaims: the mkdir/git-conflict closure covers only the blank-page-creation writer class (two dispatches racing to create one new target), never named as scoped that narrowly. A second writer class -- two dispatches concurrently editing one existing target's sidecar -- is unaddressed. Step 2's own references-field paragraph now discloses this second class explicitly, not left silently uncovered by an unqualified 'closed' claim."
+      outcome:
+        baseCommit: "52213559dba876361a97683949e1cfa78dc218a9"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "a round-5 re-review found the entry above's 'always...isolation: worktree' claim for context 1 false on this file's own terms: executing-a-branch-plan Step 6's sequential fallback (named two entries up by this Step's own mkdir bullet) carries no such guarantee. Step 2 now states the sidecar-edit race is real and open under that fallback, not a future-caller hypothetical."
+      outcome:
+        baseCommit: "83eb216ebfda43d930a4a6a164545411fd9201e1"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "axis 5's actual Pass bar is resume-time, not same-round: context 2 must scan ground truth for completed work the log doesn't disclose, since a same-round self-check can never catch a mid-round crash. Step 2 now also requires: at resume, check git log on this draft's files since the log's last baseCommit for undisclosed commits, treating any found like a stale baseCommit -- a new entry disclosing the gap."
+      outcome:
+        baseCommit: "83eb216ebfda43d930a4a6a164545411fd9201e1"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "the axis-5 sentence added at baseCommit 83eb216e itself carried no decision-log entry of its own -- a live instance of the exact undisclosed-drift pattern it prohibits, caught by a round-5 re-review since this file's own resume-time check was not yet in force when that edit landed. Disclosed and backfilled here."
+      outcome:
+        baseCommit: "83eb216ebfda43d930a4a6a164545411fd9201e1"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "a round-6 re-review found the resume-time sweep (axis 5) was scoped only to context 2, though Precondition item 1 lets context 1 also target an existing SKILL.md -- an equally in-scope resume case with no equivalent sweep. Broadened to either context. Also declared `git` in executionRequirements.tools.shell, undeclared though the sweep itself runs `git log`."
+      outcome:
+        baseCommit: "a0d3c270c341028d417ec046eb72b156f5f7ee6f"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1740"
+      summary: "this file's own baseCommit citation-convention dispute (issue https://github.com/tvna/gitapex/issues/1740) resolved: outcome.baseCommit cites the causally relevant antecedent, not a fixed git-parent rule -- see decision-log-discipline.md's new section for the three variants. The axis-7-TOCTOU entry above is a variant-1 case (its entry-adding commit 52213559 is itself the fix), so baseCommit is its true immediate parent -- corrected from 1b5626b6 to 62b3615e."
+      outcome:
+        baseCommit: "f47f554a164bf757ba7ebe2f9b7ad9ccbf41f56a"
   skillDependencies:
     requires:
       - evaluating-skill-quality
@@ -173,10 +269,10 @@ spec:
       - drafting-issues
       - eliciting-a-design
       - evaluating-deterministic-gate-quality
-      - evaluating-context-channel-maturity
       - untrusted-input-triage
       - drafting-an-adr
       - grounding-in-primary-sources
+      - scorer-gated-skill-edits
   executionRequirements:
     tools:
       read:
@@ -185,3 +281,5 @@ spec:
         - files
       shell:
         - python3
+        - mkdir
+        - git

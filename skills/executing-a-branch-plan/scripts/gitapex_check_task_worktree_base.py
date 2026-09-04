@@ -31,14 +31,14 @@ call, not a true "before any tool call at all, including a non-Bash one"
 gate -- an explicitly disclosed, asymmetric-strength residual, matching
 this skill's own established disclosure convention (Decision 17's own
 two-variant asymmetry) rather than overclaiming full coverage. See
-references/execution-and-dispatch.md and
+references/decomposition-and-dispatch.md and
 references/threat-model-and-authorization.md for the full disclosure.
 
 **Resolving the shared plan branch's own name, without threading a new
 value in from the main thread.** Nothing in this skill today passes a
 dispatched task an env var, a file, or any other explicit signal naming
 the shared plan branch (confirmed by reading SKILL.md and
-references/execution-and-dispatch.md directly before writing this module
+references/decomposition-and-dispatch.md directly before writing this module
 -- neither describes any such mechanism). A git worktree shares
 refs/objects with the main checkout it was created from, so the shared
 branch's own ref IS already visible from inside the task's own worktree
@@ -93,7 +93,7 @@ no-op whenever that dispatcher creates the worktree. Pinned as a
 regression test (`test_stale_base_is_NOT_detected_when_the_worktree_was_
 created_from_a_remote_tracking_ref`) so the limitation cannot be silently
 widened or forgotten, and disclosed in
-references/execution-and-dispatch.md and
+references/decomposition-and-dispatch.md and
 references/threat-model-and-authorization.md rather than papered over.
 
 Resolving `refs/remotes/origin/main` instead would NOT fix this: `main` is
@@ -113,7 +113,7 @@ each task's worktree via a `-b <new-branch> <shared-branch-name>`-shaped
 operation, naming the shared branch as a literal startpoint argument (the
 only shape that writes the reflog entry this module reads) -- the same
 "Open item, not resolved here" territory
-references/execution-and-dispatch.md already flags for this exact tool's
+references/decomposition-and-dispatch.md already flags for this exact tool's
 own worktree-creation internals (its own cleanup-on-merge-back behavior).
 If the real implementation instead uses a DETACHED HEAD checkout (no new
 branch at all) or passes a raw commit SHA rather than the branch's own

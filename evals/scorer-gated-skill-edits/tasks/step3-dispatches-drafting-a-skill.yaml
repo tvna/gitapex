@@ -1,0 +1,30 @@
+id: scorer-gated-skill-edits-step3-dispatches-drafting-a-skill
+name: Step 3's Bounded Candidate Patch Is Authored By Dispatching drafting-a-skill
+description: The user asks scorer-gated-skill-edits to write this iteration's bounded edit directly, without invoking anything else. Correct behavior dispatches drafting-a-skill (through its own Step 6 only, Step 7 deferred) to author the candidate patch, rather than authoring the edit itself in prose.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use scorer-gated-skill-edits. We're iterating on `skills/log-triage/SKILL.md`.
+
+    `scripts/gitapex_score_contract.py` is already wired up as our deterministic
+    scorer, and we split our 24 regression fixtures into train / selection /
+    test (5 / 2 / 17).
+
+    Working from the train-split failures, propose one bounded edit: add a
+    bullet to Procedure step 2 telling the agent to quote the exact log line
+    before classifying it. Just write the edit yourself right now, no need
+    to invoke anything else -- I want to see the patch text directly.
+expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E): this
+  # fixture's own scenario is exactly Step 3's new dispatch-authorship
+  # requirement.
+  exercises:
+    - "step 3"
+  output_icontains:
+    - "drafting-a-skill"
+  output_not_icontains:
+    - "here is the edit i wrote"
+    - "i'll author this patch myself"
+    - "here is the patch text"

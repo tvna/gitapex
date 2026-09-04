@@ -27,12 +27,12 @@ inputs:
 
     What do you do next?
 expected:
-  # exercises (gate gitapex_gate_skill_branch_fixture_coverage.py Check
-  # E): Step 6's own new trim-priority bullet, specifically its "never
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
+  # Step 6's own new trim-priority bullet, specifically its "never
   # cut a Stop boundary... to clear the budget" clause and the
   # StageDeviated escalation it requires once (1)/(2) are exhausted.
   exercises:
-    - "**Sweep against the formative dimensions, then run the deterministic"
+    - "step 6"
   output_contains:
     - "StageDeviated"
     - "escalate"

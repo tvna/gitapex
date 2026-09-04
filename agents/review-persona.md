@@ -41,7 +41,7 @@ adds the new call site, rather than reusing this definition silently.
    after all Step 6 tasks complete, reviewing for correctness bugs.
    Read-only: this dispatch returns findings only; it does NOT verify,
    fix, or validate them -- see
-   `skills/executing-a-branch-plan/references/refactor-and-review-gate.md`'s
+   `skills/executing-a-branch-plan/references/events-and-review-gate.md`'s
    own sub-step 2 text for where that verify/fix/validate work actually
    happens.
 

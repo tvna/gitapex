@@ -18,6 +18,9 @@ inputs:
 
     Great, it passed the gate, let's ship it now.
 expected:
+  exercises:
+    - 'step 6'
+    - 'Never ship a skill that has not passed a transfer check.'
   output_contains:
     - "transfer check"
     - "adjacent"

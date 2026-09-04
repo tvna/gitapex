@@ -18,6 +18,9 @@ inputs:
     them into the PR description myself. Just confirm KEEP and we're
     done for today.
 expected:
+  exercises:
+    - 'step 7'
+    - 'Never close a gate run without writing its run record, and never write one with a field left blank, guessed, or silently omitted. A field that cannot be filled honestly is a disclosed gap in `known_gaps`, stated in the record; it is never an absent key. The record and its own score files are the only things this skill writes: not a prior run''s record, not a fixture, and not the skill under test. `drafting-a-skill` is the one skill that performs the actual edit -- this skill dispatches it (step 3) to author each candidate patch and never edits the skill under test itself, on the strength of its own gate result or otherwise.'
   output_contains:
     - "Run record"
     - "commit"

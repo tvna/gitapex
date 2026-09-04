@@ -24,6 +24,8 @@ inputs:
     this edit is worth keeping. Fill in whatever fields you need; put
     "n/a" where we don't have the data.
 expected:
+  exercises:
+    - 'step 7'
   output_contains:
     - "STOP"
     - "held-out split"
