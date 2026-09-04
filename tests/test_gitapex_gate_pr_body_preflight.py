@@ -68,6 +68,28 @@ def test_run_pipes_stdin_text_through_when_given() -> None:
     assert completed.stdout.strip() == "piped"
 
 
+def test_run_default_timeout_tracks_a_monkeypatched_subprocess_timeout_seconds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: a plain ``timeout: float = SUBPROCESS_TIMEOUT_SECONDS``
+    default-argument value would freeze that module global's value at
+    _run's own function-definition time, silently breaking every test
+    (and every real call) that relies on monkeypatching
+    SUBPROCESS_TIMEOUT_SECONDS to change _run's own effective timeout --
+    found by an independent adversarial review of this issue's own
+    implementation, live-confirmed via _run.__defaults__ staying stale
+    after such a monkeypatch. _run's own None-sentinel timeout parameter
+    must read SUBPROCESS_TIMEOUT_SECONDS fresh at call time instead."""
+    monkeypatch.setattr(preflight, "SUBPROCESS_TIMEOUT_SECONDS", 0.1)
+    with pytest.raises(subprocess.TimeoutExpired):
+        preflight._run(("python3", "-c", "import time; time.sleep(5)"))
+
+
+def test_run_explicit_timeout_overrides_subprocess_timeout_seconds() -> None:
+    completed = preflight._run(("python3", "-c", "print('hello')"), timeout=30)
+    assert completed.returncode == 0
+
+
 # --- _temp_text_file ---
 
 
@@ -90,6 +112,19 @@ def test_temp_text_file_is_unlinked_even_when_the_with_block_raises() -> None:
 
 
 # --- _isolated ---
+
+
+def test_error_result_formats_a_timeout_distinctly_from_other_errors() -> None:
+    timeout_result = preflight._error_result("a", subprocess.TimeoutExpired(cmd=["x"], timeout=1))
+    assert timeout_result.name == "a"
+    assert not timeout_result.passed
+    assert "timed out" in timeout_result.output
+
+    other_result = preflight._error_result("b", ValueError("bad value"))
+    assert other_result.name == "b"
+    assert not other_result.passed
+    assert "timed out" not in other_result.output
+    assert "bad value" in other_result.output
 
 
 def test_isolated_returns_the_wrapped_check_result_on_success() -> None:
@@ -116,6 +151,65 @@ def test_isolated_converts_a_timeout_into_a_failing_result() -> None:
     assert result.name == "some-check"
     assert not result.passed
     assert "timed out" in result.output
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        FileNotFoundError("[Errno 2] No such file or directory: 'git'"),
+        ValueError("bad argv"),
+        subprocess.SubprocessError("generic subprocess failure"),
+    ],
+    ids=["FileNotFoundError-is-an-OSError", "ValueError", "SubprocessError"],
+)
+def test_isolated_converts_the_wider_exception_scope_into_a_failing_result(error: Exception) -> None:
+    """_isolated's own _ISOLATED_EXCEPTIONS scope widened to match
+    gitapex_gate_local_preflight.py's own run_check (OSError, ValueError,
+    subprocess.SubprocessError, in addition to this module's own
+    PrBodyPreflightError/TimeoutExpired) -- reconstructs the concrete
+    scenario an independent adversarial review of this issue's own
+    implementation named: build_diff_added_corpus's bare `git diff`
+    subprocess call raising an uncaught FileNotFoundError if git itself
+    were ever missing from PATH, which the original narrower scope let
+    crash this whole aggregate run past every other sub-check's own
+    result."""
+
+    def _boom() -> preflight.CheckResult:
+        raise error
+
+    result = preflight._isolated("some-check", _boom)
+    assert result.name == "some-check"
+    assert not result.passed
+    assert not result.skipped
+    assert str(error) in result.output
+
+
+def test_build_diff_added_corpus_filenotfounderror_is_isolated_not_a_crash(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """End-to-end reconstruction of the scenario above through the real
+    call chain: git itself unresolvable (not merely a sibling script) must
+    still surface as a failing provenance-disclosure result via
+    run_all_checks's own diff_added_corpus_error path, never an uncaught
+    exception out of run_all_checks."""
+    repo = init_git_repo(tmp_path / "repo")
+    (repo / "README.md").write_text("hello\n", encoding="utf-8")
+    run_git(["git", "add", "-A"], repo)
+    run_git(["git", "commit", "-q", "-m", "init"], repo)
+    run_git(["git", "tag", "BASE"], repo)
+
+    monkeypatch.setattr(preflight, "REPO_ROOT", repo)
+    monkeypatch.setenv("PATH", str(tmp_path / "empty-path-dir"))
+    (tmp_path / "empty-path-dir").mkdir()
+
+    body_path = tmp_path / "body.txt"
+    body_path.write_text(_CLEAN_BODY, encoding="utf-8")
+    results = preflight.run_all_checks(
+        body_path, _CLEAN_BODY, ("BASE", "HEAD"), frozenset({"skill-audit-disclosure", "provenance-marker-scan"})
+    )
+    by_name = {result.name: result for result in results}
+    assert not by_name["provenance-disclosure"].passed
+    assert "No such file or directory" in by_name["provenance-disclosure"].output
 
 
 # --- run_all_checks ---
@@ -372,6 +466,27 @@ def test_missing_packages_report_flags_a_genuinely_missing_package(monkeypatch: 
     report = preflight._missing_packages_report("skill-audit-disclosure")
     assert report is not None
     assert "not importable" in report
+    assert "uv sync" in report
+
+
+def test_missing_packages_report_treats_a_flag_shaped_package_name_as_data(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Defeat test for the "--" argv separator fix (issue #1725 review
+    finding): a registry-declared package name that happens to look like
+    an argparse flag (e.g. "--help") must still reach
+    gitapex_check_python_precondition.py as inert positional data, not be
+    read as option syntax for that script's own CLI. Without the "--"
+    separator this module's own _run call now adds, "--help" would trigger
+    that script's own --help handling instead of a module-import probe --
+    exiting 0 with usage text, not JSON -- which _missing_packages_report
+    would misread as "every required package is importable," silently
+    losing the deny this scenario should produce. Mirrors
+    hooks/test_gitapex_check_pr_skill_audit_disclosure_shell.py's own
+    test_tier1_precondition_treats_a_flag_shaped_package_name_as_data for
+    the sibling hook's identical call site."""
+    monkeypatch.setattr(preflight, "_registry_required_packages", lambda gate_id: ["--help"])
+    report = preflight._missing_packages_report("skill-audit-disclosure")
+    assert report is not None, "a flag-shaped package name must still be reported missing, not silently skipped"
+    assert "--help" in report
     assert "uv sync" in report
 
 

@@ -21,17 +21,20 @@ checks 1 and 2) -- and prints one aggregate PASS/FAIL report, matching
 sub-check's own verdict line, then the captured output of each failure,
 then a one-line summary; non-zero exit if anything failed).
 
-**Diff-dependent sub-checks are conditional on `--check-diff`.**
-skill-audit-disclosure's own applicability (does this diff touch a
-SKILL.md, a design doc, a checker script, a gate?) and
-provenance-disclosure's own diff-added-lines corpus both need a base/head
-ref pair to compute from `git`. Without `--check-diff`, those two
-sub-checks report SKIPPED rather than a false PASS -- skill-audit-
-disclosure would otherwise see every applicability flag empty and always
-read as trivially satisfied, silently losing the exact coverage issue
-#1707 asks for. The two body-only sub-checks (the ASCII-only scan and the
-provenance-marker scan) always run regardless, since they need no diff at
-all.
+**Only skill-audit-disclosure is conditional on `--check-diff`.** Its own
+applicability (does this diff touch a SKILL.md, a design doc, a checker
+script, a gate?) needs a base/head ref pair to compute from `git`. Without
+`--check-diff`, it reports SKIPPED rather than a false PASS -- it would
+otherwise see every applicability flag empty and always read as trivially
+satisfied, silently losing the exact coverage issue #1707 asks for. The
+other three sub-checks always run regardless of `--check-diff`:
+provenance-disclosure's own diff-added-lines corpus is diff-dependent too,
+but that sub-check is never skipped outright without one -- it runs in a
+body-only mode instead, still meaningful on its own (matching that gate's
+own CLI, which likewise accepts `--body` with no `--diff-added` at all).
+The two purely body-only sub-checks (the ASCII-only scan and the
+provenance-marker scan) need no diff at all and always run the same way
+either way.
 
 Usage::
 
@@ -102,15 +105,30 @@ _NON_ASCII_RE = re.compile(r"[^ -~\t]")
 # Per-subprocess ceiling. Bounded by hooks/check-pr-body-preflight.sh's
 # own 30s harness-level PreToolUse timeout (hooks/hooks.json), not by
 # gitapex_gate_local_preflight.py's much larger wired-gate set: that
-# hook can run up to four of these sub-checks sequentially in one call,
-# so a per-subprocess ceiling anywhere near 30s would starve this
-# module's own graceful "a sub-check timed out" handling of any chance
-# to run before the harness kills the whole hook process first (found by
-# an independent adversarial review of this issue's own implementation).
-# 8s leaves comfortable headroom over these already-fast scripts' normal
-# runtime while still fitting multiple sequential sub-checks inside the
-# hook's own 30s budget.
-SUBPROCESS_TIMEOUT_SECONDS = 8
+# hook's own wiring (--skip skill-audit-disclosure, --check-diff given)
+# invokes _run sequentially up to FOUR times in one call -- two inside
+# build_diff_added_corpus (git diff, then gitapex_extract_diff_added_lines.py)
+# plus one each for check_provenance_disclosure and
+# check_provenance_marker_scan -- so a per-subprocess ceiling anywhere
+# near 30s/4 would starve this module's own graceful "a sub-check timed
+# out" handling of any chance to run before the harness kills the whole
+# hook process first (an initial 120s value, then an under-corrected 8s
+# value that could still sum to 32s across those four calls, were both
+# found by an independent adversarial review of this issue's own
+# implementation). 5s * 4 = 20s leaves comfortable headroom under the
+# hook's own 30s budget for jq/git/interpreter-startup overhead, while
+# still generous over these already-fast scripts' normal sub-second
+# runtime.
+SUBPROCESS_TIMEOUT_SECONDS = 5
+
+# _missing_packages_report's own dedicated timeout -- see its own call
+# site comment for why this needs to run longer than SUBPROCESS_TIMEOUT_
+# SECONDS. 30s comfortably exceeds hooks/gitapex_check_python_
+# precondition.py's own PROBE_TIMEOUT_SECONDS=10s per required package,
+# for a small handful of declared packages, without competing with the
+# hook's own 30s budget (this call is never part of that sequential
+# chain).
+PRECONDITION_PROBE_TIMEOUT_SECONDS = 30
 
 
 class PrBodyPreflightError(Exception):
@@ -138,13 +156,29 @@ class CheckResult:
         return "PASS" if self.passed else "FAIL"
 
 
-def _run(argv: tuple[str, ...], stdin_text: str | None = None) -> subprocess.CompletedProcess[str]:
+def _run(
+    argv: tuple[str, ...], stdin_text: str | None = None, timeout: float | None = None
+) -> subprocess.CompletedProcess[str]:
     """Run one already-fixed argv list from the repo root, with no shell --
     same no-shell, ``errors="replace"`` posture as
     ``gitapex_gate_local_preflight.py``'s own ``_run`` helper, for the same
     reason: a sub-check's own output is not guaranteed to be strict UTF-8,
     and a raised ``UnicodeDecodeError`` here must not crash this whole
-    aggregate run past every other sub-check's own report."""
+    aggregate run past every other sub-check's own report.
+
+    ``timeout=None`` (the default) resolves to ``SUBPROCESS_TIMEOUT_SECONDS``
+    *read at call time*, not baked in as a literal default-argument value --
+    a plain ``timeout: float = SUBPROCESS_TIMEOUT_SECONDS`` default would
+    freeze that module global's value at function-definition time, silently
+    breaking any test that monkeypatches ``SUBPROCESS_TIMEOUT_SECONDS``
+    afterward (found by an independent adversarial review of this issue's
+    own implementation, live-confirmed: ``_run.__defaults__`` stayed the
+    original value after monkeypatching the module attribute). Pass an
+    explicit ``timeout`` to override for a call site that is never part of
+    the hook-wired sequential-call chain that constant is sized against --
+    see ``_missing_packages_report``, whose own call needs longer than that
+    ceiling to let ``gitapex_check_python_precondition.py``'s own slower
+    ``PROBE_TIMEOUT_SECONDS`` finish gracefully."""
     return subprocess.run(  # noqa: S603
         list(argv),
         cwd=REPO_ROOT,
@@ -152,7 +186,7 @@ def _run(argv: tuple[str, ...], stdin_text: str | None = None) -> subprocess.Com
         text=True,
         errors="replace",
         check=False,
-        timeout=SUBPROCESS_TIMEOUT_SECONDS,
+        timeout=SUBPROCESS_TIMEOUT_SECONDS if timeout is None else timeout,
         input=stdin_text,
         stdin=None if stdin_text is not None else subprocess.DEVNULL,
     )
@@ -289,7 +323,20 @@ def _missing_packages_report(gate_id: str) -> str | None:
     # positional value -- the same defeat-tested defect class that fix
     # already closed for the sibling hook, found again here by an
     # independent adversarial review of this issue's own implementation.
-    completed = _run((sys.executable, str(PYTHON_PRECONDITION_CHECKER), "--", *required))
+    # A longer, dedicated timeout rather than the shared
+    # SUBPROCESS_TIMEOUT_SECONDS: this call (only reachable from
+    # check_skill_audit_disclosure, always --skip'd by the hook-wired
+    # path -- see run_all_checks's own docstring) never competes for the
+    # hook's own 30s budget, but hooks/gitapex_check_python_precondition.py
+    # probes each required package with its own PROBE_TIMEOUT_SECONDS=10s,
+    # sequentially -- a shorter outer timeout here would cut that probe off
+    # before its own graceful degrade could report a slow-but-genuine
+    # import, misreporting it as "a sub-check timed out" instead (found by
+    # an independent adversarial review of this issue's own
+    # implementation).
+    completed = _run(
+        (sys.executable, str(PYTHON_PRECONDITION_CHECKER), "--", *required), timeout=PRECONDITION_PROBE_TIMEOUT_SECONDS
+    )
     if completed.returncode == 0:
         return None
     output = f"{completed.stdout}{completed.stderr}".strip()
@@ -370,27 +417,55 @@ def build_diff_added_corpus(base_ref: str, head_ref: str) -> str:
     return extract_completed.stdout
 
 
+# The exact exception scope gitapex_gate_local_preflight.py's own
+# run_check already isolates a wired gate against (any way a subprocess
+# call can fail to produce a real verdict -- a missing executable
+# (OSError/FileNotFoundError), a bad argument (ValueError), or a
+# subprocess-level failure (SubprocessError, of which TimeoutExpired is a
+# subclass) -- becomes a FAIL, never a crash), plus this module's own
+# PrBodyPreflightError for a sibling script genuinely missing. _isolated
+# below originally caught only PrBodyPreflightError/TimeoutExpired, a
+# narrower scope than the run_check comparison its own docstring drew --
+# e.g. build_diff_added_corpus's bare `git diff` subprocess call raised an
+# uncaught FileNotFoundError if git itself were ever missing from PATH,
+# crashing this whole aggregate run past every other sub-check's own
+# result, the exact defect class _isolated exists to prevent -- found by
+# an independent adversarial review of this issue's own implementation.
+_ISOLATED_EXCEPTIONS = (
+    PrBodyPreflightError,
+    subprocess.TimeoutExpired,
+    OSError,
+    ValueError,
+    subprocess.SubprocessError,
+)
+
+
+def _error_result(name: str, error: BaseException) -> CheckResult:
+    """Convert one caught exception (see ``_ISOLATED_EXCEPTIONS``) into a
+    failing ``CheckResult`` for ``name`` -- shared by ``_isolated`` and
+    ``run_all_checks``'s own ``diff_added_corpus`` build, which needs the
+    identical conversion but cannot itself go through ``_isolated``
+    (``build_diff_added_corpus`` returns ``str``, not ``CheckResult``)."""
+    if isinstance(error, subprocess.TimeoutExpired):
+        return CheckResult(name, False, False, f"error: a sub-check timed out: {error}")
+    return CheckResult(name, False, False, f"error: {error}")
+
+
 def _isolated(name: str, run_check: Callable[[], CheckResult]) -> CheckResult:
-    """Run one sub-check, converting a ``PrBodyPreflightError`` (a sibling
-    script genuinely missing, or ``build_diff_added_corpus``'s own ``git
-    diff`` failing) or a ``subprocess.TimeoutExpired`` into a failing
-    ``CheckResult`` for ``name`` instead of letting it propagate out of
-    ``run_all_checks`` and abort every other sub-check -- the same
+    """Run one sub-check, converting any of ``_ISOLATED_EXCEPTIONS`` into a
+    failing ``CheckResult`` for ``name`` instead of letting it propagate
+    out of ``run_all_checks`` and abort every other sub-check -- the same
     per-check isolation ``gitapex_gate_local_preflight.py``'s own
-    ``run_check`` already applies (any way a check can fail to produce a
-    real verdict becomes a FAIL carrying the error text, never a crash
-    past the rest of the run). Before this helper existed, one sub-check's
-    own setup failure (e.g. an unresolvable ``--check-diff`` ref) silently
-    lost every other sub-check's result too -- direct contradiction of
-    this module's own docstring, which promises the whole set always
-    reports, found by an independent adversarial review of this issue's
-    own implementation."""
+    ``run_check`` already applies. Before this helper existed, one
+    sub-check's own setup failure (e.g. an unresolvable ``--check-diff``
+    ref) silently lost every other sub-check's result too -- direct
+    contradiction of this module's own docstring, which promises the whole
+    set always reports, found by an independent adversarial review of this
+    issue's own implementation."""
     try:
         return run_check()
-    except PrBodyPreflightError as error:
-        return CheckResult(name, False, False, f"error: {error}")
-    except subprocess.TimeoutExpired as error:
-        return CheckResult(name, False, False, f"error: a sub-check timed out: {error}")
+    except _ISOLATED_EXCEPTIONS as error:
+        return _error_result(name, error)
 
 
 def run_all_checks(
@@ -423,12 +498,8 @@ def run_all_checks(
     if check_diff is not None and "provenance-disclosure" not in skip:
         try:
             diff_added_corpus = build_diff_added_corpus(*check_diff)
-        except PrBodyPreflightError as error:
-            diff_added_corpus_error = CheckResult("provenance-disclosure", False, False, f"error: {error}")
-        except subprocess.TimeoutExpired as error:
-            diff_added_corpus_error = CheckResult(
-                "provenance-disclosure", False, False, f"error: a sub-check timed out: {error}"
-            )
+        except _ISOLATED_EXCEPTIONS as error:
+            diff_added_corpus_error = _error_result("provenance-disclosure", error)
 
     checks: list[CheckResult] = []
     if "skill-audit-disclosure" not in skip:
@@ -490,9 +561,10 @@ def main(argv: list[str] | None = None) -> int:
         "--check-diff",
         nargs=2,
         metavar=("BASE_REF", "HEAD_REF"),
-        help="Enable the two diff-dependent sub-checks (skill-audit-disclosure's own applicability, and "
-        "provenance-disclosure's own diff-added corpus), computed locally via git against this ref pair. "
-        "Without this, those two sub-checks report SKIPPED rather than a potentially-false PASS.",
+        help="Enable skill-audit-disclosure's own applicability check and provenance-disclosure's own "
+        "diff-added corpus, both computed locally via git against this ref pair. Without this, "
+        "skill-audit-disclosure reports SKIPPED rather than a potentially-false PASS; provenance-disclosure "
+        "still runs, in a body-only mode.",
     )
     parser.add_argument(
         "--skip",

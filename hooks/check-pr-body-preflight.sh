@@ -16,9 +16,11 @@
 # inconclusive local git state that keeps the preflight script from ever
 # being invoked at all (unresolvable base branch, an unfetched
 # origin/<base>, a checkout outside this repository's own .github/
-# scripts, a stacked PR with no explicit base -- narrows to the two
-# body-only sub-checks there rather than blocking outright); CI remains
-# the deterministic backstop regardless of what this hook can determine
+# scripts, a stacked PR with no explicit base -- narrows to just the two
+# purely body-only sub-checks (ascii-only, provenance-marker-scan) plus
+# provenance-disclosure's own body-only mode there, dropping only its
+# diff-added-corpus half, rather than blocking outright); CI remains the
+# deterministic backstop regardless of what this hook can determine
 # locally. Once the preflight script actually runs, though, fail CLOSED
 # (deny) on any exit it cannot recognize as a genuine per-sub-check
 # verdict -- the same "denying either way is still the safe default"
@@ -147,15 +149,20 @@ if ! merge_base=$(git merge-base "origin/${base_branch}" HEAD 2>/dev/null); then
 fi
 
 # base_is_explicit=no means base_branch is only a guessed default-branch
-# fallback -- on a stacked PR this is the wrong ancestor. Narrow to the
-# two body-only sub-checks (ascii-only, provenance-marker-scan; skill-
-# audit-disclosure is always skipped here regardless) rather than pass a
-# possibly-wrong --check-diff pair, matching hooks/check-pr-skill-audit-
-# disclosure.sh's own degrade-to-narrower-check precedent for the
-# identical situation.
+# fallback -- on a stacked PR this is the wrong ancestor. Drop
+# --check-diff rather than pass a possibly-wrong ref pair, matching
+# hooks/check-pr-skill-audit-disclosure.sh's own degrade-to-narrower-check
+# precedent for the identical situation. This narrows to the two purely
+# body-only sub-checks (ascii-only, provenance-marker-scan; skill-audit-
+# disclosure is always skipped here regardless) PLUS provenance-
+# disclosure's own body-only mode -- provenance-disclosure itself is
+# never skipped outright, only its diff-added-corpus half (corrected
+# after an independent adversarial review of this issue's own
+# implementation found the original wording here claimed a full skip
+# that the code never actually performed).
 check_diff_args=(--check-diff "$merge_base" HEAD)
 if [ "$base_is_explicit" = "no" ]; then
-  echo "Notice: hooks/check-pr-body-preflight.sh is skipping the diff-dependent provenance-disclosure sub-check because this call supplied no explicit base branch; a stacked PR would otherwise be graded against the wrong ancestor. Falling back to the two body-only sub-checks (CI's own gates always use the PR's real base regardless)." >&2
+  echo "Notice: hooks/check-pr-body-preflight.sh is dropping --check-diff because this call supplied no explicit base branch; a stacked PR would otherwise be graded against the wrong ancestor. provenance-disclosure still runs in its body-only mode; only its diff-added-corpus half is narrowed away (CI's own gates always use the PR's real base regardless)." >&2
   check_diff_args=()
 fi
 
@@ -175,8 +182,24 @@ if command -v uv >/dev/null 2>&1 && [ -f "${repo_root}/pyproject.toml" ] && [ -f
   python3_cmd=(uv run --frozen --directory "$repo_root" python3)
 fi
 
-if preflight_output=$(cd "$repo_root" && "${python3_cmd[@]}" "$preflight_script" \
-    "${check_diff_args[@]}" --body-file "$body_file" --skip skill-audit-disclosure 2>&1); then
+# Built up rather than expanding the possibly-empty check_diff_args array
+# directly at the call site: under `set -u`, "${check_diff_args[@]}"
+# expansion of a zero-element array raises "unbound variable" on bash
+# older than 4.4 (that bug's own fix version) -- e.g. macOS's still-
+# shipped bash 3.2 -- the same class of pitfall
+# hooks/check-pr-skill-audit-disclosure.sh's own `[ "${#required_packages[@]}"
+# -gt 0 ]` guard already exists to avoid for its own optional array,
+# applied here via a length-guarded `+=` instead (found by an independent
+# adversarial review of this issue's own implementation). preflight_argv
+# always starts non-empty ($preflight_script), so the final expansion
+# below is always safe regardless of bash version.
+preflight_argv=("$preflight_script")
+if [ "${#check_diff_args[@]}" -gt 0 ]; then
+  preflight_argv+=("${check_diff_args[@]}")
+fi
+preflight_argv+=(--body-file "$body_file" --skip skill-audit-disclosure)
+
+if preflight_output=$(cd "$repo_root" && "${python3_cmd[@]}" "${preflight_argv[@]}" 2>&1); then
   preflight_exit=0
 else
   preflight_exit=$?

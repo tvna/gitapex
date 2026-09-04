@@ -211,9 +211,10 @@ It runs skill-audit-disclosure (via its own `--check-diff` mode),
 provenance-disclosure (against the body plus the diff's added
 docs/evals/skills Markdown), an ASCII-only scan, and the provenance-marker
 scan, and prints one aggregate PASS/FAIL report -- same reporting
-convention as the working-tree preflight above. Omit `--check-diff` to
-grade only the body text itself (the two diff-dependent sub-checks report
-`SKIPPED`, not a false `PASS`).
+convention as the working-tree preflight above. Omit `--check-diff` and
+skill-audit-disclosure reports `SKIPPED` (not a false `PASS`); the other
+three still run, provenance-disclosure in a body-only mode that drops
+only its diff-added-corpus half.
 
 Where this repository's hooks are installed and confirmed to bind,
 `hooks/check-pr-body-preflight.sh` already runs this same check as a

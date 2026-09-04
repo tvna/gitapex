@@ -8,11 +8,13 @@ hooks/test_gitapex_check_pr_issue_acm_disclosure_shell.py documents: both
 
 This hook's own bash logic (base-branch/merge-base resolution, the
 stacked-PR narrowing, the fail-open/fail-closed split, the empty-body
-bypass) had no automated coverage at all before an independent adversarial
-review of this issue's own implementation found two real defects in it --
-a stacked-PR false-deny risk and a fail-open policy inversion relative to
-the sibling hooks/check-pr-skill-audit-disclosure.sh -- both fixed and
-pinned here, mirroring that sibling's own
+bypass) had no automated coverage at all before two rounds of independent
+adversarial review of this issue's own implementation found several real
+defects in it -- a stacked-PR false-deny risk, a fail-open policy
+inversion relative to the sibling hooks/check-pr-skill-audit-disclosure.sh,
+an old-bash-incompatible empty-array expansion, and an inaccurate
+"skipped" claim about provenance-disclosure's own body-only mode among
+them -- all fixed and pinned here, mirroring that sibling's own
 test_gitapex_check_pr_skill_audit_disclosure_shell.py test shape.
 
 Each test runs the shipped script via subprocess with the PreToolUse JSON
@@ -243,24 +245,46 @@ def test_outside_a_git_work_tree_the_hook_stays_out_of_the_way(tmp_path: Path) -
 # --- the stacked-PR false-deny fix (issue #1725 review finding) ---
 
 
-def test_stacked_pr_with_no_explicit_base_skips_the_diff_dependent_check(repo: Path) -> None:
+def test_stacked_pr_with_no_explicit_base_drops_check_diff(repo: Path) -> None:
     """A parent feature branch's own change (one origin/main does not have
-    yet) must not be dragged into --check-diff's scope for an
-    update_pull_request call that supplies no explicit base -- narrows to
-    the two body-only sub-checks instead of denying against the wrong
-    ancestor."""
+    yet -- never published, unlike _publish()'s own tier-1 precedent) must
+    not be dragged into --check-diff's scope for an update_pull_request
+    call that supplies no explicit base -- drops --check-diff entirely
+    instead of denying against the wrong ancestor.
+
+    Deliberately does NOT publish the parent branch's own change to
+    origin/main before forking the stacked branch: an earlier version of
+    this fixture called _publish() first, which meant origin/main already
+    had the parent's change and `git merge-base origin/main HEAD` computed
+    the *same* (correct) ancestor with or without this fix -- a false
+    reassurance the fix's own review caught. This fixture instead proves
+    the risk is real before checking the fix at all: the wrong-ancestor
+    diff (origin/main, which the fix's absence would fall back to) is
+    shown below to genuinely include the parent branch's own
+    provenance-disclosure-triggering paragraph, which the real ancestor
+    (`feature`) would not."""
     _write(repo, "docs/notes.md", _PROVENANCE_DISCLOSURE_BODY)
     _commit(repo, "parent branch: docs change that would trip provenance-disclosure")
-    _publish(repo)
     # A second, real feature branch stacked on top of the one just
-    # published -- its own real base is "feature", not "main", but this
-    # call supplies no explicit base at all.
+    # committed (never pushed to origin) -- its own real base is
+    # "feature", not "main", but this call supplies no explicit base at
+    # all.
     _git(repo, "checkout", "-q", "-b", "feature-2")
     _write(repo, "README.md", "stacked change\n")
     _commit(repo, "stacked PR's own change")
+
+    # Prove the risk this fixture reconstructs is real: the wrong-ancestor
+    # diff (what a base_is_explicit-unaware hook would compute against)
+    # actually does sweep in the parent branch's own unrelated change.
+    wrong_ancestor_diff = _git(repo, "diff", "origin/main...feature-2", "--", "docs/notes.md").stdout
+    assert "no access to a registered skill" in wrong_ancestor_diff, (
+        "fixture bug: the wrong-ancestor diff does not actually include the parent branch's own "
+        "provenance-disclosure-triggering change -- this test would pass even without the fix"
+    )
+
     result = _run(repo, _CLEAN_BODY, tool_name="mcp__github__update_pull_request", base=None)
     assert result.returncode == 0, result.stderr
-    assert "skipping the diff-dependent provenance-disclosure sub-check" in result.stderr
+    assert "dropping --check-diff" in result.stderr
 
 
 def test_create_pull_request_always_supplies_base_and_keeps_full_coverage(repo: Path) -> None:
@@ -270,14 +294,14 @@ def test_create_pull_request_always_supplies_base_and_keeps_full_coverage(repo: 
     result = _run(repo, _PROVENANCE_DISCLOSURE_BODY, tool_name="mcp__github__create_pull_request", base="main")
     assert result.returncode == 2, result.stderr
     assert "provenance-disclosure" in result.stderr
-    assert "skipping the diff-dependent" not in result.stderr
+    assert "dropping --check-diff" not in result.stderr
 
 
 def test_update_pull_request_with_an_explicit_base_keeps_full_coverage(repo: Path) -> None:
     result = _run(repo, _PROVENANCE_DISCLOSURE_BODY, tool_name="mcp__github__update_pull_request", base="main")
     assert result.returncode == 2, result.stderr
     assert "provenance-disclosure" in result.stderr
-    assert "skipping the diff-dependent" not in result.stderr
+    assert "dropping --check-diff" not in result.stderr
 
 
 # --- shared guards ---
