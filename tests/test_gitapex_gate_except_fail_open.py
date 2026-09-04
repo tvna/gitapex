@@ -247,13 +247,16 @@ def test_a_non_falsy_assignment_is_not_flagged(tmp_path: pathlib.Path) -> None:
 def test_a_falsy_return_that_is_not_the_last_statement_is_not_flagged(tmp_path: pathlib.Path) -> None:
     """A known miss (documented): only the body's own literal last
     statement is inspected -- a falsy return earlier (here, buried inside
-    an `if` branch), followed by a real, unconditional raise as the
+    an `if` branch), followed by a real, non-falsy statement as the
     literal last statement, is exactly the shape this gate must not flag.
-    Step 8 independent-review dispatch, issue #1722: an earlier revision
-    of this fixture (`log(error); raise`) contained no falsy return at
-    all, so it did not actually pin the case this test's own name and
-    docstring claim -- fixed to genuinely contain one."""
-    source = "try:\n    do_work()\nexcept OSError:\n    if broken():\n        return None\n    raise\n"
+    Step 8 independent-review dispatch, issue #1722, round 2: an earlier
+    revision of this fixture ended in `raise`, which `_contains_raise`
+    catches before `_falsy_exit`'s own last-statement-only logic is ever
+    reached -- so it still exercised the wrong code path, not the one
+    this test's own name and docstring claim. Fixed to end in a
+    non-falsy, non-raising statement instead, so only `_falsy_exit`'s
+    own last-statement restriction decides the outcome."""
+    source = "try:\n    do_work()\nexcept OSError:\n    if broken():\n        return None\n    log('handled')\n"
     assert _grade(tmp_path, source) == []
 
 
@@ -301,6 +304,55 @@ def test_an_outer_raising_finally_suppresses_a_nested_trys_own_finding(tmp_path:
         "    raise RuntimeError('cleanup failed')\n"
     )
     assert _grade(tmp_path, source) == []
+
+
+def test_a_try_nested_inside_the_same_trys_own_finalbody_is_not_falsely_protected(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Step 8 independent-review dispatch, issue #1722, round 2: a Try
+    nested INSIDE another Try's own `finalbody` runs sequentially BEFORE
+    a later `raise` in that same `finalbody` -- inheriting the
+    protection the fix above computes FROM that finalbody's own raise is
+    circular, since the nested Try's own early `return` can exit before
+    the later `raise` is ever reached. A regression in the fix above
+    silently un-caught this real fail-open handler."""
+    source = (
+        "def f():\n"
+        "    try:\n"
+        "        do_work()\n"
+        "    finally:\n"
+        "        try:\n"
+        "            cleanup()\n"
+        "        except CleanupError:\n"
+        "            return None\n"
+        "        raise\n"
+    )
+    assert _rules(_grade(tmp_path, source)) == ["except-fail-open"]
+
+
+def test_a_nested_functions_own_try_never_inherits_an_enclosing_trys_protection(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Step 8 independent-review dispatch, issue #1722, round 2: a
+    function defined inside a Try's body/handlers/finally is a separate,
+    deferred execution context -- it may run at an arbitrary later time,
+    not synchronously as part of whatever Try currently encloses it --
+    so its own Try nodes must never inherit the enclosing Try's own
+    protection, matching `_contains_raise`'s own identical exclusion for
+    a nested function/lambda body."""
+    source = (
+        "def outer():\n"
+        "    try:\n"
+        "        do_work()\n"
+        "    finally:\n"
+        "        def deferred():\n"
+        "            try:\n"
+        "                cleanup()\n"
+        "            except CleanupError:\n"
+        "                return None\n"
+        "        raise RuntimeError('boom')\n"
+    )
+    assert _rules(_grade(tmp_path, source)) == ["except-fail-open"]
 
 
 def test_a_bare_annotation_with_no_assigned_value_is_not_flagged(tmp_path: pathlib.Path) -> None:

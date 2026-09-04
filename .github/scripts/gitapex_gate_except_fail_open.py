@@ -508,22 +508,39 @@ def _walk_try_nodes(node: ast.AST, protected: bool) -> Iterator[tuple[ast.Try | 
     """Yield every `Try`/`TryStar` node reachable from `node`, paired with
     whether it is "protected": covered by its own, or an ENCLOSING Try
     statement's, raising `finally:` clause. A `finally:` that raises
-    always supersedes whatever runs inside that same statement -- its own
-    body, its own handlers, or anything nested inside either of those --
-    so a `try/except` nested inside an outer `try: ... finally: raise` is
+    always supersedes whatever runs inside that same statement's `body`,
+    `handlers`, or `orelse` -- all three inherit `own_protected` -- so a
+    `try/except` nested inside an outer `try: ... finally: raise` is
     protected too, even though it is a separate `Try` node with its own
     empty `finalbody` (Step 8 adversarial review, issue #1722: checking
     only a node's own `finalbody` missed exactly this nested shape).
-    `protected` propagates down through every kind of nesting -- a
-    handler body, an `if`, a `with`, another `try` -- via
-    `ast.iter_child_nodes`, which already walks every field a `Try` node
-    carries (body, handlers, orelse, finalbody) with no special-casing
-    needed here."""
+
+    `finalbody`'s own statements are walked SEPARATELY, with the
+    ORIGINAL `protected` (never `own_protected`): they run sequentially,
+    BEFORE a later `raise` in that same `finalbody` would, so a Try
+    nested inside a Try's own `finalbody` must not inherit protection
+    computed from that very `finalbody` -- doing so is circular, since an
+    early `return` from the nested Try can exit before the later `raise`
+    is ever reached (Step 8 independent-review dispatch, issue #1722:
+    treating `finalbody` the same as `body`/`handlers`/`orelse` silently
+    un-caught exactly this shape).
+
+    A nested function/lambda's own body is a separate, deferred
+    execution context -- it may run at an arbitrary later time, not
+    synchronously as part of whatever Try currently encloses it -- so it
+    never inherits `protected` either; its own Try nodes are walked
+    fresh, matching `_contains_raise`'s own identical exclusion above."""
+    if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
+        for child in ast.iter_child_nodes(node):
+            yield from _walk_try_nodes(child, protected=False)
+        return
     if isinstance(node, ast.Try | ast.TryStar):
         own_protected = protected or _contains_raise(node.finalbody)
         yield node, own_protected
-        for child in ast.iter_child_nodes(node):
-            yield from _walk_try_nodes(child, own_protected)
+        for stmt in (*node.body, *(s for handler in node.handlers for s in handler.body), *node.orelse):
+            yield from _walk_try_nodes(stmt, own_protected)
+        for stmt in node.finalbody:
+            yield from _walk_try_nodes(stmt, protected)
         return
     for child in ast.iter_child_nodes(node):
         yield from _walk_try_nodes(child, protected)
