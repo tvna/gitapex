@@ -810,16 +810,20 @@ stated under Repository-scoped below.
       `portable-no-repo-path-citation`/`portable-no-inline-path-citation`
       checks that enforce it) is scoped only to a citation of a path
       *outside* the skill's own directory -- `evals/`, `docs/`, a
-      sibling skill, a CI-only location. It was never scoped to cover a
-      citation of the skill's
-      own bundled `references/...` or `scripts/...` file, regardless of
-      the surrounding prose's wording: a citation to the skill's own
-      bundled file is graded under [Dependency file
+      CI-only location. It was never scoped to cover a citation of the
+      skill's own bundled `references/...` or `scripts/...` file,
+      regardless of the surrounding prose's wording: a citation to the
+      skill's own bundled file is graded under [Dependency file
       portability](#dependency-file-portability) below instead (that
       section's own boundary is where the file *lives*, not how the
       citing sentence is hedged), never under this hedge-phrase
       mechanism. Applying this rule's hedge vocabulary to an in-directory
-      citation is a scope-misapplication, not a stricter reading of it.
+      citation is a scope-misapplication, not a stricter reading of it. An
+      unhedged sibling-skill fact-claim is a distinct defect this rule
+      does not cover at all -- enforced separately by
+      `portable-no-unhedged-skill-fact-claim`, with its own hedge
+      vocabulary -- and is Sibling-skill dependency portability's own
+      concern below, not this one.
     - **What the underlying defect actually is**: a repo-external path is
       a real dimension-6 defect only when the skill's own *control* -- its
       procedure or judgment logic -- depends on that path to decide how to
@@ -960,17 +964,24 @@ stated under Repository-scoped below.
   same rule stated from dimension 5's side.
 - **Repository-scoped** -- fails condition (c) or (d) outright, or fails
   Mixed's own narrowness conditions above, via one of three triggers. A
-  repository-scoped skill that reads as if it were portable is a
-  dimension-1/6 defect (it misleads a future vendoring decision), not
-  the scoping choice itself. An undeclared level that turns out to be
-  repository-scoped is itself a finding, not something to silently infer
-  and move past. Declared as the `portability` field in the skill's
-  `metadata/gitapex.yaml` sidecar (the `portability-declared` shape
-  check enforces presence and value); the declaration itself may get a
-  one-line `## Notes` mention, but any extended rationale follows the
-  [Notes vs. metadata placement axis](#notes-vs-metadata-placement-axis)
-  above and belongs in `metadata/gitapex.yaml`'s `spec.references`
-  instead.
+  condition-(c) failure not confined to the one disclosed, bundled-file
+  shape Mixed-via-bundled-convention requires -- an unhedged origin-repo
+  fact-claim scattered through the portable core itself, never isolated
+  to a single distinctly-named file -- is Repository-scoped directly on
+  condition (c)'s own terms; it needs no trigger number of its own. The
+  three named triggers below instead cover the narrower cases where a
+  single, isolable dependency almost qualifies for a Mixed sub-type but
+  falls short of that sub-type's own narrowness. A repository-scoped
+  skill that reads as if it were portable is a dimension-1/6 defect (it
+  misleads a future vendoring decision), not the scoping choice itself.
+  An undeclared level that turns out to be repository-scoped is itself a
+  finding, not something to silently infer and move past. Declared as
+  the `portability` field in the skill's `metadata/gitapex.yaml` sidecar
+  (the `portability-declared` shape check enforces presence and value);
+  the declaration itself may get a one-line `## Notes` mention, but any
+  extended rationale follows the [Notes vs. metadata placement
+  axis](#notes-vs-metadata-placement-axis) above and belongs in
+  `metadata/gitapex.yaml`'s `spec.references` instead.
 
   - **Trigger 1 -- inherently repo-bound purpose**: the skill's own
     reason for existing presupposes this specific repository's identity,
@@ -1014,13 +1025,23 @@ by all three.
   binding. A bare `relatedTo` metadata listing, or a "route to X for a
   different situation" handoff mention naming a sibling only to
   distinguish this skill's own trigger from it, is not a dependency at
-  all and never reaches the narrowness tests below -- most of a
-  skill's own Related-skills section is exactly this non-dependency
-  kind of mention, not a condition-(a) failure waiting to be graded.
+  all and never reaches the narrowness tests below -- an ordinary
+  skill's own Related-skills section is often made up entirely of this
+  non-dependency kind of mention, not a condition-(a) failure waiting to
+  be graded. An orchestrator-shaped skill is the deliberate exception,
+  not a gap in this bullet: one whose own procedure steps genuinely
+  consult, quote, or reuse several distinct siblings' own internal
+  content (rather than merely naming them) carries that many real
+  dependencies, and the next bullet's fan-out trigger is meant to catch
+  exactly that case.
 - **No fan-out.** Exactly one real sibling-skill dependency. A second
   one, of any kind, moves the target to Repository-scoped via trigger 2
   regardless of how clean each individual dependency otherwise is --
-  narrowness is evaluated per skill, not per dependency.
+  narrowness is evaluated per skill, not per dependency, and regardless
+  of any prior grading a target carries from before this rule set: an
+  orchestrator skill built around several siblings' own real content
+  landing on Repository-scoped here is this rule working as intended,
+  not a defect in the rule.
 - **A clean interface.** The one real dependency touches only the
   sibling's top-level public contract -- its stated Steps/Output shape,
   its description-level trigger, a verdict it returns -- never the
