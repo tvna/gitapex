@@ -739,7 +739,7 @@ references the *procedure* depends on to function are graded this
 strictly. A target failing exactly one condition, in one of the narrow
 ways stated under Mixed below, is Mixed; a wider failure -- more than
 one condition failing, or a single failure that does not fit any of the
-narrow Mixed shapes -- is Repository-scoped, via the matching trigger
+narrow Mixed ways -- is Repository-scoped, via the matching trigger
 stated under Repository-scoped below.
 
 - **(a) No real sibling-skill dependency**, declared or textual -- no
@@ -763,7 +763,7 @@ stated under Repository-scoped below.
   for existing does not name, target, or presuppose this specific
   repository's own identity, tooling, or workflow. See trigger 1 under
   Repository-scoped below for the failing case stated precisely; there
-  is no narrow Mixed shape for a condition-(d) failure, because an
+  is no narrow Mixed way for a condition-(d) failure, because an
   inherently repo-bound purpose leaves no portable core to split a
   Mixed classification's file-level split from.
 
@@ -894,10 +894,10 @@ stated under Repository-scoped below.
       its own separate, unrelated hedge vocabulary untouched.
 - **Mixed** -- always clears condition (d) above (a Mixed skill's
   purpose is not inherently repo-bound; see trigger 1 below for why that
-  failure has no Mixed path at all). It fails exactly one of (a), (b),
+  failure has no Mixed way at all). It fails exactly one of (a), (b),
   or (c) in one of the three narrow ways below, clearing the other two.
   A wider failure -- more than one condition failing, or a single
-  failure that does not fit any of these three narrow shapes -- is
+  failure that does not fit any of these three narrow ways -- is
   Repository-scoped instead, via the matching trigger below, not Mixed.
 
   - **Mixed-via-file** -- fails condition (b) in exactly one narrow way:
@@ -978,7 +978,7 @@ stated under Repository-scoped below.
     not be restated as a general procedure without changing what the
     skill is for (e.g. a skill whose entire point is auditing this
     repository's own plugin-distribution surface). Fails condition (d)
-    directly; no narrow Mixed path exists for this trigger, because an
+    directly; no narrow Mixed way exists for this trigger, because an
     inherently repo-bound purpose leaves no portable core left to split
     the repo-bound purpose away from.
   - **Trigger 2 -- sibling dependency failing fan-out or the
@@ -1091,17 +1091,15 @@ target discloses a fallback a vendoring consumer could use once that
 file does not travel with the copy (an adaptation note, a stated
 "replace this with your own equivalent" convention); it is
 Repository-scoped via trigger 3 instead when no such fallback is
-disclosed. A dimension-6 [porting-boundary
-map](#6-durability) -- naming the outside dependency, why it exists, and
-what a vendoring consumer should substitute -- satisfies this predicate
-directly wherever one exists: it is checkable at this same
-classification step by reading the entry itself, unlike dimension 5's
-own Mixed-portability substitute, whose first condition requires that
-later dimension-5 walk to have already run. The map is never required
-to reach Mixed-via-file -- an inline `## Notes` fallback line is
-equally sufficient -- and its absence never by itself demotes a target
-that already has one; see dimension 6 for the map's own optional,
-never-label-deciding status.
+disclosed. A dimension-6 [porting-boundary map](#6-durability)
+satisfies this predicate directly wherever one exists: it is checkable
+at this same classification step by reading the entry itself, unlike
+dimension 5's own Mixed-portability substitute, whose first condition
+requires that later dimension-5 walk to have already run. The map is
+never required to reach Mixed-via-file -- an inline `## Notes` fallback
+line is equally sufficient -- and its absence never by itself demotes a
+target that already has one; see dimension 6 for the map's own
+definition, optional status, and never-label-deciding effect.
 
 A worked example already in this repository: this skill's own grading of
 a target's `metadata/gitapex.yaml` sidecar -- the contract this section,
