@@ -438,7 +438,12 @@ def _falsy_exit(body: list[ast.stmt]) -> _FalsyExit | None:
     `for`, `with`, `try`, `pass`, bare expression, or any non-falsy
     return/assign as the last statement is never this gate's finding. See
     the module docstring's own rationale for why only the literal last
-    statement is inspected."""
+    statement is inspected. A bare annotation (`value: dict`, `last.value
+    is None`) is never a finding either: it performs no assignment at
+    runtime, so `_is_falsy_literal(None)`'s own bare-`return` reading
+    (which is correct for `ast.Return`) would otherwise misclassify a
+    no-op annotation as "assigns a falsy default" (Step 8 adversarial
+    review, issue #1722)."""
     last = body[-1]
     if isinstance(last, ast.Return) and _is_falsy_literal(last.value):
         return last
@@ -449,7 +454,12 @@ def _falsy_exit(body: list[ast.stmt]) -> _FalsyExit | None:
         and _is_falsy_literal(last.value)
     ):
         return last
-    if isinstance(last, ast.AnnAssign) and isinstance(last.target, ast.Name) and _is_falsy_literal(last.value):
+    if (
+        isinstance(last, ast.AnnAssign)
+        and last.value is not None
+        and isinstance(last.target, ast.Name)
+        and _is_falsy_literal(last.value)
+    ):
         return last
     return None
 
@@ -511,6 +521,14 @@ def findings_for_source(path: str, source: str, added: set[int]) -> tuple[list[F
 
     for node in ast.walk(tree):
         if not isinstance(node, ast.Try | ast.TryStar):
+            continue
+        # A `finally:` clause that raises supersedes every handler's own
+        # pending return/assign -- the statement never actually completes,
+        # so a handler that looks fail-open in isolation is not: it always
+        # re-raises via the enclosing `finally`. Checked once per `Try`
+        # node (not per handler) since it covers every sibling handler
+        # identically (Step 8 adversarial review, issue #1722).
+        if _contains_raise(node.finalbody):
             continue
         for handler in node.handlers:
             if not handler.body or _contains_raise(handler.body):

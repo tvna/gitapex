@@ -263,6 +263,34 @@ def test_an_if_as_the_last_statement_is_a_stated_miss_and_is_not_flagged(tmp_pat
     assert _grade(tmp_path, source) == []
 
 
+def test_a_raising_finally_clause_suppresses_every_sibling_handlers_finding(tmp_path: pathlib.Path) -> None:
+    """Step 8 adversarial review, issue #1722: a `finally:` that raises
+    always supersedes a handler's own pending falsy return/assign -- the
+    statement never actually completes -- so a handler that looks
+    fail-open in isolation is not really fail-open here."""
+    source = (
+        "try:\n    do_work()\nexcept OSError:\n    return None\nfinally:\n    raise RuntimeError('cleanup failed')\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_non_raising_finally_clause_does_not_suppress_a_real_finding(tmp_path: pathlib.Path) -> None:
+    """The finally-clause check above must not over-suppress: a finally
+    that does something else (no raise) leaves the handler's own real
+    fail-open finding intact."""
+    source = "try:\n    do_work()\nexcept OSError:\n    return None\nfinally:\n    cleanup()\n"
+    assert _rules(_grade(tmp_path, source)) == ["except-fail-open"]
+
+
+def test_a_bare_annotation_with_no_assigned_value_is_not_flagged(tmp_path: pathlib.Path) -> None:
+    """Step 8 adversarial review, issue #1722: `value: dict` with no `=`
+    is an annotation-only statement -- it assigns nothing at runtime, so
+    it must not be misread as an assignment of the falsy default `None`
+    the way a bare `return` legitimately is."""
+    source = "try:\n    value = risky()\nexcept KeyError:\n    value: dict\nuse(value)\n"
+    assert _grade(tmp_path, source) == []
+
+
 def test_a_name_bound_to_a_falsy_value_elsewhere_is_a_stated_miss(tmp_path: pathlib.Path) -> None:
     """Documented known miss: read syntactically, not evaluated -- a name
     that merely holds a falsy value is not recognised."""
