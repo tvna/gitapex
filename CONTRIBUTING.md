@@ -193,6 +193,36 @@ has to `lint.yml`. Two gates, `behind-base` (issue #985) and
 two, this pre-push hook is the sole enforcement, with no CI-side backstop
 if it's bypassed.
 
+## Local PR-body preflight
+
+The gates above grade the working tree; a PR's *body* text is a separate
+surface with its own gates (skill-audit-disclosure, provenance-disclosure,
+the outward-artifact-preflight ASCII/provenance-marker checks) that used
+to run only individually, so an editing session had to remember which
+ones applied to a given body edit before pushing it. Issue #1725
+(consolidating #1707 and #1711) closes that gap with one command:
+
+```console
+uv run --frozen python3 .github/scripts/gitapex_gate_pr_body_preflight.py \
+    --check-diff <merge-base-or-base-branch> HEAD --body-file <path-to-draft-body>
+```
+
+It runs skill-audit-disclosure (via its own `--check-diff` mode),
+provenance-disclosure (against the body plus the diff's added
+docs/evals/skills Markdown), an ASCII-only scan, and the provenance-marker
+scan, and prints one aggregate PASS/FAIL report -- same reporting
+convention as the working-tree preflight above. Omit `--check-diff` and
+skill-audit-disclosure reports `SKIPPED` (not a false `PASS`); the other
+three still run, provenance-disclosure in a body-only mode that drops
+only its diff-added-corpus half.
+
+Where this repository's hooks are installed and confirmed to bind,
+`hooks/check-pr-body-preflight.sh` already runs this same check as a
+PreToolUse gate on every `create_pull_request`/`update_pull_request` call
+and blocks a failing one outright -- the command above is the manual
+fallback for an environment without that hook, or for iterating on a
+draft body before calling either tool.
+
 ## Issue citation convention
 
 If a PR's changes fully satisfy an issue's acceptance criteria, cite it

@@ -370,7 +370,7 @@
       ],
       "rule": "Flags a paragraph (PR body, or diff-added docs/evals/skills Markdown) combining a capability-limitation cue with a tool-fingerprint cue absent an explicit 'tool-fingerprint-disclosure: WAIVED: <reason>' line.",
       "planes": ["ci"],
-      "local_exclusion": "Grades a PR body against the diff's added lines; the body does not exist locally before the PR is opened.",
+      "local_exclusion": "Grades a PR body against the diff's added lines; the body does not exist locally before the PR is opened. A pretooluse equivalent is provided by the pr-body-preflight gate below (issue #1725), which wraps this same script (plus its own diff-added-corpus computation) alongside skill-audit-disclosure and the ASCII/provenance-marker scan.",
       "trigger": ".github/workflows/provenance-disclosure-gate.yml on pull_request",
       "policy_refs": [],
       "cluster": "outward-hygiene",
@@ -387,6 +387,35 @@
         {"kind": "file-glob", "ref": "skills/*.md"},
         {"kind": "file-glob", "ref": "skills/**/*.md"},
         {"kind": "workflow-event", "ref": "provenance-disclosure-gate.yml:pull_request"}
+      ]
+    },
+    {
+      "id": "pr-body-preflight",
+      "kind": "script",
+      "script": [
+        "hooks/check-pr-body-preflight.sh",
+        ".github/scripts/gitapex_gate_pr_body_preflight.py",
+        ".github/scripts/gitapex_gate_skill_audit_disclosure.py",
+        ".github/scripts/gitapex_gate_provenance_disclosure.py",
+        ".github/scripts/gitapex_extract_diff_added_lines.py",
+        "skills/outward-artifact-preflight/scripts/gitapex_scan_provenance.py",
+        "hooks/gitapex_check_python_precondition.py",
+        "hooks/hooks.json"
+      ],
+      "rule": "Before a create_pull_request/update_pull_request call proceeds, runs the consolidated local PR-body preflight (.github/scripts/gitapex_gate_pr_body_preflight.py) against the exact draft body: provenance-disclosure (body plus diff-added corpus), an ASCII-only scan, and the provenance-marker scan (skills/outward-artifact-preflight checks 1 and 2), one aggregate PASS/FAIL verdict. The hook itself passes --skip skill-audit-disclosure -- that sub-check is already covered by hooks/check-pr-skill-audit-disclosure.sh's own separate PreToolUse hook on the identical matchers, so this hook does not recompute it a second time; the CLI's own default (no --skip) still runs all four sub-checks including skill-audit-disclosure for a standalone invocation. Issue #1725 (consolidating #1707 and #1711): no single local command previously ran every PR-body-affecting gate together, so an editing session's own memory of which individual script applied to a given body edit was the only thing standing between a locally-passing check and a CI-side failure on a different gate. The diff-dependent provenance-disclosure sub-check reports SKIPPED, not a false PASS, when no base branch/merge-base can be resolved locally -- the hook itself fails OPEN (warns, does not block) on the same inconclusive-local-git-state cases hooks/check-pr-skill-audit-disclosure.sh already fails open on. CI remains the authoritative merge gate for every wrapped sub-check regardless of what this hook determines locally.",
+      "planes": ["pretooluse"],
+      "local_exclusion": "Provides a manually-invocable CLI (.github/scripts/gitapex_gate_pr_body_preflight.py --body-file PATH [--check-diff BASE HEAD]), but cannot be wired to gitapex_gate_local_preflight.py's own 'local' plane: that runner's local_invocation field is a fixed argv with no provider for a PR-body-text input, since no PR body exists as a working-tree file before the PR is opened -- the same diff-derived-argument shape gap gitignore-pattern-test-coverage's own local_exclusion already names.",
+      "trigger": "PreToolUse matcher mcp__github__create_pull_request and mcp__github__update_pull_request (hooks/hooks.json)",
+      "policy_refs": [],
+      "cluster": ["outward-hygiene", "github-operations"],
+      "tracking_issue": [1725, 1707, 1711],
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "preconditions": {"requires_python_packages": ["pydantic"]},
+      "target": [
+        {"kind": "mcp-tool", "ref": "mcp__github__create_pull_request"},
+        {"kind": "mcp-tool", "ref": "mcp__github__update_pull_request"}
       ]
     },
     {
