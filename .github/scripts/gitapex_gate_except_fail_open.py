@@ -152,6 +152,12 @@ or, in CI, against a specific merge-base/head pair::
         "$MERGE_BASE" "$HEAD_SHA" -- '.github/scripts/*.py' 'hooks/*.py' \\
       | uv run --frozen python3 .github/scripts/gitapex_gate_except_fail_open.py
 
+A bare pipe in either example masks the upstream command's own exit status in
+a non-`pipefail` shell (issue #1531): add `set -o pipefail` first, or check
+that command's own exit code separately, if the caller must detect an
+upstream failure rather than silently grading whatever partial diff reached
+stdin.
+
 Reads a unified diff on stdin (or `--diff <file>`); diagnostics and
 violations go to stderr.
 
@@ -277,6 +283,11 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     saw_source_header = False
 
     def _reject_if_hunk_incomplete(boundary: str) -> None:
+        # function-body-test-coverage: WAIVED: a private closure nested inside
+        # parse_added_lines, with no name accessible from outside this function
+        # to reference directly; its raise path is exercised through
+        # parse_added_lines' own over-declared-hunk-count regression tests
+        # instead.
         if in_hunk:
             raise ScanError(
                 f"hunk header for {path!r} declared more pre-/post-image line(s) than its body "

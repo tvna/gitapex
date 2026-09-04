@@ -16,6 +16,7 @@ real historical diffs.
 
 from __future__ import annotations
 
+import ast
 import pathlib
 
 import gitapex_gate_except_fail_open as gate
@@ -665,6 +666,136 @@ def test_a_non_utf8_byte_on_stdin_fails_closed_instead_of_crashing(
     monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(b"+# \xff\xfe\n"))
     assert gate.main(["--root", str(tmp_path)]) == 2
     assert "diff cannot be read as UTF-8 text" in capsys.readouterr().err
+
+
+# --- direct unit coverage for internal helpers ------------------------
+
+
+def test_diff_target_path_strips_the_b_prefix() -> None:
+    assert gate._diff_target_path("b/.github/scripts/x.py") == ".github/scripts/x.py"
+
+
+def test_diff_target_path_returns_none_for_dev_null() -> None:
+    assert gate._diff_target_path("/dev/null") is None
+
+
+def test_diff_target_path_raises_on_a_non_b_prefixed_target() -> None:
+    with pytest.raises(gate.ScanError, match="not a plain b/-prefixed path"):
+        gate._diff_target_path("x.py")
+
+
+def test_iter_own_scope_excludes_a_nested_functions_own_body() -> None:
+    """A nested `def` is skipped outright -- neither it nor anything inside
+    it (here, its own `raise`) is yielded -- while a sibling statement in
+    the same scope (`x = 1`) still is."""
+    tree = ast.parse("if True:\n    def _inner():\n        raise ValueError\n    x = 1\n")
+    if_stmt = tree.body[0]
+    descendants = list(gate._iter_own_scope(if_stmt))
+    assert not any(isinstance(node, ast.Raise) for node in descendants)
+    assert not any(isinstance(node, ast.FunctionDef) for node in descendants)
+    assert any(isinstance(node, ast.Assign) for node in descendants)
+
+
+def test_contains_raise_true_for_a_bare_raise() -> None:
+    body = ast.parse("raise\n").body
+    assert gate._contains_raise(body) is True
+
+
+def test_contains_raise_false_for_a_falsy_return() -> None:
+    body = ast.parse("return None\n", mode="exec").body
+    assert gate._contains_raise(body) is False
+
+
+@pytest.mark.parametrize(
+    ("expression", "expected"),
+    [
+        ("None", True),
+        ("[]", True),
+        ("{}", True),
+        ("()", True),
+        ('""', True),
+        ("0", True),
+        ("False", True),
+        ("set()", True),
+        ("frozenset()", True),
+        ("1", False),
+        ('"x"', False),
+        ("True", False),
+        ("[1]", False),
+        ("list()", False),
+    ],
+)
+def test_is_falsy_literal_matches_every_documented_shape(expression: str, expected: bool) -> None:
+    node = ast.parse(expression, mode="eval").body
+    assert gate._is_falsy_literal(node) is expected
+
+
+def test_is_falsy_literal_treats_a_bare_return_value_of_none_as_falsy() -> None:
+    assert gate._is_falsy_literal(None) is True
+
+
+def test_falsy_exit_returns_the_last_statement_for_a_falsy_return() -> None:
+    body = ast.parse("do_work()\nreturn None\n").body
+    assert gate._falsy_exit(body) is body[-1]
+
+
+def test_falsy_exit_returns_none_for_a_non_falsy_last_statement() -> None:
+    body = ast.parse("return 1\n").body
+    assert gate._falsy_exit(body) is None
+
+
+def test_describe_reports_a_bare_return_as_none() -> None:
+    stmt = ast.parse("return\n").body[0]
+    assert isinstance(stmt, ast.Return)
+    assert gate._describe(stmt) == "returns a falsy default (None) with no re-raise"
+
+
+def test_describe_reports_an_assignment_target_and_value() -> None:
+    stmt = ast.parse("value = None\n").body[0]
+    assert isinstance(stmt, ast.Assign)
+    assert gate._describe(stmt) == "assigns value a falsy default (None) with no re-raise"
+
+
+def test_handler_header_lines_spans_a_multi_line_tuple_handler() -> None:
+    tree = ast.parse("try:\n    pass\nexcept (\n    OSError,\n    ValueError,\n):\n    return None\n")
+    try_stmt = tree.body[0]
+    assert isinstance(try_stmt, ast.Try)
+    handler = try_stmt.handlers[0]
+    assert gate._handler_header_lines(handler) == {3, 4, 5, 6}
+
+
+def test_handler_header_lines_is_one_line_for_a_bare_except() -> None:
+    tree = ast.parse("try:\n    pass\nexcept:\n    return None\n")
+    try_stmt = tree.body[0]
+    assert isinstance(try_stmt, ast.Try)
+    handler = try_stmt.handlers[0]
+    assert gate._handler_header_lines(handler) == {3}
+
+
+def test_stmt_lines_spans_a_multi_line_statement() -> None:
+    stmt = ast.parse("return (\n    1,\n    2,\n)\n").body[0]
+    assert gate._stmt_lines(stmt) == {1, 2, 3, 4}
+
+
+def test_findings_for_source_reports_the_finding_and_the_waiver_separately(tmp_path: pathlib.Path) -> None:
+    source = "try:\n    do_work()\nexcept OSError:\n    return None\n"
+    violations, waived = gate.findings_for_source(".github/scripts/gate_x.py", source, set(range(1, 5)))
+    assert _rules(violations) == ["except-fail-open"]
+    assert waived == []
+
+
+def test_findings_for_source_raises_scanerror_on_unparseable_python() -> None:
+    with pytest.raises(gate.ScanError, match="cannot be parsed as Python"):
+        gate.findings_for_source(".github/scripts/gate_x.py", "def f(:\n", {1})
+
+
+def test_root_must_exist_accepts_a_real_directory(tmp_path: pathlib.Path) -> None:
+    assert gate.GateExceptFailOpenArgs._root_must_exist(tmp_path) == tmp_path
+
+
+def test_root_must_exist_rejects_a_missing_directory(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(ValueError, match="must be an existing directory"):
+        gate.GateExceptFailOpenArgs._root_must_exist(tmp_path / "nope")
 
 
 # --- workflow drift -----------------------------------------------------
