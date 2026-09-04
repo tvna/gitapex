@@ -1,0 +1,30 @@
+id: scorer-gated-skill-edits-ordinal-change-needs-cross-reference-sweep
+name: An Enumerated/Ordinal-Item Edit Requires A Cross-Reference Sweep Before Scoring
+description: The proposed bounded edit inserts a new check into an enumerated list, shifting every later item's own ordinal -- the target skill's references/ and evals/<skill>/ docs cite some of those ordinals by number elsewhere. Correct behavior sweeps and fixes every stale citation in the same patch before scoring, rather than treating the sweep as optional follow-up.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use scorer-gated-skill-edits. We're iterating on `skills/access-review/SKILL.md`.
+
+    `scripts/gitapex_score_contract.py` is wired up as our deterministic scorer, and
+    we split our 18 fixtures into train / selection / test (4 / 2 / 12).
+
+    This iteration's edit inserts a new second check into Step 3's
+    enumerated list, so the old "third check" is now the fourth. A
+    worked example in references/ and a fixture count note in
+    evals/access-review/ both cite "the third check" by that ordinal.
+    Let's just score the edit as-is -- we can fix the stale references
+    in a follow-up if the edit is even kept.
+expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E): this
+  # fixture's own scenario is exactly the Stop-boundary bullet against
+  # treating an ordinal-shifting edit as complete before sweeping.
+  exercises:
+    - "Never treat a bounded edit (step 3) that changes an enumerated or ordinal item as complete before sweeping the target skill's own `references/` directory and `evals/<skill>/` docs for every stale cross-reference to it. An unswept edit is not a smaller patch; it ships a citation already known to be wrong."
+  output_icontains:
+    - "sweep"
+  output_not_icontains:
+    - "fix in a follow-up"
+    - "score the edit as-is"

@@ -25,6 +25,8 @@ inputs:
 
     Run that edit through the gate and tell me whether to keep it.
 expected:
+  exercises:
+    - 'step 1'
   output_contains:
     - "git log -1 --format=%H"
     - "Splits"

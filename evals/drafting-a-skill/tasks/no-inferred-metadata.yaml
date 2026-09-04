@@ -26,7 +26,7 @@ expected:
   # against inferring, re-deriving, or overriding the ACM's quoted
   # metadata choices.
   exercises:
-    - "Never infer, re-derive, or override the ACM's quoted metadata choices"
+    - "Never infer, re-derive, or override the ACM's quoted metadata choices (the four axes, the Core Domain and Agentic operation mechanism-fit verdicts) from a similar existing skill, a default, or context -- use them exactly as quoted, every time; a finding that one of them looks wrong is Step 7's upstream-ambiguity escalation branch, never a silent local override."
   output_icontains:
     - "Broad"
   output_not_icontains:

@@ -29,6 +29,16 @@
             "command": "\".claude/hooks/clairvoyance/hooks/run-hook.cmd\" session-start.sh"
           }
         ]
+      },
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "async": false,
+            "command": "\".claude/hooks/clairvoyance/hooks/run-hook.cmd\" session-start.sh"
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -41,9 +51,29 @@
             "command": "\".claude/hooks/clairvoyance/hooks/run-hook.cmd\" user-prompt-language.sh"
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "async": false,
+            "command": "\".claude/hooks/clairvoyance/hooks/run-hook.cmd\" user-prompt-language.sh"
+          }
+        ]
       }
     ],
     "PreToolUse": [
+      {
+        "matcher": "Workflow",
+        "hooks": [
+          {
+            "type": "command",
+            "async": false,
+            "command": "\".claude/hooks/clairvoyance/hooks/run-hook.cmd\" workflow-budget-gate.sh"
+          }
+        ]
+      },
       {
         "matcher": "Workflow",
         "hooks": [

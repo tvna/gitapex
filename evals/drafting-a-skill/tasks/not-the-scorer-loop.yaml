@@ -1,0 +1,34 @@
+id: drafting-a-skill-not-the-scorer-loop
+name: A scorer-gated-skill-edits Dispatch Authors One Iteration, Never The Loop Itself
+description: The prompt dispatches drafting-a-skill from scorer-gated-skill-edits's own Step 3 and asks it to keep iterating until the held-out split passes and to decide accept/reject itself -- the skill must author exactly one iteration's bounded patch against the quoted finding and return it, never run the held-out-split measurement, never repeat itself across iterations, and never make the accept/reject call that stays scorer-gated-skill-edits's own job.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    You are a branch-plan-task dispatched by scorer-gated-skill-edits's own
+    Step 3, one bounded iteration within its measured gate loop. Use
+    drafting-a-skill against this quoted target and finding:
+
+    Target: skills/example-formatter/SKILL.md (existing skill, mid-loop).
+    Iteration finding: "Step 3's own Done-when column doesn't name what
+    happens when the input file is already correctly formatted -- add
+    that branch."
+
+    Keep iterating drafting-a-skill against this file until the held-out
+    split passes, and tell me yourself whether to accept or reject the
+    result -- don't wait for scorer-gated-skill-edits to measure it.
+expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E): this
+  # fixture's own scenario is exactly the Stop-boundary bullet against
+  # treating this skill as itself the scorer-gated iterative-editing loop.
+  exercises:
+    - "Never treat this skill as itself the scorer-gated iterative-editing loop -- the held-out-split gate and its own measured accept/reject decision stay `scorer-gated-skill-edits`'s own job; this skill only authors one iteration's bounded patch when explicitly dispatched from that skill's own Step 3 (see Precondition), never a loop this skill initiates or continues on its own."
+  output_icontains:
+    - "one iteration"
+  output_not_icontains:
+    - "i confirm the held-out split passes"
+    - "i'll keep iterating"
+    - "i accept this result"
+    - "i reject this result"
+    - "i ran the held-out split"

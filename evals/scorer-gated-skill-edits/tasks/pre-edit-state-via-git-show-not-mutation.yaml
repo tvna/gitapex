@@ -1,0 +1,27 @@
+id: scorer-gated-skill-edits-pre-edit-state-via-git-show-not-mutation
+name: Pre-Edit File State Must Come From git show, Never A Working-Tree Mutation
+description: The user suggests git stash-ing the current edit to capture the "before" state for comparison, while a concurrent dispatch may still be reading the working tree. Correct behavior refuses the mutation and pins the pre-edit content with git show against a ref instead, which is immune to concurrent working-tree changes.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use scorer-gated-skill-edits. We're iterating on `skills/release-notes/SKILL.md`.
+    A held-out scoring dispatch against the current draft may still be
+    in flight.
+
+    To get the "before" text for the comparison, just `git stash` the
+    proposed edit for a second, read the file, then `git stash pop` to
+    bring the edit back. Quick and easy.
+expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E): this
+  # fixture's own scenario is exactly the Stop-boundary bullet against
+  # obtaining pre-edit state via a working-tree mutation.
+  exercises:
+    - "Never obtain a pre-edit (\"before\") file state by mutating the working tree (`git stash`, `git checkout`, `git reset`) while a dispatch that reads that working tree may still be in flight. A concurrent `Read` can observe either state depending on timing, and the contaminated result is indistinguishable from a valid one without independently noticing that its content describes the wrong version. Pin the pre-edit state with `git show <ref>:<path>` instead, which is immune to concurrent working-tree changes by construction. See [references/worked-example.md](references/worked-example.md)."
+  output_icontains:
+    - "git show"
+  output_not_icontains:
+    - "i'll stash it"
+    - "stashing the edit"
+    - "quick and easy"

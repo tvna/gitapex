@@ -175,8 +175,9 @@ itself grounds to skip the model's own full review below.
   hook/script changes, dependency additions, and instruction-bearing
   content are each an independent hard flag regardless of how
   "reasonable" the surrounding change looks. A flagged diff never
-  proceeds to commit -- it dispatches as `StageDeviated{run_id, task_id, reason, action: escalate}` (the same closed-set schema [domain events
-  and failure-handling](domain-events-and-failure-handling.md) defines)
+  proceeds to commit -- it dispatches as
+  `StageDeviated{run_id, task_id, reason, action: escalate}` (the same closed-set schema [domain events
+  and failure-handling](events-and-review-gate.md#domain-events-and-failure-handling) defines)
   regardless of whether the task's own proof method would otherwise have
   passed.
 - **Dependency-identity verification.** When a dependency addition is
@@ -220,21 +221,15 @@ where the platform supports scoping," discovered empirically rather than
 assumed from Decision 17's own text alone -- named as a deviation from
 the literal decision, not silently substituted for it.
 
-Design doc Decision 7 could not determine, in that design session, whether
-`hooks/check-bash-safety.sh` binds inside a subagent/Workflow execution
-context at all, because `CLAUDE_PLUGIN_ROOT` was unset there -- i.e.
-gitapex was not installed as a plugin in that session. **This remains an
-open item for the plugin-installed deployment case** (re-verify
-`hooks/check-bash-safety.sh` specifically, in that context, before relying
-on it as covering task-agent dispatch).
+Design doc Decision 7 left one question open -- see "Decision 7's own
+broader open question" below -- re-verify `hooks/check-bash-safety.sh`
+specifically inside a plugin-installed deployment before relying on it
+as covering task-agent dispatch.
 
 **Decision 17's own backstop exists in two variants, of genuinely
 different strength, and this asymmetry is stated here explicitly rather
-than papered over** -- an earlier draft of this reference overclaimed
-uniform strength across both, which a fresh adversarial
-`evaluating-skill-quality` pass caught and is corrected here (see
-Facts vs. speculation-equivalent discipline: verify against Claude Code's
-actual plugin-agent schema, not a plausible-sounding claim).
+than papered over** -- verified against Claude Code's actual
+plugin-agent schema, not a plausible-sounding claim.
 
 1. **Project-local variant** (`.claude/agents/branch-plan-task.md` --
    this repository checked out and worked on directly, the deployment
@@ -265,24 +260,13 @@ actual plugin-agent schema, not a plausible-sounding claim).
    literal invocation path as covered by the same evidence, not only the
    `Agent`-tool proxy for it. **Empirically verified live in this
    skill's own authoring session** (mirroring Decision 7's own "test,
-   don't assume" method), quoted, not summarized:
-   - `pip install --help` -> denied, `systemMessage`: "Blocked by
-     executing-a-branch-plan's task-agent Bash gate (design doc Decision
-     17): package/plugin install commands are not permitted inside a
-     task-level agent...."
-   - `gh issue view 1` -> denied, `systemMessage`: "Blocked by
-     executing-a-branch-plan's task-agent Bash gate (design doc Decision
-     17): the gh CLI is not permitted inside a task-level agent, read or
-     write...."
-   - `git push origin HEAD` -> denied, `systemMessage`: "Blocked by
-     executing-a-branch-plan's task-agent Bash gate (design doc Decision
-     17): git push is not permitted inside a task-level agent...."
-   - `git status --short` (a normal, non-excluded command) -> ran
-     normally, not blocked.
-   - A direct `mcp__github__issue_read` call inside that same subagent ->
-     `Error: No such tool available: mcp__github__issue_read` --
-     confirming `disallowedTools: mcp__github` actually removes the tool
-     from that agent type's registry, not merely from its listing.
+   don't assume" method): all four excluded categories (package/plugin
+   install, `gh`, `git push`) were denied with this skill's own
+   `systemMessage` text naming Decision 17, a normal non-excluded
+   command ran unblocked, and a direct `mcp__github__issue_read` call
+   failed with `Error: No such tool available` -- confirming
+   `disallowedTools: mcp__github` actually removes the tool from that
+   agent type's registry, not merely from its listing.
 
    **Second, separate probe: does the hook still fire when the subagent
    also runs `isolation: 'worktree'` (step 6's actual multi-task-wave
@@ -307,20 +291,13 @@ actual plugin-agent schema, not a plausible-sounding claim).
    (see the implementation PR) named as untested; not left open.
 
    **What "empirically verified" and "hard deny" above do NOT cover,
-   stated explicitly rather than left for a reader to assume completeness
-   (found by a fourth battle-testing-a-skill trial, confirmed live; since
-   closed for the specific bypasses named below -- issue `#1326`, Stage 1):**
-   `check_task_bash_safety.sh` was originally a raw-text regex gate, and a
-   regex gate cannot see through ordinary shell obfuscation that hides the
-   verb itself -- `git${IFS}push origin HEAD`, `gi""t push origin HEAD`,
-   and `p\ip install foo` (bash parameter expansion and character-
-   splitting, nothing exotic) all ran unblocked when tested directly
-   against the shipped script at the time. `hooks/check-bash-safety.sh`,
-   the file this script is explicitly adapted from, disclosed this
-   identical ceiling for itself at the time.
-
-   Issue `#1326` (Stage 1) closed this specific bypass class in both
-   scripts: `check_task_bash_safety.sh` now shells out to
+   stated explicitly rather than left for a reader to assume
+   completeness:** issue `#1326` (Stage 1) closed the raw-text-regex
+   obfuscation bypass class (`${IFS}`/quote-split/character-splitting
+   hiding the verb token itself, e.g. `git${IFS}push origin HEAD`,
+   `gi""t push origin HEAD`, `p\ip install foo`) both this script and
+   `hooks/check-bash-safety.sh` (the file it is adapted from) originally
+   shared: `check_task_bash_safety.sh` now shells out to
    `gitapex_check_task_bash_safety.py`, a token-based classifier (Python
    stdlib `shlex`, POSIX mode) that matches against bash's own dequoted,
    operator-segmented token stream instead of scanning raw source text --
@@ -342,17 +319,6 @@ actual plugin-agent schema, not a plausible-sounding claim).
    tracked as a separate, owner-decision-requiring follow-up, not part of
    this issue's own scope.
 
-   Incidentally, a second, distinct Claude-Code-native guard was also
-   observed during this probe (not part of this skill's own mechanism,
-   named here only because it was directly encountered): a
-   worktree-isolated subagent refused a compound/redirected shell
-   command outright ("too complex to verify that it stays inside the
-   worktree"), independent of this skill's own `check_task_bash_safety.sh`
-   hook. This is an additional platform-level control this skill did not
-   design and should not claim credit for or rely on by name -- noted as
-   an observed fact from this one encounter, not characterized further
-   without its own primary-source documentation lookup.
-
 2. **Plugin-distributed variant** (`agents/branch-plan-task.md` at this
    repository's own plugin root -- the deployment when gitapex is
    installed as a plugin into a different repository, the distribution
@@ -372,14 +338,12 @@ actual plugin-agent schema, not a plausible-sounding claim).
    PreToolUse hook the calling session independently has registered --
    for a session with gitapex's own plugin hooks active, that is
    `hooks/check-bash-safety.sh`, which hard-denies package/plugin
-   installs unconditionally (session-wide, not task-scoped) -- except
-   `uv add`/`uv remove` and `apm install`/`apm uninstall`, carved out as
-   declarative, visibly-mutating commands (issue `#1320`, `#1326`) -- denies
-   `gh issue`/`gh pr` *write* subcommands specifically (not every `gh`
-   invocation), and only warns (does not deny) on `git push`. This is real,
-   structural, defense-in-depth coverage, but it is neither task-scoped
-   nor as strict as the project-local variant, and this reference does
-   not overstate it as equivalent.
+   installs and `gh issue`/`gh pr` writes and warns (does not deny) on
+   `git push`, with narrow, disclosed carve-outs (issue `#1320`,
+   `#1326`) -- see that hook's own documentation for the exact scope.
+   This is real, structural, defense-in-depth coverage, but it is
+   neither task-scoped nor as strict as the project-local variant, and
+   this reference does not overstate it as equivalent.
 
 **Decision 7's own broader open question -- whether
 `hooks/check-bash-safety.sh` binds inside a subagent/Workflow execution
@@ -478,34 +442,30 @@ reason.**
    commands before its last message" is not a Bash-command pattern any
    PreToolUse hook could classify.
 
-**Found and fixed by this PR's own `checker-script-adversarial-review`
-(issue `#1476`), not shipped with either defect:**
+**Two properties of this mechanism's own Stop-hook response and hook
+registration, both load-bearing:**
 
-- **The `decision` value.** An earlier revision emitted
-  `"decision": "continue"` in `check_task_full_verification.sh`'s own
-  deny path -- the wrong value, confirmed against this repository's own
-  already-shipped `hooks/check-stop-review-obligation.sh` (a real Stop
-  hook using `"decision": "block"` correctly, and one this same session
-  directly observed working) and against Claude Code's own hooks
-  documentation, which lists `"block"` as the value that denies a
-  Stop/SubagentStop event. Fixed to `"block"` in both of this script's
-  own deny paths.
+- **The `decision` value.** `check_task_full_verification.sh`'s own deny
+  path emits `"decision": "block"` -- the value Claude Code's own hooks
+  documentation lists as denying a Stop/SubagentStop event, matching this
+  repository's own already-shipped `hooks/check-stop-review-obligation.sh`
+  (a real Stop hook using the same value, one this same session directly
+  observed working).
 - **The outer hook `timeout` vs. the classifier's own per-step timeout.**
   `gitapex_check_task_full_verification.py`'s own `DEFAULT_TIMEOUT_SECONDS`
   (1800s) applies PER STEP to two sequential steps (pytest, then
-  local-preflight) -- up to 3600s combined in the worst case -- but the
-  `SubagentStop` hook registration in `.claude/agents/branch-plan-task.md`
-  originally set `timeout: 1800` for the whole wrapper. Claude Code
-  cancels a `command` hook that reaches its own `timeout` and discards
-  its output entirely; `SubagentStop` is not one of the two documented
+  local-preflight) -- up to 3600s combined in the worst case. Claude Code
+  cancels a `command` hook that reaches its own `timeout` and discards its
+  output entirely; `SubagentStop` is not one of the two documented
   exceptions that still block on a timeout (only `PreModelSwitch`, and
-  Agent-SDK callback hooks on `PreToolUse`, do) -- so a legitimately
-  slow, not-failing verification run could have hit Claude Code's own
-  hook timeout first and silently failed OPEN, exactly the defect this
-  whole mechanism exists to close. Fixed by raising the registered
-  `timeout` to 3900s (comfortably above 2x the per-step ceiling); the two
-  values are cross-referenced in both files so a future edit to one is
-  less likely to silently desync from the other.
+  Agent-SDK callback hooks on `PreToolUse`, do) -- so a legitimately slow,
+  not-failing verification run hitting Claude Code's own hook timeout
+  first would silently fail OPEN, exactly the defect this whole mechanism
+  exists to close. The `SubagentStop` hook registration in
+  `.claude/agents/branch-plan-task.md` sets `timeout: 3900` (comfortably
+  above 2x the per-step ceiling); the two values are cross-referenced in
+  both files so a future edit to one is less likely to silently desync
+  from the other.
 
 **Known, disclosed limitation, not solved here: no bound on repeated
 denial.** A genuinely persistent failure -- an unrelated pre-existing
@@ -514,7 +474,7 @@ missing from PATH -- denies every stop attempt, with nothing in this hook
 enforcing a retry ceiling or circuit breaker of its own; the subagent may
 spend many turns retrying before a human notices. This is a deliberate,
 disclosed choice, not an oversight: this skill's own [Freshness and hang
-detection](domain-events-and-failure-handling.md#freshness-and-hang-detection)
+detection](failure-and-recovery.md#freshness-and-hang-detection)
 already exists specifically to catch a wave that never returns for
 whatever reason, and inventing a second, narrower circuit breaker inside
 this one hook would duplicate that existing backstop rather than close a
@@ -527,8 +487,7 @@ this skill's own established disclosure convention for every other
 similarly-shaped gap in this reference.
 
 **Known, disclosed limitation, not solved here: the gate can self-tamper
-its own copy (found by `evaluating-context-channel-maturity`, issue
-`#1476`).** `check_task_full_verification.sh` resolves its own classifier
+its own copy.** `check_task_full_verification.sh` resolves its own classifier
 via `script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"` -- the
 literal, identical pattern `check_task_bash_safety.sh` above already uses,
 and the same empirically-confirmed fact applies to both: this resolves to
@@ -601,8 +560,8 @@ a task-level dispatch can be reached at all:
 `git rev-parse <shared-branch>` from inside the task's own worktree,
 denying (with both SHAs named) on a confirmed mismatch. Full mechanism
 detail, including the branch-name-resolution design and its own disclosed
-assumptions: [execution and dispatch
-reference](execution-and-dispatch.md#worktree-base-precondition-backstop).
+assumptions: [decomposition and dispatch
+reference](decomposition-and-dispatch.md#worktree-base-precondition-backstop).
 
 **No `SubagentStart`-equivalent hook event exists to check this before a
 task begins at all.** Confirmed directly against Claude Code's own hooks
@@ -671,7 +630,7 @@ answer), and a false DENY here would be strictly worse than a missed
 detection: it would stop a task's own legitimate work over a precondition
 this mechanism cannot always resolve with confidence, for reasons
 (unmerged assumptions about the Workflow tool's own worktree-creation
-internals -- see the execution-and-dispatch reference cited above) that
+internals -- see the decomposition-and-dispatch reference cited above) that
 have nothing to do with whether the task's own work is actually safe.
 
 **Known, disclosed limitation, live-confirmed: in this repository's own
@@ -688,8 +647,8 @@ is issue `#1508`'s own defect shape, and this mechanism returned `warn`
 (fail open) for it: nothing was detected, and the dispatched agent had to
 notice the stale base and `git reset --hard` by hand.
 
-So the "Disclosed, unverified assumption" in the [execution and dispatch
-reference](execution-and-dispatch.md#worktree-base-precondition-backstop)
+So the "Disclosed, unverified assumption" in the [decomposition and dispatch
+reference](decomposition-and-dispatch.md#worktree-base-precondition-backstop)
 is, for at least one real dispatcher, verified FALSE. **Until the shared
 plan branch's name is threaded in explicitly, plan for this backstop
 being absent rather than present**: a wave dispatch's own prompt should

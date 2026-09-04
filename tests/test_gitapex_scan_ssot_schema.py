@@ -333,7 +333,7 @@ def test_gate_preconditions_matches_its_sibling_models_strictness_convention():
 
 
 def test_script_drift_still_caught_when_gate_carries_new_fields(tmp_path):
-    """Defeat test (refactor-and-review-gate.md's own mandatory step 8
+    """Defeat test (events-and-review-gate.md's own mandatory step 8
     requirement, constructed here at task time since it exercises this
     exact new code path directly): a gate carrying the new optional fields
     AND a broken script path must still be caught by find_script_drift, not

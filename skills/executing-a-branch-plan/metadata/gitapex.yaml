@@ -4,12 +4,13 @@ metadata:
   name: executing-a-branch-plan
 spec:
   portability: Mixed
-  capabilityAssumption: Adaptive
+  capabilityAssumption: Frontier
   lifecycle:
     renamedFrom: fixing-a-reported-issue
   skillDependencies:
     requires:
       - planning-a-branch-from-an-issue
+      - outward-artifact-preflight
     relatedTo:
       - planning-a-branch-from-an-issue
       - drafting-a-pr-to-merge
@@ -17,6 +18,8 @@ spec:
       - untrusted-input-triage
       - screening-a-low-trust-contribution
       - diagnosing-a-failure
+      - drafting-a-skill
+      - scorer-gated-skill-edits
   executionRequirements:
     tools:
       read:
@@ -42,6 +45,49 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1558"
       summary: "Step 6's per-task screening dispatches screening-a-low-trust-contribution's checks 2-8 to the new agents/review-persona.md subagent type (tools: Read, Grep, Glob) instead of reasoning about the task's own diff directly in the main thread, which at that point holds mcp__github write access, git push, and unrestricted Bash. Isolates tool privilege only -- the separate calling-context-contamination axis is disclosed in review-persona.md's own Limits section, not resolved here."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1630"
+      summary: "Step 3 now also classifies whether a task's Planned ops edit an existing SKILL.md; task-decomposition.md's new Existing-skill-file edit floor section requires gitapex_check_skill_shape.py plus a formative-quality-dimensions.md sweep before such a task reports complete, unless the task's own Planned ops route it to scorer-gated-skill-edits via a stated scorer/held-out-split precondition; added to relatedTo."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1630"
+      summary: "the same issue's independent Step 8 adversarial review found the floor over- and under-reaching. Over: the sibling task rewrote formative-quality-dimensions.md row 8 into an artifact-producing Eval preparation instruction, so an unqualified sweep obliged every ordinary SKILL.md edit to author evals/ fixtures; the sweep now excludes row 8. Under: the floor binds the worktree-isolated task agent, which never reads this file -- both checks now go into its dispatch prompt in-band."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "Supersedes both issue/1630 entries above (append-only, not deleted): task-decomposition.md's Existing-skill-file edit floor section is deleted outright and replaced by a unified Skill-file edit routing rule -- any task whose Planned ops create or edit a SKILL.md, new or existing, routes to drafting-a-skill's full procedure; scorer-gated-skill-edits stays a separate opt-in route reached only on a stated scorer and held-out split."
+      outcome:
+        baseCommit: "2ff00c34c897074a619d390c208d66e9c52cf7d3"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "capabilityAssumption's own round-trip, never previously recorded: commit f79fdec3 changed it Frontier to Adaptive as a round-2 review-repair attempt; the near-500-line body and threat-model-and-authorization.md's uniformly-mandatory-read status contradict Adaptive's lean-body-plus-on-demand-reference claim (rubric.md dimension 5). Commits 14485a4c/80d9f7d5 reverted field and Notes prose to Frontier, under which dimension 5's Adaptive-only layering rule does not apply."
+      outcome:
+        baseCommit: "80d9f7d5a936534ca43182ff0a17ee2c9433c809"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "dimension 5 major: 5-6 reference files were each cited from an ordinary, non-failure Step, exceeding rubric.md's three-file ceiling; no self-guard exemption applies (each varies with the target Branch Plan). Merged by lifecycle axis into decomposition-and-dispatch.md and events-and-review-gate.md; threat-model-and-authorization.md stays standalone. Three files now, matching the ceiling. Content preserved verbatim under demoted headings; cross-references repointed."
+      outcome:
+        baseCommit: "0a069a68ba4889ebcd79082494d5253c2596701b"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "the entry above overclaims: rubric.md's own text reads 'if acting on the typical request needs three files open, the split is wrong' -- three IS the failure condition, not an acceptable ceiling. A round-5 re-review confirmed the 6-to-3 merge itself is clean (no new defect, links/anchors resolve) but dimension 5 does not clear: the ordinary path still opens exactly three files."
+      outcome:
+        baseCommit: "be8ee11641d2612f1ab796b63a463916da70c1d8"
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "declined two further restructurings, by the repository owner's own direction: (a) arguing threat-model-and-authorization.md is a rubric self-guard exemption -- round 5 called this the repository owner's own rubric-process call, not a single session's; (b) merging all three files into one -- risks failing dimension 5 from the opposite direction (a 1700+-line file). Standing open gap, disclosed alongside this skill's other residuals."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1662"
+      summary: "Split events-and-review-gate.md's failure/resume-only content (loss/absence, freshness/hang, failure dispatch, rollback) into new failure-and-recovery.md, never read on a clean run. Four files now, but the typical request still opens three (threat-model, decomposition-and-dispatch, events-and-review-gate). Real progressive-disclosure gain; does not itself close dimension 5's three-file reading -- open pending issue/1662's rubric fix (a Fable dispatch found no satisfiable clause for this shape)."
+    - kind: corroboration
+      anchor: "https://github.com/tvna/gitapex/issues/1662"
+      summary: "Issue/1662's rubric fix merged (PR/1672). An isolated re-review against the new rubric re-derived sequential cohesion independently, confirmed both new-exemption conditions (every-use content 1,513 lines, ~1,050-1,150 after real pruning, still over the 500-line cap), and found no easy file-count reduction: dimension 5 now PASSES. Overall verdict stays WELL-FORMED-NOT-MATURE -- dimension 2 (sediment/duplication/sprawl) and the Mixed-portability split gap remain open, disclosed only."
+      outcome:
+        baseCommit: "a0addc2c10e6ffc4f76bf9d6358232b48246d1b3"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1676"
+      summary: "A Fable dispatch found no rubric blind spot in dimension 2 (sediment/duplication/sprawl) -- fixed here, threat-model-and-authorization.md pruned 584 to 539 lines, no structural change. Mixed-portability's file-level-split rule does conflict with dimension 5's just-closed exemption for this shape: every compliant split adds a 4th every-use file or breaks failure-and-recovery.md. Filed as issue/1676 for a rubric fix, per issue/1662's same governed process. Not fixed here."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1648"
+      summary: "Unrelated style tidy under this same PR: failure-and-recovery.md's prose was hard-wrapped at roughly 72 characters, occasionally mid-clause; reflowed every paragraph/bullet into one line, no wording changed."
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/1676"
       summary: "Mixed-portability re-graded vs. rubric.md's new Mixed-portability substitute (verification-only). Both gating conditions met (D5 exemption granted; Claude-Code mechanics confirmed every-use). All three positive requirements unmet: no heading isolation, an incomplete Notes declaration, no porting-boundary-map file. Stays an open finding; closing it is separate follow-up, out of this issue's scope. Not re-verified against the rubric's later dimension-5 relocation; substance believed unchanged."
@@ -52,3 +98,28 @@ spec:
         requirement_1_distinct_headings: not_met
         requirement_2_notes_declaration: not_met
         requirement_3_porting_boundary_map_file: not_met
+    - kind: corroboration
+      anchor: "https://github.com/tvna/gitapex/issues/1676"
+      summary: "Round 13: a Sonnet dispatch re-derived this finding, initially doubting condition 2; a direct re-read traced that to misreading two authoring-session-testing-limit passages as deployment gating. Conditions 1-2 stay met, agreeing with the entry above. Requirement 2 found largely met, contra that entry. Requirements 1 and 3 fixed here: SKILL.md Notes split into Non-portable/Portable headings naming the worktree-base backstop; new porting-boundary-map.md enumerates every touchpoint."
+      outcome:
+        verdict: satisfied
+        condition_1_dimension5_exemption: met
+        condition_2_every_use_independently_verified: met
+        requirement_1_distinct_headings: met
+        requirement_2_notes_declaration: met
+        requirement_3_porting_boundary_map_file: met
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/1632"
+      summary: "an independent fresh review found the entry above overclaimed requirement 1: the Notes section used bold inline lead-ins, never an actual Markdown heading -- this SKILL.md carried no `###` anywhere, and `rubric.md`'s own internal 'heading' usage elsewhere supports a literal reading. Promoted both to real `### Non-portable (Claude-Code-specific)` / `### Portable` subheadings; net-zero body-line growth held via tighter prose rewrap elsewhere in this same section."
+      outcome:
+        baseCommit: "8e8366713ca047192eaa620bda145232de94bcaf"
+        verdict: satisfied
+        requirement_1_distinct_headings: met
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/pull/1632"
+      summary: "a fresh isolated re-review (Round 17) found requirement 1's heading fix real but incomplete: decomposition-and-dispatch.md documents Step 8 using agentType: 'branch-plan-task' and subagent_type: 'review-persona', both Claude-Code-native, but porting-boundary-map.md's agentType row only listed Step 6 and had no review-persona row, and both SKILL.md's Portable section and this file's own closing line falsely claimed step 8 fully portable. Fixed: both corrected to exclude step 8."
+      outcome:
+        baseCommit: "978f38df5803fdce0d291a6abeee5f7c23804f82"
+        verdict: satisfied
+        requirement_1_distinct_headings: met
+        requirement_3_porting_boundary_map_file: met
