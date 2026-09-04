@@ -107,7 +107,7 @@ surface only via one gate's own error text partway through the run
   (issue #890), which closes the "configured here but never actually
   installed" half; nothing closes the ``--no-verify`` half. CI remains the
   authoritative merge gate for every gate carrying a ``ci`` plane -- true
-  for 44 of the 46 wired gates. ``behind-base`` (issue #985) and
+  for 45 of the 47 wired gates. ``behind-base`` (issue #985) and
   ``real-checkout-git-write`` (issue #991) are the two exceptions: each
   carries only ``local``, so for those two gates specifically this
   pre-push hook -- bypassable the same way as any other -- is the *only*
@@ -119,7 +119,7 @@ surface only via one gate's own error text partway through the run
   ``jsonschema`` -- a real, non-stdlib dependency, contrary to an earlier
   revision of this paragraph's own "the runner itself needs no
   dependencies" claim. A bare system ``python3`` with no ``jsonschema``
-  installed crashed the whole runner on import before any of the 46 wired
+  installed crashed the whole runner on import before any of the 47 wired
   gates got a chance to run individually, so CONTRIBUTING.md's standalone
   example and the pre-push hook's own ``entry`` both now invoke it as ``uv
   run --frozen python3`` too, the same pin every wired gate's own argv
@@ -207,7 +207,7 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # own _GROUP_TIMEOUT_SECONDS = 600 -- so that one gate's own theoretical
 # worst case is ~4200 s, not 600 s. A ceiling matching that would be useless
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
-# call in the other direction. For scale: a warm run of all 46 wired gates
+# call in the other direction. For scale: a warm run of all 47 wired gates
 # combined measures roughly 22 s end to end (issue #1556's regex-
 # catastrophic-backtracking gate; different hardware than the figures
 # below, see this paragraph's own closing parenthetical -- the

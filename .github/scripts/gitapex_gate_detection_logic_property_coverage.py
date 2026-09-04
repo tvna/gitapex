@@ -292,6 +292,48 @@ receiver-agnostic trigger rather than a bug to fix quietly:
   in a membership comparison -- building a set for iteration alone, not an
   allowlist/denylist check, still triggers category (c).
 
+Authoring guidance for shell-command-detection regexes
+--------------------------------------------------------
+Issue #1719 (refs #1531, #1713): a shell-command-detection regex added to
+``gitapex_gate_unguarded_shell_pipe_in_docs.py`` had no test case exercising a
+shell backslash line-continuation split (a ``cmd \\`` line followed by
+``| consumer`` on the next line) -- this repository's own common ``Usage::``
+wrapping convention for a long producer command. Nothing caught the gap
+until an independent adversarial review (``reviewing-an-artifact``)
+specifically looked for it; 13 further real, previously-undetected instances
+of the same defect class were found in the repository as a direct result.
+
+This gate's own existing-coverage check (above) only asks whether a scope has
+*some* ``@given``-decorated property test mentioning it by name -- it does not
+and structurally cannot inspect what shapes that test's own generator
+actually covers (the same "textual/AST identifier-presence heuristic, not
+true call-graph or data-flow analysis" limit the "Known misses" section
+above already discloses for a different question). Closing #1719's specific
+gap that way would need a new trigger category and generator-shape
+inspection this gate does not implement, so the fix stays here, as authoring
+guidance rather than a new deterministic trigger:
+
+Any new or materially changed regex in an in-scope file whose own stated
+purpose is to match a shell command invocation (a pipe-detection,
+subcommand-detection, or similar shell-syntax-matching regex -- not an
+arbitrary regex that merely happens to touch shell-shaped text) must be
+covered by at least one property or example test case that exercises a
+backslash shell line-continuation split, so a continuation-line blind spot
+is caught before merge rather than only by an adversarial review pass. The
+worked example this guidance is modeled on:
+``gitapex_gate_unguarded_shell_pipe_in_docs.py``'s own ``_effective_line``
+helper (joins a backslash-continued line with its successor before matching)
+and its properties-file coverage,
+``tests/test_gitapex_gate_unguarded_shell_pipe_in_docs_properties.py``'s
+``test_effective_line_joins_a_real_continuation`` and
+``test_effective_line_does_not_join_a_non_continuation``.
+
+This is prose guidance for a script's own author, not a change to this
+gate's own AST-based trigger categories (a)/(b)/(c) above -- it is not
+itself deterministically enforced, the same disclosed gap "Known misses in
+the trigger table itself" already accepts for other shapes this gate does
+not detect.
+
 Waiver
 ------
 ``# detection-logic-property-coverage: WAIVED: <reason>`` -- a non-whitespace
