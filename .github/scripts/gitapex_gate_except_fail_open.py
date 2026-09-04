@@ -504,6 +504,31 @@ def _waived_lines(source: str) -> set[int]:
     return waived
 
 
+def _walk_try_nodes(node: ast.AST, protected: bool) -> Iterator[tuple[ast.Try | ast.TryStar, bool]]:
+    """Yield every `Try`/`TryStar` node reachable from `node`, paired with
+    whether it is "protected": covered by its own, or an ENCLOSING Try
+    statement's, raising `finally:` clause. A `finally:` that raises
+    always supersedes whatever runs inside that same statement -- its own
+    body, its own handlers, or anything nested inside either of those --
+    so a `try/except` nested inside an outer `try: ... finally: raise` is
+    protected too, even though it is a separate `Try` node with its own
+    empty `finalbody` (Step 8 adversarial review, issue #1722: checking
+    only a node's own `finalbody` missed exactly this nested shape).
+    `protected` propagates down through every kind of nesting -- a
+    handler body, an `if`, a `with`, another `try` -- via
+    `ast.iter_child_nodes`, which already walks every field a `Try` node
+    carries (body, handlers, orelse, finalbody) with no special-casing
+    needed here."""
+    if isinstance(node, ast.Try | ast.TryStar):
+        own_protected = protected or _contains_raise(node.finalbody)
+        yield node, own_protected
+        for child in ast.iter_child_nodes(node):
+            yield from _walk_try_nodes(child, own_protected)
+        return
+    for child in ast.iter_child_nodes(node):
+        yield from _walk_try_nodes(child, protected)
+
+
 def findings_for_source(path: str, source: str, added: set[int]) -> tuple[list[Finding], list[Finding]]:
     """Grade one file's source, returning `(violations, honoured waivers)`.
 
@@ -519,16 +544,8 @@ def findings_for_source(path: str, source: str, added: set[int]) -> tuple[list[F
     violations: list[Finding] = []
     waived: list[Finding] = []
 
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Try | ast.TryStar):
-            continue
-        # A `finally:` clause that raises supersedes every handler's own
-        # pending return/assign -- the statement never actually completes,
-        # so a handler that looks fail-open in isolation is not: it always
-        # re-raises via the enclosing `finally`. Checked once per `Try`
-        # node (not per handler) since it covers every sibling handler
-        # identically (Step 8 adversarial review, issue #1722).
-        if _contains_raise(node.finalbody):
+    for node, protected in _walk_try_nodes(tree, protected=False):
+        if protected:
             continue
         for handler in node.handlers:
             if not handler.body or _contains_raise(handler.body):

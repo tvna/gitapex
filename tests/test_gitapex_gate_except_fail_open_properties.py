@@ -260,8 +260,10 @@ def test_diff_target_path_raises_for_anything_not_b_prefixed_or_dev_null(path: s
         gate._diff_target_path(path)
 
 
-def test_diff_target_path_returns_none_for_dev_null() -> None:
-    assert gate._diff_target_path("/dev/null") is None
+# The /dev/null case itself is a fixed-value assertion, not a property --
+# tests/test_gitapex_gate_except_fail_open.py's own
+# test_diff_target_path_returns_none_for_dev_null already covers it; no
+# duplicate here (Step 8 independent-review dispatch, issue #1722).
 
 
 # ---------------------------------------------------------------------------

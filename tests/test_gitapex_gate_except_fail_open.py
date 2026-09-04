@@ -246,12 +246,14 @@ def test_a_non_falsy_assignment_is_not_flagged(tmp_path: pathlib.Path) -> None:
 
 def test_a_falsy_return_that_is_not_the_last_statement_is_not_flagged(tmp_path: pathlib.Path) -> None:
     """A known miss (documented): only the body's own literal last
-    statement is inspected -- a falsy return earlier, followed by a real
-    raise, is exactly the shape this gate must not flag, but the same
-    literal-last-statement rule also misses a falsy return buried inside an
-    earlier branch. This test pins the intended (non-flagged) case, not the
-    miss."""
-    source = "try:\n    do_work()\nexcept OSError as error:\n    log(error)\n    raise\n"
+    statement is inspected -- a falsy return earlier (here, buried inside
+    an `if` branch), followed by a real, unconditional raise as the
+    literal last statement, is exactly the shape this gate must not flag.
+    Step 8 independent-review dispatch, issue #1722: an earlier revision
+    of this fixture (`log(error); raise`) contained no falsy return at
+    all, so it did not actually pin the case this test's own name and
+    docstring claim -- fixed to genuinely contain one."""
+    source = "try:\n    do_work()\nexcept OSError:\n    if broken():\n        return None\n    raise\n"
     assert _grade(tmp_path, source) == []
 
 
@@ -280,6 +282,25 @@ def test_a_non_raising_finally_clause_does_not_suppress_a_real_finding(tmp_path:
     fail-open finding intact."""
     source = "try:\n    do_work()\nexcept OSError:\n    return None\nfinally:\n    cleanup()\n"
     assert _rules(_grade(tmp_path, source)) == ["except-fail-open"]
+
+
+def test_an_outer_raising_finally_suppresses_a_nested_trys_own_finding(tmp_path: pathlib.Path) -> None:
+    """Step 8 independent-review dispatch, issue #1722: a `try/except`
+    nested inside an outer `try: ... finally: raise` is a SEPARATE Try
+    node with its own empty finalbody -- checking only a node's own
+    finalbody (the first finally fix above) missed this nested shape,
+    even though the outer finally still always supersedes the inner
+    handler's own pending falsy return."""
+    source = (
+        "try:\n"
+        "    try:\n"
+        "        do_work()\n"
+        "    except OSError:\n"
+        "        return None\n"
+        "finally:\n"
+        "    raise RuntimeError('cleanup failed')\n"
+    )
+    assert _grade(tmp_path, source) == []
 
 
 def test_a_bare_annotation_with_no_assigned_value_is_not_flagged(tmp_path: pathlib.Path) -> None:
@@ -444,6 +465,29 @@ def test_an_over_declared_hunk_before_the_next_diff_git_header_raises_scanerror(
 def test_an_over_declared_hunk_at_end_of_input_raises_scanerror() -> None:
     diff = "diff --git a/.github/scripts/x.py b/.github/scripts/x.py\n--- a/x.py\n+++ b/.github/scripts/x.py\n@@ -1,0 +1,2 @@\n+x = 1\n"
     with pytest.raises(gate.ScanError, match="the diff ended"):
+        gate.parse_added_lines(diff)
+
+
+def test_an_over_declared_hunk_length_before_a_new_hunk_header_raises_scanerror() -> None:
+    """Ported from gitapex_gate_exception_handler_gaps.py's own identically-named
+    test (issue #1193): `@@ -0,0 +1,5 @@` declares 5 post-image lines but only 2
+    real added lines follow before the next file's own headers begin -- with no
+    `diff --git ` separator, `new_remaining` stays above zero, so the guard must
+    catch this at the second file's own `@@` line before any of its content is
+    consumed. Step 8 independent-review dispatch, issue #1722: this was one of
+    three `_reject_if_hunk_incomplete` call sites ported from the sibling gate,
+    and this test file covered only the other two."""
+    diff = (
+        "--- a/.github/scripts/file1.py\n"
+        "+++ b/.github/scripts/file1.py\n"
+        "@@ -0,0 +1,5 @@\n"
+        "+def f():\n"
+        "+    pass\n"
+        "--- a/.github/scripts/file2.py\n"
+        "+++ b/.github/scripts/file2.py\n"
+        "@@ -1,1 +1,2 @@\n"
+    )
+    with pytest.raises(gate.ScanError, match=r"2 post-image line\(s\) still unconsumed"):
         gate.parse_added_lines(diff)
 
 
@@ -798,6 +842,34 @@ def test_handler_header_lines_is_one_line_for_a_bare_except() -> None:
     assert isinstance(try_stmt, ast.Try)
     handler = try_stmt.handlers[0]
     assert gate._handler_header_lines(handler) == {3}
+
+
+def test_walk_try_nodes_marks_a_nested_try_protected_by_an_outer_finally() -> None:
+    tree = ast.parse(
+        "try:\n"
+        "    try:\n"
+        "        do_work()\n"
+        "    except OSError:\n"
+        "        return None\n"
+        "finally:\n"
+        "    raise RuntimeError('cleanup failed')\n"
+    )
+    results = list(gate._walk_try_nodes(tree, protected=False))
+    assert len(results) == 2
+    outer, outer_protected = results[0]
+    inner, inner_protected = results[1]
+    assert outer.lineno == 1
+    assert outer_protected is True
+    assert inner.lineno == 2
+    assert inner_protected is True
+
+
+def test_walk_try_nodes_leaves_an_unrelated_try_unprotected() -> None:
+    tree = ast.parse("try:\n    do_work()\nexcept OSError:\n    return None\n")
+    (node, protected), *rest = gate._walk_try_nodes(tree, protected=False)
+    assert not rest
+    assert node.lineno == 1
+    assert protected is False
 
 
 def test_stmt_lines_spans_a_multi_line_statement() -> None:

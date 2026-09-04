@@ -2008,7 +2008,7 @@
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_except_fail_open.py"],
       "local_stdin": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_run_base_diff.py", "--", ".github/scripts/*.py", "hooks/*.py"],
-      "trigger": ".github/workflows/except-fail-open-gate.yml on pull_request, plus tests/test_gitapex_gate_except_fail_open.py inside the pytest step of .github/workflows/test.yml",
+      "trigger": ".github/workflows/except-fail-open-gate.yml on pull_request, plus tests/test_gitapex_gate_except_fail_open.py and tests/test_gitapex_gate_except_fail_open_properties.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "test-integrity",
       "tracking_issue": 1722,
