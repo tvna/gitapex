@@ -2482,8 +2482,7 @@ decoupled here from those specific model names:
 - **Balanced tier:** is the skill clear and efficient?
 - **Frontier-capable tier (powerful reasoning):** does the skill avoid *over*-explaining?
 
-The economical tier's floor is
-Claude Haiku 4.5 or an
+The economical tier's floor is Claude Haiku 4.5 or an
 equivalent-capability model; a model below that floor is outside this
 repository's supported scope. This tier mapping is provisional.
 
