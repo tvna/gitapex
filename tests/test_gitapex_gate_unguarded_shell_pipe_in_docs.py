@@ -617,3 +617,29 @@ def test_marker_exempts_every_match_in_the_block_disclosed_gap(tmp_path: pathlib
         "```\n",
     )
     assert gate.find_violations(root) == []
+
+
+# --- same-file pathspec-magic consistency (#1720 systemic half) -----------
+
+
+def test_markdown_and_python_pathspecs_share_the_same_glob_magic() -> None:
+    """#1720's systemic half, pinned rather than left to a future adversarial
+    review pass to notice again: `_MARKDOWN_PATHSPECS` and `_PYTHON_PATHSPECS`
+    are two independent literal tuples in this module with no shared constant
+    of their own enforcing a matching pathspec-magic convention.
+    `_MARKDOWN_PATHSPECS` once omitted the `:(glob)` magic `_PYTHON_PATHSPECS`
+    already carried (fixed in commit 23c9835, issue #1720), letting a bare
+    `*` cross a `/` and leak scope to a doubly-nested file (see
+    test_doubly_nested_skill_md_is_not_scanned and
+    test_doubly_nested_reference_file_is_not_scanned above for that specific,
+    already-fixed regression). This test instead pins the general property --
+    every entry in *both* tuples carries `:(glob)` -- confirmed to fail
+    against a reintroduced omission (a copy of `_MARKDOWN_PATHSPECS` with the
+    magic stripped from one entry, checked by hand against this same
+    assertion before this test was added) and to pass against the current,
+    fixed tuples, so a *future* independent omission in either tuple is
+    caught here rather than only by an adversarial review pass."""
+    all_pathspecs = (*gate._MARKDOWN_PATHSPECS, *gate._PYTHON_PATHSPECS)
+    assert all_pathspecs, "no pathspecs found -- this test would otherwise pass vacuously"
+    for pathspec in all_pathspecs:
+        assert pathspec.startswith(":(glob)"), f"{pathspec!r} is missing the :(glob) pathspec magic"
