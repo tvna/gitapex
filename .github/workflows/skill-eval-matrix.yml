@@ -99,7 +99,7 @@ jobs:
       # gitapex_run_eval_suite.py's own module docstring requires the same
       # for itself (it reaches PyYAML through gitapex_run_ablation.py).
       - name: Install uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d  # v10.0.1
         with:
           enable-cache: true
 
@@ -318,7 +318,7 @@ jobs:
       # go through `uv run`, and gitapex_run_eval_suite.py's own module
       # docstring requires the same for itself.
       - name: Install uv
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d  # v10.0.1
         with:
           enable-cache: true
 
