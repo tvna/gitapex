@@ -746,7 +746,7 @@ strictly.
 | (d) Not inherently repo-bound in purpose | The skill's own reason for existing does not name, target, or presuppose this specific repository's own identity, tooling, or workflow | *(no narrow Mixed way exists -- an inherently repo-bound purpose leaves no portable core to split a file-level split from)* | Repository-scoped, trigger 1 |
 
 - **The portability litmus test (condition c), applied to every
-  executed steps**: for Portable-declared content, ask of each claim --
+  sentence, not only executed steps**: for Portable-declared content, ask of each claim --
   including one the model never executes as a step, such as a Stop
   boundary or an Agentic operation mechanism-fit assertion -- *"would this exact sentence
   remain true, unchanged, if this file were copied into a repository
@@ -1922,11 +1922,11 @@ presence by shape.
   (trigger 2, and Mixed-via-clean-sibling's own narrowness conditions) --
   never by this substitute, which has no bearing on whether a sibling
   dependency is narrow enough to stay Mixed in the first place. The
-  Portability level section's Mixed bullet prices a *choice*: an author
-  who could relocate the repository-specific part into a dedicated
-  reference file, and simply has not done so yet. A target that has already cleared the
-  cohesion-confirmed sequential-pipeline exemption immediately above has
-  no such choice available for its every-use non-portable content
+  Portability level section's Mixed bullet prices a *choice*: an author who
+  could relocate the repository-specific part into a dedicated reference
+  file, and simply has not done so yet. A target that has already cleared
+  the cohesion-confirmed sequential-pipeline exemption immediately above
+  has no such choice available for its every-use non-portable content
   specifically: physically relocating that content into a new every-use
   reference file would push the exemption's own already-minimized
   common-case file count past its irreducible floor, and folding it into
