@@ -1994,6 +1994,35 @@
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
+    },
+    {
+      "id": "except-fail-open",
+      "kind": "script",
+      "script": [
+        ".github/scripts/gitapex_gate_except_fail_open.py",
+        ".github/scripts/gitapex_run_base_diff.py",
+        ".github/scripts/_gitapex_base_ref.py",
+        ".github/workflows/except-fail-open-gate.yml"
+      ],
+      "rule": "An except (or except*) clause newly added by a PR diff to .github/scripts/*.py or hooks/*.py must not fail open: if its own body contains no raise anywhere (searched recursively, never crossing into a nested function/lambda's own body) and its own last top-level statement is a return of a falsy default (None, [], {}, (), \"\", 0, False, set(), frozenset()) or a single-Name-target assignment to one, it is flagged. Scope is the diff, not the repository, and narrower than exception-handler-gap's own four-directory scope (issue #1722 states exactly these two directories). An inline except-fail-open WAIVED comment carrying a reason discloses an intentional sentinel, and every honoured waiver is printed. Exits 2 rather than pass silently on input it cannot grade. See the script docstring for the disclosed known misses (branch-tail analysis, falling off a function's own end, name-resolved falsy values) and over-reports.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_except_fail_open.py"],
+      "local_stdin": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_run_base_diff.py", "--", ".github/scripts/*.py", "hooks/*.py"],
+      "trigger": ".github/workflows/except-fail-open-gate.yml on pull_request, plus tests/test_gitapex_gate_except_fail_open.py and tests/test_gitapex_gate_except_fail_open_properties.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "test-integrity",
+      "tracking_issue": 1722,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".github/scripts/*.py"},
+        {"kind": "file-glob", "ref": "hooks/*.py"},
+        {"kind": "cross-registry-consistency", "ref": "new fail-open except clauses in .github/scripts/*.py or hooks/*.py <-> a re-raise or an inline except-fail-open WAIVED disclosure"},
+        {"kind": "workflow-event", "ref": "except-fail-open-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     }
   ],
   "clusters": {

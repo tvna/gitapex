@@ -53,6 +53,7 @@ jobs:
           uv run --frozen pytest \
             tests/test_gitapex_gate_detection_logic_property_coverage_properties.py \
             tests/test_gitapex_gate_exception_handler_gaps_properties.py \
+            tests/test_gitapex_gate_except_fail_open_properties.py \
             tests/test_gitapex_gate_stdlib_only_claim_drift_properties.py \
             --no-cov -v > pytest-output.txt 2>&1 || rc=$?
           {
