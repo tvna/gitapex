@@ -261,6 +261,11 @@ spec:
       summary: "this file's own baseCommit citation-convention dispute (issue https://github.com/tvna/gitapex/issues/1740) resolved: outcome.baseCommit cites the causally relevant antecedent, not a fixed git-parent rule -- see decision-log-discipline.md's new section for the three variants. The axis-7-TOCTOU entry above is a variant-1 case (its entry-adding commit 52213559 is itself the fix), so baseCommit is its true immediate parent -- corrected from 1b5626b6 to 62b3615e."
       outcome:
         baseCommit: "f47f554a164bf757ba7ebe2f9b7ad9ccbf41f56a"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1774"
+      summary: "The PR closing https://github.com/tvna/gitapex/issues/1766 added checklist item 5 opening with drafting-process reasoning quoting AGENTS.md Section 1 -- why the check originated, not a normative statement. The repository owner, reviewing after merge, asked this framing be removed. Item 5's opening clause was reworded to state the check standalone, with no AGENTS.md reference."
+      outcome:
+        baseCommit: "e0e24d907684fa2b820a2001a42ee2200a4de446"
   skillDependencies:
     requires:
       - evaluating-skill-quality
