@@ -2486,10 +2486,7 @@ with future model releases:
 As of this writing (2026-09-04), the economical tier's floor is
 Claude Haiku 4.5 or an
 equivalent-capability model; a model below that floor is outside this
-repository's supported scope. This tier mapping is provisional pending
-a multi-model evaluation harness -- once one exists, re-derive the
-tier boundaries from actual behavioral evidence across models rather
-than this name-based placeholder.
+repository's supported scope. This tier mapping is provisional.
 
 "What works perfectly for the frontier-capable tier might need more detail for the economical tier." Judge --
 or state that you cannot yet judge -- against every tier in this spread
