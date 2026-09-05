@@ -81,4 +81,4 @@ def test_the_matcher_and_the_checker_name_the_same_tools() -> None:
 def test_the_shared_list_is_non_empty() -> None:
     """A regex that stopped matching would make all three comparisons above
     trivially true against three empty sets."""
-    assert len(_matcher_tools()) >= 3
+    assert len(_matcher_tools()) >= 6

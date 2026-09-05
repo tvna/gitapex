@@ -48,7 +48,7 @@ _SAFE_CHARS = st.characters(blacklist_categories=("Cc", "Cs"), blacklist_charact
 
 
 def _no_known_suffix(s: str) -> bool:
-    return s != "Bash" and not s.endswith("__pull_request_read") and not s.endswith("__resolve_review_thread")
+    return not s.endswith("__pull_request_read") and not s.endswith("__resolve_review_thread")
 
 
 @_PROPERTIES
@@ -71,7 +71,16 @@ def test_unknown_tool_name_always_returns_none(tool_name: str) -> None:
     reviewer sees both tests pass but the positive side's own assertion never
     fired (which Hypothesis's own shrinking and the added ``assert result is
     not None`` in the positive tests make impossible to miss)."""
-    result = tracker.process({"session_id": "prop_unknown", "tool_name": tool_name})
+    with tempfile.TemporaryDirectory() as tmp:
+        old = os.environ.get("TMPDIR")
+        os.environ["TMPDIR"] = tmp
+        try:
+            result = tracker.process({"session_id": "prop_unknown", "tool_name": tool_name})
+        finally:
+            if old is None:
+                os.environ.pop("TMPDIR", None)
+            else:
+                os.environ["TMPDIR"] = old
     assert result is None
 
 

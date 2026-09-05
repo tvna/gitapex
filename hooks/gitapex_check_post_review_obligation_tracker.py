@@ -11,8 +11,8 @@ obligation depended solely on the agent remembering it.
 
 Design (settled on issue #1209, not guessed at implementation time): a
 marker-file state machine. This script is the writer half, invoked as a
-PostToolUse hook (matcher: Bash|mcp__github__resolve_review_thread|
-mcp__github__pull_request_read); hooks/gitapex_check_stop_review_obligation.py
+PostToolUse hook (matcher: Bash|mcp__(github|plugin_github_github)__resolve_review_thread|
+mcp__(github|plugin_github_github)__pull_request_read); hooks/gitapex_check_stop_review_obligation.py
 is the reader half, invoked as a Stop hook. Neither half makes its own
 GitHub API call -- this script reads only what the already-executed tool
 call itself returned (its own tool_response), reusing the pattern
