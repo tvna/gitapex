@@ -585,3 +585,62 @@ def test_shell_exits_zero_when_python3_is_missing(tmp_path: Path) -> None:
     assert result.returncode == 0
     assert "python3 is not available on PATH" in result.stdout
     assert not (tmp_path / "gitapex-review-obligation-shell-no-python3.json").exists()
+
+
+# --- Namespace-tolerant dispatch (issue #1823) ---------------------------
+
+
+def test_get_review_comments_with_plugin_namespaced_tool_name() -> None:
+    """Plugin-namespaced mcp__plugin_github_github__pull_request_read dispatches as get_review_comments."""
+    session_id = "s_ns1"
+    _push(session_id)
+    result = tracker.process(
+        {
+            "session_id": session_id,
+            "tool_name": "mcp__plugin_github_github__pull_request_read",
+            "tool_input": {**_PR_INPUT, "method": "get_review_comments"},
+            "tool_response": {"threads": [{"isResolved": False}]},
+        }
+    )
+    assert result is not None
+    assert result["open_review_threads"] == 1
+    assert result["target_pr"] == "tvna/gitapex#1209"
+
+
+def test_pull_request_read_get_with_plugin_namespaced_tool_name() -> None:
+    """Plugin-namespaced mcp__plugin_github_github__pull_request_read dispatches as method=get."""
+    session_id = "s_ns2"
+    _push(session_id)
+    result = tracker.process(
+        {
+            "session_id": session_id,
+            "tool_name": "mcp__plugin_github_github__pull_request_read",
+            "tool_input": {**_PR_INPUT, "method": "get"},
+            "tool_response": {"number": 1209, "mergeable_state": "clean"},
+        }
+    )
+    assert result is not None
+    assert result["mergeable_checked"] is True
+
+
+def test_resolve_review_thread_with_plugin_namespaced_tool_name() -> None:
+    """Plugin-namespaced mcp__plugin_github_github__resolve_review_thread increments resolve_calls."""
+    session_id = "s_ns3"
+    _push(session_id)
+    tracker.process(
+        {
+            "session_id": session_id,
+            "tool_name": "mcp__plugin_github_github__pull_request_read",
+            "tool_input": {**_PR_INPUT, "method": "get_review_comments"},
+            "tool_response": {"threads": [{"isResolved": False}]},
+        }
+    )
+    result = tracker.process(
+        {
+            "session_id": session_id,
+            "tool_name": "mcp__plugin_github_github__resolve_review_thread",
+            "tool_response": {},
+        }
+    )
+    assert result is not None
+    assert result["resolve_calls"] == 1
