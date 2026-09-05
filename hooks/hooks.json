@@ -34,7 +34,7 @@
         ]
       },
       {
-        "matcher": "mcp__github__issue_write",
+        "matcher": "mcp__(github|plugin_github_github)__issue_write",
         "hooks": [
           {
             "type": "command",
@@ -44,7 +44,7 @@
         ]
       },
       {
-        "matcher": "mcp__github__create_pull_request",
+        "matcher": "mcp__(github|plugin_github_github)__create_pull_request",
         "hooks": [
           {
             "type": "command",
@@ -79,7 +79,7 @@
         ]
       },
       {
-        "matcher": "mcp__github__update_pull_request",
+        "matcher": "mcp__(github|plugin_github_github)__update_pull_request",
         "hooks": [
           {
             "type": "command",
@@ -99,7 +99,7 @@
         ]
       },
       {
-        "matcher": "mcp__github__merge_pull_request",
+        "matcher": "mcp__(github|plugin_github_github)__merge_pull_request",
         "hooks": [
           {
             "type": "command",
@@ -111,7 +111,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "mcp__github__create_pull_request|mcp__github__update_pull_request|mcp__github__issue_write",
+        "matcher": "mcp__(github|plugin_github_github)__create_pull_request|mcp__(github|plugin_github_github)__update_pull_request|mcp__(github|plugin_github_github)__issue_write",
         "hooks": [
           {
             "type": "command",
@@ -121,7 +121,7 @@
         ]
       },
       {
-        "matcher": "Bash|mcp__github__resolve_review_thread|mcp__github__pull_request_read",
+        "matcher": "Bash|mcp__(github|plugin_github_github)__resolve_review_thread|mcp__(github|plugin_github_github)__pull_request_read",
         "hooks": [
           {
             "type": "command",

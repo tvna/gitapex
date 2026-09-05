@@ -468,9 +468,9 @@ def process(payload: dict[str, Any]) -> dict[str, Any] | None:
 
     if tool_name == "Bash":
         new_state = handle_bash(state, tool_input)
-    elif tool_name == "mcp__github__resolve_review_thread":
+    elif isinstance(tool_name, str) and tool_name.endswith("__resolve_review_thread"):
         new_state = handle_resolve_review_thread(state, payload.get("tool_response"))
-    elif tool_name == "mcp__github__pull_request_read":
+    elif isinstance(tool_name, str) and tool_name.endswith("__pull_request_read"):
         new_state = handle_pull_request_read(state, tool_input, payload.get("tool_response"))
     else:
         return None
