@@ -102,9 +102,7 @@ def build_dedup_sweep_line(open_count: int, timestamp: str, verdict: str = "NEW"
     calendar instant in that exact format, or when `verdict` names a
     non-filing outcome.
     """
-    if isinstance(open_count, bool) or not isinstance(open_count, int):
-        raise ValueError(f"open_count must be a non-negative int, got {open_count!r}")
-    if open_count < 0:
+    if isinstance(open_count, bool) or not isinstance(open_count, int) or open_count < 0:
         raise ValueError(f"open_count must be a non-negative int, got {open_count!r}")
     if not isinstance(timestamp, str):
         raise ValueError(f"timestamp must be ISO-8601 UTC YYYY-MM-DDTHH:MM:SSZ, got {timestamp!r}")
@@ -211,9 +209,8 @@ def build_gate_proposal_acm_body(
     function's own output). A trailing `Refs #<retrospective-issue-number>`
     line supplies the back-link Decision 1/Architecture require.
     """
-    residual_risk_text = (
-        residual_risk.strip() if residual_risk and residual_risk.strip() else _RESIDUAL_RISK_NONE_IDENTIFIED
-    )
+    stripped_risk = (residual_risk or "").strip()
+    residual_risk_text = stripped_risk if stripped_risk else _RESIDUAL_RISK_NONE_IDENTIFIED
     criterion_cell = _sanitize_cell(repair_label)
     interpretation_cell = _sanitize_cell(classification_rationale)
     planned_ops_cell = _sanitize_cell(proposed_gate_text)
