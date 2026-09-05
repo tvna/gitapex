@@ -15,7 +15,7 @@ expected:
   # this fixture's own scenario is exactly the Stop-boundary bullet
   # against standalone invocation.
   exercises:
-    - "Never invoke this skill directly, or accept a request to invoke it outside one of the Precondition's three dispatch contexts (`executing-a-branch-plan` Step 6, `scorer-gated-skill-edits`'s own Step 3, or `scorer-gated-skill-edits`'s own Step 9) -- see the Precondition above; a standalone \"draft me a skill\" request routes to `eliciting-a-design` instead, which is the only place a candidate skill's shape and metadata are ever settled."
+    - "Never attempt to invoke this skill via the `Skill` tool -- `disable-model-invocation: true` makes that structurally impossible for any caller, not only a top-level one (issue `#1796`). Never accept a request to act outside one of the Precondition's three dispatch contexts -- see the Precondition above. Correct usage: the dispatch context reads this file's own content directly (embedding its procedure text or file path into its own dispatch prompt), executes Steps 1/2/6 itself (per the Precondition's self-editing exception when the target is this skill's own files), and dispatches Steps 3/4/5/7 to `review-persona` via the `Agent`/`Task` tool. A standalone \"draft me a skill\" request routes to `eliciting-a-design` instead, which is the only place a candidate skill's shape and metadata are ever settled."
   output_icontains:
     - "eliciting-a-design"
   output_not_icontains:
