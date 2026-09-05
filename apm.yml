@@ -13,6 +13,17 @@
 # .claude-plugin/plugin.json in lockstep -- unaffected by that generation step.
 name: gitapex
 version: 0.1.0
+# targets is pinned (not auto-detected) since issue #1812: the committed
+# .opencode/plugins/ session plugin is itself an opencode signal, so
+# auto-detection sees both claude (.claude/) and opencode (.opencode/) and
+# refuses a bare `apm install`. Claude-only is the pre-#1812 behavior, kept
+# deliberately: OpenCode sessions read the same .claude/skills/ deploys
+# through their own discovery paths (opencode.ai/docs/skills), so deploying
+# devDependencies twice (also to .agents/skills/) would only create
+# duplicate skill names across locations. An explicit
+# `apm install --target opencode` still overrides this pin.
+targets:
+  - claude
 devDependencies:
   apm:
     - tvna/clairvoyance

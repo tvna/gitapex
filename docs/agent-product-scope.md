@@ -21,7 +21,12 @@ forward (gitapex#445, reframed).
 installed into -- i.e. which products load `skills/` from this
 repository via `apm install` or `/plugin marketplace add`.
 
-**Current scope:** Claude Code, unambiguously. Whether Codex's
+**Current scope:** Claude Code, unambiguously, plus OpenCode since
+issue #1812: `apm install tvna/gitapex --target opencode` deploys the
+skills/agents into OpenCode's own discovery paths (live-verified), and
+`.opencode/plugins/gitapex-session.js` provisions an OpenCode session
+the way `.claude/hooks/session-start.sh` does for Claude Code web
+sessions. Whether Codex's
 `apm install` path already qualifies is unresolved, not settled by this
 doc: [`repository-layout.md`](repository-layout.md) itself currently
 says "gitapex is a Claude Code / Codex plugin" and lists `skills/` as
