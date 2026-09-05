@@ -177,6 +177,33 @@ def test_append_registry_entry_raises_on_flow_style_entries(tmp_path: Path) -> N
         gvid.append_registry_entry(path, {"date": "2026-09-05"})
 
 
+def test_append_registry_entry_raises_when_reparse_yields_unexpected_entry_count(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Defensive branch of the generic postcondition check: even when the
+    # constructed text is valid YAML, the check must still reject a reparse
+    # that does not add exactly one entry. A real YAML shape reaching this
+    # exact branch without also hitting the earlier "invalid YAML" branch
+    # first is not constructible from this module's own always-block-style-
+    # list-item append shape, so this monkeypatches the postcondition
+    # re-parse call specifically to exercise the count check in isolation.
+    path = tmp_path / "registry.yaml"
+    path.write_text('entries:\n  - date: "2026-01-01"\n', encoding="utf-8")
+    real_safe_load = gvid.yaml.safe_load
+    calls = {"n": 0}
+
+    def fake_safe_load(text: str) -> Any:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return real_safe_load(text)
+        return {"entries": [{"date": "2026-01-01"}, {"date": "2026-09-05"}, {"date": "unexpected-extra"}]}
+
+    monkeypatch.setattr(gvid.yaml, "safe_load", fake_safe_load)
+
+    with pytest.raises(OSError, match="not add exactly one entry"):
+        gvid.append_registry_entry(path, {"date": "2026-09-05"})
+
+
 def test_append_registry_entry_raises_on_flow_style_entries_with_a_comment_before_the_bracket(
     tmp_path: Path,
 ) -> None:
