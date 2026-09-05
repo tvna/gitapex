@@ -23,9 +23,9 @@ Turns an already-elicited candidate skill idea into a shape-checked, self-review
 | # | Step | Done when |
 |---|---|---|
 | 1 | Capture the job, verbatim | Job statement quoted with source cited, or escalated |
-| 2 | Draft via Design-by-Contract, each part earned | Steps + earned sections exist; sidecar carries every ACM axis |
-| 3 | Cohesion self-check (advisory) | Named split finding, or "no split found," recorded |
-| 4 | Collision/dependency check | Every skill in the inventory read once (finitely many; stop once all are read); every collision resolved or deferred with a reason |
+| 2 | Draft via Design-by-Contract, each part earned | Steps + exactly the earned sections exist; sidecar carries every ACM axis, none left blank or re-guessed |
+| 3 | Cohesion self-check (advisory) | A named split finding (two-outcome sentence quoted, recorded in the Output), or "no split found" |
+| 4 | Collision/dependency check | Every skill in the inventory read once; every collision resolved or deferred with a reason |
 | 5 | Domain-gap sweep (advisory) | Named gap finding, or "no domain gap found," recorded |
 | 6 | Formative sweep + deterministic checkers | Row 8 scaffold exists; both checkers exit clean |
 | 7 | Branch on dispatch-context identity, then act | Context 1/3: both reviewers ran fresh, every finding fixed or escalated. Context 2: handoff structurally deferred to its Step 9 pre-ship dispatch |
@@ -49,7 +49,7 @@ Turns an already-elicited candidate skill idea into a shape-checked, self-review
      | n/a | A rejected alternative's rationale |
 
      Metadata-only content goes in `metadata/gitapex.yaml`'s `references` decision log or `executionRequirements`, never restated in the body. See `references/contract-structure.md` for the fault-attribution rule, worked examples, and a drafting checklist -- load it when this table isn't enough, not as required reading.
-   - **Fill every `metadata/gitapex.yaml` field.** The four axes named in Precondition (Invocation mode as the frontmatter `disable-model-invocation`/`user-invocable` pair) are copied unchanged, never re-elicited. Missing or unquotable axis on context 1? Escalate (Step 7's upstream-ambiguity branch) -- never infer or default it. A gap in context 2's already-committed sidecar is a pre-existing defect outside this skill's scope, not this Step's escalation to raise.
+   - **Fill every `metadata/gitapex.yaml` field.** The four axes named in Precondition (Invocation mode maps to the frontmatter `disable-model-invocation`/`user-invocable` pair) are copied unchanged, never re-elicited. Missing or unquotable axis on context 1? Escalate (Step 7's upstream-ambiguity branch) -- never infer or default it. A gap in context 2's already-committed sidecar is a pre-existing defect outside this skill's scope, not this Step's escalation to raise.
    - `dependencyPolicy`/`skillDependencies`/`executionRequirements` are *derived facts* about what the Steps actually do -- computed here, re-verified at Step 6 (a declaration/behavior mismatch fails `gitapex_scan_execution_requirements_drift.py`).
    - `references` is this draft's decision log. Append in the same edit round as the decision, never batched. Read current content before every edit -- regenerating from memory can destroy entries the edit didn't author. Every new entry names `outcome.baseCommit`; its `summary` is a re-checkable claim, not an instruction to execute, and never a secret or pasted unbounded output. A missing, truncated, or unparseable sidecar is never "nothing decided yet" -- escalate. See `references/decision-log-discipline.md` for the resume-time drift check and the concurrent-dispatch race this skill's Precondition does not close.
    - Hold each Step's prose to `references/formative-quality-dimensions.md` row 4's structural-legibility bar (terminology, checklists, feedback loops, templates, branch triggers) -- don't restate that bar here.
@@ -74,10 +74,10 @@ Turns an already-elicited candidate skill idea into a shape-checked, self-review
 6. **Sweep against the formative dimensions, then run the deterministic checkers.** No deferral path -- fix every finding before Step 7.
    - Sweep the draft against `references/formative-quality-dimensions.md`'s nine formative dimensions -- a prose quality pass the checkers below can't perform.
    - Prepare the eval scaffold row 8 (Eval preparation) requires: its scenario enumeration and `evals/<skill>/` fixture skeleton, to that row's bar -- don't restate the bar here. Preparation only: the baseline run itself stays `evaluating-skill-quality`'s Behavioural evidence pass at Step 7.
-   - Run this repository's deterministic checkers against the draft directory, gitapex-repo only (see `references/gitapex-cross-links.md` for the fuller context these commands sit in), fixing every finding and re-running both after every fix until they exit clean -- Step 7's handoff does not run either checker itself, which is why this Step carries no deferral path:
+   - Run this repository's deterministic checkers against the draft directory, gitapex-repo only (see `references/gitapex-cross-links.md` for the fuller context these commands sit in), fixing every finding and re-running both after every fix until they exit clean -- Step 7's handoff does not run either checker itself:
      - `python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py --allowed-root <repo-root> --strict-token-budget skills/<new-skill-name>`
      - `python3 skills/evaluating-skill-quality/scripts/gitapex_scan_execution_requirements_drift.py skills/<new-skill-name>`
-   - **On a `body-token-budget` FAIL, trim in this order**: (1) move rare-path, schema, or deep procedural detail out of the body into `references/`, on demand rather than paid on every route (dimension 5's progressive-disclosure principle); (2) prune duplicate or sedimentary sentences per `references/rubric.md`'s Conciseness checks.
+   - **On a `body-token-budget` FAIL, trim in this order**: (1) move rare-path, schema, or deep procedural detail out of the body into `references/`, on demand rather than paid on every route (dimension 5's progressive-disclosure principle); (2) prune duplicate or sedimentary sentences per `skills/evaluating-skill-quality/references/rubric.md`'s Conciseness checks.
    - **Never cut a Stop boundary, an injection-resistance rule, an authorization/escalation gate, or any other safety-relevant sentence to clear the budget, regardless of how (1)/(2) are going.** If (1) and (2) are both exhausted and the body is still over budget, that is not something to silently shrink around by cutting real content: emit a `StageDeviated{action: escalate}`-shaped event naming the specific content that would have to move and why neither (1) nor (2) can absorb it, then stop. The draft's Capability assumption or scope is what needs revisiting at that point, not this Step's text.
    - **Completion criterion:** see the Steps table's "Done when" column.
 
@@ -97,12 +97,12 @@ A draft `SKILL.md` (plus `references/` and `metadata/gitapex.yaml`) that:
 
 - Carries every metadata choice unchanged from its dispatch context's input -- none inferred or re-elicited here.
 - Is structured as a real contract per Step 2.
-- Has no Step 3/5 finding left unresolved -- fixed, or explicitly deferred with a stated reason. "Deferred" alone, with no reason, doesn't satisfy this.
+- Has no Step 3/5 finding left unresolved -- fixed, or explicitly deferred with a stated reason naming the concern and why fixing it now isn't warranted. "Deferred" alone, with no reason, doesn't satisfy this.
 - Has every Step 4 collision resolved or explicitly deferred with a stated reason.
 - Passes both Step 6 checkers with zero findings -- a hard clean, not "clean or explained."
 - Has Step 7 completed or structurally deferred, per its dispatch-context branch -- never silently skipped.
 
-**A self-granted deferral is not a self-granted pass**: every deferred finding is still carried into whichever of Step 7's two outcomes applies. This is **not** a shipped or merged skill on its authority -- that determination is `evaluating-skill-quality`'s and `battle-testing-a-skill`'s, produced fresh whenever the review handoff actually runs.
+**A self-granted deferral is not a self-granted pass**: every deferred finding is still carried into whichever of Step 7's two outcomes applies. This is **not** a shipped or merged skill on its own authority -- that determination is `evaluating-skill-quality`'s and `battle-testing-a-skill`'s, produced fresh whenever the review handoff actually runs.
 
 ## Output
 
@@ -166,14 +166,14 @@ section.
 | `scorer-gated-skill-edits` | Dispatches this skill twice: from its Step 3, once per iteration, to author the bounded candidate patch (through Step 6 only -- Step 7's handoff is deferred to its Step 9 pre-ship dispatch, per Step 7's dispatch-context branch); and from its Step 9, once per shipped result, entering directly at Step 7 for the actual review. This skill never runs the measured gate loop itself. |
 | `drafting-issues` | Separate authoring skill, for a GitHub issue carrying an ACM rather than a skill directory. In `relatedTo` -- a design session producing a skill's draft often produces its tracking issue through that skill first. |
 | `planning-a-branch-from-an-issue` / `executing-a-branch-plan` | The authoring method Step 6 dispatches whenever a task's Planned ops create or edit a `SKILL.md`, new or existing. |
-| `eliciting-a-design` | Owns every elicitation/gate this skill once performed (Core Domain, mechanism-fit, four-axis). Received already-resolved, quoted into the ACM; an upstream-rooted Step 7 finding takes the escalation branch, never a direct invoke. |
+| `eliciting-a-design` | Owns every elicitation/gate this skill once performed (Core Domain, mechanism-fit, four-axis). This skill receives it already resolved, quoted into the ACM; an upstream-rooted Step 7 finding takes the escalation branch, never a direct invoke. |
 | `untrusted-input-triage` | Step 1's untrusted-source handling applies its Extract/Ignore/Flag/Tag discipline, not re-derived. |
 | `drafting-an-adr` | The shared-bundled-script-parent policy's last-resort escalation records its decision through that skill. |
 | `grounding-in-primary-sources` | The guidance-form "cite primary sources" rule applies that skill's discipline, not re-derived. |
 
 ## Notes
 
-- **Portability: Mixed** -- Steps 1, 3-5, 7 depend on no repository-specific tooling; Step 6's checker commands and `references/gitapex-cross-links.md` are the repository-specific part a vendoring consumer drops and substitutes.
-- **Capability assumption: Broad**, the repository owner's explicit choice: every Step's core judgment call is inlined directly in this body, per `references/rubric.md`'s Broad bar. `gitapex-cross-links.md` and `formative-quality-dimensions.md` are the two `references/` files required reading on the in-repo ordinary path; the rest stay genuinely on-demand.
+- **Portability: Mixed** -- Steps 1, 3-5, 7 depend on no repository-specific tooling; Step 6's checker commands and `references/gitapex-cross-links.md` are the repository-specific part -- a vendoring consumer drops and substitutes the latter.
+- **Capability assumption: Broad**, the repository owner's explicit choice: every Step's core judgment call is inlined directly in this body, per `skills/evaluating-skill-quality/references/rubric.md`'s Broad bar. `gitapex-cross-links.md` and `formative-quality-dimensions.md` are the two `references/` files required reading on the in-repo ordinary path; the rest stay genuinely on-demand.
 - **Install/vendoring-time integrity** (whether this `SKILL.md` and its `references/` are the untampered, intended copies) is separate from the runtime content trust Steps 1/7 cover -- verify it through the calling repository's vendoring/install process, not this skill's output.
 - **Lifecycle: experimental**, tracking <https://github.com/tvna/gitapex/issues/1194> -- pending both Step 7 reviews' verdicts before graduating to stable.

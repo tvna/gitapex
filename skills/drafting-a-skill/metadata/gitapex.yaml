@@ -281,6 +281,11 @@ spec:
       summary: "Applied the split rule to the rest of the body (7904 -> 6211 tokens): moved Worked examples 2/3 to contract-structure.md; moved mkdir-regime rationale to decision-log-discipline.md; unified Step 6 commands with gitapex-cross-links.md (fixing Notes' now-false 'found nowhere else'); compressed wording, no judgment/gate changed. All 8 Stop boundaries and fixture-quoted strings verified byte-identical (a first pass broke 6 via blanket substitution; reverted before landing)."
       outcome:
         baseCommit: "738f44150d7a576f7da4097bd0ae958c0e28332b"
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1792"
+      summary: "Notes' Attribution bullet dropped from the body (writing-skills list-shape credit, rejected RED-GREEN-REFACTOR import, skill-creator's three rejected features) -- rationale for a rejected alternative is metadata-only per Step 2's earning test. An earlier entry above folded a fact into that bullet; this entry supersedes it now the bullet is gone."
+      outcome:
+        baseCommit: "91298328872664e0eb366eac6b26a579a1ad548d"
   skillDependencies:
     requires:
       - evaluating-skill-quality

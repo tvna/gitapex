@@ -1,6 +1,6 @@
 # Contract structure for a drafted skill
 
-Loaded on demand: `SKILL.md`'s own Step 4 already states the three-part Precondition/Steps/Postcondition definition and the never-both rule directly in the body -- load this file for the fault-attribution rule, deeper worked examples, and the drafting checklist, when that inline definition alone doesn't resolve a real drafting question (or earlier, if Step 1's candidate job is already fuzzy enough that a contract shape would sharpen it). This file exists so a draft's Precondition, Steps, and Postcondition are written as a real contract, in Bertrand Meyer's Design by Contract sense of the term -- the same framing the review that later grades a draft already applies to itself, in its own Contract discipline section; see this skill's own `references/gitapex-cross-links.md` for the exact sibling-skill citation this shared framing depends on. Drafting and reviewing are separate bounded contexts (see this skill's own SKILL.md), but they share one vocabulary for what a contract is, so a drafted skill and the review that later grades it are talking about the same thing.
+Loaded on demand: `SKILL.md`'s own Step 2 already states the three-part Precondition/Steps/Postcondition definition and the never-both rule directly in the body -- load this file for the fault-attribution rule, deeper worked examples, and the drafting checklist, when that inline definition alone doesn't resolve a real drafting question (or earlier, if Step 1's candidate job is already fuzzy enough that a contract shape would sharpen it). This file exists so a draft's Precondition, Steps, and Postcondition are written as a real contract, in Bertrand Meyer's Design by Contract sense of the term -- the same framing the review that later grades a draft already applies to itself, in its own Contract discipline section; see this skill's own `references/gitapex-cross-links.md` for the exact sibling-skill citation this shared framing depends on. Drafting and reviewing are separate bounded contexts (see this skill's own SKILL.md), but they share one vocabulary for what a contract is, so a drafted skill and the review that later grades it are talking about the same thing.
 
 ## The three parts, applied to a skill
 
@@ -40,11 +40,11 @@ Before treating a draft's contract shape as done:
 convention. A Precondition, Postcondition, and Non-goals bullet added
 from habit each restate Step 1 or don't exist in this vocabulary at
 all. Corrected: one Step only, the scope cut logged as an elision in
-`metadata/gitapex.yaml` instead -- see `SKILL.md`'s own Step 2 earning
-test above.
+`metadata/gitapex.yaml` instead -- see the earning test in
+`SKILL.md`'s own Step 2.
 
 **A candidate whose review finding roots upstream, not in the draft
-itself.** A third candidate reaches Step 7 with a `battle-testing-a-skill`
+itself.** A candidate reaches Step 7 with a `battle-testing-a-skill`
 finding that the elicited Capability assumption (`Frontier`) is wrong
 for a body this thin -- but that call was `eliciting-a-design`'s own
 Part-adjacent axis resolution, not anything this skill's own Steps
