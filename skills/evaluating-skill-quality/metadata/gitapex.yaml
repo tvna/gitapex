@@ -593,6 +593,9 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/1794"
       summary: "Dimension 9's decoupled tier-to-model mapping is a provisional name-based placeholder; re-derive the tier boundaries from actual behavioral evidence across models once a multi-model evaluation harness exists."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1809"
+      summary: "Added scripts/gitapex_run_verified_isolated_dispatch.py: verifies isolation itself (a matching Reviewed metadata/isolation-registry.yaml entry, or a live two-control run) before launching a real dispatch, so the dispatch under review never verifies its own isolation. Migrated all historical Known entries from adversarial-self-audit.md's Isolation verification section into the new registry, carrying forward each entry's own stated trust_class rather than re-deriving it from merge status."
   skillDependencies:
     requires: []
     relatedTo:
@@ -607,6 +610,7 @@ spec:
         - files
       shell:
         - python3
+        - claude
     packages:
       pip:
         - pyyaml
