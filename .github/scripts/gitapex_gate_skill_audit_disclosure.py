@@ -138,6 +138,40 @@ above).
   fabricated one. See `docs/superpowers/specs/2026-08-10-defeat-test-disclosure-design.md`
   for the full decision record.
 
+Issue #1796: a seventh process-disclosure check, same shared RAN/NOT-RUN/
+WAIVED shape as every row above except `deterministic-gate-quality`.
+
+- `drafting-a-skill-invocation-disclosure`: required when the calling
+  workflow's diff adds or modifies a skill's own `SKILL.md`, or adds or
+  modifies anything under that skill's own `skills/<name>/references/**`
+  -- either alone is enough; a change touching only `references/**` with no
+  `SKILL.md` edit still owes this disclosure, closing the gap where a
+  behavior-shaping references edit fell through both `drafting-a-skill`'s
+  own delegation trigger and this gate's own `paths:` list (branch plan
+  row 2, refs #1794/#1795's own references-only edit as the motivating
+  case). Disclosing "RAN" or "NOT-RUN" here means a `drafting-a-skill`
+  dispatch happened, or was judged unnecessary (e.g. a typo-only touch) --
+  not that its own output passed any review; that stays
+  `battle-testing-a-skill`/`evaluating-skill-quality`'s job when a SKILL.md
+  itself changed.
+
+  The only row whose grading draws on two independent CLI-supplied lists
+  rather than one: `gitapex_compute_skill_audit_flags.py` computes the
+  SKILL.md side (`changed_skill_md_skills` -- every skill whose own
+  SKILL.md changed, unconditionally, unlike the narrower
+  `description_changed_skills`/`security_relevant_skills`) and the
+  references side (`changed_reference_skills`) as two separate signals, on
+  purpose: `changed_reference_skills` also independently drives
+  `compute_flags()`'s own applicability test (a references-only diff must
+  make the whole gate applicable even with no SKILL.md line at all), so it
+  cannot be pre-unioned with the SKILL.md list upstream without losing that
+  independent meaning -- the same reasoning `changed_checker_or_gate_scripts`
+  above documents for why *that* union gets its own field rather than
+  overloading either constituent. `_ProcessDisclosureCheck.extra_cli_flag`/
+  `extra_cli_dest` exist for exactly this one row; every other row in this
+  table leaves them at their default (`None`) and is graded from `cli_dest`
+  alone, same as before this addition.
+
 Issue #874: the same applicability facts can now be computed locally,
 before a push, via `--check-diff BASE_REF HEAD_REF --body-file PATH`. That
 mode calls `gitapex_compute_skill_audit_flags.py` -- the module the CI
@@ -274,7 +308,42 @@ _EVAL_COVERAGE_WAIVER_RE = _waived_pattern(_EVAL_COVERAGE_CHECK_NAME)
 # workflow fails there rather than shipping a green no-op.
 _ProcessDisclosureCheck = collections.namedtuple(
     "_ProcessDisclosureCheck",
-    ["name", "cli_flag", "cli_dest", "help_text", "fail_subject", "fail_hint", "verdicts"],
+    [
+        "name",
+        "cli_flag",
+        "cli_dest",
+        "help_text",
+        "fail_subject",
+        "fail_hint",
+        "verdicts",
+        # Issue #1796: optional second source, defaulting to None for every
+        # existing row. `drafting-a-skill-invocation-disclosure` is the only
+        # row that sets these -- see its own comment below for why one row
+        # needs two independent lists rather than one.
+        #
+        # Deliberately NOT wired into argparse via a per-row loop the way
+        # `cli_flag`/`cli_dest` are below: `gitapex_gate_registry_wiring.py`
+        # discovers registry flags by statically parsing this very tuple
+        # literal for a `cli_flag=<string literal>` keyword on each element
+        # -- it has no matching rule for `extra_cli_flag`, and a call built
+        # from an attribute expression (`parser.add_argument(check.extra_cli_flag,
+        # ...)`) is invisible to that scanner's own hardcoded-flag rule too
+        # (which requires a literal first positional argument). `main()`
+        # below therefore registers `--changed-skill-md-skills` as an
+        # ordinary hardcoded `add_argument` call instead, the same shape its
+        # own `--description-changed-skills`/`--needs-eval-coverage-skills`
+        # siblings already use -- confirmed live: the dynamic form left
+        # `gitapex_gate_registry_wiring.py`'s own `find_orphaned_flags`
+        # reporting this flag as unknown to the script, a real drift-gate
+        # regression this comment exists to prevent recurring. These two
+        # fields stay on the row purely for this module's own generic
+        # grading (`_process_disclosure_items`, `_LIST_FLAG_DESTS`) and for
+        # the wiring tests that pin them against the workflow and the
+        # hardcoded `add_argument` call agreeing.
+        "extra_cli_flag",
+        "extra_cli_dest",
+    ],
+    defaults=(None, None),
 )
 
 _PROCESS_DISCLOSURE_VERDICTS = ("RAN", "NOT-RUN")
@@ -396,6 +465,27 @@ _PROCESS_DISCLOSURE_CHECKS = (
         fail_hint=(
             ", disclosing whether at least one test was constructed specifically to defeat "
             "(not merely exercise the happy path of) the new or changed detection logic"
+        ),
+        verdicts=_PROCESS_DISCLOSURE_VERDICTS,
+    ),
+    # Issue #1796: the only row graded from two independent lists rather
+    # than one -- see this module's own docstring section for why. Either
+    # list alone makes this row's disclosure required; `_process_disclosure_items`
+    # unions them before grading.
+    _ProcessDisclosureCheck(
+        name="drafting-a-skill-invocation-disclosure",
+        cli_flag="--changed-reference-skills",
+        cli_dest="changed_reference_skills",
+        extra_cli_flag="--changed-skill-md-skills",
+        extra_cli_dest="changed_skill_md_skills",
+        help_text=(
+            "Comma-separated skill names (skills/<name>/) whose own "
+            "references/** was added or modified in this diff (issue #1796)."
+        ),
+        fail_subject="changed skill (SKILL.md and/or references/** touched)",
+        fail_hint=(
+            ", disclosing whether a drafting-a-skill invocation was dispatched for this "
+            "skill's own change, or naming why one was not needed (e.g. a typo-only touch)"
         ),
         verdicts=_PROCESS_DISCLOSURE_VERDICTS,
     ),
@@ -557,13 +647,38 @@ def find_missing_defeat_test_disclosure(body_text: str | None, changed_checker_o
     )
 
 
+def find_missing_drafting_a_skill_invocation_disclosure(
+    body_text: str | None,
+    changed_skill_md_skills: list[str],
+    changed_reference_skills: list[str],
+) -> list[str]:
+    """Return the sorted union of changed_skill_md_skills and
+    changed_reference_skills unless the PR body discloses
+    drafting-a-skill-invocation-disclosure via a RAN/NOT-RUN/WAIVED line
+    (issue #1796); else [].
+
+    Two list parameters, not one: this is the only process-disclosure check
+    whose applicability is "either of two independent facts", so it is the
+    only `find_missing_*` wrapper here that does not delegate straight to
+    `_find_missing_disclosure` with a single caller-supplied list -- see the
+    registry row's own comment for why the two facts stay separate signals
+    upstream rather than being pre-unioned by the flag computer.
+    """
+    combined = sorted(set(changed_skill_md_skills) | set(changed_reference_skills))
+    return _find_missing_disclosure(
+        body_text, combined, _PROCESS_DISCLOSURE_LINE_RES["drafting-a-skill-invocation-disclosure"]
+    )
+
+
 def _parse_comma_list(raw: str | None) -> list[str]:
     """Comma-separated tokens -> a sorted, deduped list with no empty items.
 
     Deliberately named for the wire format rather than for skill names:
-    only two of this CLI's six list-valued flags carry skill names. The
-    other four (`--changed-design-docs`, `--changed-checker-scripts`,
-    `--changed-gate-scripts`, `--changed-checker-or-gate-scripts`) carry
+    only three of this CLI's eight list-valued flags carry skill names. The
+    other five (`--changed-design-docs`, `--changed-checker-scripts`,
+    `--changed-gate-scripts`, `--changed-checker-or-gate-scripts`,
+    `--changed-reference-skills` -- the last a skill name too, but grouped
+    here by count rather than re-split into two clauses) carry
     repository-relative file paths, so a skill-name-specific contract here
     would misdescribe most call sites and point a reader auditing path
     handling at the wrong abstraction.
@@ -579,6 +694,21 @@ def _parse_comma_list(raw: str | None) -> list[str]:
     return sorted({item.strip() for item in (raw or "").split(",") if item.strip()})
 
 
+def _process_disclosure_items(args: argparse.Namespace, check: _ProcessDisclosureCheck) -> list[str]:
+    """The deduped, sorted item list `check` grades against.
+
+    `check.cli_dest` alone for every row except
+    `drafting-a-skill-invocation-disclosure`, whose own `extra_cli_dest` is
+    unioned in -- the same union `find_missing_drafting_a_skill_invocation_disclosure`
+    performs directly for a caller supplying both lists by hand; this is
+    the `args`-driven path `main()` uses instead.
+    """
+    items = set(_parse_comma_list(getattr(args, check.cli_dest)))
+    if check.extra_cli_dest:
+        items |= set(_parse_comma_list(getattr(args, check.extra_cli_dest)))
+    return sorted(items)
+
+
 # Every list-valued applicability flag, by argparse dest. Issue #874's
 # --check-diff mode fills these from
 # `gitapex_compute_skill_audit_flags.SkillAuditFlags`, whose field names
@@ -586,11 +716,15 @@ def _parse_comma_list(raw: str | None) -> list[str]:
 # correspondence rather than assuming it, so renaming a field on one side
 # fails loudly instead of silently leaving a check un-fired -- the same
 # fail-open class `tests/test_gitapex_skill_audit_gate_workflow_wiring.py`
-# guards for the workflow half of the wiring.
+# guards for the workflow half of the wiring. Issue #1796 adds the second
+# comprehension: `extra_cli_dest` is only set on one row today, but is
+# read generically here (not hardcoded to that row's own name) so a future
+# second two-source row is covered with no edit to this line.
 _LIST_FLAG_DESTS = (
     "description_changed_skills",
     "needs_eval_coverage_skills",
     *(check.cli_dest for check in _PROCESS_DISCLOSURE_CHECKS),
+    *(check.extra_cli_dest for check in _PROCESS_DISCLOSURE_CHECKS if check.extra_cli_dest),
 )
 
 
@@ -681,7 +815,7 @@ def _apply_check_diff(args: argparse.Namespace) -> int | None:
 def main(argv: list[str] | None = None) -> int:
     """CLI: exit 0 iff the given PR body discloses every applicable check --
     the two #248 audits when a SKILL.md changed, the two #427
-    description-change-only checks, and each #517/#565/#673/#998
+    description-change-only checks, and each #517/#565/#673/#998/#1796
     process-disclosure check the workflow flags as applicable -- else 1.
     """
     parser = argparse.ArgumentParser(
@@ -730,6 +864,20 @@ def main(argv: list[str] | None = None) -> int:
     for check in _PROCESS_DISCLOSURE_CHECKS:
         parser.add_argument(check.cli_flag, dest=check.cli_dest, default="", help=check.help_text)
     parser.add_argument(
+        # Issue #1796: `drafting-a-skill-invocation-disclosure`'s own
+        # extra_cli_flag/extra_cli_dest, registered as an ordinary hardcoded
+        # flag rather than from the loop above -- see the registry row's
+        # own comment for why. This literal string and dest must keep
+        # matching that row's `extra_cli_flag`/`extra_cli_dest` values;
+        # `test_extra_cli_flag_is_a_real_registered_argument` pins the
+        # correspondence.
+        "--changed-skill-md-skills",
+        dest="changed_skill_md_skills",
+        default="",
+        help="Comma-separated skill names (skills/<name>/) whose own "
+        "SKILL.md was added or modified in this diff (issue #1796).",
+    )
+    parser.add_argument(
         "--skill-md-changed",
         action="store_true",
         help="Set when this diff adds or modifies at least one "
@@ -758,11 +906,11 @@ def main(argv: list[str] | None = None) -> int:
         if early_exit is not None:
             return early_exit
 
-    # Normalize and extract once, then grade all eight checks against the
+    # Normalize and extract once, then grade all nine checks against the
     # result. Each `find_missing_*` wrapper re-derives this from the raw
     # body on its own, which is correct for a single-check caller (and for
     # the tests, which call them by name) but would repeat two string
-    # copies and two regex searches eight times here.
+    # copies and two regex searches nine times here.
     section = _extract_section(_normalize_body(body_text))
 
     missing = _missing_base_disclosures(section) if args.skill_md_changed else []
@@ -773,7 +921,7 @@ def main(argv: list[str] | None = None) -> int:
     process_disclosure_missing = {
         check.name: _missing_in_section(
             section,
-            _parse_comma_list(getattr(args, check.cli_dest)),
+            _process_disclosure_items(args, check),
             _PROCESS_DISCLOSURE_LINE_RES[check.name],
         )
         for check in _PROCESS_DISCLOSURE_CHECKS

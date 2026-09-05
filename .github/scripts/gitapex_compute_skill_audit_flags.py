@@ -80,6 +80,26 @@ and therefore needs a scope neither existing signal alone covers (a
 `hooks/check-*.sh` gate matches `changed_gate_scripts` but no
 checker-script glob; see `2026-08-10-defeat-test-disclosure-design.md`).
 
+Issue #1796: adds two more skill-name signals, both consumed by
+`gitapex_gate_skill_audit_disclosure.py`'s new
+`drafting-a-skill-invocation-disclosure` check --
+
+- `changed_reference_skills`: skill names whose own `skills/<name>/references/**`
+  was added or modified in this diff. Widens this gate's own scope to match
+  `drafting-a-skill`'s own delegation trigger, which issue #1796 also widened
+  to `references/**` (a behavior-shaping references edit used to fall
+  through both triggers entirely -- see the branch plan's row 2).
+- `changed_skill_md_skills`: every skill whose own `SKILL.md` was added or
+  modified in this diff -- unconditionally, unlike `description_changed_skills`
+  (narrower: only a frontmatter `description:` edit) or
+  `security_relevant_skills` (narrower still: only a keyword match). Exists
+  because `drafting-a-skill-invocation-disclosure` must fire for *either*
+  signal (a SKILL.md touch or a references touch) and grades a real
+  skill-name list either way, following the same collector pattern
+  `_collect_paths` already uses for design docs and checker scripts rather
+  than boolean `skill_md_changed` alone -- see that check's own registry-row
+  comment for why one row needs two independent list sources.
+
 Usage::
 
     uv run --frozen python3 gitapex_compute_skill_audit_flags.py \\
@@ -123,6 +143,8 @@ OUTPUT_KEYS = (
     "changed-checker-scripts",
     "changed-gate-scripts",
     "changed-checker-or-gate-scripts",
+    "changed-reference-skills",
+    "changed-skill-md-skills",
     "skill-md-changed",
 )
 
@@ -140,6 +162,14 @@ _CHECKER_SCRIPT_SHAPE_RE = re.compile(
 )
 _SKILL_MD_PATH_RE = re.compile(r"skills/([^/]+)/SKILL\.md")
 _SKILL_NAME_RE = re.compile(r"[A-Za-z0-9_-]+")
+# Issue #1796: unlike the design-doc/checker-script shapes above, a
+# reference file's own depth under `references/` is unconstrained (a skill
+# may nest its references in subdirectories), so this shape deliberately
+# does not enforce single-level-only the way `_DESIGN_DOC_SHAPE_RE` does --
+# there is no "unsupported shape" case here to hard-fail loudly on, only
+# the skill-directory-name validation `_skill_name` already applies to
+# every other signal's captured group.
+_REFERENCE_PATH_RE = re.compile(r"skills/([^/]+)/references/.+")
 
 _SKILL_MD_PATHSPECS = ("skills/*/SKILL.md",)
 # No `:(glob)`, deliberately -- see this module's docstring.
@@ -149,6 +179,12 @@ _CHECKER_SCRIPT_PATHSPECS = (
     ":(glob)evals/scripts/*.py",
     ":(glob).github/scripts/*.py",
 )
+# No `:(glob)`, deliberately, same reason as the design-doc pathspec above:
+# a plain `*` crosses `/` in git's default pathspec syntax, which is exactly
+# what lets one entry reach `references/` content at any depth (confirmed
+# live: `git diff --name-status -- "skills/*/references/*"` matches a
+# `skills/foo/references/sub/deep.md` two levels down).
+_REFERENCE_PATHSPECS = ("skills/*/references/*",)
 
 _EXCLUDED_STATUS_RE = re.compile(r"(D|R100)\s")
 
@@ -174,6 +210,8 @@ class SkillAuditFlags:
     changed_checker_scripts: tuple[str, ...] = ()
     changed_gate_scripts: tuple[str, ...] = ()
     changed_checker_or_gate_scripts: tuple[str, ...] = ()
+    changed_reference_skills: tuple[str, ...] = ()
+    changed_skill_md_skills: tuple[str, ...] = ()
 
     def as_output_pairs(self) -> list[tuple[str, str]]:
         """The `$GITHUB_OUTPUT` key/value pairs, in `OUTPUT_KEYS` order."""
@@ -186,6 +224,8 @@ class SkillAuditFlags:
             ("changed-checker-scripts", ",".join(self.changed_checker_scripts)),
             ("changed-gate-scripts", ",".join(self.changed_gate_scripts)),
             ("changed-checker-or-gate-scripts", ",".join(self.changed_checker_or_gate_scripts)),
+            ("changed-reference-skills", ",".join(self.changed_reference_skills)),
+            ("changed-skill-md-skills", ",".join(self.changed_skill_md_skills)),
             ("skill-md-changed", _bool_text(self.skill_md_changed)),
         ]
 
@@ -345,14 +385,20 @@ def _collect_gate_scripts(repo_root: pathlib.Path, base_ref: str, head_ref: str)
         ) from error
 
 
-def _skill_name(new_path: str) -> str:
-    """The `skills/<name>/SKILL.md` directory name, validated.
+def _skill_name(new_path: str, path_re: re.Pattern[str] = _SKILL_MD_PATH_RE) -> str:
+    """The `skills/<name>/...` directory name, validated.
 
     A PR author fully controls this directory name in their own diff and it
     reaches both `$GITHUB_OUTPUT` and a comma-split downstream, so an
     unexpected shape is a hard error rather than a trusted passthrough.
+
+    `path_re` defaults to the `SKILL.md` shape (every existing caller's own
+    use); issue #1796 passes `_REFERENCE_PATH_RE` instead for a
+    `references/**` path, since both shapes capture the skill name as the
+    same first group and both need the same `_SKILL_NAME_RE` validation --
+    one function, not a second near-duplicate.
     """
-    match = _SKILL_MD_PATH_RE.fullmatch(new_path)
+    match = path_re.fullmatch(new_path)
     skill = match.group(1) if match else new_path
     if not _SKILL_NAME_RE.fullmatch(skill):
         raise FlagComputationError(f"unsupported skill directory name for signal computation: {new_path}")
@@ -464,13 +510,20 @@ def compute_flags(
     # report `applicable=false`. It is also the only term here that can be
     # non-empty for a pure deletion.
     gate_scripts = _collect_gate_scripts(repo_root, base_ref, head_ref)
+    # Issue #1796: independent of skill_md_lines below for the same reason
+    # gate_scripts is independent of checker_lines above -- a
+    # references-only change with no SKILL.md touched must still make this
+    # diff applicable, not silently skip the whole gate.
+    reference_lines, reference_paths = _collect_paths(
+        repo_root, base_ref, head_ref, "reference file", _REFERENCE_PATH_RE, _REFERENCE_PATHSPECS
+    )
 
-    if not (skill_md_lines or design_doc_lines or checker_lines or gate_scripts):
+    if not (skill_md_lines or design_doc_lines or checker_lines or gate_scripts or reference_lines):
         print(
-            "No added/modified skills/*/SKILL.md, docs/superpowers/specs/*.md "
-            "or docs/gitapex/specs/*.md, or deterministic checker script, "
-            "and no changed deterministic gate, in this diff; skipping "
-            "disclosure check.",
+            "No added/modified skills/*/SKILL.md, skills/*/references/**, "
+            "docs/superpowers/specs/*.md or docs/gitapex/specs/*.md, or "
+            "deterministic checker script, and no changed deterministic "
+            "gate, in this diff; skipping disclosure check.",
             file=sys.stderr,
         )
         return SkillAuditFlags(applicable=False)
@@ -482,6 +535,16 @@ def compute_flags(
     description_changed, needs_eval_coverage, security_relevant = _skill_signals(
         repo_root, base_ref, head_ref, skill_md_lines
     )
+    # Every SKILL.md-changed skill, unconditionally -- unlike
+    # description_changed above (narrower: only a frontmatter description
+    # edit). Re-derives the skill name from the same already-validated
+    # skill_md_lines rather than threading a fourth return value through
+    # _skill_signals, which stays scoped to the three signals its own git
+    # reads (merge-base description diff, security-relevance) compute.
+    changed_skill_md_skills = tuple(
+        dict.fromkeys(_skill_name(_parse_name_status_line(line)[2]) for line in skill_md_lines)
+    )
+    changed_reference_skills = tuple(dict.fromkeys(_skill_name(path, _REFERENCE_PATH_RE) for path in reference_paths))
     return SkillAuditFlags(
         applicable=True,
         skill_md_changed=bool(skill_md_lines),
@@ -492,6 +555,8 @@ def compute_flags(
         changed_checker_scripts=tuple(checker_scripts),
         changed_gate_scripts=tuple(gate_scripts),
         changed_checker_or_gate_scripts=tuple(sorted(set(checker_scripts) | set(gate_scripts))),
+        changed_reference_skills=changed_reference_skills,
+        changed_skill_md_skills=changed_skill_md_skills,
     )
 
 

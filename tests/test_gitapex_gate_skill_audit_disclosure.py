@@ -1037,6 +1037,208 @@ def test_defeat_test_disclosure_check_is_not_required_when_no_path_changed(monke
     assert gate.main(["--changed-design-docs", "foo.md", "--changed-checker-or-gate-scripts", ""]) == 0
 
 
+# --- Issue #1796: find_missing_drafting_a_skill_invocation_disclosure ---
+#
+# The only process-disclosure check graded from two independent lists
+# rather than one: a skill's own SKILL.md change and a change under that
+# skill's own references/** are two separate signals upstream (the second
+# also independently drives compute_flags()'s own applicability test), so
+# either alone must require this disclosure -- see the registry row's own
+# comment for why they are not pre-unioned into one field before reaching
+# here.
+
+
+def test_drafting_a_skill_invocation_disclosure_not_required_when_both_lists_empty():
+    assert gate.find_missing_drafting_a_skill_invocation_disclosure("anything, no section", [], []) == []
+
+
+def test_missing_drafting_a_skill_invocation_disclosure_reported_for_skill_md_only():
+    """Required case (a): a SKILL.md-only change with no disclosure fails."""
+    body = "# My PR\n\nNo evidence section at all.\n"
+    assert gate.find_missing_drafting_a_skill_invocation_disclosure(body, ["foo"], []) == ["foo"]
+
+
+def test_missing_drafting_a_skill_invocation_disclosure_reported_for_references_only():
+    """Required case (b): a references-only change with no disclosure fails."""
+    body = "# My PR\n\nNo evidence section at all.\n"
+    assert gate.find_missing_drafting_a_skill_invocation_disclosure(body, [], ["foo"]) == ["foo"]
+
+
+def test_missing_drafting_a_skill_invocation_disclosure_reported_with_no_line():
+    assert gate.find_missing_drafting_a_skill_invocation_disclosure(_VALID_SECTION, ["foo"], []) == ["foo"]
+
+
+def test_drafting_a_skill_invocation_disclosure_unions_both_sources_sorted_and_deduped():
+    body = "# My PR\n\nNo evidence section at all.\n"
+    assert gate.find_missing_drafting_a_skill_invocation_disclosure(body, ["foo", "bar"], ["bar", "baz"]) == [
+        "bar",
+        "baz",
+        "foo",
+    ]
+
+
+@pytest.mark.parametrize("verdict", ["RAN", "NOT-RUN", "ran", "not-run"])
+def test_drafting_a_skill_invocation_disclosure_accepts_its_own_verdict_vocabulary(verdict):
+    """Required case (c): RAN or NOT-RUN both satisfy the check -- the
+    honest-NOT-RUN escape hatch for a typo-only touch that never dispatched
+    drafting-a-skill."""
+    body = _VALID_SECTION + f"- drafting-a-skill-invocation-disclosure: {verdict}\n"
+    assert gate.find_missing_drafting_a_skill_invocation_disclosure(body, ["foo"], ["bar"]) == []
+
+
+def test_drafting_a_skill_invocation_disclosure_waiver_satisfies_check():
+    body = _VALID_SECTION + "- drafting-a-skill-invocation-disclosure: WAIVED: typo-only touch\n"
+    assert gate.find_missing_drafting_a_skill_invocation_disclosure(body, ["foo"], []) == []
+
+
+def test_drafting_a_skill_invocation_disclosure_bare_waiver_with_no_reason_does_not_satisfy():
+    body = _VALID_SECTION + "- drafting-a-skill-invocation-disclosure: WAIVED\n"
+    assert gate.find_missing_drafting_a_skill_invocation_disclosure(body, [], ["foo"]) == ["foo"]
+
+
+def test_drafting_a_skill_invocation_disclosure_unrecognized_verdict_does_not_satisfy():
+    body = _VALID_SECTION + "- drafting-a-skill-invocation-disclosure: MAYBE\n"
+    assert gate.find_missing_drafting_a_skill_invocation_disclosure(body, ["foo"], []) == ["foo"]
+
+
+@pytest.mark.parametrize(
+    "check", [c for c in gate._PROCESS_DISCLOSURE_CHECKS if c.extra_cli_flag], ids=lambda c: c.name
+)
+def test_extra_cli_flag_is_a_real_registered_argument(check):
+    """The row's own extra_cli_flag is registered as an ordinary hardcoded
+    `add_argument` call, not via the per-row loop
+    (`gitapex_gate_registry_wiring.py`'s own static scan cannot see a
+    dynamic `parser.add_argument(check.extra_cli_flag, ...)` call -- see the
+    registry row's own comment). This pins that the row's declared string
+    and the hardcoded call agree: argparse exits 2 with "unrecognized
+    arguments" for a flag nothing registers, never 0 or 1.
+    """
+    code = gate.main([check.extra_cli_flag, "x", "--body", "/dev/null"])
+    assert code in (0, 1), f"{check.extra_cli_flag} was not accepted by argparse (exit {code})"
+
+
+def test_drafting_a_skill_invocation_disclosure_does_not_satisfy_battle_testing_a_skill():
+    """Independent claims about the same diff -- a drafting-a-skill line
+    must not silently stand in for the two base audit checks."""
+    body = _VALID_SECTION.replace("battle-testing-a-skill: PASS", "") + (
+        "- drafting-a-skill-invocation-disclosure: RAN\n"
+    )
+    assert gate.find_missing_disclosures(body) == ["battle-testing-a-skill"]
+
+
+# --- Issue #1796: main() integration -- the four required cases ---
+
+
+def test_main_fails_when_only_skill_md_changed_and_undisclosed(monkeypatch, capsys):
+    """Required case (a): SKILL.md changed only, no disclosure -> FAIL."""
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_VALID_SECTION.encode("utf-8")))
+    assert gate.main(["--changed-skill-md-skills", "foo"]) == 1
+    err = capsys.readouterr().err
+    assert "drafting-a-skill-invocation-disclosure" in err
+    assert "foo" in err
+
+
+def test_main_fails_when_only_references_changed_and_undisclosed(monkeypatch, capsys):
+    """Required case (b): references changed only, no disclosure -> FAIL."""
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_VALID_SECTION.encode("utf-8")))
+    assert gate.main(["--changed-reference-skills", "foo"]) == 1
+    err = capsys.readouterr().err
+    assert "drafting-a-skill-invocation-disclosure" in err
+    assert "foo" in err
+
+
+@pytest.mark.parametrize("verdict", ["RAN", "NOT-RUN"])
+def test_main_passes_when_both_are_disclosed(monkeypatch, capsys, verdict):
+    """Required case (c): both SKILL.md and references changed, disclosed
+    via either RAN or NOT-RUN -> PASS."""
+    body = _VALID_SECTION + f"- drafting-a-skill-invocation-disclosure: {verdict}\n"
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
+    assert gate.main(["--changed-skill-md-skills", "foo", "--changed-reference-skills", "bar"]) == 0
+
+
+def test_main_skips_the_check_when_neither_source_is_populated(monkeypatch, capsys):
+    """Required case (d): an inapplicable change (neither source populated)
+    is SKIPPED -- no disclosure required, so an otherwise-empty body still
+    passes, same shape as `test_gate_quality_check_is_not_required_when_no_gate_script_changed`
+    and `test_defeat_test_disclosure_check_is_not_required_when_no_path_changed`."""
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_VALID_SECTION.encode("utf-8")))
+    assert gate.main(["--changed-skill-md-skills", "", "--changed-reference-skills", ""]) == 0
+    assert "PASS" in capsys.readouterr().out
+
+
+def test_main_reports_skill_md_and_reference_failures_together_as_one_union(monkeypatch, capsys):
+    """A diff touching both a different skill's SKILL.md and another
+    skill's references/** in the same PR owes one union list, not two
+    separate FAIL blocks."""
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(_VALID_SECTION.encode("utf-8")))
+    assert gate.main(["--changed-skill-md-skills", "foo", "--changed-reference-skills", "bar"]) == 1
+    err = capsys.readouterr().err
+    assert "drafting-a-skill-invocation-disclosure" in err
+    assert "bar" in err
+    assert "foo" in err
+
+
+# --- Issue #1796: --check-diff end-to-end, live fail-closed demonstration ---
+
+
+def _add_reference_file(repo):
+    target = repo / "skills" / "sample" / "references" / "notes.md"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("# notes\n", encoding="utf-8")
+    _commit_all(repo, "add reference")
+
+
+def test_check_diff_fails_on_an_undisclosed_reference_only_change(tmp_path, capsys):
+    repo = _init_repo(tmp_path / "repo")
+    _add_reference_file(repo)
+    code = gate.main(
+        [
+            "--check-diff",
+            "HEAD~1",
+            "HEAD",
+            "--repo-root",
+            str(repo),
+            "--body-file",
+            _body_file(tmp_path, "# no evidence section\n"),
+        ]
+    )
+    assert code == 1
+    assert "drafting-a-skill-invocation-disclosure" in capsys.readouterr().err
+
+
+def test_check_diff_passes_once_the_reference_only_change_is_disclosed(tmp_path, capsys):
+    repo = _init_repo(tmp_path / "repo")
+    _add_reference_file(repo)
+    body = "## Skill audit evidence\n\n- drafting-a-skill-invocation-disclosure: NOT-RUN\n"
+    code = gate.main(
+        ["--check-diff", "HEAD~1", "HEAD", "--repo-root", str(repo), "--body-file", _body_file(tmp_path, body)]
+    )
+    assert code == 0, capsys.readouterr().err
+
+
+def test_check_diff_skips_the_check_for_an_unrelated_diff(tmp_path, capsys):
+    """Required case (d) end-to-end: an inapplicable diff (no SKILL.md,
+    references/**, design doc, checker script, or gate touched) is SKIPPED
+    at the whole-gate level -- the documented pre-push command's own PASS
+    message, with no evidence section required at all."""
+    repo = _init_repo(tmp_path / "repo")
+    (repo / "README.md").write_text("hi\n", encoding="utf-8")
+    _commit_all(repo, "unrelated")
+    code = gate.main(
+        [
+            "--check-diff",
+            "HEAD~1",
+            "HEAD",
+            "--repo-root",
+            str(repo),
+            "--body-file",
+            _body_file(tmp_path, "nothing"),
+        ]
+    )
+    assert code == 0
+    assert "triggers no skill-audit disclosure requirement" in capsys.readouterr().out
+
+
 # --- issue #874: the local --check-diff mode ---
 #
 # Exercised by direct import rather than only through the subprocess suite

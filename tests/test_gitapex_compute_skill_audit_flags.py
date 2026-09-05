@@ -261,6 +261,89 @@ def test_checker_or_gate_union_includes_a_gate_path_no_checker_glob_matches(repo
     assert flags.changed_checker_or_gate_scripts == ("hooks/check-thing.sh",)
 
 
+def test_a_changed_reference_file_is_applicable_without_any_skill_md(repo: pathlib.Path) -> None:
+    """Issue #1796: a references-only touch must not fall through this
+    signal the way it used to fall through both this gate's `paths:`
+    trigger and `drafting-a-skill`'s own delegation trigger."""
+    _write(repo, "skills/sample/references/notes.md", "# notes\n")
+    _commit(repo)
+    flags = _flags(repo)
+    assert flags.applicable is True
+    assert flags.skill_md_changed is False
+    assert flags.changed_reference_skills == ("sample",)
+    assert flags.changed_skill_md_skills == ()
+
+
+def test_a_nested_reference_file_is_detected(repo: pathlib.Path) -> None:
+    """Unlike the design-doc/checker-script shapes, references/** depth is
+    unconstrained -- a nested reference file must not be dropped or
+    hard-fail."""
+    _write(repo, "skills/sample/references/sub/deep.md", "# deep\n")
+    _commit(repo)
+    assert _flags(repo).changed_reference_skills == ("sample",)
+
+
+def test_multiple_reference_files_in_one_skill_are_deduped(repo: pathlib.Path) -> None:
+    _write(repo, "skills/sample/references/a.md", "# a\n")
+    _write(repo, "skills/sample/references/b.md", "# b\n")
+    _commit(repo)
+    assert _flags(repo).changed_reference_skills == ("sample",)
+
+
+def test_a_deleted_reference_file_alone_is_not_applicable(repo: pathlib.Path) -> None:
+    """The same D/R100 exclusion every other collected-path signal applies."""
+    _write(repo, "skills/sample/references/notes.md", "# notes\n")
+    _commit(repo, "add")
+    base = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    _git(repo, "rm", "-q", "skills/sample/references/notes.md")
+    _commit(repo, "delete")
+    flags = _flags(repo, base=base)
+    assert flags.applicable is False
+    assert flags.changed_reference_skills == ()
+
+
+def test_changed_skill_md_skills_is_populated_even_without_a_description_change(repo: pathlib.Path) -> None:
+    """Issue #1796: unconditional, unlike description_changed_skills --
+    drafting-a-skill-invocation-disclosure must fire for a body-only edit
+    too, not only a frontmatter description change."""
+    _write(repo, "skills/sample/SKILL.md", SKILL_MD)
+    _commit(repo, "add")
+    base = _git(repo, "rev-parse", "HEAD").stdout.strip()
+    _write(repo, "skills/sample/SKILL.md", SKILL_MD + "\nMore body text.\n")
+    _commit(repo, "body only")
+    flags = _flags(repo, base=base)
+    assert flags.description_changed_skills == ()
+    assert flags.changed_skill_md_skills == ("sample",)
+
+
+def test_reference_and_skill_md_signals_are_independent(repo: pathlib.Path) -> None:
+    _write(repo, "skills/sample/SKILL.md", SKILL_MD)
+    _write(repo, "skills/other/references/notes.md", "# notes\n")
+    _commit(repo)
+    flags = _flags(repo)
+    assert flags.changed_skill_md_skills == ("sample",)
+    assert flags.changed_reference_skills == ("other",)
+
+
+def test_an_unrelated_diff_leaves_the_new_signals_empty_too(repo: pathlib.Path) -> None:
+    """The SKIPPED case: an inapplicable diff must not report either new
+    signal, matching the workflow's own check step being skipped
+    (`if: steps.diff.outputs.applicable == 'true'`)."""
+    _write(repo, "README.md")
+    _commit(repo)
+    flags = _flags(repo)
+    assert flags.applicable is False
+    assert flags.changed_reference_skills == ()
+    assert flags.changed_skill_md_skills == ()
+
+
+def test_an_unsupported_skill_directory_name_under_references_is_an_error(repo: pathlib.Path) -> None:
+    _write(repo, "skills/bad name/references/x.md", "# x\n")
+    _commit(repo)
+    with pytest.raises(flags_module.FlagComputationError, match="unsupported skill directory name"):
+        _flags(repo)
+
+
 def test_checker_or_gate_union_combines_both_signals_sorted_and_deduped(repo: pathlib.Path) -> None:
     _write(repo, "skills/foo/scripts/gitapex_check_thing.py")
     _write(repo, "hooks/check-thing.sh")

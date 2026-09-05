@@ -18,6 +18,12 @@ on:
     # ran and passed on it (check run 91426145937 of run 30721581500).
     paths:
       - "skills/**/SKILL.md"
+      # Issue #1796: a behavior-shaping skills/<name>/references/** edit
+      # used to fall through this trigger entirely -- neither this path
+      # list nor drafting-a-skill's own delegation trigger (widened in
+      # lockstep by that issue's branch plan row 2) covered it, so the
+      # references-only case (refs #1794/#1795) reached neither gate.
+      - "skills/**/references/**"
       - "docs/superpowers/specs/*.md"
       - "docs/gitapex/specs/*.md"
       - "skills/*/scripts/*.py"
@@ -99,6 +105,8 @@ jobs:
           CHANGED_CHECKER_SCRIPTS: ${{ steps.diff.outputs.changed-checker-scripts }}
           CHANGED_GATE_SCRIPTS: ${{ steps.diff.outputs.changed-gate-scripts }}
           CHANGED_CHECKER_OR_GATE_SCRIPTS: ${{ steps.diff.outputs.changed-checker-or-gate-scripts }}
+          CHANGED_REFERENCE_SKILLS: ${{ steps.diff.outputs.changed-reference-skills }}
+          CHANGED_SKILL_MD_SKILLS: ${{ steps.diff.outputs.changed-skill-md-skills }}
           SKILL_MD_CHANGED: ${{ steps.diff.outputs.skill-md-changed }}
         run: |
           set -euo pipefail
@@ -114,4 +122,6 @@ jobs:
             --changed-checker-scripts "$CHANGED_CHECKER_SCRIPTS" \
             --changed-gate-scripts "$CHANGED_GATE_SCRIPTS" \
             --changed-checker-or-gate-scripts "$CHANGED_CHECKER_OR_GATE_SCRIPTS" \
+            --changed-reference-skills "$CHANGED_REFERENCE_SKILLS" \
+            --changed-skill-md-skills "$CHANGED_SKILL_MD_SKILLS" \
             "${skill_md_changed_flag[@]}"
