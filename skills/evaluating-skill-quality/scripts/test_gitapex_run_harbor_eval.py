@@ -128,3 +128,14 @@ def test_check_docker_daemon_down(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("subprocess.run", fake_run)
     problem = gitapex_run_harbor_eval.check_docker()
     assert problem is not None and "daemon" in problem
+
+
+def test_check_harbor_without_uv(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Missing uv binary fails harbor preflight with guidance, never a traceback."""
+
+    def fake_which(name: object) -> str | None:
+        return None if name == "uv" else "/usr/bin/docker"
+
+    monkeypatch.setattr("shutil.which", fake_which)
+    problem = gitapex_run_harbor_eval.check_harbor()
+    assert problem is not None and "uv" in problem

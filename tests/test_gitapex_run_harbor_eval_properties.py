@@ -49,6 +49,7 @@ def test_check_harbor_guidance(
     def fake_run(_cmd: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="")
 
+    monkeypatch.setattr("shutil.which", lambda _name: "/usr/bin/uv")
     monkeypatch.setattr("subprocess.run", fake_run)
     problem = gitapex_run_harbor_eval.check_harbor()
     assert problem is not None and "harbor" in problem

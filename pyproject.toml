@@ -277,6 +277,8 @@ module = [
     "test_gitapex_route_test_model",
     "test_gitapex_run_ablation",
     "test_gitapex_run_eval_suite",
+    "test_gitapex_run_harbor_eval",
+    "test_gitapex_run_harbor_eval_properties",
     "test_gitapex_scan_apm_lockfile_drift",
     "test_gitapex_scan_apm_manifest_drift",
     "test_gitapex_scan_retrospective_gate_drift",

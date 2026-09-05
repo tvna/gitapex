@@ -93,8 +93,10 @@ def check_docker() -> str | None:
 
 def check_harbor() -> str | None:
     """Return guidance text when harbor is unavailable, else None."""
+    if shutil.which("uv") is None:
+        return "uv not found on PATH. Install uv and retry."
     proc = subprocess.run(
-        ["uv", "run", "--group", "harbor", "harbor", "--version"],  # noqa: S607 -- PATH-resolved tool names only
+        ["uv", "run", "--group", "harbor", "harbor", "--version"],  # noqa: S607 -- PATH-resolved via shutil.which above
         capture_output=True,
         text=True,
     )
