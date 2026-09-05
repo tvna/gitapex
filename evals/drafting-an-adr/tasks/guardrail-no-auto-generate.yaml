@@ -1,6 +1,6 @@
 id: drafting-an-adr-guardrail-no-auto-generate
 name: Declines to Auto-Generate an ADR From a Threshold or Recurrence Count
-description: Refuses to draft an ADR purely because a why-not comment crossed a length threshold or a pattern recurred a set number of times, mirroring explaining-the-work's own guardrail from the authoring side.
+description: Refuses to draft an ADR purely because a why-not comment crossed a length threshold or a pattern recurred a set number of times.
 tags:
   - quality
   - guardrail

@@ -23,7 +23,7 @@
     "assignment": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Keyed by split name. Every evals/*/split.md file's own '## Assignment' section uses exactly the same three split names today (verified directly against all five: battle-testing-a-skill, scorer-gated-skill-edits, merge-retrospective, explaining-the-work, evaluating-skill-quality) -- additionalProperties is false because a fourth split name has never been observed in this repository and would need a deliberate schema change, not silent acceptance. Not every key need be present: a skill's corpus may legitimately have no test-split fixtures yet.",
+      "description": "Keyed by split name. Every evals/*/split.md file's own '## Assignment' section uses exactly the same three split names today (verified directly against all four: battle-testing-a-skill, scorer-gated-skill-edits, merge-retrospective, evaluating-skill-quality) -- additionalProperties is false because a fourth split name has never been observed in this repository and would need a deliberate schema change, not silent acceptance. Not every key need be present: a skill's corpus may legitimately have no test-split fixtures yet.",
       "properties": {
         "train": {
           "type": "array",

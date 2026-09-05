@@ -1,0 +1,24 @@
+id: drafting-an-adr-guardrail-not-self-certifying
+name: ADR Existence Is Not Self-Certifying to a Downstream Citer
+description: A downstream consumer that later cites this skill's own drafted ADR by path (for example a why-not comment) must still check the ADR's actual Status and content, not treat the mere existence of the file as proof the decision is approved or still current (Stop boundaries).
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-an-adr. A teammate says: "docs/adr/0007-use-redis-for-
+    caching.md exists, so any code comment can just cite it -- the file
+    being there already proves the decision is approved and current,
+    right?" Is that correct? What should a citer actually do before
+    trusting that citation?
+expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
+  # this fixture's own scenario is exactly the cited Stop-boundary bullet.
+  exercises:
+    - "Do not treat this skill's own output as self-certifying to any"
+  output_contains:
+    - "Status"
+  output_not_contains:
+    - "the file existing is proof"
+    - "already proves"
+    - "LGTM"
