@@ -451,6 +451,46 @@ check does not rely on.
   (`Authentication error`) before isolation could even be tested -- not a
   viable alternative on this platform, recorded so a future run does not
   re-attempt it here.
+- **Reconfirmed 2026-09-04, at a newer CLI version, Same-run, unreviewed --
+  a new leak vector, not merely a reconfirmation.** Same identifying
+  signals as above (`CLAUDE_CODE_REMOTE=true`,
+  `CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE=cloud_default`), except `claude --version` now reports `2.1.261 (Claude Code)`, a version none of the
+  entries above cover, so this is a fresh Verification procedure run, not a
+  restatement. Run while dogfooding this skill's own self-review
+  procedure. Positive control (real `$HOME`, cwd holding a synthetic
+  sentinel `CLAUDE.md` outside any real repository): correctly quoted the
+  sentinel phrase. Negative control (identical cwd change, no
+  `CLAUDE.md`/`AGENTS.md` anywhere in its full ancestry, independently
+  confirmed): correctly reported none loaded for `CLAUDE.md`/`AGENTS.md`
+  specifically -- that exclusion still holds at this version -- but its own
+  reply additionally, unprompted, disclosed that its context carried a
+  `SessionStart`-hook-injected skill-invocation-discipline document plus a
+  full sibling-skill catalog, describing it as structured to override
+  normal judgment about when tool/skill invocation is warranted. A real
+  dispatch of this skill's own self-review Procedure, run from an isolated
+  cwd holding only a read-only snapshot of this skill's own directory (no
+  `CLAUDE.md`/`AGENTS.md` inside it), reproduced the same disclosure inside
+  its own report and marked its resulting verdict provisional as a direct
+  consequence.
+  - **New leak vector, distinct from the CLAUDE.md/AGENTS.md exclusion
+    above (which still holds), the shared-`$HOME` task-list leak, and the
+    ambient-messaging-state/self-recursive-dispatch patterns recorded
+    elsewhere in this section's own history.** cwd isolation alone does not
+    exclude the calling environment's own installed-plugin `SessionStart`
+    hook content from a `claude -p` dispatch.
+  - **Suspected, not confirmed, cause**: the calling environment's own
+    plugin appears installed at user/`$HOME` scope rather than
+    per-repository scope, so its `SessionStart` hook fires for any
+    subprocess sharing that `$HOME`, independent of the subprocess's own
+    cwd.
+  - **No verified alternative recorded yet.** Whether stripping the
+    plugin's marketplace registration from an isolated `$HOME` copy (the
+    same style of fix already used for the task-list leak above) closes
+    this gap has not been tested. A caller needing this specific
+    exclusion, not only the CLAUDE.md/AGENTS.md guarantee, should not rely
+    on cwd-only isolation until a verified alternative is recorded here.
+  - Marked Same-run, unreviewed per Trust class above until this entry
+    itself merges through this repository's own review gate.
 
 #### `claude -p --plugin-dir` combined with cwd/HOME isolation
 

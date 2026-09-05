@@ -726,147 +726,230 @@ discipline](#contract-discipline) above) -- the three-level definition
 (Portable / Repository-scoped / Mixed) lives in `SKILL.md`, checkable
 without opening this file, precisely because establishing it is a cheap
 precondition step, not part of the expensive dimension walk. This
-section is the elaboration: why the classification is a design decision
-rather than a quality defect by default, and how each level changes
-grading below.
+section is the elaboration: the precise conditions and triggers behind
+each level, why the classification is a design decision rather than a
+quality defect by default, and how each level changes grading below.
 
-- **Portable** -- grade dimension 6 (durability) at full strictness: any
-  behavior-controlling reference outside the skill's own folder is a real
-  defect, not a style nit. References to the origin repository as
-  *context* or a *worked example* remain fine; only references the
-  *procedure* depends on to function are graded this strictly.
-  - **The portability litmus test, applied to every sentence, not only
-    executed steps**: for Portable-declared content, ask of each claim --
-    including one the model never executes as a step, such as a Stop
-    boundary or an Agentic operation mechanism-fit assertion -- *"would this exact sentence
-    remain true, unchanged, if this file were copied into a repository
-    carrying none of the origin repo's state?"* A runtime path-read
-    failing this test is the same defect as a **declarative fact-claim**
-    failing it (e.g. "backed by this plugin's `hooks/check-x.sh`," "this
-    repository's tests currently number 214"). Grade both identically;
-    the absence of an executed step does not exempt a prose assertion.
-    Fail: an unconditional claim that a specific file, hook, or count
-    backs a rule. Pass: a conditional check ("real deterministic backing
-    if the current environment has one; verify directly rather than
-    assuming either way").
-  - **Stop boundaries and Agentic operation mechanism-fit prose are the highest-risk
-    locations for this failure**, because an author who correctly checked
-    the *origin* repository and found a hook is tempted to record that
-    finding as a flat, unconditional fact rather than as a conditional
-    check -- the claim silently stops being portable at exactly the
-    moment it stops being hedged. Read every Stop-boundaries and
-    Agentic operation mechanism-fit sentence in Portable-declared content twice: once
-    answering "is this backed" (Agentic operation mechanism-fit's question), once answering
-    "would this sentence's specific wording survive being read in an
-    unrelated repository" (the portability litmus test) -- these are
-    different questions, and Portable-declared content must pass both,
-    not just the first.
-  - **`evals/` and `docs/` path citations get identical treatment in
-    Portable content, in bare prose or inline code alike** -- both roots
-    name locations outside the skill's own directory that a plugin install
-    or a vendoring copy does not carry along, the same "must resolve
-    inside the skill's own directory" boundary [Dependency file
-    portability](#dependency-file-portability) below already applies to a
-    bundled *file*, applied here to a *prose citation* instead. An earlier
-    revision of this rule gave `evals/` a hedge escape in inline-code form
-    while unconditionally banning `docs/` -- an enumerated, asymmetric
-    exception that itself reproduced the "recurs for the next unlisted
-    case" problem this rule exists to close; both roots now get identical
-    treatment.
-    - **What the underlying defect actually is**: a repo-external path is
-      a real dimension-6 defect only when the skill's own *control* -- its
-      procedure or judgment logic -- depends on that path to decide how to
-      behave (e.g. citing a design doc's schema to know what a field
-      means, or a numbered invariant list to know what to check). A path
-      cited only as an **input source** ("read whatever eval data the
-      calling repository has, if any") or an **output destination**
-      ("this skill's own verdict is consumed downstream by X in this
-      repository") is not a control dependency: the skill's own procedure
-      neither reads nor needs that path to produce its result, so nothing
-      breaks when it is copied elsewhere and the path does not travel
-      with it.
-    - **The deterministic check's hedge vocabulary encodes this
-      distinction, narrowly.** A hedge phrase ("this repository has also
-      recorded...") that marks a citation as a *deliberate, known-real*
-      reference to this repository's own file discloses a control
-      dependency; it does not remove it -- this half of the hedge
-      vocabulary (`this repository` / `gitapex`) never rescues an
-      inline-code match, and never rescues a bare-prose one either (bare
-      prose has never had a hedge escape at all). The other half (`the calling repository` / `the target repository`) marks the opposite:
-      a generic illustrative placeholder for *whatever* repository the
-      skill lands in, not a citation to the origin repository's own real
-      file at all (establishing-ubiquitous-language's "record resolved
-      terms in the calling repository's own glossary doc (e.g.
-      `docs/glossary.md`)" is the canonical real example -- a portable
-      **output-destination** description, not a control dependency) --
-      only this narrower half still rescues an inline-code match. When
-      neither hedge shape fits and the citation is a genuine input-source
-      or output-destination reference regardless, summarize the role in
-      prose without the literal path (this skill's own SKILL.md Notes
-      section describes its verdict's downstream consumer this way) rather
-      than force an artificial "the calling repository" phrasing onto a
-      sentence that is not actually generic.
-    Enforced by `portable-no-repo-path-citation` (bare-prose form,
-    unconditional, no hedge ever) and `portable-no-inline-path-citation`
-    (inline-code form, rescued only by the generic-role hedge half above).
-    - **A second, structured rescue path supplements the hedge-phrase
-      mechanism: `spec.externalCitations`.** A Portable
-      skill's own `metadata/gitapex.yaml` sidecar may declare, per
-      `evals/`/`docs/` path citation it carries, an exact literal `path`
-      string plus a closed `role` (`input-source` or `output-destination`
-      -- the same two roles named above, spelled as an enum instead of a
-      hedge phrase). The bundled shape checker cross-references each
-      declaration against the skill's own real citations, exact-substring,
-      not a regex or line anchor: a declared path with no matching
-      citation anywhere in `SKILL.md`/`references/*.md` is a stale
-      declaration (`external-citations-resolve`), and a citation whose own
-      matched text equals a declared path is rescued in
-      `portable-no-inline-path-citation` regardless of any nearby hedge
-      phrase (per-citation, not clause-wide -- a declaration is a fact
-      about one specific path, unlike a hedge phrase's clause-wide prose
-      reach). This closes the *proximity-ambiguity* gap the nearby-hedge-
-      phrase text search still carries -- an exact structured
-      cross-reference instead of a fuzzy "somewhere in this sentence or
-      the one before it" search -- **not** an increase in determinism over
-      the existing mechanism: `GENERIC_ROLE_HEDGE_PHRASES` was already
-      fully deterministic as a computation before this addition. A
-      declared role can still misrepresent a citation's true function,
-      exactly as a hedge phrase can; this mechanism narrows the *shape*
-      ambiguity, never the underlying honesty judgment, which stays with
-      this dimension's own model-judged review regardless of which rescue
-      path a citation takes.
-    - **Supplements, never replaces, the hedge-phrase convention.** A
-      skill may use either mechanism, both, or neither for a given
-      citation; `spec.externalCitations` is opt-in, and a skill already
-      relying on `GENERIC_ROLE_HEDGE_PHRASES` (e.g.
-      establishing-ubiquitous-language's "the calling repository's own
-      glossary doc" phrasing) is unaffected. Deliberately scoped to
-      `portable-no-inline-path-citation` only: the bare-prose repo-path
-      check (`portable-no-repo-path-citation`) stays unconditional with no
-      rescue of any kind, and the inline-code issue/PR-number check keeps
-      its own separate, unrelated hedge vocabulary untouched.
-- **Repository-scoped** -- a repository-scoped skill that reads as if it
-  were portable is a dimension-1/6 defect (it misleads a future vendoring
-  decision), not the scoping choice itself. An undeclared level that
-  turns out to be repository-scoped is itself a finding, not something to
-  silently infer and move past. Declared as the `portability` field in
-  the skill's `metadata/gitapex.yaml` sidecar (the
-  `portability-declared` shape check enforces presence and value); the
-  declaration itself may get a one-line `## Notes` mention, but any
+**Portable requires all four conditions in the table below**, and
+grades dimension 6 (durability) at full strictness: any
+behavior-controlling reference outside the skill's own folder is a real
+defect under condition (b) or (c), not a style nit. A reference to the
+origin repository as *context* or a *worked example* remains fine; only
+a reference the *procedure* depends on to function is graded this
+strictly.
+
+| Condition | Requirement | Failing only this, narrowly | Wider failure |
+|---|---|---|---|
+| (a) No real sibling-skill dependency | No other skill's own content is read, applied, or binding on this target's procedure -- see [Sibling-skill dependency portability](#sibling-skill-dependency-portability) for exactly what counts as real, as opposed to a bare mention that never reaches this condition | Mixed-via-clean-sibling | Repository-scoped, trigger 2 |
+| (b) No hard dependency on a non-skill file outside this skill's own directory | No bundled script, schema, config, or fixture the procedure treats as authoritative resolves at a path a plugin install or vendoring copy will not carry along -- see [Dependency file portability](#dependency-file-portability) for the exact boundary, including Fix B's caveat that a file sitting fully *inside* the skill's own directory can still cost Portable status on *content* grounds under (c), a distinct question from where the file lives | Mixed-via-file | Repository-scoped, trigger 3 |
+| (c) Passes the sentence-level litmus test below | No unhedged origin-repo fact-claim anywhere in the body, executed step or not | Mixed-via-bundled-convention | Repository-scoped, directly -- no trigger number needed |
+| (d) Not inherently repo-bound in purpose | The skill's own reason for existing does not name, target, or presuppose this specific repository's own identity, tooling, or workflow | *(no narrow Mixed way exists -- an inherently repo-bound purpose leaves no portable core to split a file-level split from)* | Repository-scoped, trigger 1 |
+
+- **The portability litmus test (condition c), applied to every
+  sentence, not only executed steps**: for Portable-declared content, ask of each claim --
+  including one the model never executes as a step, such as a Stop
+  boundary or an Agentic operation mechanism-fit assertion -- *"would this exact sentence
+  remain true, unchanged, if this file were copied into a repository
+  carrying none of the origin repo's state?"* A runtime path-read
+  failing this test is the same defect as a **declarative fact-claim**
+  failing it (e.g. "backed by this plugin's `hooks/check-x.sh`," "this
+  repository's tests currently number 214"). Grade both identically;
+  the absence of an executed step does not exempt a prose assertion.
+  Fail: an unconditional claim that a specific file, hook, or count
+  backs a rule. Pass: a conditional check ("real deterministic backing
+  if the current environment has one; verify directly rather than
+  assuming either way").
+- **Stop boundaries and Agentic operation mechanism-fit prose are the highest-risk
+  locations for this failure**, because an author who correctly checked
+  the *origin* repository and found a hook is tempted to record that
+  finding as a flat, unconditional fact rather than as a conditional
+  check -- the claim silently stops being portable at exactly the
+  moment it stops being hedged. Read every Stop-boundaries and
+  Agentic operation mechanism-fit sentence in Portable-declared content twice: once
+  answering "is this backed" (Agentic operation mechanism-fit's question), once answering
+  "would this sentence's specific wording survive being read in an
+  unrelated repository" (the portability litmus test) -- these are
+  different questions, and Portable-declared content must pass both,
+  not just the first.
+- **`evals/` and `docs/` path citations get identical treatment in
+  Portable content, in bare prose or inline code alike** -- both roots
+  name locations outside the skill's own directory that a plugin install
+  or a vendoring copy does not carry along, the same "must resolve
+  inside the skill's own directory" boundary [Dependency file
+  portability](#dependency-file-portability) below already applies to a
+  bundled *file*, applied here to a *prose citation* instead. An earlier
+  revision of this rule gave `evals/` a hedge escape in inline-code form
+  while unconditionally banning `docs/` -- an enumerated, asymmetric
+  exception that itself reproduced the "recurs for the next unlisted
+  case" problem this rule exists to close; both roots now get identical
+  treatment.
+  - **Fix A -- this rule's own scope, stated explicitly.** The
+    hedge-vocabulary mechanism below (and the
+    `portable-no-repo-path-citation`/`portable-no-inline-path-citation`
+    checks that enforce it) is scoped only to a citation of a path
+    *outside* the skill's own directory -- `evals/`, `docs/`, a
+    CI-only location -- never an in-directory `references/...`/
+    `scripts/...` citation, which [Dependency file
+    portability](#dependency-file-portability) below grades instead
+    (that section's own boundary is where the file *lives*, not how
+    the citing sentence is hedged). An unhedged sibling-skill
+    fact-claim is a separate defect this rule does not cover, enforced
+    by `portable-no-unhedged-skill-fact-claim` under [Sibling-skill
+    dependency portability](#sibling-skill-dependency-portability)
+    below instead.
+  - **What the underlying defect actually is**: a repo-external path is
+    a real dimension-6 defect only when the skill's own *control* -- its
+    procedure or judgment logic -- depends on that path to decide how to
+    behave (e.g. citing a design doc's schema to know what a field
+    means, or a numbered invariant list to know what to check). A path
+    cited only as an **input source** ("read whatever eval data the
+    calling repository has, if any") or an **output destination**
+    ("this skill's own verdict is consumed downstream by X in this
+    repository") is not a control dependency: the skill's own procedure
+    neither reads nor needs that path to produce its result, so nothing
+    breaks when it is copied elsewhere and the path does not travel
+    with it.
+  - **The deterministic check's hedge vocabulary encodes this
+    distinction, narrowly.** A hedge phrase ("this repository has also
+    recorded...") that marks a citation as a *deliberate, known-real*
+    reference to this repository's own file discloses a control
+    dependency; it does not remove it -- this half of the hedge
+    vocabulary (`this repository` / `gitapex`) never rescues an
+    inline-code match, and never rescues a bare-prose one either (bare
+    prose has never had a hedge escape at all). The other half (`the calling repository` / `the target repository`) marks the opposite:
+    a generic illustrative placeholder for *whatever* repository the
+    skill lands in, not a citation to the origin repository's own real
+    file at all (establishing-ubiquitous-language's "record resolved
+    terms in the calling repository's own glossary doc (e.g.
+    `docs/glossary.md`)" is the canonical real example -- a portable
+    **output-destination** description, not a control dependency) --
+    only this narrower half still rescues an inline-code match. When
+    neither hedge shape fits and the citation is a genuine input-source
+    or output-destination reference regardless, summarize the role in
+    prose without the literal path (this skill's own SKILL.md Notes
+    section describes its verdict's downstream consumer this way) rather
+    than force an artificial "the calling repository" phrasing onto a
+    sentence that is not actually generic.
+  Enforced by `portable-no-repo-path-citation` (bare-prose form,
+  unconditional, no hedge ever) and `portable-no-inline-path-citation`
+  (inline-code form, rescued only by the generic-role hedge half above).
+  - **A second, structured rescue path supplements the hedge-phrase
+    mechanism: `spec.externalCitations`.** A Portable
+    skill's own `metadata/gitapex.yaml` sidecar may declare, per
+    `evals/`/`docs/` path citation it carries, an exact literal `path`
+    string plus a closed `role` (`input-source` or `output-destination`
+    -- the same two roles named above, spelled as an enum instead of a
+    hedge phrase). The bundled shape checker cross-references each
+    declaration against the skill's own real citations, exact-substring,
+    not a regex or line anchor: a declared path with no matching
+    citation anywhere in `SKILL.md`/`references/*.md` is a stale
+    declaration (`external-citations-resolve`), and a citation whose own
+    matched text equals a declared path is rescued in
+    `portable-no-inline-path-citation` regardless of any nearby hedge
+    phrase (per-citation, not clause-wide -- a declaration is a fact
+    about one specific path, unlike a hedge phrase's clause-wide prose
+    reach). This closes the *proximity-ambiguity* gap the nearby-hedge-
+    phrase text search still carries -- an exact structured
+    cross-reference instead of a fuzzy "somewhere in this sentence or
+    the one before it" search -- **not** an increase in determinism over
+    the existing mechanism: `GENERIC_ROLE_HEDGE_PHRASES` was already
+    fully deterministic as a computation before this addition. A
+    declared role can still misrepresent a citation's true function,
+    exactly as a hedge phrase can; this mechanism narrows the *shape*
+    ambiguity, never the underlying honesty judgment, which stays with
+    this dimension's own model-judged review regardless of which rescue
+    path a citation takes.
+  - **Supplements, never replaces, the hedge-phrase convention.** A
+    skill may use either mechanism, both, or neither for a given
+    citation; `spec.externalCitations` is opt-in, and a skill already
+    relying on `GENERIC_ROLE_HEDGE_PHRASES` (e.g.
+    establishing-ubiquitous-language's "the calling repository's own
+    glossary doc" phrasing) is unaffected. Deliberately scoped to
+    `portable-no-inline-path-citation` only: the bare-prose repo-path
+    check (`portable-no-repo-path-citation`) stays unconditional with no
+    rescue of any kind, and the inline-code issue/PR-number check keeps
+    its own separate, unrelated hedge vocabulary untouched.
+- **Mixed** -- always clears condition (d) above (a Mixed skill's
+  purpose is not inherently repo-bound; see trigger 1 below for why that
+  failure has no Mixed way at all). It fails exactly one of (a), (b),
+  or (c) in one of the three narrow ways below, clearing the other two.
+  A wider failure -- more than one condition failing, or a single
+  failure that does not fit any of these three narrow ways -- is
+  Repository-scoped instead, via the matching trigger below, not Mixed.
+
+  | Sub-type | Fails | Narrowness requirement |
+  |---|---|---|
+  | Mixed-via-file | (b) | A single hard dependency on one non-skill file, cleanly named (a reader can tell what it is and why it lives where it does from its name and one citing sentence alone), carrying no undisclosed baggage (no second, unnamed repo-specific assumption riding along inside the same dependency) |
+  | Mixed-via-clean-sibling | (a) | A single sibling-skill dependency clearing all three of no-fan-out, a clean interface, and uncleaned-baggage-free -- see [Sibling-skill dependency portability](#sibling-skill-dependency-portability) for the exact narrowness conditions |
+  | Mixed-via-bundled-convention | (c) | The skill's only repo-specific content is confined entirely to one or more distinctly-named bundled reference files -- living inside this skill's own directory, so (b) itself stays clear -- that this skill's own `SKILL.md` explicitly instructs a vendoring consumer to replace or drop wholesale (e.g. `drafting-an-adr`'s `references/this-repo-only.md`, `auditing-agent-product-scope`'s `references/gitapex-cross-links.md`, `scanning-attack-surfaces` Mode B's own equivalent). Distinguished from a merely-illustrative bundled file, which stays Portable, by a control test: does a procedure step actually read the file to decide how to behave? If yes, this is a real condition-(c) failure; if the file is cited only as a worked example or background color no step depends on, condition (c) is unaffected |
+
+  Any repository-specific content besides the one narrow dependency or
+  bundled file that earns a target one of the three Mixed sub-types
+  above must still be cleanly split into its own distinctly-named
+  reference file per the ordinary Mixed rule stated next, not blended
+  into the portable core -- this applies uniformly across all three
+  sub-types, not only Mixed-via-clean-sibling's own explicit
+  "uncleaned-baggage-free" wording.
+
+  Dimension 5 (progressive disclosure) requires the actual split, not
+  just the intent to split: the repository-specific part belongs in a
+  clearly named reference file (e.g. `references/this-repo-only.md`) a
+  consumer can identify and drop, not blended into the portable core.
+  This classification step only establishes that the ordinary rule
+  applies; a narrow substitute for a target that also clears dimension
+  5's own cohesion-confirmed sequential-pipeline exemption is graded
+  entirely within dimension 5's own walk below, not here -- see
+  dimension 5's own Mixed-portability substitute, since its first
+  gating condition is a dimension-5 finding this earlier classification
+  step has no access to yet. **A sibling-skill seam is graded by this
+  section's own classification triggers, not by dimension 5's
+  substitute** -- see that substitute's own scoping note there.
+- **Repository-scoped** -- fails condition (c) or (d) outright, or fails
+  Mixed's own narrowness conditions above, via one of three triggers. An
+  unhedged origin-repo fact-claim scattered through the portable core
+  itself -- not isolated to one disclosed bundled file, per Mixed-via-
+  bundled-convention's own shape -- is a direct condition-(c) failure
+  needing no trigger number; the three named triggers below instead
+  cover the narrower near-miss cases. A repository-scoped skill that
+  reads as if it were portable is a dimension-1/6 defect (it misleads a
+  future vendoring decision), not the scoping choice itself.
+  An undeclared level that turns out to be repository-scoped is itself a
+  finding, not something to silently infer and move past. Declared as
+  the `portability` field in the skill's `metadata/gitapex.yaml` sidecar
+  (the `portability-declared` shape check enforces presence and value);
+  the declaration itself may get a one-line `## Notes` mention, but any
   extended rationale follows the [Notes vs. metadata placement
   axis](#notes-vs-metadata-placement-axis) above and belongs in
   `metadata/gitapex.yaml`'s `spec.references` instead.
-- **Mixed** -- dimension 5 (progressive disclosure) requires the actual
-  split, not just the intent to split: the repository-specific part
-  belongs in a clearly named reference file (e.g.
-  `references/this-repo-only.md`) a consumer can identify and drop, not
-  blended into the portable core. This classification step only
-  establishes that the ordinary rule applies; a narrow substitute for a
-  target that also clears dimension 5's own cohesion-confirmed
-  sequential-pipeline exemption is graded entirely within dimension 5's
-  own walk below, not here -- see dimension 5's own Mixed-portability
-  substitute, since its first gating condition is a dimension-5 finding
-  this earlier classification step has no access to yet.
+
+  | Trigger | Condition |
+  |---|---|
+  | 1 -- inherently repo-bound purpose | The skill's own reason for existing presupposes this specific repository's identity, tooling, or workflow -- not merely touches it in passing, but could not be restated as a general procedure without changing what the skill is for (e.g. a skill whose entire point is auditing this repository's own plugin-distribution surface). Fails condition (d) directly -- see condition (d) above for why this leaves no narrow Mixed way |
+  | 2 -- sibling fan-out or clean-interface failure | More than one real sibling-skill dependency, or a single one that fails the no-fan-out, clean-interface, or uncleaned-baggage-free condition Mixed-via-clean-sibling requires (e.g. citing a sibling's own internal section number or bundled file path, not just its public contract). See [Sibling-skill dependency portability](#sibling-skill-dependency-portability) |
+  | 3 -- non-skill-file dependency, no fallback | A hard dependency on a non-skill file living outside this skill's own directory, where the target discloses no fallback a vendoring consumer could use once that outside file does not travel with the copy (no adaptation note, no stated "replace this with your own equivalent" convention). A target with a stated fallback at this step is Mixed-via-file instead, not this trigger. See [Dependency file portability](#dependency-file-portability) for this trigger's own fallback predicate and the porting-boundary-map path that can satisfy it |
+
+### Sibling-skill dependency portability
+
+Conditions (a) (Portable), Mixed-via-clean-sibling, and trigger 2
+(Repository-scoped) all turn on the same underlying question: does this
+skill have a *real* dependency on a sibling skill, and if so, is it
+narrow enough to stay Mixed? This section states that line once, reused
+by all three.
+
+| Test | What it checks |
+|---|---|
+| A real dependency at all | Reading, applying, or being bound by the sibling's real content -- a procedure step that consults its Steps/Output, follows a rule it states, or treats its verdict as binding. A bare `relatedTo` metadata listing, or a "route to X for a different situation" handoff mention, is not a dependency and never reaches the tests below; an ordinary skill's own Related-skills section is often made up entirely of this non-dependency kind of mention. An orchestrator-shaped skill is the deliberate exception, not a gap: one whose own procedure steps genuinely consult, quote, or reuse several distinct siblings' own internal content carries that many real dependencies, which the next row's fan-out trigger is meant to catch |
+| No fan-out | Exactly one real dependency. A second, of any kind, moves the target to Repository-scoped via trigger 2 regardless of how clean each one otherwise is -- narrowness is evaluated per skill, not per dependency; an orchestrator landing on Repository-scoped here is this rule working as intended |
+| A clean interface | Touches only the sibling's top-level public contract -- its stated Steps/Output shape, its description-level trigger, a verdict it returns -- never its internal section structure, bundled file layout, or a specific line/heading that could move without the public contract changing. Citing a sibling's own internal section number or bundled `references/*.md` path fails this even with only one dependency |
+| Uncleaned-baggage-free | Any other repository-specific content the target carries besides this one dependency is itself cleanly split into its own distinctly-named, disclosed file (the Mixed classification's own ordinary file-level-split requirement) -- not blended into the portable core, and not riding along inside the sibling-dependency prose itself |
+
+A target clearing all three narrowness rows for its one real
+dependency is Mixed-via-clean-sibling. A target with no real dependency
+at all (per the first row above) never reaches these three tests and is
+not thereby Mixed on sibling-dependency grounds -- it stays wherever
+conditions (b)-(d) otherwise place it. A target failing any one of the
+three narrowness rows, or carrying more than one real dependency, is
+Repository-scoped via trigger 2, not Mixed.
 
 ### Dependency file portability
 
@@ -881,6 +964,17 @@ travels together with `SKILL.md` when the skill is copied or installed
 as a plugin elsewhere -- or at a path outside the skill (a CI-only
 location, a repository-governance directory, another skill's own
 folder) that a plugin install or a vendoring copy will not carry along.
+
+**Fix B -- what this section asks, and what it does not.** This section
+asks only *where* a bundled dependency file lives, never whether its
+*content* is repository-specific. A file resolving inside the skill's
+own directory clears this section regardless of what it says --
+clearing it does not by itself make the skill Portable. Whether that
+same file's content survives condition (c)'s sentence-level litmus test
+is a separate question, graded there: a bundled file with
+repository-specific content that a procedure step reads to decide
+behavior is Mixed-via-bundled-convention (see Mixed above) even though
+it fully clears this section's own location test.
 
 - **Portable** -- every dependency file the procedure treats as
   authoritative must resolve inside the skill's own directory. One that
@@ -897,6 +991,22 @@ folder) that a plugin install or a vendoring copy will not carry along.
   reading (so the full dependency surface is visible in one place
   alongside any prose citations); any extended justification beyond that
   belongs in `metadata/gitapex.yaml`'s `spec.references` instead.
+
+**Trigger 3's own fallback predicate.** A hard dependency on a file
+living outside the skill's own directory is Mixed-via-file when the
+target discloses a fallback a vendoring consumer could use once that
+file does not travel with the copy (an adaptation note, a stated
+"replace this with your own equivalent" convention); it is
+Repository-scoped via trigger 3 instead when no such fallback is
+disclosed. A dimension-6 [porting-boundary map](#6-durability)
+satisfies this predicate directly wherever one exists: it is checkable
+at this same classification step by reading the entry itself, unlike
+dimension 5's own Mixed-portability substitute, whose first condition
+requires that later dimension-5 walk to have already run. The map is
+never required to reach Mixed-via-file -- an inline `## Notes` fallback
+line is equally sufficient -- and its absence never by itself demotes a
+target that already has one; see dimension 6 for the map's own
+definition, optional status, and never-label-deciding effect.
 
 A worked example already in this repository: this skill's own grading of
 a target's `metadata/gitapex.yaml` sidecar -- the contract this section,
@@ -1803,12 +1913,20 @@ presence by shape.
   itself every-use, has a narrow substitute for the Portability level
   section's own ordinary Mixed file-level-split requirement -- but only
   under two conditions, checked here, not there, because the first one
-  is this dimension's own finding.** The Portability level section's
-  Mixed bullet prices a *choice*: an author who could relocate the
-  repository-specific part into a dedicated reference file, and
-  simply has not done so yet. A target that has already cleared the
-  cohesion-confirmed sequential-pipeline exemption immediately above has
-  no such choice available for its every-use non-portable content
+  is this dimension's own finding.** **This substitute discharges the
+  Mixed bullet's split obligation for a target whose step-4 level is
+  already Mixed on the Portability level section's own terms; it never
+  revises that level, and a target the classification step has placed
+  at Repository-scoped never reaches it.** In particular, a sibling-skill
+  seam is graded entirely by that section's own classification triggers
+  (trigger 2, and Mixed-via-clean-sibling's own narrowness conditions) --
+  never by this substitute, which has no bearing on whether a sibling
+  dependency is narrow enough to stay Mixed in the first place. The
+  Portability level section's Mixed bullet prices a *choice*: an author who
+  could relocate the repository-specific part into a dedicated reference
+  file, and simply has not done so yet. A target that has already cleared
+  the cohesion-confirmed sequential-pipeline exemption immediately above
+  has no such choice available for its every-use non-portable content
   specifically: physically relocating that content into a new every-use
   reference file would push the exemption's own already-minimized
   common-case file count past its irreducible floor, and folding it into
@@ -1960,6 +2078,23 @@ rotting or breaking once copied or revisited later.
   fact-claim** exactly as strictly as to an executed step -- see the
   portability litmus test in [Portability level](#portability-level)
   above.
+- **A porting-boundary map, for a skill declared (or read as)
+  Repository-scoped.** Optional, never label-deciding: a
+  Repository-scoped skill with no such map is not thereby a lesser
+  Repository-scoped skill, and authoring one does not itself promote the
+  skill to Mixed or Portable. When a target does author one -- a
+  dedicated section or reference file enumerating every outside-
+  directory dependency (a non-skill file, a sibling-skill seam) the
+  skill actually carries, why each exists, and what a vendoring consumer
+  should substitute for it -- its one concrete effect is narrower: a
+  complete entry for a specific non-skill-file dependency satisfies the
+  Portability level section's own trigger 3 "fallback exists" predicate
+  for that dependency (see [Portability level](#portability-level)
+  above and that section's own [Dependency file
+  portability](#dependency-file-portability) subsection), checkable at
+  this same dimension-6 pass by reading the entry directly -- unlike
+  dimension 5's own Mixed-portability substitute, whose first condition
+  requires that dimension-5 walk to have already run.
 
 - **Fail:** "before August 2025 use the old API" stated as current
   guidance with no explicit historical marking, or a bare `#149`
