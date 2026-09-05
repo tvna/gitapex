@@ -1,6 +1,10 @@
 #!/bin/bash
 # PostToolUse hook (matchers: mcp__github__create_pull_request,
-# mcp__github__update_pull_request, mcp__github__issue_write): re-fetch the
+# mcp__plugin_github_github__create_pull_request,
+# mcp__github__update_pull_request,
+# mcp__plugin_github_github__update_pull_request,
+# mcp__github__issue_write,
+# mcp__plugin_github_github__issue_write): re-fetch the
 # body GitHub actually stored and re-run the outward-artifact-preflight
 # provenance (check 1) and ASCII-only (check 2) scans against it.
 #
@@ -88,7 +92,7 @@ tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')
 # the three covered tools, but never trust that alone. The Python checker
 # re-validates the same field independently.
 case "$tool_name" in
-  mcp__github__create_pull_request | mcp__github__update_pull_request | mcp__github__issue_write) ;;
+  mcp__github__create_pull_request | mcp__plugin_github_github__create_pull_request | mcp__github__update_pull_request | mcp__plugin_github_github__update_pull_request | mcp__github__issue_write | mcp__plugin_github_github__issue_write) ;;
   *) exit 0 ;;
 esac
 
