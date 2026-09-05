@@ -144,7 +144,11 @@ is still grading from a contaminated context.
   as verification, and it records why a filesystem-only check does not.
   Read what that section's Trust class rule says about an entry the current run wrote before relying on one. If no platform mechanism can be
   verified, follow that section's "No verified mechanism available"
-  subsection rather than dispatching into a contaminated context. Whether the exclusion, once verified, carries
+  subsection rather than dispatching into a contaminated context. Where the
+  local Docker+Harbor precondition holds, the containerized-evaluation
+  route in [references/evaluation-via-harbor.md](references/evaluation-via-harbor.md)
+  additionally applies -- strictly optional, never a substitute for the
+  exclusion requirement above. Whether the exclusion, once verified, carries
   real deterministic backing (a hook, a permission rule) or is enforced
   by this instruction alone still depends on the environment -- check
   directly, the same self-audit this skill already applies to its

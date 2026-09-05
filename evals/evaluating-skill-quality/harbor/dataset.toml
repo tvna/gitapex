@@ -1,0 +1,19 @@
+# Dataset manifest for tvna/evaluating-skill-quality-harbor
+# Add tasks using: harbor add <org>/<name>
+# Publish using: harbor publish
+
+[dataset]
+name = "tvna/evaluating-skill-quality-harbor"
+version = "1.0.0"
+description = "Harbor starter set for evaluating-skill-quality (issue #1813)"
+authors = []
+keywords = []
+
+[[tasks]]
+name = "tvna/battle-testing-trial"
+digest = "sha256:f7017530fba63699daedfea11502637a6e51a989fbb251eb2e856a629476af1b"
+
+[[tasks]]
+name = "tvna/portability-spot-check"
+digest = "sha256:bc598e726f4ee1e7d79c5524a0478217260bf6df763b12a90dbb1483c2d8fee9"
+
