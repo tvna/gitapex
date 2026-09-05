@@ -79,8 +79,19 @@ highest-value secret this repository's own CI workflows are documented to
 pass this script (``ANTHROPIC_API_KEY``) as a targeted, disclosed mitigation
 -- it does not attempt a general credential/PII allowlist, which would risk
 breaking the OAuth-token-based authentication some environments this script
-runs in depend on (see the registry's own historical notes). A caller
-needing either gap fully closed must not rely on this script alone.
+runs in depend on (see the registry's own historical notes). Separately, a
+second independent review found that this leak, left unmitigated, would
+almost certainly reach this repository's own *public* GitHub Actions log on
+``.github/workflows/isolation-registry-refresh.yml``'s very first scheduled
+run: that workflow's own runner reports no ``CLAUDE_CODE_REMOTE`` signal,
+which every existing registry entry's own ``identifying_signals`` includes,
+so it can never match an existing entry and always falls through to a live
+control establishment -- whose transcript this script prints
+unconditionally. ``redact_pii`` (below) now strips an email-address shape
+from every control transcript and real-dispatch output this script prints,
+closing that specific downstream consequence even though the underlying
+account-context-injection gap itself stays open. A caller needing either
+gap fully closed must not rely on this script alone.
 
 **Why a freshly-established (same-run) recipe still needs a human eye.**
 Today's manual procedure has an operator directly read both control
@@ -119,6 +130,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -148,6 +160,31 @@ _CONTROL_PROMPT = (
 # The only leak vector this script's own automated procedure verifies (see
 # this module's docstring, "What this script actually verifies").
 _PRIMARY_LEAK_VECTOR = "claude_md_agents_md"
+
+# A narrowly-scoped email-address pattern, not a general PII scrubber -- the
+# one concrete leak shape this module's own docstring discloses ("Two
+# further gaps": the harness has been observed to inject the calling
+# account's own userEmail into a dispatch's context regardless of the
+# sentinel CLAUDE.md's own content). Applied to every control transcript and
+# real-dispatch output this script prints, since a caller -- most concretely
+# .github/workflows/isolation-registry-refresh.yml, a scheduled job on a
+# public repository -- pipes that output straight into a CI log neither
+# GitHub's own secret-masking (scoped to `secrets.*` values only) nor
+# anything else in this pipeline would otherwise catch (issue #1809, Step 8
+# follow-up; CLAUDE.md section 4: "never echo secret values, credentials,
+# tokens, or PII into logs... redact before logging").
+_EMAIL_PATTERN = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+_PII_REDACTED_MARKER = "[REDACTED-EMAIL]"
+
+
+def redact_pii(text: str) -> str:
+    """Replace every email-address-shaped substring in ``text`` with
+    ``_PII_REDACTED_MARKER``. See ``_EMAIL_PATTERN``'s own comment for why
+    this exists and why it is deliberately narrow rather than a general PII
+    scrubber."""
+    # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
+    return _EMAIL_PATTERN.sub(_PII_REDACTED_MARKER, text)
+
 
 # The exact recipe this script itself implements: cwd isolation (the target
 # snapshot itself, via build_target_snapshot) PLUS an isolated $HOME copy
@@ -255,6 +292,15 @@ def save_registry(path: Path, entries: list[dict[str, Any]]) -> None:
     )
 
 
+# Matches a flow-style `entries:` declaration (`entries: []`/`entries: {}`,
+# on one line) -- append_registry_entry refuses to text-append a block-style
+# list item after either shape, since the result would be invalid YAML (a
+# flow-style empty collection cannot be "continued" by a following
+# block-style sequence under the same key). An independent adversarial
+# review found this exact shape unguarded (issue #1809, Step 8 follow-up).
+_FLOW_STYLE_ENTRIES_RE = re.compile(r"^entries:\s*[\[{]", re.MULTILINE)
+
+
 def append_registry_entry(path: Path, entry: dict[str, Any]) -> None:
     """Append exactly one entry to ``path``'s own ``entries:`` list, leaving
     every existing byte before it untouched. This is the production
@@ -263,7 +309,14 @@ def append_registry_entry(path: Path, entry: dict[str, Any]) -> None:
     for this operation. If ``path`` does not exist yet, or is empty/
     whitespace-only, creates it fresh with just the ``entries:`` key and
     this one entry (matching a freshly-created registry's own documented
-    starting shape, per ``load_registry``'s docstring)."""
+    starting shape, per ``load_registry``'s docstring). Raises ``OSError``
+    rather than guessing when an existing, non-empty file does not already
+    look like a well-formed ``entries:``-keyed registry (a header-comment-
+    only stub, a flow-style ``entries: []``/``entries: {}``, or anything
+    else ``load_registry`` itself would not recognize) -- appending text
+    after such a file would either produce invalid YAML or, worse, silently
+    valid-but-wrong YAML whose new entry ``load_registry`` would never see
+    again (issue #1809, Step 8 follow-up)."""
     # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
     rendered = yaml.safe_dump([entry], sort_keys=False, default_flow_style=False, allow_unicode=True)
     # Indented 2 spaces to nest correctly under an `entries:` top-level key
@@ -285,6 +338,14 @@ def append_registry_entry(path: Path, entry: dict[str, Any]) -> None:
     if not existing.strip():
         path.write_text(f"entries:\n{indented}\n", encoding="utf-8")
         return
+    if _FLOW_STYLE_ENTRIES_RE.search(existing):
+        raise OSError(f"{path} declares `entries:` in flow style -- refusing to text-append after it")
+    try:
+        parsed = yaml.safe_load(existing)
+    except yaml.YAMLError as error:
+        raise OSError(f"{path} exists but is not valid YAML -- refusing to append: {error}") from error
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("entries"), list):
+        raise OSError(f"{path} exists but has no well-formed top-level `entries:` list -- refusing to guess")
     if not existing.endswith("\n"):
         existing += "\n"
     path.write_text(f"{existing}\n{indented}\n", encoding="utf-8")
@@ -451,7 +512,10 @@ def run_two_controls(
     the full stdout/stderr of both runs, always returned regardless of
     outcome, so a human reviewing a same-run establishment sees the same
     evidence the manual procedure always required (see this module's
-    docstring).
+    docstring). ``transcript`` has ``redact_pii`` applied before it is
+    returned -- see that function's own docstring -- so every caller
+    printing it (this module's own CLI included) gets a safe-by-construction
+    string, not an opt-in the caller must remember.
     """
     # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
     positive_cwd = base_dir / "positive-control"
@@ -473,7 +537,7 @@ def run_two_controls(
         "--- negative control (expects the marker to be absent) ---\n"
         f"stdout:\n{negative.stdout}\nstderr:\n{negative.stderr}\n"
     )
-    return positive_ok, negative_ok, transcript
+    return positive_ok, negative_ok, redact_pii(transcript)
 
 
 def print_no_verified_mechanism_block(reason: str, current_platform_note: str) -> None:
@@ -516,7 +580,14 @@ def build_target_snapshot(target: Path, base_dir: Path) -> Path:
     file-reading tools has been confirmed able to read outside this cwd when
     actively instructed to. "Read-only" here is caller-created and not
     written by the dispatch, not an OS-enforced guarantee under a uid-0
-    process, which bypasses the mode bits.
+    process, which bypasses the mode bits -- and, separately (an independent
+    review's own second finding), stripping the write bit from every
+    *child* of the snapshot is not enough on its own: POSIX governs
+    creating, deleting, or renaming an entry by its *containing directory's*
+    write bit, not the entry's own, so the snapshot's own top-level
+    directory must be stripped too, or an unprivileged dispatch could still
+    create, delete, or rename files directly at that top level even though
+    it cannot edit any existing file's content in place.
     """
     # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
     snapshot = base_dir / "target-snapshot"
@@ -529,6 +600,7 @@ def build_target_snapshot(target: Path, base_dir: Path) -> Path:
         for name in dirs + files:
             path = Path(root) / name
             path.chmod(path.stat().st_mode & ~0o222)
+    snapshot.chmod(snapshot.stat().st_mode & ~0o222)
     return snapshot
 
 
@@ -736,9 +808,14 @@ def main(
             print(f"error: the real dispatch failed to execute: {error}", file=sys.stderr)
             return 1
 
-        print(result.stdout)
+        # redact_pii applied here, not inside run_real_dispatch itself: this
+        # function's own return value is the actual review report a caller
+        # may consume programmatically, not only print -- printing to a log
+        # (this CLI's own stdout/stderr) is the specific unsafe boundary,
+        # per this module's docstring's "Two further gaps" section.
+        print(redact_pii(result.stdout))
         if result.stderr:
-            print(result.stderr, file=sys.stderr)
+            print(redact_pii(result.stderr), file=sys.stderr)
         print(f"verifiedLeakVectors: {verified_leak_vectors}")
         return 0 if result.returncode == 0 else 1
 

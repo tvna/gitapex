@@ -133,12 +133,67 @@ def test_append_registry_entry_preserves_existing_content(tmp_path: Path) -> Non
     assert [entry["date"] for entry in entries] == ["2026-01-01", "2026-09-05"]
 
 
+def test_append_registry_entry_adds_missing_trailing_newline(tmp_path: Path) -> None:
+    path = tmp_path / "registry.yaml"
+    original = 'entries:\n  - date: "2026-01-01"'  # deliberately no trailing newline
+    path.write_text(original, encoding="utf-8")
+
+    gvid.append_registry_entry(path, {"date": "2026-09-05"})
+
+    entries = gvid.load_registry(path)
+    assert [entry["date"] for entry in entries] == ["2026-01-01", "2026-09-05"]
+
+
 def test_append_registry_entry_creates_file_when_missing(tmp_path: Path) -> None:
     path = tmp_path / "registry.yaml"
 
     gvid.append_registry_entry(path, {"date": "2026-09-05"})
 
     assert gvid.load_registry(path) == [{"date": "2026-09-05"}]
+
+
+def test_append_registry_entry_raises_on_non_utf8_existing_file(tmp_path: Path) -> None:
+    # Regression test for issue #1809's Step 8 finding (exception-handler-gap
+    # gate + an independent review's own coverage finding): a genuinely
+    # undecodable existing file must never be silently treated as "empty,
+    # start fresh" -- that would discard whatever real content is there.
+    path = tmp_path / "registry.yaml"
+    path.write_bytes(b"\xff\xfe not valid utf-8 entries:\n")
+
+    with pytest.raises(OSError, match="not valid UTF-8"):
+        gvid.append_registry_entry(path, {"date": "2026-09-05"})
+
+
+def test_append_registry_entry_raises_on_flow_style_entries(tmp_path: Path) -> None:
+    # Regression test for an independent review's own finding: text-appending
+    # a block-style list item after a flow-style `entries: []`/`entries: {}`
+    # would produce invalid YAML.
+    path = tmp_path / "registry.yaml"
+    path.write_text("entries: []\n", encoding="utf-8")
+
+    with pytest.raises(OSError, match="flow style"):
+        gvid.append_registry_entry(path, {"date": "2026-09-05"})
+
+
+def test_append_registry_entry_raises_when_no_entries_key(tmp_path: Path) -> None:
+    # Regression test for an independent review's own finding: a
+    # non-empty, non-flow-style file that simply has no `entries:` list at
+    # all (a header-comment-only stub, or an unrelated YAML document) must
+    # not be silently text-appended to -- the new entry would land under no
+    # recognized key, and load_registry would never see it again.
+    path = tmp_path / "registry.yaml"
+    path.write_text("# just a header comment, no entries key yet\n", encoding="utf-8")
+
+    with pytest.raises(OSError, match="no well-formed top-level"):
+        gvid.append_registry_entry(path, {"date": "2026-09-05"})
+
+
+def test_append_registry_entry_raises_on_invalid_yaml(tmp_path: Path) -> None:
+    path = tmp_path / "registry.yaml"
+    path.write_text("entries:\n  - [unterminated\n", encoding="utf-8")
+
+    with pytest.raises(OSError, match="not valid YAML"):
+        gvid.append_registry_entry(path, {"date": "2026-09-05"})
 
 
 def test_find_reviewed_match_succeeds_against_real_shipped_registry() -> None:
@@ -399,7 +454,56 @@ def test_build_isolated_home_matches_sibling_copy_in_dispatch_trace() -> None:
     )
 
 
+# ---- redact_pii --------------------------------------------------------------
+
+
+def test_redact_pii_replaces_email_address() -> None:
+    # Regression test for issue #1809's Step 8 finding: a live positive
+    # control run was observed to report the calling account's own
+    # userEmail verbatim -- this must never reach a printed log unredacted.
+    text = "The user's email address is tsubasa.nagano@icloud.com. Use it only to identify the user."
+    assert gvid.redact_pii(text) == "The user's email address is [REDACTED-EMAIL]. Use it only to identify the user."
+
+
+def test_redact_pii_leaves_text_without_an_email_untouched() -> None:
+    text = "No change, no action."
+    assert gvid.redact_pii(text) == text
+
+
+def test_redact_pii_replaces_every_occurrence() -> None:
+    text = "a@example.com and b@example.org"
+    assert gvid.redact_pii(text) == "[REDACTED-EMAIL] and [REDACTED-EMAIL]"
+
+
 # ---- run_two_controls (mocked subprocess) -----------------------------------
+
+
+def test_run_two_controls_redacts_pii_from_the_returned_transcript(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path / "real-home"))
+    (tmp_path / "real-home" / ".claude").mkdir(parents=True)
+
+    def fake_run(
+        argv: list[str],
+        cwd: str,
+        env: dict[str, str],
+        capture_output: bool,
+        text: bool,
+        check: bool,
+        timeout: float | None,
+    ) -> subprocess.CompletedProcess[str]:
+        stdout = f"{gvid._SENTINEL_MARKER} reported by operator@example.com"
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(gvid.subprocess, "run", fake_run)
+
+    _, _, transcript = gvid.run_two_controls(
+        tmp_path / "work", gvid.build_isolated_home(tmp_path / "work"), "claude", 30.0
+    )
+
+    assert "operator@example.com" not in transcript
+    assert "[REDACTED-EMAIL]" in transcript
 
 
 def test_run_two_controls_both_pass(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -509,6 +613,22 @@ def test_build_target_snapshot_copies_directory_read_only(tmp_path: Path) -> Non
     copied = snapshot / "SKILL.md"
     assert copied.read_text(encoding="utf-8") == "content"
     assert not (copied.stat().st_mode & 0o222)
+
+
+def test_build_target_snapshot_strips_write_bit_from_the_snapshot_root_itself(tmp_path: Path) -> None:
+    # Regression test for an independent review's own finding: stripping the
+    # write bit from every *child* of the snapshot was not enough on its
+    # own -- POSIX governs creating/deleting/renaming an entry by its
+    # *containing directory's* own write bit, so the snapshot's own
+    # top-level directory must be stripped too, or an unprivileged dispatch
+    # could still create/delete/rename files directly at that top level.
+    target = tmp_path / "target-skill"
+    target.mkdir()
+    (target / "SKILL.md").write_text("content", encoding="utf-8")
+
+    snapshot = gvid.build_target_snapshot(target, tmp_path / "work")
+
+    assert not (snapshot.stat().st_mode & 0o222)
 
 
 def test_build_target_snapshot_copies_single_file(tmp_path: Path) -> None:
@@ -673,6 +793,70 @@ def test_main_reuses_reviewed_entry_and_launches_dispatch(
     assert "Reusing Reviewed registry entry" in output.err
 
 
+def test_main_redacts_pii_from_the_real_dispatch_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Regression test for an independent review's own finding: the real
+    # dispatch's own stdout/stderr, printed unconditionally by main(), must
+    # have the same PII redaction applied as the control transcript.
+    _stub_home(tmp_path, monkeypatch)
+
+    def fake_run(
+        argv: list[str],
+        cwd: str | None = None,
+        env: dict[str, str] | None = None,
+        capture_output: bool = True,
+        text: bool = True,
+        check: bool = False,
+        timeout: float | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        if argv[:2] == ["claude", "--version"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="2.1.300 (Claude Code)\n", stderr="")
+        return subprocess.CompletedProcess(argv, 0, stdout="reported by operator@example.com", stderr="")
+
+    monkeypatch.setattr(gvid.subprocess, "run", fake_run)
+    monkeypatch.setenv("CLAUDE_CODE_REMOTE", "true")
+    monkeypatch.delenv("CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE", raising=False)
+
+    registry = tmp_path / "registry.yaml"
+    gvid.save_registry(
+        registry,
+        [
+            {
+                "identifying_signals": {"CLAUDE_CODE_REMOTE": "true", "claude_version": "2.1.300 (Claude Code)"},
+                "leak_vector": "claude_md_agents_md",
+                "result": "isolated",
+                "trust_class": "reviewed",
+                "date": "2026-08-01",
+                "mechanism": gvid._CANONICAL_MECHANISM,
+            }
+        ],
+    )
+    target = tmp_path / "target"
+    target.mkdir()
+    (target / "SKILL.md").write_text("x", encoding="utf-8")
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("review this skill", encoding="utf-8")
+
+    exit_code = gvid.main(
+        [
+            "--target",
+            str(target),
+            "--prompt-file",
+            str(prompt_file),
+            "--registry",
+            str(registry),
+            "--history-markdown",
+            str(tmp_path / "history.md"),
+        ]
+    )
+
+    output = capsys.readouterr()
+    assert exit_code == 0
+    assert "operator@example.com" not in output.out
+    assert "[REDACTED-EMAIL]" in output.out
+
+
 def test_main_establishes_new_entry_when_no_match_controls_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -736,6 +920,91 @@ def test_main_reports_no_verified_mechanism_on_control_failure(
     output = capsys.readouterr()
     assert "No verified mechanism available" in output.err
     assert gvid.load_registry(registry) == []
+
+
+def test_main_reports_registry_write_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A malformed existing registry (no well-formed entries: list) makes
+    # append_registry_entry raise OSError once the live control run
+    # succeeds -- main() must report it via this module's own consistent
+    # print-and-return-1 convention, not crash.
+    _stub_home(tmp_path, monkeypatch)
+
+    def fake_run(
+        argv: list[str],
+        cwd: str | None = None,
+        env: dict[str, str] | None = None,
+        capture_output: bool = True,
+        text: bool = True,
+        check: bool = False,
+        timeout: float | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        if argv[:2] == ["claude", "--version"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="2.1.303 (Claude Code)\n", stderr="")
+        if cwd is not None and (Path(cwd) / "CLAUDE.md").is_file():
+            return subprocess.CompletedProcess(argv, 0, stdout=gvid._SENTINEL_MARKER, stderr="")
+        return subprocess.CompletedProcess(argv, 0, stdout="none loaded", stderr="")
+
+    monkeypatch.setattr(gvid.subprocess, "run", fake_run)
+    monkeypatch.delenv("CLAUDE_CODE_REMOTE", raising=False)
+
+    registry = tmp_path / "registry.yaml"
+    registry.write_text("# a header comment with no entries key at all\n", encoding="utf-8")
+
+    exit_code = gvid.main(["--controls-only", "--registry", str(registry)])
+
+    assert exit_code == 1
+    assert "could not write the new registry entry" in capsys.readouterr().err
+
+
+def test_main_reports_target_snapshot_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # A broken symlink inside --target makes build_target_snapshot raise
+    # OSError (shutil.Error, an OSError subclass) -- main() must report it
+    # via this module's own consistent print-and-return-1 convention.
+    _stub_home(tmp_path, monkeypatch)
+
+    def fake_run(
+        argv: list[str],
+        cwd: str | None = None,
+        env: dict[str, str] | None = None,
+        capture_output: bool = True,
+        text: bool = True,
+        check: bool = False,
+        timeout: float | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        if argv[:2] == ["claude", "--version"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="2.1.304 (Claude Code)\n", stderr="")
+        if cwd is not None and (Path(cwd) / "CLAUDE.md").is_file():
+            return subprocess.CompletedProcess(argv, 0, stdout=gvid._SENTINEL_MARKER, stderr="")
+        return subprocess.CompletedProcess(argv, 0, stdout="none loaded", stderr="")
+
+    monkeypatch.setattr(gvid.subprocess, "run", fake_run)
+    monkeypatch.delenv("CLAUDE_CODE_REMOTE", raising=False)
+
+    target = tmp_path / "target"
+    target.mkdir()
+    (target / "broken-link").symlink_to(tmp_path / "does-not-exist")
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("review this", encoding="utf-8")
+
+    exit_code = gvid.main(
+        [
+            "--target",
+            str(target),
+            "--prompt-file",
+            str(prompt_file),
+            "--registry",
+            str(tmp_path / "registry.yaml"),
+            "--history-markdown",
+            str(tmp_path / "history.md"),
+        ]
+    )
+
+    assert exit_code == 1
+    assert "could not build a snapshot of --target" in capsys.readouterr().err
 
 
 def test_main_requires_target_and_prompt_file_unless_controls_only(

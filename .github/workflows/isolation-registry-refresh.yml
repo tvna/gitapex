@@ -20,27 +20,37 @@
 # because it is also the one path guaranteed not to act on that entry in the
 # same run.
 #
-# Job-level permission scope (issue #1809, Step 8 follow-up -- disclosed
-# rather than left implicit after an independent convention review flagged
-# it): this job's own `contents: write`/`pull-requests: write`/`issues:
-# write` grant on the default GITHUB_TOKEN is broader than the top-level
-# `contents: read` default, and this repository's one other
-# genuinely-mutating workflow (apply-rulesets.yml) instead routes its own
-# write through a separate, purpose-scoped PAT behind a required-reviewer
-# Environment gate, keeping the default token's own blast radius at
-# `contents: read`. That pattern was not adopted here: provisioning a new
-# PAT and Environment is a repository-owner action (a new secret, per
-# AGENTS.md section 3's own disclosure requirement) this PR cannot take on
-# its own authority, and this workflow's own actual risk profile is
-# narrower than a generic mutating job -- both triggers are `schedule`/
-# parameterless `workflow_dispatch` (no `pull_request`/`issue_comment`/any
-# trigger carrying attacker-controlled text), and no step interpolates
-# `${{ github.event.* }}` anywhere (confirmed: every `${{ }}` reference in
-# this file is either a `secrets.*`/`github.token`/deterministic
-# `github.server_url`/`github.repository`/`github.run_id` value, none of
-# which an external contributor controls). Revisit this if that risk
-# profile ever changes (a trigger gains attacker-controlled input, or this
-# job's own write scope grows).
+# Job-level permission scope (issue #1809, Step 8 follow-up -- disclosed,
+# and corrected once by a second independent review after the first
+# disclosure's own comparison turned out inaccurate): this job's own
+# `contents: write`/`pull-requests: write`/`issues: write` grant on the
+# default GITHUB_TOKEN is broader than the top-level `contents: read`
+# default. Job-level `issues: write` alone (default token, no separate PAT)
+# is this repository's own common pattern for a scheduled/event-triggered
+# job that only opens/closes issues (post-merge-retro.yml,
+# stale-retro-stub-autoclose.yml, acm-issue-gate.yml all do this) -- but the
+# *combination* this job needs (`contents: write` together with
+# `pull-requests: write`, to push a branch and open a PR from it, not only
+# open an issue) is unique to this workflow; no other job in this repository
+# needs that combination. The one comparable precedent for a job needing
+# more than issues-alone write power is apply-rulesets.yml, which instead
+# routes its own write through a separate, purpose-scoped PAT behind a
+# required-reviewer Environment gate, keeping its own job-level permissions
+# at `contents: read` and never escalating the default token at all. That
+# pattern was not adopted here: provisioning a new PAT and Environment is a
+# repository-owner action (a new secret, per AGENTS.md section 3's own
+# disclosure requirement) this PR cannot take on its own authority, and this
+# workflow's own actual risk profile is narrower than a generic mutating job
+# -- both triggers are `schedule`/parameterless `workflow_dispatch` (no
+# `pull_request`/`issue_comment`/any trigger carrying attacker-controlled
+# text), and no step interpolates `${{ github.event.* }}` anywhere
+# (confirmed: every `${{ }}` reference in this file resolves to a
+# `secrets.*` value, `github.token`, or a deterministic, non-attacker-
+# controlled workflow/repository-context value -- `github.server_url`,
+# `github.repository`, `github.repository_owner`, `github.run_id`,
+# `github.workflow` -- none of which an external contributor controls).
+# Revisit this if that risk profile ever changes (a trigger gains
+# attacker-controlled input, or this job's own write scope grows).
 
 name: Isolation registry refresh
 
