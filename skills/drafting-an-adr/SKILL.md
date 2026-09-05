@@ -1,6 +1,6 @@
 ---
 name: drafting-an-adr
-description: Use when a decision affecting architecture (structure, non-functional characteristics, dependencies, interfaces, or construction techniques) needs to be recorded before or after it's made. Applies Nygard's architecturally-significant criteria to judge warrant, then drafts an ADR from a MADR-derived template. Distinct from explaining-the-work (cites an ADR, never authors one) and drafting-issues (same drafted-artifact shape, different artifact).
+description: Use when a decision affecting architecture (structure, non-functional characteristics, dependencies, interfaces, or construction techniques) needs to be recorded before or after it's made. Applies Nygard's architecturally-significant criteria to judge warrant, then drafts an ADR from a MADR-derived template. Distinct from drafting-issues (same drafted-artifact shape, different artifact).
 ---
 
 # Drafting an ADR
@@ -211,21 +211,12 @@ ADR** when not applicable.
 - Do not auto-generate an ADR from a threshold or metric being crossed
   (a comment hitting a length limit, a pattern recurring N times). ADRs
   are heavyweight, owner-approved records; machine-generating them
-  produces "drive-by ADRs" -- the same boundary `explaining-the-work`
-  already states for the comment side of this problem.
+  produces "drive-by ADRs".
 - Do not create the file at `docs/adr/` before
   `scripts/gitapex_check_adr_shape.py` passes on the drafted body.
 
 ## Related skills
 
-- **vs. `explaining-the-work`:** that skill's why-not comment template
-  cites an ADR by path; it never authors one. This skill is what
-  produces the file that citation points at -- run this skill first when
-  no ADR exists yet for a decision a why-not comment needs to cite. This
-  skill's output is not self-certifying to that citer or any other
-  downstream consumer: a citer must still check the ADR's actual
-  `Status` and content at the path it cites, not treat the file's mere
-  existence as proof the decision is approved or still current.
 - **vs. `drafting-issues`:** same shape (elicit, draft a structured
   artifact from a template, validate with a bundled checker before
   creating anything), different artifact and trigger -- that skill drafts

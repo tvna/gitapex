@@ -268,7 +268,6 @@ def main(argv: list[str] | None = None) -> int:
         "Add a '### Transfer check' subsection within the entry's own span "
         "(disclosing a real cross-model result, or that it was not run this "
         "iteration), per the convention already used in "
-        "evals/explaining-the-work/split.md and "
         "evals/evaluating-skill-quality/split.md.",
         file=sys.stderr,
     )

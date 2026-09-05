@@ -301,8 +301,7 @@ When the fresh arrival is from an unknown or low-trust author, this
 skill and `responding-to-a-fresh-arrival` are both expected to fire on
 the same event -- this skill handles diff/metadata threat screening, the
 other handles content/response. Apply both; neither substitutes for the
-other. (Mirrors `outward-artifact-preflight` + `explaining-the-work`'s
-established co-firing pattern.)
+other.
 
 `scanning-attack-surfaces` covers this repository's *standing* hosting-
 platform configuration (existing unpinned actions, branch protection,

@@ -46,7 +46,7 @@ The harness to *measure* the repo's cross-model consistency concept now
 exists; the measurement itself does not yet, for the repository's suites
 in aggregate. Concretely, as of issue #106:
 
-- 27 of 30 `evals/*/eval.yaml` declare
+- 26 of 29 `evals/*/eval.yaml` declare
   `trials_per_task: 3`, so each of those tasks is sampled 3 times per run
   rather than once. (waza's docs describe bootstrap confidence
   intervals at trials > 1; that behavior is not verified here, since this
@@ -155,7 +155,6 @@ suites still assert on final text only).
 | `evaluating-deterministic-gate-quality` | 3 | 40 | none | no | [evals/evaluating-deterministic-gate-quality/eval-status.md](../evals/evaluating-deterministic-gate-quality/eval-status.md) |
 | `evaluating-skill-quality` | 3 | 98 | `claude-haiku-4-5-20251001`, `claude-opus-5`, `claude-sonnet-5` | yes | [evals/evaluating-skill-quality/eval-status.md](../evals/evaluating-skill-quality/eval-status.md) |
 | `executing-a-branch-plan` | 3 | 10 | none | no | [evals/executing-a-branch-plan/eval-status.md](../evals/executing-a-branch-plan/eval-status.md) |
-| `explaining-the-work` | 3 | 14 | none | no | [evals/explaining-the-work/eval-status.md](../evals/explaining-the-work/eval-status.md) |
 | `grounding-in-primary-sources` | 3 | 23 | none | no | [evals/grounding-in-primary-sources/eval-status.md](../evals/grounding-in-primary-sources/eval-status.md) |
 | `invoking-gitapex` | 3 | 5 | none | no | [evals/invoking-gitapex/eval-status.md](../evals/invoking-gitapex/eval-status.md) |
 | `merge-retrospective` | 3 | 29 | none | no | [evals/merge-retrospective/eval-status.md](../evals/merge-retrospective/eval-status.md) |
