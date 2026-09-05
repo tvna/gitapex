@@ -337,6 +337,30 @@ def test_an_unrelated_diff_leaves_the_new_signals_empty_too(repo: pathlib.Path) 
     assert flags.changed_skill_md_skills == ()
 
 
+def test_compute_flags_reports_the_new_reference_signal_directly(repo: pathlib.Path) -> None:
+    """Calls compute_flags directly, not through the _flags() wrapper every
+    other test above uses."""
+    _write(repo, "skills/sample/references/notes.md", "# notes\n")
+    _commit(repo)
+    flags = flags_module.compute_flags("HEAD~1", "HEAD", repo)
+    assert flags.changed_reference_skills == ("sample",)
+
+
+def test_skill_name_extracts_from_a_reference_path_with_an_explicit_path_re() -> None:
+    """_skill_name's path_re parameter defaults to the SKILL.md shape;
+    issue #1796 is its first caller passing _REFERENCE_PATH_RE explicitly."""
+    assert flags_module._skill_name("skills/foo/references/bar.md", flags_module._REFERENCE_PATH_RE) == "foo"
+    assert flags_module._skill_name("skills/foo/SKILL.md") == "foo"
+
+
+def test_as_output_pairs_includes_the_two_new_reference_keys(repo: pathlib.Path) -> None:
+    _write(repo, "skills/sample/references/notes.md", "# notes\n")
+    _commit(repo)
+    pairs = dict(_flags(repo).as_output_pairs())
+    assert pairs["changed-reference-skills"] == "sample"
+    assert pairs["changed-skill-md-skills"] == ""
+
+
 def test_an_unsupported_skill_directory_name_under_references_is_an_error(repo: pathlib.Path) -> None:
     _write(repo, "skills/bad name/references/x.md", "# x\n")
     _commit(repo)

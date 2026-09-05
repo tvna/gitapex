@@ -15,6 +15,7 @@ eval-coverage-disclosure waiver.
 
 from __future__ import annotations
 
+import argparse
 import builtins
 import pathlib
 import subprocess
@@ -308,6 +309,9 @@ def test_eval_coverage_not_required_when_skill_list_empty():
         ("foo,bar", ["bar", "foo"]),
         (" foo , bar ,foo", ["bar", "foo"]),
         (",,", []),
+        # Issue #1796: a hyphenated skill-directory-shaped token, the shape
+        # --changed-reference-skills/--changed-skill-md-skills actually carry.
+        ("drafting-a-skill,evaluating-skill-quality", ["drafting-a-skill", "evaluating-skill-quality"]),
     ],
 )
 def test_parse_comma_list(raw, expected):
@@ -1099,6 +1103,23 @@ def test_drafting_a_skill_invocation_disclosure_bare_waiver_with_no_reason_does_
 def test_drafting_a_skill_invocation_disclosure_unrecognized_verdict_does_not_satisfy():
     body = _VALID_SECTION + "- drafting-a-skill-invocation-disclosure: MAYBE\n"
     assert gate.find_missing_drafting_a_skill_invocation_disclosure(body, ["foo"], []) == ["foo"]
+
+
+def test_process_disclosure_items_unions_cli_dest_and_extra_cli_dest():
+    """The row-level helper `main()` calls to grade each check: for
+    drafting-a-skill-invocation-disclosure it must union both sources,
+    sorted and deduped."""
+    check = next(c for c in gate._PROCESS_DISCLOSURE_CHECKS if c.name == "drafting-a-skill-invocation-disclosure")
+    args = argparse.Namespace(changed_reference_skills="foo,bar", changed_skill_md_skills="bar,baz")
+    assert gate._process_disclosure_items(args, check) == ["bar", "baz", "foo"]
+
+
+def test_process_disclosure_items_uses_cli_dest_alone_when_no_extra_source():
+    """Every other row (no extra_cli_dest set) must read from cli_dest
+    alone -- unaffected by the union logic the one two-source row needs."""
+    check = next(c for c in gate._PROCESS_DISCLOSURE_CHECKS if c.name == "design-doc-adversarial-review")
+    args = argparse.Namespace(changed_design_docs="b.md,a.md")
+    assert gate._process_disclosure_items(args, check) == ["a.md", "b.md"]
 
 
 @pytest.mark.parametrize(
