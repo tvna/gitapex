@@ -17,6 +17,25 @@ check, there is no single stable key (a run ID changes every firing) to
 dedup a "possible new contamination pattern" issue against; an operator
 seeing two such issues for the same underlying cause can close one as a
 duplicate by hand.
+
+Usage::
+
+    uv run --frozen python3 .github/scripts/gitapex_isolation_registry_open_contamination_issue.py \\
+        --owner tvna --repo gitapex --run-url https://github.com/tvna/gitapex/actions/runs/123
+
+Run via `uv run` (needed for the pydantic import -- a bare `python3`
+invocation without pydantic installed now fails at import time, before
+argparse even runs), matching isolation-registry-refresh.yml's own
+invocation.
+
+Environment variables:
+    GITHUB_TOKEN  GitHub token with issues:write (the default Actions
+                  token's ``issues: write`` permission suffices).
+
+Exit codes:
+    0  Issue opened successfully.
+    1  Missing token, invalid arguments, or a GitHub API error prevented
+       completion (never silently treated as success).
 """
 
 from __future__ import annotations
@@ -29,8 +48,37 @@ from collections.abc import Callable
 from typing import Any
 
 from _gitapex_github_http import GitHubApiError, call_json, default_opener
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 _API_ROOT = "https://api.github.com"
+
+# This CLI's own wording for each constraint the model below imposes, keyed
+# by pydantic's own error type -- matching gitapex_stale_retro_stub_autoclose.py's
+# own established convention (its own docstring has the full rationale for
+# why pydantic's own message text is never echoed directly).
+_CONSTRAINT_HINTS = {
+    "string_too_short": "must not be blank",
+    "value_error": "must not be blank",
+}
+
+
+class OpenContaminationIssueArgs(BaseModel):
+    """Typed view of `main`'s parsed CLI namespace. Every field rejects
+    blank -- argparse's own ``required=True`` only guarantees the flag was
+    passed, not that its value is non-empty -- before any of it reaches a
+    GitHub API URL or request body."""
+
+    owner: str = Field(min_length=1)
+    repo: str = Field(min_length=1)
+    run_url: str = Field(min_length=1)
+
+    @field_validator("owner", "repo", "run_url")
+    @classmethod
+    def _reject_whitespace_only(cls, value: str) -> str:
+        # function-body-test-coverage: WAIVED: covered by test_main_rejects_blank_owner, which exercises this validator through main()'s own pydantic call rather than naming it directly (issue #1809, Step 8 follow-up)
+        if not value.strip():
+            raise ValueError("must not be blank")
+        return value
 
 
 def open_contamination_issue(
@@ -77,6 +125,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo", required=True)
     parser.add_argument("--run-url", required=True, help="This workflow run's own GitHub Actions URL")
     args = parser.parse_args(argv)
+    try:
+        OpenContaminationIssueArgs(owner=args.owner, repo=args.repo, run_url=args.run_url)
+    except ValidationError as error:
+        # Only the offending flag names and this CLI's own constraint
+        # wording are echoed -- never pydantic's own message text.
+        invalid = ", ".join(
+            f"--{str(item['loc'][0]).replace('_', '-')} ({_CONSTRAINT_HINTS.get(item['type'], 'invalid value')})"
+            for item in error.errors()
+        )
+        print(f"error: invalid arguments: {invalid}", file=sys.stderr)
+        return 1
 
     token = os.environ.get("GITHUB_TOKEN", "")
     if not token:

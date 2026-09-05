@@ -167,11 +167,28 @@ def test_append_registry_entry_raises_on_non_utf8_existing_file(tmp_path: Path) 
 def test_append_registry_entry_raises_on_flow_style_entries(tmp_path: Path) -> None:
     # Regression test for an independent review's own finding: text-appending
     # a block-style list item after a flow-style `entries: []`/`entries: {}`
-    # would produce invalid YAML.
+    # would produce invalid YAML. Caught by the generic re-parse postcondition
+    # check, not a shape-specific precondition regex (see the function's own
+    # docstring for why a postcondition check replaced that narrower regex).
     path = tmp_path / "registry.yaml"
     path.write_text("entries: []\n", encoding="utf-8")
 
-    with pytest.raises(OSError, match="flow style"):
+    with pytest.raises(OSError, match="invalid YAML"):
+        gvid.append_registry_entry(path, {"date": "2026-09-05"})
+
+
+def test_append_registry_entry_raises_on_flow_style_entries_with_a_comment_before_the_bracket(
+    tmp_path: Path,
+) -> None:
+    # Regression test for an independent review's own finding: a narrower,
+    # regex-based flow-style check missed this exact shape (a comment
+    # between the colon and a bracket deferred to a continuation line) --
+    # the generic re-parse postcondition check this function now uses
+    # catches it too, with no shape-specific regex needed.
+    path = tmp_path / "registry.yaml"
+    path.write_text("entries: # legacy compact format\n  [foo, bar]\n", encoding="utf-8")
+
+    with pytest.raises(OSError):
         gvid.append_registry_entry(path, {"date": "2026-09-05"})
 
 
@@ -357,6 +374,22 @@ def test_build_isolated_home_strips_live_state_dirs(tmp_path: Path, monkeypatch:
     assert (isolated_home / ".claude" / "skills" / "keep.txt").read_text(encoding="utf-8") == "kept"
     assert not list((isolated_home / ".claude" / "tasks").iterdir())
     assert (isolated_home / ".claude.json").read_text(encoding="utf-8") == '{"real": true}'
+
+
+def test_build_isolated_home_does_not_copy_credentials_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Regression test for an independent review's own finding: a dispatch
+    # confirmed able to read outside its isolated cwd when actively
+    # instructed to could otherwise read and echo back a live credential
+    # from the isolated $HOME's own copy -- the isolated copy must never
+    # carry this file at all.
+    real_home = tmp_path / "real-home"
+    (real_home / ".claude").mkdir(parents=True)
+    (real_home / ".claude" / ".credentials.json").write_text('{"token": "real-secret"}', encoding="utf-8")
+    monkeypatch.setenv("HOME", str(real_home))
+
+    isolated_home = gvid.build_isolated_home(tmp_path / "workdir")
+
+    assert not (isolated_home / ".claude" / ".credentials.json").exists()
 
 
 def test_build_isolated_home_raises_when_home_unset(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

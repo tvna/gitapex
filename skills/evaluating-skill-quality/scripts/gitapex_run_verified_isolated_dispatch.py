@@ -90,8 +90,23 @@ control establishment -- whose transcript this script prints
 unconditionally. ``redact_pii`` (below) now strips an email-address shape
 from every control transcript and real-dispatch output this script prints,
 closing that specific downstream consequence even though the underlying
-account-context-injection gap itself stays open. A caller needing either
-gap fully closed must not rely on this script alone.
+account-context-injection gap itself stays open. A third independent review
+then combined the first gap (an actively-instructed dispatch can read
+outside its isolated cwd) with the second (the isolated ``$HOME`` copy is
+not a general credential scrub) into one chained finding: a dispatch given
+read tools and pointed at untrusted review content -- ``SKILL.md``'s own
+mandated, sanctioned usage of this script -- could be instructed to read
+and echo back a credential-storage file from its own isolated ``$HOME``
+copy, and ``redact_pii``'s own narrow email-only scope would not catch a
+credential shape. ``_HOME_COPY_STRIP_FILES`` below now excludes the one
+concretely-known such file (``.credentials.json``, per the registry's own
+2026-08-08 entry) from the copy, the same targeted, single-named-item
+philosophy ``_dispatch_env`` already applies to ``ANTHROPIC_API_KEY`` --
+narrowing, not closing, the residual risk: any other credential-shaped file
+this list does not name is still copied, and any such content that does
+reach a dispatch's output still passes through ``redact_pii`` unredacted if
+it is not email-shaped. A caller needing any of these gaps fully closed
+must not rely on this script alone.
 
 **Why a freshly-established (same-run) recipe still needs a human eye.**
 Today's manual procedure has an operator directly read both control
@@ -146,6 +161,26 @@ import yaml
 # dispatched subprocess cannot see this calling session's own live task list
 # or conversation history.
 _HOME_COPY_STRIP_DIRS = ("tasks", "projects", "sessions", "shell-snapshots")
+
+# A named, single credential-storage file this repository's own registry
+# already documents as a real artifact in some environments
+# (metadata/isolation-registry.yaml's own 2026-08-08 entry: "a bare freshly
+# created isolated $HOME with no .credentials.json copied sufficed"). Never
+# copied into an isolated $HOME, the same targeted, single-named-item
+# philosophy _dispatch_env below already applies to ANTHROPIC_API_KEY -- not
+# a general credential/PII allowlist (this module's own docstring explains
+# why that broader approach was rejected), but the one concretely-known file
+# whose live content this script has no reason to expose to a dispatch, and
+# every real reason not to: a dispatch confirmed able to read outside its
+# isolated cwd when actively instructed to (this module's own "Two further
+# gaps" docstring section) could otherwise read this file's copy and echo
+# its content back, and redact_pii's own narrow email-address scope would
+# not catch that (issue #1809, Step 8 follow-up -- an independent review's
+# own finding). This is a residual-risk-narrowing measure, not a complete
+# fix: any other credential-shaped file this list does not name is still
+# copied, and any output escaping redact_pii's own email-only scope is still
+# printed as-is.
+_HOME_COPY_STRIP_FILES = (".credentials.json",)
 
 # Fixed, distinctive, non-sensitive sentence -- never the calling repository's
 # real CLAUDE.md content (see this module's own docstring for why).
@@ -292,15 +327,6 @@ def save_registry(path: Path, entries: list[dict[str, Any]]) -> None:
     )
 
 
-# Matches a flow-style `entries:` declaration (`entries: []`/`entries: {}`,
-# on one line) -- append_registry_entry refuses to text-append a block-style
-# list item after either shape, since the result would be invalid YAML (a
-# flow-style empty collection cannot be "continued" by a following
-# block-style sequence under the same key). An independent adversarial
-# review found this exact shape unguarded (issue #1809, Step 8 follow-up).
-_FLOW_STYLE_ENTRIES_RE = re.compile(r"^entries:\s*[\[{]", re.MULTILINE)
-
-
 def append_registry_entry(path: Path, entry: dict[str, Any]) -> None:
     """Append exactly one entry to ``path``'s own ``entries:`` list, leaving
     every existing byte before it untouched. This is the production
@@ -311,12 +337,16 @@ def append_registry_entry(path: Path, entry: dict[str, Any]) -> None:
     this one entry (matching a freshly-created registry's own documented
     starting shape, per ``load_registry``'s docstring). Raises ``OSError``
     rather than guessing when an existing, non-empty file does not already
-    look like a well-formed ``entries:``-keyed registry (a header-comment-
-    only stub, a flow-style ``entries: []``/``entries: {}``, or anything
-    else ``load_registry`` itself would not recognize) -- appending text
-    after such a file would either produce invalid YAML or, worse, silently
-    valid-but-wrong YAML whose new entry ``load_registry`` would never see
-    again (issue #1809, Step 8 follow-up)."""
+    look like a well-formed ``entries:``-keyed registry, or when appending
+    the rendered text would not actually add exactly one entry to it (a
+    header-comment-only stub, a flow-style ``entries: []``/``entries: {}``
+    -- including one split across a comment and a continuation line, a
+    shape a narrower one-line regex previously missed -- or anything else
+    ``load_registry`` itself would not recognize): a single postcondition
+    check (re-parsing the text this function is about to write, before
+    writing it) subsumes any number of precondition special cases, since it
+    verifies the actual result rather than guessing from the existing
+    text's own surface shape (issue #1809, Step 8 follow-up)."""
     # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
     rendered = yaml.safe_dump([entry], sort_keys=False, default_flow_style=False, allow_unicode=True)
     # Indented 2 spaces to nest correctly under an `entries:` top-level key
@@ -338,17 +368,24 @@ def append_registry_entry(path: Path, entry: dict[str, Any]) -> None:
     if not existing.strip():
         path.write_text(f"entries:\n{indented}\n", encoding="utf-8")
         return
-    if _FLOW_STYLE_ENTRIES_RE.search(existing):
-        raise OSError(f"{path} declares `entries:` in flow style -- refusing to text-append after it")
     try:
         parsed = yaml.safe_load(existing)
     except yaml.YAMLError as error:
         raise OSError(f"{path} exists but is not valid YAML -- refusing to append: {error}") from error
     if not isinstance(parsed, dict) or not isinstance(parsed.get("entries"), list):
         raise OSError(f"{path} exists but has no well-formed top-level `entries:` list -- refusing to guess")
+    pre_count = len(parsed["entries"])
     if not existing.endswith("\n"):
         existing += "\n"
-    path.write_text(f"{existing}\n{indented}\n", encoding="utf-8")
+    new_full_text = f"{existing}\n{indented}\n"
+    try:
+        reparsed = yaml.safe_load(new_full_text)
+    except yaml.YAMLError as error:
+        raise OSError(f"appending to {path} would produce invalid YAML -- refusing: {error}") from error
+    post_entries = reparsed.get("entries") if isinstance(reparsed, dict) else None
+    if not isinstance(post_entries, list) or len(post_entries) != pre_count + 1:
+        raise OSError(f"appending to {path} would not add exactly one entry to its `entries:` list -- refusing")
+    path.write_text(new_full_text, encoding="utf-8")
 
 
 def find_reviewed_match(
@@ -402,13 +439,15 @@ def build_isolated_home(
     base_dir: Path,
 ) -> Path:
     """Copy the real ``$HOME/.claude`` tree and ``$HOME/.claude.json`` into a
-    fresh directory under ``base_dir``, stripping only the live-state
-    subdirectories a dispatched subprocess must not see -- mirrors the
-    verified recipe in ``adversarial-self-audit.md``'s Isolation verification
-    section (settings/hooks/skills untouched). Raises ``FileNotFoundError``
-    if ``$HOME`` is unset or the real ``$HOME/.claude`` does not exist,
-    rather than guessing a fallback location, which would risk silently
-    copying a different identity's config/skills into the "isolated" copy.
+    fresh directory under ``base_dir``, stripping the live-state
+    subdirectories (``_HOME_COPY_STRIP_DIRS``) and the one named
+    credential-storage file (``_HOME_COPY_STRIP_FILES``) a dispatched
+    subprocess must not see -- mirrors the verified recipe in
+    ``adversarial-self-audit.md``'s Isolation verification section
+    (settings/hooks/skills untouched). Raises ``FileNotFoundError`` if
+    ``$HOME`` is unset or the real ``$HOME/.claude`` does not exist, rather
+    than guessing a fallback location, which would risk silently copying a
+    different identity's config/skills into the "isolated" copy.
     """
     # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
     home_env = os.environ.get("HOME")
@@ -431,7 +470,7 @@ def build_isolated_home(
     def _ignore_top_level_strip_dirs(directory: str, names: list[str]) -> list[str]:
         # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
         if Path(directory) == real_claude_dir:
-            return [n for n in names if n in _HOME_COPY_STRIP_DIRS]
+            return [n for n in names if n in _HOME_COPY_STRIP_DIRS or n in _HOME_COPY_STRIP_FILES]
         return []
 
     shutil.copytree(real_claude_dir, isolated_home / ".claude", ignore=_ignore_top_level_strip_dirs)
@@ -565,6 +604,15 @@ def print_no_verified_mechanism_block(reason: str, current_platform_note: str) -
     )
 
 
+def _strip_write_bit(path: Path) -> None:
+    """Clear every write bit on ``path`` (owner/group/other) without
+    touching any other mode bit -- shared by ``build_target_snapshot``'s own
+    per-child loop and its final call against the snapshot root itself, so
+    the masking expression exists in exactly one place."""
+    # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
+    path.chmod(path.stat().st_mode & ~0o222)
+
+
 def build_target_snapshot(target: Path, base_dir: Path) -> Path:
     """Copy ``target`` into a fresh scratch directory under ``base_dir`` and
     make it read-only, so the real dispatch's own isolated cwd *is* the
@@ -598,9 +646,8 @@ def build_target_snapshot(target: Path, base_dir: Path) -> Path:
         shutil.copy2(target, snapshot / target.name)
     for root, dirs, files in os.walk(snapshot):
         for name in dirs + files:
-            path = Path(root) / name
-            path.chmod(path.stat().st_mode & ~0o222)
-    snapshot.chmod(snapshot.stat().st_mode & ~0o222)
+            _strip_write_bit(Path(root) / name)
+    _strip_write_bit(snapshot)
     return snapshot
 
 

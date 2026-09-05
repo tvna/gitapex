@@ -485,6 +485,23 @@ def test_build_isolated_home_strips_live_state_dirs(tmp_path: Path, monkeypatch)
     assert (isolated_home / ".claude.json").read_text(encoding="utf-8") == '{"real": true}'
 
 
+def test_build_isolated_home_does_not_copy_credentials_file(tmp_path: Path, monkeypatch):
+    # Kept in sync with gitapex_run_verified_isolated_dispatch.py's own
+    # identical test (issue #1809, Step 8 follow-up; see this module's own
+    # test_build_isolated_home_matches_sibling_copy_in_dispatch_trace drift
+    # guard in that sibling test file).
+    real_home = tmp_path / "real-home"
+    (real_home / ".claude").mkdir(parents=True)
+    (real_home / ".claude" / ".credentials.json").write_text('{"token": "real-secret"}', encoding="utf-8")
+    monkeypatch.setenv("HOME", str(real_home))
+
+    base = tmp_path / "workdir"
+    base.mkdir()
+    isolated_home = cdt.build_isolated_home(base)
+
+    assert not (isolated_home / ".claude" / ".credentials.json").exists()
+
+
 def test_build_isolated_home_raises_without_real_claude_dir(tmp_path: Path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path / "no-claude-here"))
     with pytest.raises(FileNotFoundError):

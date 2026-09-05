@@ -84,6 +84,13 @@ from pydantic import BaseModel, ValidationError, field_validator
 # calling session's own live task list or conversation history.
 _HOME_COPY_STRIP_DIRS = ("tasks", "projects", "sessions", "shell-snapshots")
 
+# Kept in sync with gitapex_run_verified_isolated_dispatch.py's own sibling
+# copy (see that module's own _HOME_COPY_STRIP_FILES comment for the full
+# rationale) -- a named credential-storage file never copied into an
+# isolated $HOME, the same targeted, single-named-item philosophy the
+# ANTHROPIC_API_KEY environment strip already applies.
+_HOME_COPY_STRIP_FILES = (".credentials.json",)
+
 
 class ToolUseBlock(BaseModel):
     """One ``tool_use`` content block inside a transcript line's
@@ -296,7 +303,7 @@ def build_isolated_home(base_dir: Path) -> Path:
         # skill (e.g. a skill's own tasks/ content), which the prior
         # copy-then-rmtree approach never touched either.
         if Path(directory) == real_claude_dir:
-            return [n for n in names if n in _HOME_COPY_STRIP_DIRS]
+            return [n for n in names if n in _HOME_COPY_STRIP_DIRS or n in _HOME_COPY_STRIP_FILES]
         return []
 
     shutil.copytree(

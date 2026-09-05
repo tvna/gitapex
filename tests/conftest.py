@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import io
+import json
 import pathlib
 import re
 import subprocess
+import urllib.error
+import urllib.request
 from typing import Any
 
 import yaml
@@ -388,3 +391,46 @@ def shallow_clone_of_a_shallow_origin(tmp_path: pathlib.Path) -> pathlib.Path:
     leaf = tmp_path / "shallow-leaf"
     run_git(["git", "clone", "-q", "--depth", "1", f"file://{intermediate}", str(leaf)], tmp_path)
     return leaf
+
+
+class Response:
+    """A minimal stand-in for `http.client.HTTPResponse`, just the surface
+    `_gitapex_github_http.py`'s own `call_json`/`fetch_json_page` actually
+    use (`.status`, context-manager protocol, `.read()`). Shared by every
+    `.github/scripts/*.py` REST-write-carrier test that injects an `opener`
+    rather than making a real network call -- an independent review found
+    two new test files (issue #1809) had each defined their own byte-for-
+    byte copy of this class alongside several pre-existing ones; new test
+    files should import this shared copy rather than adding another."""
+
+    def __init__(self, status: int, body: str = "") -> None:
+        self.status = status
+        self.body = body.encode()
+
+    def __enter__(self) -> Response:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self.body
+
+    def close(self) -> None:
+        return None
+
+
+def http_error(code: int, body: str = "") -> urllib.error.HTTPError:
+    """A genuine `urllib.error.HTTPError` an injected `opener` can raise, to
+    exercise a `.github/scripts/*.py` REST-write carrier's own
+    `except GitHubApiError`/retry-on-5xx handling without a real network
+    call. See `Response`'s own docstring for the sharing rationale."""
+    return urllib.error.HTTPError("https://example.test", code, "err", {}, Response(code, body))  # type: ignore[arg-type]
+
+
+def payload_of(request: urllib.request.Request) -> Any:
+    """Decode an injected `opener`'s captured `Request`'s own JSON body --
+    the request `_gitapex_github_http.call_json` actually sends. See
+    `Response`'s own docstring for the sharing rationale."""
+    assert isinstance(request.data, bytes)
+    return json.loads(request.data.decode())

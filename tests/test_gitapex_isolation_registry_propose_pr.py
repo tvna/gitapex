@@ -17,33 +17,7 @@ from typing import Any
 
 import gitapex_isolation_registry_propose_pr as pp
 import pytest
-
-
-def _payload(request: urllib.request.Request) -> Any:
-    assert isinstance(request.data, bytes)
-    return json.loads(request.data.decode())
-
-
-class Response:
-    def __init__(self, status: int, body: str = "") -> None:
-        self.status = status
-        self.body = body.encode()
-
-    def __enter__(self) -> Response:
-        return self
-
-    def __exit__(self, *args: object) -> None:
-        return None
-
-    def read(self) -> bytes:
-        return self.body
-
-    def close(self) -> None:
-        return None
-
-
-def http_error(code: int, body: str = "") -> urllib.error.HTTPError:
-    return urllib.error.HTTPError("https://example.test", code, "err", {}, Response(code, body))  # type: ignore[arg-type]
+from conftest import Response, http_error, payload_of
 
 
 def test_propose_registry_pr_posts_expected_head_and_base() -> None:
@@ -52,7 +26,7 @@ def test_propose_registry_pr_posts_expected_head_and_base() -> None:
     def opener(request: urllib.request.Request) -> Response:
         captured["url"] = request.full_url
         captured["method"] = request.get_method()
-        captured["payload"] = _payload(request)
+        captured["payload"] = payload_of(request)
         return Response(201, json.dumps({"number": 42}))
 
     result = pp.propose_registry_pr(
@@ -118,3 +92,15 @@ def test_main_exits_one_on_github_api_error(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(pp, "propose_registry_pr", raise_error)
 
     assert pp.main(["--owner", "tvna", "--repo", "gitapex", "--head", "h", "--base", "main", "--run-url", "u"]) == 1
+
+
+def test_main_rejects_blank_head(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    # argparse's own required=True only guarantees the flag was passed, not
+    # that its value is non-empty -- the pydantic model must reject this
+    # before it ever reaches a GitHub API URL.
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+
+    exit_code = pp.main(["--owner", "tvna", "--repo", "gitapex", "--head", " ", "--base", "main", "--run-url", "u"])
+
+    assert exit_code == 1
+    assert "--head" in capsys.readouterr().err
