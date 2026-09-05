@@ -33,10 +33,19 @@ _WORKFLOW_PATH = Path(__file__).resolve().parent.parent / ".github/workflows/iso
 # (`mergePullRequest`, `enablePullRequestAutoMerge`), whose camelCase would
 # not match a snake_case guess like `merge_pull_request` even after
 # lowercasing (lowercasing camelCase introduces no underscores). `"gh api"`
-# is forbidden outright: this workflow only ever needs `gh pr create`/
-# `gh issue create`, so a raw API call of any kind is out of scope for it,
-# not only a merge-shaped one -- an independent adversarial review found
-# the prior list missed exactly this class of bypass (issue #1809).
+# is forbidden outright: this workflow needs no raw API call of any kind,
+# merge-shaped or not -- an independent adversarial review found the prior
+# list missed exactly this class of bypass (issue #1809). `"gh pr create"`/
+# `"gh issue create"` are also now forbidden outright (a second, later
+# independent review, issue #1809's own Step 8 follow-up): this workflow's
+# own two write operations were migrated off the raw `gh` CLI entirely onto
+# this repository's established REST-wrapper convention
+# (`gitapex_isolation_registry_open_contamination_issue.py`/
+# `gitapex_isolation_registry_propose_pr.py`, both built on
+# `_gitapex_github_http.py`), per AGENTS.md section 3's own "do not invoke
+# command-line GitHub tools directly" -- a regression back to either raw
+# `gh` invocation must fail this same governance test, not slip back in
+# silently.
 _FORBIDDEN_SUBSTRINGS = (
     "gh pr merge",
     "gh pr edit --auto",
@@ -47,6 +56,8 @@ _FORBIDDEN_SUBSTRINGS = (
     "mergepullrequest",
     "enablepullrequestautomerge",
     "gh pr review",
+    "gh pr create",
+    "gh issue create",
 )
 
 
@@ -91,16 +102,16 @@ def test_workflow_never_merges_or_auto_promotes_a_pr() -> None:
         )
 
 
-def test_workflow_only_opens_a_pr_via_gh_pr_create() -> None:
+def test_workflow_only_opens_a_pr_via_the_rest_wrapper_script() -> None:
     bodies = _iter_run_step_bodies(_load_workflow())
     combined = "\n".join(bodies)
-    assert "gh pr create" in combined
+    assert "gitapex_isolation_registry_propose_pr.py" in combined
 
 
 def test_workflow_opens_an_issue_on_control_failure() -> None:
     bodies = _iter_run_step_bodies(_load_workflow())
     combined = "\n".join(bodies)
-    assert "gh issue create" in combined
+    assert "gitapex_isolation_registry_open_contamination_issue.py" in combined
 
 
 def test_workflow_runs_controls_only_mode() -> None:

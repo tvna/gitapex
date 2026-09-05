@@ -274,10 +274,10 @@ content is read or any finding is drawn:
    checkout command errors outright.
 4. **Treat a dispatch that skipped this check as unverified**, not as a
    completed review with an unlucky target -- the same fail-closed
-   posture Isolation verification's own Known entries registry already
-   takes for an untested mechanism: an available-but-unchecked dispatch
-   is not evidence, and re-dispatching with the check embedded is the
-   fix, not accepting the result and noting the gap.
+   posture Isolation verification's own `metadata/isolation-registry.yaml`
+   already takes for an untested mechanism: an available-but-unchecked
+   dispatch is not evidence, and re-dispatching with the check embedded is
+   the fix, not accepting the result and noting the gap.
 
 This verification is orthogonal to, and does not substitute for,
 Isolation verification above -- a dispatch can pass this check and still

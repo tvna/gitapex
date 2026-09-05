@@ -13,8 +13,8 @@ section for the Trust class rule this `trust_class` column encodes.
 | 2026-07-28 | claude_md_agents_md | Dispatching a subagent through the harness's native Agent tool, pointed at a project-instruction-file-free scratch copy of the review target. | contaminated | reviewed |
 | 2026-07-28 | home_task_list | claude -p subprocess launched with cwd isolation only, $HOME inherited unchanged from the parent shell. | contaminated | reviewed |
 | 2026-08-01 | claude_md_agents_md | claude -p subprocess with cwd+HOME isolation, invoked with an explicit non-default --model flag. | isolated | reviewed |
-| 2026-08-08 | claude_md_agents_md | claude -p subprocess with cwd+HOME isolation, default model. | isolated | reviewed |
-| 2026-08-30 | claude_md_agents_md | claude -p subprocess with cwd+HOME isolation, default model. | isolated | same-run-unreviewed |
+| 2026-08-08 | claude_md_agents_md | claude -p subprocess, isolated cwd + isolated $HOME (script-established baseline recipe) | isolated | reviewed |
+| 2026-08-30 | claude_md_agents_md | claude -p subprocess, isolated cwd + isolated $HOME (script-established baseline recipe) | isolated | same-run-unreviewed |
 | 2026-09-01 | claude_md_agents_md | claude -p subprocess with cwd isolation only (no $HOME override). | isolated | same-run-unreviewed |
 | 2026-07-30 | claude_md_agents_md | claude -p --plugin-dir (pointed at a target directory) from the isolated cwd+HOME recipe, loading this repository's own skills/ (with and without a root CLAUDE.md) as a session-scoped plugin. | isolated | reviewed |
 | 2026-07-31 | missing_marketplace_manifest_fallback | claude plugin marketplace add + claude plugin install against the isolated $HOME, then dispatch (real Skill-tool discovery path, distinct from --plugin-dir's direct load). | contaminated | reviewed |
@@ -23,3 +23,4 @@ section for the Trust class rule this `trust_class` column encodes.
 | 2026-08-25 | claude_md_agents_md | claude -p, prompt passed as a single self-contained CLI argument, no permission-bypass flag. | isolated | reviewed |
 | 2026-08-26 | claude_md_agents_md | claude -p, prompt passed as a single self-contained CLI argument, no permission-bypass flag. | isolated | same-run-unreviewed |
 | (unspecified) | claude_md_agents_md | claude -p, prompt passed as a single self-contained CLI argument, no permission-bypass flag. | isolated | same-run-unreviewed |
+| 2026-09-05 | account_level_context_injection | claude -p subprocess, isolated cwd + isolated $HOME (script-established baseline recipe) | contaminated | same-run-unreviewed |

@@ -54,6 +54,34 @@ carries a ``verifiedLeakVectors`` list naming exactly what was checked this
 run, never an unqualified ``dispatchIsolation: true`` boolean that would
 overstate what was actually verified.
 
+**Two further gaps, found by issue #1809's own Step 8 independent review and
+this module's own author reproducing both live, disclosed here rather than
+silently left implicit in the narrow ``verifiedLeakVectors`` list above.**
+First: cwd isolation is not a read-confinement boundary. This script's
+isolated cwd only prevents the *passive*, automatic CLAUDE.md/AGENTS.md
+ancestry scan the primary leak vector covers -- it does **not** prevent a
+dispatch that is actively instructed (for example by injected content
+inside the very review target this script exists to let a human review
+safely) from reading an arbitrary absolute path outside its cwd. Confirmed
+live: a ``claude -p --allowedTools "Read,Glob"`` dispatch from this exact
+recipe successfully read a file at an absolute path outside its isolated
+cwd, in the same environment this script is meant to run in. Treat the
+isolated cwd as closing the one specific automatic-discovery leak this
+module targets, never as a general sandbox against a deliberate,
+instructed read. Second, and following from the first: the isolated
+``$HOME`` copy this script builds does not scrub every account-level
+context the harness itself injects independently of the dispatch's own cwd
+content -- a live positive-control run observed the calling account's own
+``userEmail``/``currentDate`` context reaching the dispatch verbatim,
+alongside the sentinel ``CLAUDE.md``, even though neither is part of that
+sentinel file. ``_dispatch_env`` below strips the one specific, named,
+highest-value secret this repository's own CI workflows are documented to
+pass this script (``ANTHROPIC_API_KEY``) as a targeted, disclosed mitigation
+-- it does not attempt a general credential/PII allowlist, which would risk
+breaking the OAuth-token-based authentication some environments this script
+runs in depend on (see the registry's own historical notes). A caller
+needing either gap fully closed must not rely on this script alone.
+
 **Why a freshly-established (same-run) recipe still needs a human eye.**
 Today's manual procedure has an operator directly read both control
 transcripts before trusting the result. Automating the pass/fail comparison
@@ -122,16 +150,28 @@ _CONTROL_PROMPT = (
 _PRIMARY_LEAK_VECTOR = "claude_md_agents_md"
 
 # The exact recipe this script itself implements: cwd isolation (the target
-# snapshot itself, via build_target_snapshot) plus an isolated $HOME copy, no
-# permission-bypass flag. Used both when this script writes a new same-run
-# entry (so the entry accurately names what was actually run) and when it
-# looks one up (so it never reuses a registry entry recorded for a different
-# mechanism -- e.g. `--plugin-dir` or a marketplace install -- merely because
-# that entry happens to share this run's own identifying signals; the
-# registry's own schema keys entries on the *pair* (identifying-signal-set,
-# mechanism), not signals alone, and several migrated historical entries
-# share identical signals with different mechanisms and results).
-_CANONICAL_MECHANISM = "claude -p subprocess, isolated cwd (script-established baseline recipe)"
+# snapshot itself, via build_target_snapshot) PLUS an isolated $HOME copy
+# (build_isolated_home, called unconditionally by main() -- never cwd alone),
+# default model, prompt passed as a CLI argument, no permission-bypass flag.
+# Named explicitly as "cwd+HOME" (not merely "isolated cwd") because two
+# migrated historical entries in metadata/isolation-registry.yaml describe
+# cwd-only isolation with $HOME left inherited or unaddressed -- a materially
+# weaker recipe this string must never be confused with. Used both when this
+# script writes a new same-run entry (so the entry accurately names what was
+# actually run) and when it looks one up (so it never reuses a registry entry
+# recorded for a different mechanism -- e.g. `--plugin-dir`, a marketplace
+# install, or cwd-only isolation -- merely because that entry happens to
+# share this run's own identifying signals; the registry's own schema keys
+# entries on the *pair* (identifying-signal-set, mechanism), not signals
+# alone, and several migrated historical entries share identical signals
+# with different mechanisms and results). An independent adversarial review
+# found the two migrated entries actually describing this exact recipe
+# ("claude -p subprocess with cwd+HOME isolation, default model.", dated
+# 2026-08-08 and 2026-08-30) used their own historical prose wording rather
+# than this literal constant, so this constant could never match anything in
+# the shipped registry -- both entries' own `mechanism` fields were corrected
+# to this exact string to fix that (issue #1809, Step 8 follow-up).
+_CANONICAL_MECHANISM = "claude -p subprocess, isolated cwd + isolated $HOME (script-established baseline recipe)"
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _SKILL_DIR = _SCRIPT_DIR.parent
@@ -188,16 +228,66 @@ def load_registry(
     except (UnicodeDecodeError, yaml.YAMLError):
         return []
     entries = data.get("entries") if isinstance(data, dict) else None
-    return entries if isinstance(entries, list) else []
+    if not isinstance(entries, list):
+        return []
+    # A non-mapping list item (a plausible hand-authored YAML slip -- this
+    # file is also meant to be human-edited during review/promotion) is
+    # dropped here, once, rather than crashing every caller's own
+    # entry.get(...) with AttributeError (issue #1809, Step 8 follow-up).
+    return [item for item in entries if isinstance(item, dict)]
 
 
 def save_registry(path: Path, entries: list[dict[str, Any]]) -> None:
-    """Write ``entries`` back to ``path`` as ``{"entries": [...]}``."""
+    """Write ``entries`` back to ``path`` as ``{"entries": [...]}``, replacing
+    the file wholesale. Used for initial creation and by this module's own
+    tests to seed a fixture registry -- never called from this module's own
+    same-run-entry-write path (``main()`` uses ``append_registry_entry``
+    instead), since round-tripping the *entire* file through this generic
+    dumper on every single-entry addition would strip the hand-authored
+    file's own header comment and reformat every existing entry's own
+    scalar style, drowning a one-entry addition in reformatting noise
+    (issue #1809, Step 8 follow-up -- confirmed live: appending one entry
+    this way turned a 438-line file into a ~755-line diff)."""
     # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
     path.write_text(
         yaml.safe_dump({"entries": entries}, sort_keys=False, default_flow_style=False, allow_unicode=True),
         encoding="utf-8",
     )
+
+
+def append_registry_entry(path: Path, entry: dict[str, Any]) -> None:
+    """Append exactly one entry to ``path``'s own ``entries:`` list, leaving
+    every existing byte before it untouched. This is the production
+    same-run-entry-write path ``main()`` actually uses -- see
+    ``save_registry``'s own docstring for why a whole-file rewrite is wrong
+    for this operation. If ``path`` does not exist yet, or is empty/
+    whitespace-only, creates it fresh with just the ``entries:`` key and
+    this one entry (matching a freshly-created registry's own documented
+    starting shape, per ``load_registry``'s docstring)."""
+    # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
+    rendered = yaml.safe_dump([entry], sort_keys=False, default_flow_style=False, allow_unicode=True)
+    # Indented 2 spaces to nest correctly under an `entries:` top-level key
+    # (this registry's own established convention -- see the file this
+    # module ships) -- yaml.safe_dump's own top-level list rendering starts
+    # each item at column 0, which would otherwise silently break the YAML
+    # block structure when appended under an already-indented list.
+    indented = "\n".join(f"  {line}" if line else line for line in rendered.splitlines())
+    try:
+        existing = path.read_text(encoding="utf-8") if path.is_file() else ""
+    except UnicodeDecodeError as error:
+        # Never silently treat an existing-but-undecodable file as "empty,
+        # start fresh" -- that would overwrite whatever real content is
+        # actually there. Raised as OSError, not left as the raw
+        # UnicodeDecodeError, so this module's own existing OSError-catching
+        # call sites (e.g. main()'s own build_target_snapshot handling) can
+        # catch it without a separate except arm.
+        raise OSError(f"{path} exists but is not valid UTF-8 -- refusing to append: {error}") from error
+    if not existing.strip():
+        path.write_text(f"entries:\n{indented}\n", encoding="utf-8")
+        return
+    if not existing.endswith("\n"):
+        existing += "\n"
+    path.write_text(f"{existing}\n{indented}\n", encoding="utf-8")
 
 
 def find_reviewed_match(
@@ -269,6 +359,13 @@ def build_isolated_home(
         raise FileNotFoundError(f"no {real_claude_dir} to build an isolated copy from")
     isolated_home = base_dir / "isolated-home"
     isolated_home.mkdir(parents=True, exist_ok=True)
+    # An explicit chmod, not only mkdir's own mode= (which mkdir applies
+    # before umask masking, so it does not reliably land on 0o700 alone) --
+    # a defense-in-depth permission set at the point this script itself
+    # creates a directory that will hold a copy of $HOME/.claude, rather
+    # than relying solely on the enclosing tempfile.TemporaryDirectory's own
+    # 0o700 default one level up (issue #1809, Step 8 follow-up).
+    isolated_home.chmod(0o700)
 
     def _ignore_top_level_strip_dirs(directory: str, names: list[str]) -> list[str]:
         # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
@@ -286,9 +383,32 @@ def build_isolated_home(
 
 
 def _dispatch_env(home: Path, cwd: Path) -> dict[str, str]:
+    """Build the dispatched subprocess's own environment. Copies the parent
+    process's environment (needed: this script's own callers, including
+    ``.github/workflows/isolation-registry-refresh.yml``, document that a
+    working ``claude`` CLI invocation needs whatever ambient auth the
+    calling environment already provides) minus ``CLAUDE_CODE_SESSION_ID``
+    (never let a dispatched subprocess see the calling session's own ID) and
+    minus ``ANTHROPIC_API_KEY`` -- a targeted, disclosed mitigation, not a
+    general secret-scrubbing pass: this script's own module docstring's "two
+    further gaps" section discloses that a dispatch given file-reading tools
+    is not actually confined to reads inside ``cwd`` in every environment
+    this script runs in, so the one specific, named, highest-value secret
+    this repository's own CI workflows are documented to pass this script
+    should not be reachable from inside a dispatch reviewing untrusted
+    content, even though this does not close the underlying confinement gap
+    (issue #1809, Step 8 follow-up). A broader allowlist/denylist was
+    considered and rejected: several environments this script runs in
+    authenticate via an env-supplied OAuth token/file descriptor rather than
+    a fixed, guessable name (see this repository's own isolation-registry.yaml
+    historical notes), so stripping anything beyond this one specifically
+    named, specifically documented variable risks breaking authentication in
+    exactly the environments this script needs to keep working in.
+    """
     # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
     env = dict(os.environ)
     env.pop("CLAUDE_CODE_SESSION_ID", None)
+    env.pop("ANTHROPIC_API_KEY", None)
     env["HOME"] = str(home)
     # Some tools consult $PWD instead of calling getcwd(); left stale here it
     # would still carry the calling process's real cwd even though `cwd=`
@@ -386,11 +506,17 @@ def build_target_snapshot(target: Path, base_dir: Path) -> Path:
     make it read-only, so the real dispatch's own isolated cwd *is* the
     review target itself rather than an empty directory pointed at an
     absolute path elsewhere -- adversarial-self-audit.md's own methodology
-    pitfall: the harness's permission sandbox confines a dispatch to reads
-    inside its working directory, so any other arrangement silently truncates
-    the dispatch's output to a bare read-grant request. "Read-only" here is
-    caller-created and not written by the dispatch, not an OS-enforced
-    guarantee under a uid-0 process, which bypasses the mode bits.
+    pitfall: a dispatch launched from an empty isolated cwd but pointed at
+    an absolute target path elsewhere has been observed to silently truncate
+    its output to a bare read-grant request in at least one environment,
+    easy to misread as a model refusal. Making the target snapshot itself
+    the cwd sidesteps that specific failure mode -- it is not, and must not
+    be read as, a general read-confinement guarantee: this module's own
+    docstring's "two further gaps" section discloses that a dispatch with
+    file-reading tools has been confirmed able to read outside this cwd when
+    actively instructed to. "Read-only" here is caller-created and not
+    written by the dispatch, not an OS-enforced guarantee under a uid-0
+    process, which bypasses the mode bits.
     """
     # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
     snapshot = base_dir / "target-snapshot"
@@ -534,7 +660,10 @@ def main(
                 f"Reusing Reviewed registry entry dated {matched.get('date')}: {matched.get('mechanism')}",
                 file=sys.stderr,
             )
-            verified_leak_vectors = [str(matched.get("leak_vector", _PRIMARY_LEAK_VECTOR))]
+            # find_reviewed_match's own leak_vector filter already guarantees
+            # matched["leak_vector"] == _PRIMARY_LEAK_VECTOR here -- no
+            # fallback/coercion needed (issue #1809, Step 8 follow-up).
+            verified_leak_vectors = [_PRIMARY_LEAK_VECTOR]
         else:
             try:
                 positive_ok, negative_ok, transcript = run_two_controls(
@@ -571,16 +700,28 @@ def main(
                     "own review gate."
                 ],
             }
-            entries.append(new_entry)
-            save_registry(args.registry, entries)
-            regenerate_markdown_summary(args.registry, args.history_markdown)
+            try:
+                append_registry_entry(args.registry, new_entry)
+                regenerate_markdown_summary(args.registry, args.history_markdown)
+            except OSError as error:
+                print(f"error: could not write the new registry entry to {args.registry}: {error}", file=sys.stderr)
+                return 1
             verified_leak_vectors = [_PRIMARY_LEAK_VECTOR]
 
         if args.controls_only:
             print("controls-only mode: isolation verified, not launching a real dispatch.")
             return 0
 
-        snapshot = build_target_snapshot(args.target, base_dir)
+        try:
+            snapshot = build_target_snapshot(args.target, base_dir)
+        except OSError as error:
+            # A broken symlink or an unreadable file inside --target -- a
+            # plausible real checkout artifact -- would otherwise crash
+            # main() with a raw traceback instead of this module's own
+            # consistent print-and-return-1 convention (issue #1809, Step 8
+            # follow-up).
+            print(f"error: could not build a snapshot of --target {args.target}: {error}", file=sys.stderr)
+            return 1
         try:
             prompt = args.prompt_file.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as error:

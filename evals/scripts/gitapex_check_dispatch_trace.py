@@ -278,6 +278,16 @@ def build_isolated_home(base_dir: Path) -> Path:
         raise FileNotFoundError(f"no {real_claude_dir} to build an isolated copy from")
     isolated_home = base_dir / "isolated-home"
     isolated_home.mkdir(parents=True, exist_ok=True)
+    # An explicit chmod, not only mkdir's own mode= (which mkdir applies
+    # before umask masking, so it does not reliably land on 0o700 alone) --
+    # a defense-in-depth permission set at the point this function itself
+    # creates a directory that will hold a copy of $HOME/.claude, ported
+    # from skills/evaluating-skill-quality/scripts/
+    # gitapex_run_verified_isolated_dispatch.py's own identical fix so the
+    # two copies stay in sync (issue #1809, Step 8 follow-up; see that
+    # module's own test_build_isolated_home_matches_sibling_copy_in_dispatch_trace
+    # drift guard).
+    isolated_home.chmod(0o700)
 
     def _ignore_top_level_strip_dirs(directory: str, names: list[str]) -> list[str]:
         # Only strip these names as direct children of real_claude_dir

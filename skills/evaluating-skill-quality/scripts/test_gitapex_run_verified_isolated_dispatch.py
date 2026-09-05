@@ -104,6 +104,69 @@ def test_save_and_load_registry_round_trips(tmp_path: Path) -> None:
     assert yaml.safe_load(path.read_text(encoding="utf-8"))["entries"] == entries
 
 
+def test_load_registry_drops_non_dict_entries(tmp_path: Path) -> None:
+    # A plausible hand-authored YAML slip (this file is also meant to be
+    # human-edited during review/promotion, per the design doc's own
+    # Migration section) -- must be skipped, not crash a later caller's own
+    # entry.get(...) with AttributeError (issue #1809, Step 8 follow-up).
+    path = tmp_path / "registry.yaml"
+    path.write_text("entries:\n  - not-a-mapping\n  - identifying_signals: {}\n", encoding="utf-8")
+
+    assert gvid.load_registry(path) == [{"identifying_signals": {}}]
+
+
+def test_append_registry_entry_preserves_existing_content(tmp_path: Path) -> None:
+    # Regression test for issue #1809's Step 8 finding: save_registry's own
+    # whole-file round trip through yaml.safe_dump strips the hand-authored
+    # header comment and reformats every existing entry, turning a
+    # single-entry addition into a full-file diff. append_registry_entry
+    # must never touch a single byte that came before the new entry.
+    path = tmp_path / "registry.yaml"
+    original = '# A hand-authored header comment.\n\nentries:\n  - date: "2026-01-01"\n'
+    path.write_text(original, encoding="utf-8")
+
+    gvid.append_registry_entry(path, {"date": "2026-09-05", "leak_vector": "claude_md_agents_md"})
+
+    new_content = path.read_text(encoding="utf-8")
+    assert new_content.startswith(original)
+    entries = gvid.load_registry(path)
+    assert [entry["date"] for entry in entries] == ["2026-01-01", "2026-09-05"]
+
+
+def test_append_registry_entry_creates_file_when_missing(tmp_path: Path) -> None:
+    path = tmp_path / "registry.yaml"
+
+    gvid.append_registry_entry(path, {"date": "2026-09-05"})
+
+    assert gvid.load_registry(path) == [{"date": "2026-09-05"}]
+
+
+def test_find_reviewed_match_succeeds_against_real_shipped_registry() -> None:
+    # Regression test for issue #1809's Step 8 finding: _CANONICAL_MECHANISM
+    # previously matched none of the real, shipped registry's own migrated
+    # entries, so find_reviewed_match always returned None against real
+    # data even though a byte-for-byte-equivalent reviewed/isolated entry
+    # existed -- every prior test here constructed its own synthetic entry
+    # instead of loading the actual file, so this gap went uncaught. Loads
+    # the real metadata/isolation-registry.yaml this repository ships.
+    real_registry_path = Path(__file__).resolve().parent.parent / "metadata" / "isolation-registry.yaml"
+    entries = gvid.load_registry(real_registry_path)
+    assert entries, "the real shipped registry must not be empty"
+
+    signals = {
+        "CLAUDE_CODE_REMOTE": "true",
+        "CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE": "cloud_default",
+        "claude_version": "2.1.226 (Claude Code)",
+    }
+
+    match = gvid.find_reviewed_match(entries, signals)
+
+    assert match is not None
+    assert match["mechanism"] == gvid._CANONICAL_MECHANISM
+    assert match["trust_class"] == "reviewed"
+    assert match["result"] == "isolated"
+
+
 # ---- find_reviewed_match -----------------------------------------------------
 
 
@@ -251,6 +314,89 @@ def test_build_isolated_home_raises_without_real_claude_dir(tmp_path: Path, monk
     monkeypatch.setenv("HOME", str(tmp_path / "no-claude-here"))
     with pytest.raises(FileNotFoundError):
         gvid.build_isolated_home(tmp_path / "workdir")
+
+
+def test_build_isolated_home_does_not_strip_nested_same_named_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Ported from tests/test_gitapex_check_dispatch_trace.py's own identically
+    # named test -- an independent adversarial review found this copy's own
+    # test file had silently dropped this regression guard while adapting
+    # the rest of that file's build_isolated_home tests (issue #1809, Step 8
+    # follow-up). Only a direct child of $HOME/.claude named "tasks" (etc.)
+    # is stripped -- a same-named directory nested inside a vendored skill's
+    # own content must survive untouched (the strip is a top-level-only
+    # exclusion, not a recursive ignore_patterns-style match).
+    real_home = tmp_path / "real-home"
+    claude_dir = real_home / ".claude"
+    (claude_dir / "tasks").mkdir(parents=True)
+    nested_tasks = claude_dir / "skills" / "some-skill" / "tasks"
+    nested_tasks.mkdir(parents=True)
+    (nested_tasks / "fixture.yaml").write_text("id: x", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(real_home))
+
+    isolated_home = gvid.build_isolated_home(tmp_path / "workdir")
+
+    assert not list((isolated_home / ".claude" / "tasks").iterdir())
+    assert (isolated_home / ".claude" / "skills" / "some-skill" / "tasks" / "fixture.yaml").read_text(
+        encoding="utf-8"
+    ) == "id: x"
+
+
+def test_build_isolated_home_hardens_directory_permissions(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    real_home = tmp_path / "real-home"
+    (real_home / ".claude").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(real_home))
+
+    isolated_home = gvid.build_isolated_home(tmp_path / "workdir")
+
+    assert (isolated_home.stat().st_mode & 0o777) == 0o700
+
+
+def test_build_isolated_home_matches_sibling_copy_in_dispatch_trace() -> None:
+    """Drift-detection guard for the deliberate copy-paste this module's own
+    docstring discloses (evals/scripts/gitapex_check_dispatch_trace.py's
+    build_isolated_home cannot be imported here across the never-deployed-
+    with-skills/ boundary -- see that docstring). An independent adversarial
+    review found this duplication has no guard against silent drift between
+    the two copies (issue #1809, Step 8 follow-up); this test compares both
+    functions' own parsed AST structure (after dropping each one's own
+    leading docstring, whose prose deliberately differs between the two
+    files) rather than raw source text, so formatting/comment/docstring
+    differences neither file promises to keep identical never produce a
+    false failure, while an actual logic change to only one copy does."""
+    import ast
+    import inspect
+    import sys
+    import textwrap
+
+    scripts_dir = Path(__file__).resolve().parent.parent.parent.parent / "evals" / "scripts"
+    sys.path.insert(0, str(scripts_dir))
+    try:
+        import gitapex_check_dispatch_trace as cdt
+    finally:
+        sys.path.remove(str(scripts_dir))
+
+    def _body_structure(func: object) -> str:
+        source = textwrap.dedent(inspect.getsource(func))  # type: ignore[arg-type]
+        module = ast.parse(source)
+        function_def = module.body[0]
+        assert isinstance(function_def, ast.FunctionDef)
+        body = function_def.body
+        if (
+            body
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)
+        ):
+            body = body[1:]  # drop the leading docstring -- prose differs by design
+        return "\n".join(ast.dump(node, annotate_fields=False) for node in body)
+
+    assert _body_structure(gvid.build_isolated_home) == _body_structure(cdt.build_isolated_home), (
+        "gitapex_run_verified_isolated_dispatch.build_isolated_home has drifted from "
+        "evals/scripts/gitapex_check_dispatch_trace.build_isolated_home -- port the change to both "
+        "copies (issue #1809, Step 8 follow-up)"
+    )
 
 
 # ---- run_two_controls (mocked subprocess) -----------------------------------

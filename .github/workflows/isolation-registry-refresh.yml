@@ -19,6 +19,28 @@
 # to establish a same-run entry with zero human watching live, precisely
 # because it is also the one path guaranteed not to act on that entry in the
 # same run.
+#
+# Job-level permission scope (issue #1809, Step 8 follow-up -- disclosed
+# rather than left implicit after an independent convention review flagged
+# it): this job's own `contents: write`/`pull-requests: write`/`issues:
+# write` grant on the default GITHUB_TOKEN is broader than the top-level
+# `contents: read` default, and this repository's one other
+# genuinely-mutating workflow (apply-rulesets.yml) instead routes its own
+# write through a separate, purpose-scoped PAT behind a required-reviewer
+# Environment gate, keeping the default token's own blast radius at
+# `contents: read`. That pattern was not adopted here: provisioning a new
+# PAT and Environment is a repository-owner action (a new secret, per
+# AGENTS.md section 3's own disclosure requirement) this PR cannot take on
+# its own authority, and this workflow's own actual risk profile is
+# narrower than a generic mutating job -- both triggers are `schedule`/
+# parameterless `workflow_dispatch` (no `pull_request`/`issue_comment`/any
+# trigger carrying attacker-controlled text), and no step interpolates
+# `${{ github.event.* }}` anywhere (confirmed: every `${{ }}` reference in
+# this file is either a `secrets.*`/`github.token`/deterministic
+# `github.server_url`/`github.repository`/`github.run_id` value, none of
+# which an external contributor controls). Revisit this if that risk
+# profile ever changes (a trigger gains attacker-controlled input, or this
+# job's own write scope grows).
 
 name: Isolation registry refresh
 
@@ -100,24 +122,32 @@ jobs:
       # yet verified at this version") -- opens an issue rather than
       # silently no-op'ing, mirroring merge-retrospective's own
       # gate-proposal pattern. Never opens or merges a PR on this branch.
+      # Uses this repository's own REST-wrapper script rather than the raw
+      # `gh issue create` CLI (issue #1809, Step 8 follow-up -- AGENTS.md
+      # section 3: "use platform-integrated tool calls...or the
+      # repository's approved REST API wrapper...do not invoke
+      # command-line GitHub tools directly").
       - name: Open an issue on a new contamination finding
         if: steps.run.outputs.exit-code != '0'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          gh issue create \
-            --title "isolation-registry-refresh: possible new contamination pattern found" \
-            --body "The scheduled isolation-registry-refresh workflow's live two-control run failed on \`claude\` CLI version reported by this run. This can mean a genuinely new contamination pattern, not merely an as-yet-unverified CLI version. See this run's own log for the full control transcripts: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. Investigate per skills/evaluating-skill-quality/scripts/gitapex_run_verified_isolated_dispatch.py's own module docstring (the current two-control methodology) before trusting any isolated dispatch on this platform." \
-            --label "bug"
+          uv run --frozen python3 .github/scripts/gitapex_isolation_registry_open_contamination_issue.py \
+            --owner "${{ github.repository_owner }}" \
+            --repo "$(basename "${{ github.repository }}")" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
       # Never runs `gh pr merge`/`gh pr edit --auto`/an auto-promote API
       # call anywhere in this job -- test_gitapex_isolation_registry_refresh_workflow.py
       # asserts this file's own text contains none, not merely a prose
-      # promise. Propose only: a human still reviews and merges.
+      # promise. Propose only: a human still reviews and merges. Uses this
+      # repository's own REST-wrapper script rather than the raw
+      # `gh pr create` CLI, for the same reason as the issue-open step
+      # above.
       - name: Propose the registry update via PR
         if: steps.run.outputs.exit-code == '0'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if git diff --quiet -- \
             skills/evaluating-skill-quality/metadata/isolation-registry.yaml \
@@ -134,8 +164,9 @@ jobs:
             skills/evaluating-skill-quality/references/isolation-registry-history.md
           git commit -m "chore(evaluating-skill-quality): scheduled isolation-registry same-run entry (Refs #1809)"
           git push origin "$branch"
-          gh pr create \
-            --title "chore(evaluating-skill-quality): scheduled isolation-registry same-run entry" \
-            --body "Opened automatically by the isolation-registry-refresh workflow (run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}). Adds a same-run-unreviewed registry entry established by a live two-control run at the current \`claude\` CLI version. Per adversarial-self-audit.md's Trust class rule, this entry becomes Reviewed once this PR merges, not before -- review the printed control transcripts in the linked run log before approving." \
+          uv run --frozen python3 .github/scripts/gitapex_isolation_registry_propose_pr.py \
+            --owner "${{ github.repository_owner }}" \
+            --repo "$(basename "${{ github.repository }}")" \
             --head "$branch" \
-            --base main
+            --base main \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

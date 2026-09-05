@@ -146,7 +146,9 @@ entries:
       CLAUDE_CODE_REMOTE: "true"
       CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
       claude_version: "2.1.226 (Claude Code)"
-    mechanism: "claude -p subprocess with cwd+HOME isolation, default model."
+    mechanism: >-
+      claude -p subprocess, isolated cwd + isolated $HOME
+      (script-established baseline recipe)
     leak_vector: claude_md_agents_md
     result: isolated
     verified_alternative: >-
@@ -156,12 +158,22 @@ entries:
     companion_flags: []
     methodology_pitfalls:
       - >-
-        The harness's own permission sandbox confines a dispatched claude
-        -p to reads inside its working directory. A dispatch launched from
-        an empty isolated cwd but pointed at an absolute target path
-        elsewhere never reads the target -- it halts and returns a bare
-        read-grant request that can look like a short report, easy to
-        misread as a model refusal rather than a harness denial.
+        RETRACTED 2026-09-05 (issue #1809, Step 8 follow-up): this entry
+        previously claimed "the harness's own permission sandbox confines a
+        dispatched claude -p to reads inside its working directory." That
+        claim is FALSE in at least one confirmed environment (this same
+        session's own CLAUDE_CODE_REMOTE/cloud_default signature): a live
+        `claude -p --allowedTools "Read,Glob"` dispatch from this exact
+        recipe successfully read a file at an arbitrary absolute path
+        outside its isolated cwd. Do not rely on cwd isolation as a
+        confinement boundary against a dispatch actively instructed (e.g.
+        by injected content in the review target) to read outside its cwd
+        -- it only prevents the *passive*, automatic CLAUDE.md/AGENTS.md
+        ancestry scan this entry's own leak_vector actually covers. The
+        original claim's own scenario (an empty cwd pointed at an absolute
+        target path elsewhere producing a bare read-grant request) may
+        still be accurate for that specific narrow case; only the general
+        "confines to reads inside its working directory" claim is retracted.
     trust_class: reviewed
     date: "2026-08-08"
     notes:
@@ -176,7 +188,9 @@ entries:
       CLAUDE_CODE_REMOTE: "true"
       CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
       claude_version: "2.1.251 (Claude Code)"
-    mechanism: "claude -p subprocess with cwd+HOME isolation, default model."
+    mechanism: >-
+      claude -p subprocess, isolated cwd + isolated $HOME
+      (script-established baseline recipe)
     leak_vector: claude_md_agents_md
     result: isolated
     verified_alternative: >-
@@ -436,3 +450,41 @@ entries:
         Same claude_version (2.1.251) as the cwd+HOME isolation entry above
         dated 2026-08-30, which may (not confirmed) place this entry
         around the same date -- flagged as speculation, not fact.
+
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: 'true'
+      CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
+      claude_version: 2.1.261 (Claude Code)
+    mechanism: claude -p subprocess, isolated cwd + isolated $HOME (script-established
+      baseline recipe)
+    leak_vector: account_level_context_injection
+    result: contaminated
+    verified_alternative: None known yet. The isolated $HOME copy this recipe builds
+      does not appear to be the source (settings/hooks/skills are copied unmodified,
+      per the existing cwd+HOME entries) -- the injected content plausibly originates
+      from the harness itself, independent of both cwd and $HOME content. Not yet isolated
+      by any recipe this registry currently records.
+    companion_flags: []
+    methodology_pitfalls:
+    - 'Not part of the primary claude_md_agents_md leak vector this script''s own automated
+      two-control procedure checks -- found incidentally by reading the positive control''s
+      own transcript text during issue #1809''s Step 8 independent review, not by a
+      dedicated check. A caller relying solely on gitapex_run_verified_isolated_dispatch.py''s
+      own verifiedLeakVectors report would not learn of this leak.'
+    trust_class: same-run-unreviewed
+    date: '2026-09-05'
+    notes:
+    - A live positive-control run (per this script's own two-control procedure, from
+      a fresh isolated cwd carrying only the sentinel CLAUDE.md, and a fresh isolated
+      $HOME copy) reported the calling account's own userEmail and the calling session's
+      own currentDate context alongside the sentinel CLAUDE.md content, framed as "delivered
+      to me in the system-reminder" -- neither value is part of the sentinel file this
+      script writes. This means an account-level, session-independent context injection
+      reaches the dispatch regardless of the target content's own isolation, and (for
+      userEmail specifically) is a real PII leak if the dispatch is ever compromised
+      via injected content in an adversarial review target and instructed to exfiltrate
+      its own context.
+    - 'Discovered by an independent adversarial review-persona dispatch during issue
+      #1809''s own executing-a-branch-plan Step 8/drafting-a-pr-to-merge Step 8 rounds,
+      then independently reproduced live by this same session using this script''s own
+      real two-control run (not a synthetic test).'
