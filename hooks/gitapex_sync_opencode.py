@@ -101,7 +101,10 @@ def _read_skill_name(skill_md: Path) -> str | None:
     no parseable frontmatter name at all."""
     try:
         parsed = _split_frontmatter(skill_md.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError):
+    # An unreadable SKILL.md means "not a valid skill" -- the caller skips
+    # it with a SKIP note printed to stdout, so the None sentinel below is
+    # surfaced, never silent.
+    except (OSError, UnicodeDecodeError):  # except-fail-open: WAIVED: skip-with-note surfacing (see above)
         return None
     if parsed is None:
         return None
@@ -122,7 +125,10 @@ def _is_our_symlink(link: Path, skills_src: Path) -> bool:
         # target text points into the skills tree.
         try:
             raw = link.readlink()
-        except OSError:
+        # readlink on an already-proven symlink fails only on races; False
+        # treats the link as foreign (left untouched), the safe direction,
+        # and every skip/prune decision is printed as a note by the caller.
+        except OSError:  # except-fail-open: WAIVED: safe-direction sentinel with note surfacing (see above)
             return False
         return not raw.is_absolute() and SKILLS_SRC_DIRNAME in raw.parts
 
@@ -245,7 +251,10 @@ def sync_agents(project_dir: Path, verify_only: bool, notes: list[str]) -> int:
         if dst.is_file():
             try:
                 current = dst.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
+            # None only means "unknown, rewrite" -- the write_text below
+            # then surfaces any real I/O error loudly instead of trusting
+            # a stale copy.
+            except (OSError, UnicodeDecodeError):  # except-fail-open: WAIVED: rewrite-forces-loud-error (see above)
                 current = None
             if current == rendered:
                 continue
