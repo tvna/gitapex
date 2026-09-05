@@ -227,9 +227,9 @@ entries:
       CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
       claude_version: "2.1.220 (Claude Code)"
     mechanism: >-
-      claude -p --plugin-dir <path> from the isolated cwd+HOME recipe,
-      loading this repository's own skills/ (with and without a root
-      CLAUDE.md) as a session-scoped plugin.
+      claude -p --plugin-dir (pointed at a target directory) from the
+      isolated cwd+HOME recipe, loading this repository's own skills/
+      (with and without a root CLAUDE.md) as a session-scoped plugin.
     leak_vector: claude_md_agents_md
     result: isolated
     verified_alternative: >-

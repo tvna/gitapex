@@ -1,0 +1,141 @@
+# Issue #1809: keep skills/evaluating-skill-quality/metadata/isolation-registry.yaml
+# current without depending on an interactive session happening to dispatch
+# a review at a drifted `claude` CLI version. Runs
+# gitapex_run_verified_isolated_dispatch.py in --controls-only mode on a
+# schedule; on finding a new same-run-unreviewed entry, opens a pull request
+# proposing the registry update rather than committing it directly.
+#
+# Governance property this workflow must never violate (design doc
+# "Components" item 4, Testing section): this job proposes via PR, it never
+# merges or auto-promotes an entry to `reviewed` trust class -- that still
+# requires the existing human/PR review gate, preserving the Trust class
+# rule's own safety property (an entry becomes Reviewed once merged, not
+# once written). test_gitapex_isolation_registry_refresh_workflow.py asserts
+# this workflow's own YAML text contains no merge/auto-promote API call, not
+# merely as an assertion in prose.
+#
+# --controls-only mode never launches a real target dispatch (on a same-run
+# or reviewed entry alike) -- the one code path in the whole design allowed
+# to establish a same-run entry with zero human watching live, precisely
+# because it is also the one path guaranteed not to act on that entry in the
+# same run.
+
+name: Isolation registry refresh
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          fetch-depth: '0'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # Same rationale as skill-eval-gate.yml's own identically-named step:
+      # this job's own script invokes the `claude` CLI directly and needs
+      # this secret for authentication. Presence is checked; the value is
+      # never printed (CLAUDE.md section 4 -- secrets must not reach a log).
+      - name: Preflight -- require ANTHROPIC_API_KEY
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::No ANTHROPIC_API_KEY configured. Set repository" \
+              "secret ANTHROPIC_API_KEY under Settings -> Secrets and" \
+              "variables -> Actions before this workflow can run --" \
+              "gitapex_run_verified_isolated_dispatch.py invokes the claude" \
+              "CLI directly and needs this for authentication."
+            exit 1
+          fi
+
+      # Same pin as skill-eval-gate.yml's own "Install Claude Code CLI" step
+      # -- not provisioned by this repo's own Nix flake, not preinstalled on
+      # ubuntu-latest. Kept at the same version deliberately: bumping either
+      # copy without the other would leave two different CI-observed
+      # `claude_version` identifying signals for what is otherwise the same
+      # runner image, needlessly fragmenting the registry.
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code@2.1.240
+
+      # This is the one code path in the whole design allowed to establish a
+      # same-run entry with zero human watching live (see this file's own
+      # header comment) -- --controls-only never launches a real target
+      # dispatch, on a same-run or reviewed entry alike.
+      - name: Run isolation verification (controls-only)
+        id: run
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set +e
+          uv run --frozen python3 skills/evaluating-skill-quality/scripts/gitapex_run_verified_isolated_dispatch.py \
+            --controls-only \
+            --registry skills/evaluating-skill-quality/metadata/isolation-registry.yaml \
+            --history-markdown skills/evaluating-skill-quality/references/isolation-registry-history.md
+          echo "exit-code=$?" >> "$GITHUB_OUTPUT"
+
+      # A non-zero exit here means the live control run failed in a way
+      # suggesting a genuinely new contamination pattern (not merely "not
+      # yet verified at this version") -- opens an issue rather than
+      # silently no-op'ing, mirroring merge-retrospective's own
+      # gate-proposal pattern. Never opens or merges a PR on this branch.
+      - name: Open an issue on a new contamination finding
+        if: steps.run.outputs.exit-code != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "isolation-registry-refresh: possible new contamination pattern found" \
+            --body "The scheduled isolation-registry-refresh workflow's live two-control run failed on \`claude\` CLI version reported by this run. This can mean a genuinely new contamination pattern, not merely an as-yet-unverified CLI version. See this run's own log for the full control transcripts: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. Investigate per skills/evaluating-skill-quality/references/adversarial-self-audit.md's Verification procedure before trusting any isolated dispatch on this platform." \
+            --label "bug"
+
+      # Never runs `gh pr merge`/`gh pr edit --auto`/an auto-promote API
+      # call anywhere in this job -- test_gitapex_isolation_registry_refresh_workflow.py
+      # asserts this file's own text contains none, not merely a prose
+      # promise. Propose only: a human still reviews and merges.
+      - name: Propose the registry update via PR
+        if: steps.run.outputs.exit-code == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- \
+            skills/evaluating-skill-quality/metadata/isolation-registry.yaml \
+            skills/evaluating-skill-quality/references/isolation-registry-history.md; then
+            echo "No registry change to propose."
+            exit 0
+          fi
+          branch="isolation-registry-refresh/$(date -u +%Y-%m-%d)-${{ github.run_id }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add \
+            skills/evaluating-skill-quality/metadata/isolation-registry.yaml \
+            skills/evaluating-skill-quality/references/isolation-registry-history.md
+          git commit -m "chore(evaluating-skill-quality): scheduled isolation-registry same-run entry (Refs #1809)"
+          git push origin "$branch"
+          gh pr create \
+            --title "chore(evaluating-skill-quality): scheduled isolation-registry same-run entry" \
+            --body "Opened automatically by the isolation-registry-refresh workflow (run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}). Adds a same-run-unreviewed registry entry established by a live two-control run at the current \`claude\` CLI version. Per adversarial-self-audit.md's Trust class rule, this entry becomes Reviewed once this PR merges, not before -- review the printed control transcripts in the linked run log before approving." \
+            --head "$branch" \
+            --base main
