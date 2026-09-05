@@ -72,6 +72,15 @@ dev = [
     "xenon>=0.9,<0.10",
 ]
 
+# Issue #1813: Harbor-based skill evaluation. Independent optional group,
+# not dev: Harbor's own dependency tree is heavy, so keep it opt-in via
+# `uv sync --group harbor`. Pinned to the measured version (0.22.0 --
+# verified live with oracle + opencode runs on 2026-09-05); re-measure
+# before raising, same discipline as the ruff/radon/xenon pins above.
+harbor = [
+    "harbor==0.22.0",
+]
+
 [tool.uv]
 # Non-package project: uv manages the environment and dev tools only.
 package = false
