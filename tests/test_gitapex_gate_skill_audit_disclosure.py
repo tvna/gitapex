@@ -309,13 +309,20 @@ def test_eval_coverage_not_required_when_skill_list_empty():
         ("foo,bar", ["bar", "foo"]),
         (" foo , bar ,foo", ["bar", "foo"]),
         (",,", []),
-        # Issue #1796: a hyphenated skill-directory-shaped token, the shape
-        # --changed-reference-skills/--changed-skill-md-skills actually carry.
-        ("drafting-a-skill,evaluating-skill-quality", ["drafting-a-skill", "evaluating-skill-quality"]),
     ],
 )
 def test_parse_comma_list(raw, expected):
     assert gate._parse_comma_list(raw) == expected
+
+
+def test_parse_comma_list_handles_a_hyphenated_skill_name_value():
+    """Issue #1796: --changed-reference-skills/--changed-skill-md-skills feed
+    this same splitter with hyphenated skill-directory-shaped tokens; a
+    dedicated direct call pins that explicitly."""
+    assert gate._parse_comma_list("drafting-a-skill,evaluating-skill-quality") == [
+        "drafting-a-skill",
+        "evaluating-skill-quality",
+    ]
 
 
 # --- Issue #427 (refs #422): main() integration ---
