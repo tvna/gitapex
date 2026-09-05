@@ -147,7 +147,7 @@ suites still assert on final text only).
 | `diagnosing-a-failure` | 3 | 7 | none | no | [evals/diagnosing-a-failure/eval-status.md](../evals/diagnosing-a-failure/eval-status.md) |
 | `drafting-a-pr-to-merge` | 3 | 31 | none | no | [evals/drafting-a-pr-to-merge/eval-status.md](../evals/drafting-a-pr-to-merge/eval-status.md) |
 | `drafting-a-skill` | 3 | 9 | none | no | [evals/drafting-a-skill/eval-status.md](../evals/drafting-a-skill/eval-status.md) |
-| `drafting-an-adr` | 3 | 18 | none | no | [evals/drafting-an-adr/eval-status.md](../evals/drafting-an-adr/eval-status.md) |
+| `drafting-an-adr` | 3 | 19 | none | no | [evals/drafting-an-adr/eval-status.md](../evals/drafting-an-adr/eval-status.md) |
 | `drafting-issues` | 3 | 18 | none | no | [evals/drafting-issues/eval-status.md](../evals/drafting-issues/eval-status.md) |
 | `eliciting-a-design` | 3 | 7 | none | no | [evals/eliciting-a-design/eval-status.md](../evals/eliciting-a-design/eval-status.md) |
 | `establishing-ubiquitous-language` | 3 | 6 | none | no | [evals/establishing-ubiquitous-language/eval-status.md](../evals/establishing-ubiquitous-language/eval-status.md) |
