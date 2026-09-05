@@ -643,6 +643,12 @@ def main(
 
     entries = load_registry(args.registry)
     matched = find_reviewed_match(entries, signals, _CANONICAL_MECHANISM)
+    # Both branches below verify exactly this one leak vector:
+    # find_reviewed_match's own leak_vector filter already guarantees a
+    # matched entry's leak_vector equals _PRIMARY_LEAK_VECTOR, and a freshly
+    # established same-run entry always targets it too -- no per-branch
+    # fallback/coercion needed (issue #1809, Step 8 follow-up).
+    verified_leak_vectors = [_PRIMARY_LEAK_VECTOR]
 
     with tempfile.TemporaryDirectory(prefix="gitapex-verified-dispatch-") as tmp_name:
         base_dir = Path(tmp_name)
@@ -660,10 +666,6 @@ def main(
                 f"Reusing Reviewed registry entry dated {matched.get('date')}: {matched.get('mechanism')}",
                 file=sys.stderr,
             )
-            # find_reviewed_match's own leak_vector filter already guarantees
-            # matched["leak_vector"] == _PRIMARY_LEAK_VECTOR here -- no
-            # fallback/coercion needed (issue #1809, Step 8 follow-up).
-            verified_leak_vectors = [_PRIMARY_LEAK_VECTOR]
         else:
             try:
                 positive_ok, negative_ok, transcript = run_two_controls(
@@ -706,7 +708,6 @@ def main(
             except OSError as error:
                 print(f"error: could not write the new registry entry to {args.registry}: {error}", file=sys.stderr)
                 return 1
-            verified_leak_vectors = [_PRIMARY_LEAK_VECTOR]
 
         if args.controls_only:
             print("controls-only mode: isolation verified, not launching a real dispatch.")
