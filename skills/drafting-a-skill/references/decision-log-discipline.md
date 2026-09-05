@@ -1,6 +1,6 @@
 # Decision-log discipline for `metadata/gitapex.yaml`'s own `references` field
 
-Loaded on demand: `SKILL.md`'s own Step 2 already states the common-path rule directly in the body (append in the same edit round as the decision, read the sidecar before every edit, never trust it over ground truth) -- load this file for the resume-time and concurrent-dispatch detail that rule doesn't spell out.
+Loaded on demand: `SKILL.md`'s own Step 2 already states the common-path rule directly in the body (append in the same edit round as the decision, read the sidecar before every edit) -- load this file for the resume-time and concurrent-dispatch detail, and the mkdir-regime rationale ("Blank-page creation race" below), that rule doesn't spell out.
 
 ## What `outcome.baseCommit` cites
 
@@ -29,6 +29,19 @@ A same-round writer that completes normally still appends its own entry in the s
 Two concurrent dispatches editing the same *existing* target's sidecar race the identical way two `scorer-gated-skill-edits` iterations against one target once did: this skill supplies no isolation of its own, and the two real dispatch contexts only partly do.
 
 - Context 2 always runs after `scorer-gated-skill-edits`'s own Precondition-gate worktree isolation self-establishes, closing the race there.
-- Context 1 does not close it uniformly: `executing-a-branch-plan` Step 6 dispatches a wave either via the Workflow tool (`isolation: 'worktree'`, closing the race the same way) or its own sequential fallback -- the same fallback mode Step 2's own mkdir bullet names -- which carries no such guarantee.
+- Context 1 does not close it uniformly: `executing-a-branch-plan` Step 6 dispatches a wave either via the Workflow tool (`isolation: 'worktree'`, closing the race the same way) or its own sequential fallback -- the same fallback mode the "Blank-page creation race" section below names -- which carries no such guarantee.
 
 A same-tree overwrite between two isolated worktrees still surfaces as an ordinary git conflict at landing, never a silent loss; the sequential-fallback mode carries no such backstop, so that race is real and currently open, not merely a future caller's hypothetical -- disclosed here as open, never framed as closed by caller-side isolation it does not uniformly have. This skill's own Precondition does not itself check for either case.
+
+## Blank-page creation race (why Step 2's `mkdir` guards only one regime)
+
+Step 2's bare `mkdir skills/<name>` (no `-p`, no side-effect file write)
+guards the shared-filesystem-view case only -- a sequential-fallback run,
+or two sessions in one checkout -- where its atomic `EEXIST` failure is
+what routes a second writer away via the Precondition's
+target-already-exists branch. An isolated-worktree dispatch is covered
+without it: two worktrees adding the same new `skills/<name>/` path
+always collide as a git add/add conflict at merge-back, and within one
+`executing-a-branch-plan` run the file-ownership edge already forbids two
+same-wave tasks sharing a path -- that regime's own collision is never
+silent either.
