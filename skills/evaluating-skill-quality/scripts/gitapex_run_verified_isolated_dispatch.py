@@ -121,6 +121,18 @@ _CONTROL_PROMPT = (
 # this module's docstring, "What this script actually verifies").
 _PRIMARY_LEAK_VECTOR = "claude_md_agents_md"
 
+# The exact recipe this script itself implements: cwd isolation (the target
+# snapshot itself, via build_target_snapshot) plus an isolated $HOME copy, no
+# permission-bypass flag. Used both when this script writes a new same-run
+# entry (so the entry accurately names what was actually run) and when it
+# looks one up (so it never reuses a registry entry recorded for a different
+# mechanism -- e.g. `--plugin-dir` or a marketplace install -- merely because
+# that entry happens to share this run's own identifying signals; the
+# registry's own schema keys entries on the *pair* (identifying-signal-set,
+# mechanism), not signals alone, and several migrated historical entries
+# share identical signals with different mechanisms and results).
+_CANONICAL_MECHANISM = "claude -p subprocess, isolated cwd (script-established baseline recipe)"
+
 _SCRIPT_DIR = Path(__file__).resolve().parent
 _SKILL_DIR = _SCRIPT_DIR.parent
 _DEFAULT_REGISTRY_PATH = _SKILL_DIR / "metadata" / "isolation-registry.yaml"
@@ -189,23 +201,42 @@ def save_registry(path: Path, entries: list[dict[str, Any]]) -> None:
 
 
 def find_reviewed_match(
-    entries: list[dict[str, Any]], signals: dict[str, str], leak_vector: str = _PRIMARY_LEAK_VECTOR
+    entries: list[dict[str, Any]],
+    signals: dict[str, str],
+    mechanism: str = _CANONICAL_MECHANISM,
+    leak_vector: str = _PRIMARY_LEAK_VECTOR,
 ) -> dict[str, Any] | None:
     """Return the first ``reviewed`` entry whose own ``identifying_signals``
-    exactly equal ``signals``, whose ``leak_vector`` matches, and whose
-    ``result`` is ``"isolated"`` -- or ``None``. The registry also carries
-    ``"contaminated"`` entries (a mechanism this run does not even use, kept
-    on record as a negative finding); matching on ``leak_vector`` alone
-    would let a caller "reuse" a contaminated entry's own signals as if they
-    verified isolation, which is exactly backwards. Never matches a
-    ``same-run-unreviewed`` entry -- per ``adversarial-self-audit.md``'s
-    Trust class rule, a same-run entry is never read back as established
-    within a later lookup, only the two control outcomes that run actually
-    observed count as evidence.
+    exactly equal ``signals``, whose ``mechanism`` exactly equals
+    ``mechanism``, whose ``leak_vector`` matches, and whose ``result`` is
+    ``"isolated"`` -- or ``None``.
+
+    ``mechanism`` is compared, not only ``identifying_signals``, because the
+    registry's own schema keys an entry on the *pair* (identifying-signal-set,
+    mechanism) -- several migrated historical entries share byte-identical
+    ``identifying_signals`` with *different* mechanisms and results (a
+    contaminated Agent-tool dispatch, an isolated ``--plugin-dir`` dispatch,
+    and an isolated plain ``claude -p`` dispatch all recorded at the same
+    platform signature). Matching on signals alone would let this function
+    return an entry recorded for a mechanism this script does not actually
+    implement (e.g. ``--plugin-dir``), which would be reused as if it
+    verified the recipe this script is about to run -- an independent
+    adversarial review caught this gap (issue #1809).
+
+    The registry also carries ``"contaminated"`` entries (a mechanism this
+    run does not even use, kept on record as a negative finding); matching
+    on ``leak_vector`` alone would let a caller "reuse" a contaminated
+    entry's own signals as if they verified isolation, which is exactly
+    backwards. Never matches a ``same-run-unreviewed`` entry -- per
+    ``adversarial-self-audit.md``'s Trust class rule, a same-run entry is
+    never read back as established within a later lookup, only the two
+    control outcomes that run actually observed count as evidence.
     """
     # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
     for entry in entries:
         if entry.get("trust_class") != "reviewed":
+            continue
+        if entry.get("mechanism") != mechanism:
             continue
         if entry.get("leak_vector") != leak_vector:
             continue
@@ -386,8 +417,8 @@ def run_real_dispatch(
     """Launch the real review dispatch, using exactly the verified isolated
     recipe: ``cwd`` (the target snapshot) carries no permission-bypass flag
     by default -- only ``--allowedTools`` when the caller supplies one,
-    matching the most recently reconfirmed baseline in
-    ``adversarial-self-audit.md``'s Known entries."""
+    matching ``_CANONICAL_MECHANISM``, the most recently reconfirmed
+    baseline recorded in ``metadata/isolation-registry.yaml``."""
     # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
     argv = [claude_bin, "-p", prompt]
     if allowed_tools:
@@ -485,7 +516,7 @@ def main(
         return 1
 
     entries = load_registry(args.registry)
-    matched = find_reviewed_match(entries, signals)
+    matched = find_reviewed_match(entries, signals, _CANONICAL_MECHANISM)
 
     with tempfile.TemporaryDirectory(prefix="gitapex-verified-dispatch-") as tmp_name:
         base_dir = Path(tmp_name)
@@ -524,7 +555,7 @@ def main(
                 return 1
             new_entry: dict[str, Any] = {
                 "identifying_signals": signals,
-                "mechanism": "claude -p subprocess, isolated cwd (script-established baseline recipe)",
+                "mechanism": _CANONICAL_MECHANISM,
                 "leak_vector": _PRIMARY_LEAK_VECTOR,
                 "result": "isolated",
                 "verified_alternative": "isolated cwd with no CLAUDE.md/AGENTS.md in its ancestry; the "

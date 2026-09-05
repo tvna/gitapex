@@ -114,6 +114,7 @@ def test_find_reviewed_match_returns_matching_entry() -> None:
     entries: list[dict[str, Any]] = [
         {
             "identifying_signals": _SIGNALS,
+            "mechanism": gvid._CANONICAL_MECHANISM,
             "leak_vector": "claude_md_agents_md",
             "result": "isolated",
             "trust_class": "reviewed",
@@ -121,6 +122,52 @@ def test_find_reviewed_match_returns_matching_entry() -> None:
         }
     ]
     assert gvid.find_reviewed_match(entries, _SIGNALS) == entries[0]
+
+
+def test_find_reviewed_match_ignores_same_signals_different_mechanism() -> None:
+    # Regression for an independent-review finding (issue #1809): several
+    # migrated registry entries share byte-identical identifying_signals
+    # with different mechanisms and results (a contaminated Agent-tool
+    # dispatch and an isolated --plugin-dir dispatch, for instance, both
+    # recorded at the same platform signature). Matching on signals alone
+    # would let this function return an entry recorded for a mechanism this
+    # script never actually runs.
+    entries: list[dict[str, Any]] = [
+        {
+            "identifying_signals": _SIGNALS,
+            "mechanism": "claude -p --plugin-dir (a different recipe this script does not implement)",
+            "leak_vector": "claude_md_agents_md",
+            "result": "isolated",
+            "trust_class": "reviewed",
+        }
+    ]
+    assert gvid.find_reviewed_match(entries, _SIGNALS, gvid._CANONICAL_MECHANISM) is None
+
+
+def test_find_reviewed_match_picks_correct_entry_among_same_signals_multiple_mechanisms() -> None:
+    contaminated_entry: dict[str, Any] = {
+        "identifying_signals": _SIGNALS,
+        "mechanism": "Agent tool dispatch (contaminated)",
+        "leak_vector": "claude_md_agents_md",
+        "result": "contaminated",
+        "trust_class": "reviewed",
+    }
+    other_isolated_entry: dict[str, Any] = {
+        "identifying_signals": _SIGNALS,
+        "mechanism": "claude -p --plugin-dir (a different recipe this script does not implement)",
+        "leak_vector": "claude_md_agents_md",
+        "result": "isolated",
+        "trust_class": "reviewed",
+    }
+    canonical_entry: dict[str, Any] = {
+        "identifying_signals": _SIGNALS,
+        "mechanism": gvid._CANONICAL_MECHANISM,
+        "leak_vector": "claude_md_agents_md",
+        "result": "isolated",
+        "trust_class": "reviewed",
+    }
+    entries = [contaminated_entry, other_isolated_entry, canonical_entry]
+    assert gvid.find_reviewed_match(entries, _SIGNALS, gvid._CANONICAL_MECHANISM) == canonical_entry
 
 
 def test_find_reviewed_match_ignores_same_run_unreviewed_entry() -> None:
@@ -147,7 +194,13 @@ def test_find_reviewed_match_ignores_signal_mismatch() -> None:
 
 def test_find_reviewed_match_ignores_wrong_leak_vector() -> None:
     entries: list[dict[str, Any]] = [
-        {"identifying_signals": _SIGNALS, "leak_vector": "home_task_list", "trust_class": "reviewed"}
+        {
+            "identifying_signals": _SIGNALS,
+            "mechanism": gvid._CANONICAL_MECHANISM,
+            "leak_vector": "home_task_list",
+            "result": "isolated",
+            "trust_class": "reviewed",
+        }
     ]
     assert gvid.find_reviewed_match(entries, _SIGNALS, leak_vector="claude_md_agents_md") is None
 
@@ -160,6 +213,7 @@ def test_find_reviewed_match_ignores_contaminated_result() -> None:
     entries: list[dict[str, Any]] = [
         {
             "identifying_signals": _SIGNALS,
+            "mechanism": gvid._CANONICAL_MECHANISM,
             "leak_vector": "claude_md_agents_md",
             "result": "contaminated",
             "trust_class": "reviewed",
@@ -443,7 +497,7 @@ def test_main_reuses_reviewed_entry_and_launches_dispatch(
                 "result": "isolated",
                 "trust_class": "reviewed",
                 "date": "2026-08-01",
-                "mechanism": "claude -p, isolated cwd",
+                "mechanism": gvid._CANONICAL_MECHANISM,
             }
         ],
     )

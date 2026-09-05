@@ -107,7 +107,7 @@ jobs:
         run: |
           gh issue create \
             --title "isolation-registry-refresh: possible new contamination pattern found" \
-            --body "The scheduled isolation-registry-refresh workflow's live two-control run failed on \`claude\` CLI version reported by this run. This can mean a genuinely new contamination pattern, not merely an as-yet-unverified CLI version. See this run's own log for the full control transcripts: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. Investigate per skills/evaluating-skill-quality/references/adversarial-self-audit.md's Verification procedure before trusting any isolated dispatch on this platform." \
+            --body "The scheduled isolation-registry-refresh workflow's live two-control run failed on \`claude\` CLI version reported by this run. This can mean a genuinely new contamination pattern, not merely an as-yet-unverified CLI version. See this run's own log for the full control transcripts: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. Investigate per skills/evaluating-skill-quality/scripts/gitapex_run_verified_isolated_dispatch.py's own module docstring (the current two-control methodology) before trusting any isolated dispatch on this platform." \
             --label "bug"
 
       # Never runs `gh pr merge`/`gh pr edit --auto`/an auto-promote API

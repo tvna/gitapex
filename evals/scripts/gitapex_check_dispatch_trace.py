@@ -399,7 +399,8 @@ def run_live_dispatch(
     ``build_isolated_home`` (or an equivalent) first -- this function does
     not verify isolation itself, only executes the already-isolated call, so
     a live proof run must still record the isolation check per
-    ``adversarial-self-audit.md``'s Verification procedure.
+    ``evaluating-skill-quality``'s own
+    ``scripts/gitapex_run_verified_isolated_dispatch.py``.
 
     Raises ``subprocess.TimeoutExpired`` if the dispatch does not finish
     within ``timeout_seconds`` (default 10 minutes -- a real observed

@@ -27,13 +27,25 @@ _WORKFLOW_PATH = Path(__file__).resolve().parent.parent / ".github/workflows/iso
 
 # Any of these appearing in a `run:` step body would mean the job merges or
 # auto-promotes a PR itself, defeating the human/PR review gate the Trust
-# class rule depends on.
+# class rule depends on. Matched against the lowercased combined text (see
+# test_workflow_never_merges_or_auto_promotes_a_pr below), so each entry
+# here is already lowercase -- including the GraphQL mutation names
+# (`mergePullRequest`, `enablePullRequestAutoMerge`), whose camelCase would
+# not match a snake_case guess like `merge_pull_request` even after
+# lowercasing (lowercasing camelCase introduces no underscores). `"gh api"`
+# is forbidden outright: this workflow only ever needs `gh pr create`/
+# `gh issue create`, so a raw API call of any kind is out of scope for it,
+# not only a merge-shaped one -- an independent adversarial review found
+# the prior list missed exactly this class of bypass (issue #1809).
 _FORBIDDEN_SUBSTRINGS = (
     "gh pr merge",
     "gh pr edit --auto",
+    "gh api",
     "--auto-merge",
     "enable_pr_auto_merge",
     "merge_pull_request",
+    "mergepullrequest",
+    "enablepullrequestautomerge",
     "gh pr review",
 )
 
