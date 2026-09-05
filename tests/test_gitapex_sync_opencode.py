@@ -270,5 +270,193 @@ def test_opencode_scaffolded_noise_stays_gitignored() -> None:
         )
 
 
+def test_frontmatter_non_field_lines_ignored(tmp_path: pathlib.Path) -> None:
+    project = _project(tmp_path)
+    _write(
+        project / "skills" / "messy" / "SKILL.md",
+        "---\nname: messy\ndescription: Does things.\n- a list item, not a field\n# a comment\n---\n\nBody.\n",
+    )
+    notes: list[str] = []
+    assert sync.sync_skills(project, False, notes) == 1
+    assert (project / ".agents" / "skills" / "messy").is_symlink()
+
+
+def test_unreadable_skill_md_skipped(tmp_path: pathlib.Path) -> None:
+    project = _project(tmp_path)
+    _skill(project, "good-skill")
+    locked = project / "skills" / "locked" / "SKILL.md"
+    _write(project / "skills" / "locked" / "SKILL.md", "---\nname: locked\n---\n")
+    locked.chmod(0o000)
+    try:
+        notes: list[str] = []
+        assert sync.sync_skills(project, False, notes) == 1
+        assert any("locked" in note for note in notes)
+        assert not (project / ".agents" / "skills" / "locked").exists()
+    finally:
+        locked.chmod(0o644)
+
+
+def test_skills_src_missing_entirely(tmp_path: pathlib.Path) -> None:
+    project = _project(tmp_path)
+    notes: list[str] = []
+    assert sync.sync_skills(project, False, notes) == 0
+    assert any("not found" in note for note in notes)
+
+
+def test_repair_stale_our_symlink(tmp_path: pathlib.Path) -> None:
+    project = _project(tmp_path)
+    _skill(project, "good-skill")
+    _skill(project, "other-skill")
+    dst_dir = project / ".agents" / "skills"
+    dst_dir.mkdir(parents=True)
+    # Ours (raw target inside skills/) but pointing at the wrong skill.
+    (dst_dir / "good-skill").symlink_to("../../skills/other-skill")
+    notes: list[str] = []
+    assert sync.sync_skills(project, True, notes) == 2  # repair + link
+    assert sync.sync_skills(project, False, notes) == 2
+    assert (dst_dir / "good-skill").resolve() == (project / "skills" / "good-skill").resolve()
+    assert sync.sync_skills(project, False, []) == 0
+
+
+def test_foreign_symlink_in_sync_loop_skipped(tmp_path: pathlib.Path) -> None:
+    project = _project(tmp_path)
+    _skill(project, "good-skill")
+    dst_dir = project / ".agents" / "skills"
+    dst_dir.mkdir(parents=True)
+    (dst_dir / "good-skill").symlink_to("../elsewhere")
+    notes: list[str] = []
+    assert sync.sync_skills(project, False, notes) == 0
+    assert any("foreign symlink" in note for note in notes)
+
+
+def test_retired_real_dir_never_pruned(tmp_path: pathlib.Path) -> None:
+    project = _project(tmp_path)
+    _skill(project, "stays-here")
+    notes: list[str] = []
+    assert sync.sync_skills(project, False, notes) == 1
+    # An apm-managed real directory for a now-retired skill: not a symlink
+    # (covers the non-symlink guard), not pruned, never touched.
+    retired = project / ".agents" / "skills" / "retired-skill"
+    _write(retired / "SKILL.md", "released copy\n")
+    assert sync.sync_skills(project, False, notes) == 0
+    assert retired.joinpath("SKILL.md").read_text(encoding="utf-8") == "released copy\n"
+
+
+def _break_resolve_for(monkeypatch: pytest.MonkeyPatch, link: pathlib.Path) -> None:
+    real_resolve = pathlib.Path.resolve
+
+    def _boom(self: pathlib.Path, strict: bool = False) -> pathlib.Path:
+        if self == link:
+            raise OSError("simulated resolve failure")
+        return real_resolve(self, strict)
+
+    monkeypatch.setattr(pathlib.Path, "resolve", _boom)
+
+
+def test_resolve_failure_falls_back_to_raw_target(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project = _project(tmp_path)
+    dst_dir = project / ".agents" / "skills"
+    dst_dir.mkdir(parents=True)
+    (project / "skills").mkdir()
+    link = dst_dir / "dangling"
+    link.symlink_to("../../skills/gone")
+    _break_resolve_for(monkeypatch, link)
+    assert sync._is_our_symlink(link, project / "skills") is True
+    link2 = dst_dir / "absolute"
+    link2.symlink_to("/tmp/absolutely-elsewhere")
+    _break_resolve_for(monkeypatch, link2)
+    assert sync._is_our_symlink(link2, project / "skills") is False
+
+
+def test_readlink_failure_treated_as_foreign(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    project = _project(tmp_path)
+    dst_dir = project / ".agents" / "skills"
+    dst_dir.mkdir(parents=True)
+    (project / "skills").mkdir()
+    link = dst_dir / "unreadable"
+    link.symlink_to("../../skills/gone")
+    _break_resolve_for(monkeypatch, link)
+
+    real_readlink = pathlib.Path.readlink
+
+    def _boom_readlink(self: pathlib.Path) -> pathlib.Path:
+        if self == link:
+            raise OSError("simulated readlink failure")
+        return real_readlink(self)
+
+    monkeypatch.setattr(pathlib.Path, "readlink", _boom_readlink)
+    assert sync._is_our_symlink(link, project / "skills") is False
+
+
+def test_agents_render_errors_skipped(tmp_path: pathlib.Path) -> None:
+    project = _project(tmp_path)
+    agents = project / "agents"
+    _write(agents / "review-persona.md", "no frontmatter at all\n")
+    _write(agents / "branch-plan-task.md", "---\nname: branch-plan-task\n---\n\nNo description.\n")
+    notes: list[str] = []
+    assert sync.sync_agents(project, False, notes) == 0
+    assert sum("SKIP" in note for note in notes) == 2
+
+
+def test_agents_rewrite_unexpected_form_and_verify(tmp_path: pathlib.Path) -> None:
+    project = _project(tmp_path)
+    agents = project / "agents"
+    _write(
+        agents / "review-persona.md",
+        "---\nname: review-persona\ndescription: Read-only review.\ntools: Read, Grep, Glob\n---\n\nBody.\n",
+    )
+    _write(
+        agents / "branch-plan-task.md",
+        "---\nname: branch-plan-task\ndescription: Dispatch target.\n---\n\nBody.\n",
+    )
+    dst_dir = project / ".opencode" / "agents"
+    dst_dir.mkdir(parents=True)
+    _write(dst_dir / "review-persona.md", "stale content\n")
+    (dst_dir / "branch-plan-task.md").symlink_to("elsewhere")
+    notes: list[str] = []
+    assert sync.sync_agents(project, True, notes) == 1  # rewrite counts; symlink skip does not
+    assert sync.sync_agents(project, False, notes) == 1
+    assert "stale content" not in (dst_dir / "review-persona.md").read_text(encoding="utf-8")
+    assert sync.sync_agents(project, False, []) == 0
+
+
+def test_agents_unreadable_dst_forces_rewrite(tmp_path: pathlib.Path) -> None:
+    project = _project(tmp_path)
+    agents = project / "agents"
+    _write(
+        agents / "review-persona.md",
+        "---\nname: review-persona\ndescription: Read-only review.\n---\n\nBody.\n",
+    )
+    _write(
+        agents / "branch-plan-task.md",
+        "---\nname: branch-plan-task\ndescription: Dispatch target.\n---\n\nBody.\n",
+    )
+    dst_dir = project / ".opencode" / "agents"
+    dst_dir.mkdir(parents=True)
+    locked = dst_dir / "review-persona.md"
+    _write(locked, "stale content\n")
+    # Write-only: read_text raises (covers the unreadable-dst branch) while
+    # the rewrite itself still succeeds.
+    locked.chmod(0o200)
+    try:
+        notes: list[str] = []
+        assert sync.sync_agents(project, False, notes) == 2
+    finally:
+        locked.chmod(0o644)
+    assert "stale content" not in locked.read_text(encoding="utf-8")
+
+
+def test_prune_verify_counts_without_writing(tmp_path: pathlib.Path) -> None:
+    project = _project(tmp_path)
+    _skill(project, "stays-here")
+    notes: list[str] = []
+    assert sync.sync_skills(project, False, notes) == 1
+    shutil.rmtree(project / "skills" / "stays-here")
+    assert sync.sync_skills(project, True, notes) == 1
+    assert (project / ".agents" / "skills" / "stays-here").is_symlink()
+    assert sync.sync_skills(project, False, notes) == 1
+    assert not (project / ".agents" / "skills" / "stays-here").is_symlink()
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__]))

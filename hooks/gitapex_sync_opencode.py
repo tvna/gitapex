@@ -267,10 +267,9 @@ def sync_agents(project_dir: Path, verify_only: bool, notes: list[str]) -> int:
         if verify_only:
             changes += 1
             continue
-        if not verify_only:
-            agents_dst.mkdir(parents=True, exist_ok=True)
-            dst.write_text(rendered, encoding="utf-8")
-            changes += 1
+        agents_dst.mkdir(parents=True, exist_ok=True)
+        dst.write_text(rendered, encoding="utf-8")
+        changes += 1
     return changes
 
 
