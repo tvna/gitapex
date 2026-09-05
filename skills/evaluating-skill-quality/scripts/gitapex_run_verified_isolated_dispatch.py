@@ -486,7 +486,6 @@ def main(
 
     entries = load_registry(args.registry)
     matched = find_reviewed_match(entries, signals)
-    verified_leak_vectors: list[str] = []
 
     with tempfile.TemporaryDirectory(prefix="gitapex-verified-dispatch-") as tmp_name:
         base_dir = Path(tmp_name)

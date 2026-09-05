@@ -153,10 +153,9 @@ that varies by platform and can change between harness versions.
 (`scripts/gitapex_run_verified_isolated_dispatch.py`) for every isolated
 dispatch -- never hand-roll the verification procedure below and never
 launch a bare `Agent`-tool/`claude -p` dispatch directly.** The script
-always
-verifies isolation itself, from its own orchestrating process, before
-launching the real dispatch -- the dispatch under review never verifies
-its own isolation. It reuses a matching Reviewed entry in
+always verifies isolation itself, from its own orchestrating process,
+before launching the real dispatch -- the dispatch under review never
+verifies its own isolation. It reuses a matching Reviewed entry in
 [`metadata/isolation-registry.yaml`](../metadata/isolation-registry.yaml)
 when this run's own identifying signals match one exactly, or otherwise
 runs a live positive/negative control pair and records a new entry
@@ -164,8 +163,9 @@ itself. Its own module docstring carries the full two-control methodology
 and rationale (default: a synthetic sentinel `CLAUDE.md` written outside
 any real repository, never the calling repository's real file); this
 section states only what stays true regardless of which platform or CLI
-version is current, not the mechanics `gitapex_run_verified_isolated_dispatch.py`
-now owns. A generated, human-browsable history of every entry lives at
+version is current, not the mechanics
+`gitapex_run_verified_isolated_dispatch.py` now owns. A generated,
+human-browsable history of every entry lives at
 `references/isolation-registry-history.md` -- conditional material,
 relevant only when reviewing a same-run entry for promotion or maintaining
 the script itself, not needed for ordinary dispatch operation.
@@ -205,7 +205,6 @@ written by the same run it constrains. This hardens the instruction; it
 does not close the hole. An entry is therefore never sufficient on its own
 to *raise* trust in a mechanism the reading run has not itself controlled
 for.
-
 
 ## Target-checkout verification
 

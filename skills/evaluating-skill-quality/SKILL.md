@@ -131,8 +131,7 @@ is still grading from a contaminated context.
 - Required, not optional: when the calling repository carries its own
   project-instruction file (for example `CLAUDE.md` or `AGENTS.md`),
   exclude that file from the dispatch's context before dispatching. Run
-  `gitapex_run_verified_isolated_dispatch.py`
-  (`scripts/gitapex_run_verified_isolated_dispatch.py`) for the dispatch
+  `scripts/gitapex_run_verified_isolated_dispatch.py` for the dispatch
   itself, rather than hand-rolling this check or launching a bare
   `Agent`-tool/`claude -p` dispatch directly -- it verifies isolation
   itself, from its own orchestrating process, before ever launching the
