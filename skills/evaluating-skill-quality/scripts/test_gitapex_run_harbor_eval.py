@@ -113,3 +113,18 @@ def test_main_passes_through_agent_exit_code(
     monkeypatch.setattr("subprocess.run", runner)
     assert gitapex_run_harbor_eval.main(["--tasks", "evals/d"]) == 3
     assert calls[-1][:6] == ["uv", "run", "--group", "harbor", "harbor", "run"]
+
+
+def test_check_docker_daemon_down(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Present CLI but dead daemon fails closed with daemon guidance."""
+
+    def fake_which(_name: object) -> str:
+        return "/usr/bin/docker"
+
+    def fake_run(_cmd: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="")
+
+    monkeypatch.setattr("shutil.which", fake_which)
+    monkeypatch.setattr("subprocess.run", fake_run)
+    problem = gitapex_run_harbor_eval.check_docker()
+    assert problem is not None and "daemon" in problem
