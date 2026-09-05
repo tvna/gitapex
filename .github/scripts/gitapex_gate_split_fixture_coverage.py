@@ -71,8 +71,8 @@ classifier itself is explicitly NOT built here -- see issue #631): for
 every fixture `split.json`'s own `assignment.selection` array declares,
 when the sibling `SKILL.md` has at least one `###`-level section heading
 (this repository's convention for a routing-style sub-heading, e.g.
-`### Commit log -> a terse Why, not the full Why`, established by
-`skills/explaining-the-work/SKILL.md`), that fixture must declare a
+`### Commit log -> a terse Why, not the full Why`), that fixture must
+declare a
 well-formed `exercises` list (a non-empty list of section labels -- not
 merely truthy, mirroring `gitapex_lint_fixture_assertions.py`'s
 `_is_real_dispatch_declaration` shape-validation pattern), either inline in

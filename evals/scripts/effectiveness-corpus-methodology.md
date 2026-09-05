@@ -110,8 +110,8 @@ apply. Two splits only:
 cherry-picked after seeing any outcome):** sort every skill name
 alphabetically, zero-index it, and assign `test` to every 5th skill
 (index mod 5 == 0), `selection` to the rest -- a fixed 20%/80% split. With
-24 skills total this is 5 `test` / 19 `selection`. This is a small corpus
-either way (24 skills total, the same "roughly 25-26 skills" limitation
+23 skills total this is 4 `test` / 19 `selection`. This is a small corpus
+either way (23 skills total, the same "roughly 25-26 skills" limitation
 issue #1143's own residual-risk column already names) -- `SMALL_N_THRESHOLD`
 and `MODERATE_N_THRESHOLD` in `gitapex_compute_rank_correlation.py` disclose
 the resulting power caveat directly in that tool's own output, not only

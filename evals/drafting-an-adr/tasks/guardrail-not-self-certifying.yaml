@@ -21,3 +21,4 @@ expected:
   output_not_contains:
     - "the file existing is proof"
     - "already proves"
+    - "LGTM"

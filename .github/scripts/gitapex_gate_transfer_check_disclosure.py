@@ -109,7 +109,7 @@ DEFAULT_GLOB = "evals/*/split.md"
 # reporting "PASS: no files matched" -- the same fail-open shape PR #651's
 # own precedent named, and the same purpose as
 # gitapex_scan_split_schema.py's own MIN_EXPECTED_SPLIT_JSON_FILES floor
-# (issue #928 adversarial review finding 3). This repository has 5 real
+# (issue #928 adversarial review finding 3). This repository has 4 real
 # evals/*/split.md files today; the floor is set below that real count so a
 # partial-but-not-total discovery loss is not the trigger here (that shape
 # is instead caught per-entry by find_missing_transfer_checks itself), only

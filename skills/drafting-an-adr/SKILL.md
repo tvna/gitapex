@@ -215,7 +215,7 @@ ADR** when not applicable.
 - Do not create the file at `docs/adr/` before
   `scripts/gitapex_check_adr_shape.py` passes on the drafted body.
 - Do not treat this skill's own output as self-certifying to any
-  downstream consumer that later cites the ADR by path: a citer must
+  downstream consumer that later cites the ADR by path -- a citer must
   still check the ADR's actual `Status` and content at the path it
   cites, not treat the file's mere existence as proof the decision is
   approved or still current.
