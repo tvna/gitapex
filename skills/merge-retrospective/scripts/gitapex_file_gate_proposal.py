@@ -102,6 +102,9 @@ def build_dedup_sweep_line(open_count: int, timestamp: str, verdict: str = "NEW"
     calendar instant in that exact format, or when `verdict` names a
     non-filing outcome.
     """
+    # function-body-test-coverage: WAIVED: covered by tests/test_gitapex_dedup_sweep_generator_hook_agreement.py
+    # (same diff, commit 422cdfe) via builder.build_dedup_sweep_line -- a differently-named integration test
+    # file this gate's own tests/test_{stem}.py naming convention does not scan.
     if isinstance(open_count, bool) or not isinstance(open_count, int) or open_count < 0:
         raise ValueError(f"open_count must be a non-negative int, got {open_count!r}")
     if not isinstance(timestamp, str):
@@ -209,6 +212,9 @@ def build_gate_proposal_acm_body(
     function's own output). A trailing `Refs #<retrospective-issue-number>`
     line supplies the back-link Decision 1/Architecture require.
     """
+    # function-body-test-coverage: WAIVED: covered by tests/test_gitapex_dedup_sweep_generator_hook_agreement.py
+    # (same diff, commit 422cdfe) via builder.build_gate_proposal_acm_body -- a differently-named integration
+    # test file this gate's own tests/test_{stem}.py naming convention does not scan.
     stripped_risk = (residual_risk or "").strip()
     residual_risk_text = stripped_risk if stripped_risk else _RESIDUAL_RISK_NONE_IDENTIFIED
     criterion_cell = _sanitize_cell(repair_label)
