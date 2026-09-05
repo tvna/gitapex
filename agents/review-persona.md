@@ -44,6 +44,25 @@ adds the new call site, rather than reusing this definition silently.
    `skills/executing-a-branch-plan/references/events-and-review-gate.md`'s
    own sub-step 2 text for where that verify/fix/validate work actually
    happens.
+5. `executing-a-branch-plan` Step 6, or `scorer-gated-skill-edits`'s own
+   Step 3/9, whenever the task under dispatch touches a `SKILL.md` or
+   `references/**` path -- `drafting-a-skill`'s own Step 3 (Cohesion
+   self-check), Step 4 (Collision/dependency check), Step 5 (Domain-gap
+   sweep), and Step 7 (review-handoff critique) dispatched here instead,
+   because `drafting-a-skill` carries `disable-model-invocation: true`,
+   which blocks a `Skill`-tool invocation of it from any caller, not only
+   a top-level one (empirically demonstrated, not assumed -- issue
+   `#1796`). The dispatch prompt embeds `drafting-a-skill`'s own Step
+   3/4/5/7 procedure text (or its file path) and the proposed
+   `SKILL.md`/`references/` diff under review directly, in-band, since
+   this dispatch has no tool of its own that could fetch either. Findings
+   return in `drafting-a-skill`'s own Step 3/4/5/7 output shape (a named
+   split/gap finding or an explicit "none found," each Step 4 collision
+   resolved or deferred with a reason, and the Step 7 review-handoff
+   critique) -- this dispatch never itself decides whether a finding gets
+   fixed, deferred, or escalated; that stays the dispatching caller's own
+   job, the same read-only findings-only boundary call site 4 above
+   already states.
 
 ## What this dispatch does and does not do
 

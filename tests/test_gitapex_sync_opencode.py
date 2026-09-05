@@ -10,6 +10,7 @@ while the provisioning plugin itself stays tracked.
 
 from __future__ import annotations
 
+import os
 import pathlib
 import shutil
 import subprocess
@@ -284,6 +285,10 @@ def test_frontmatter_non_field_lines_ignored(tmp_path: pathlib.Path) -> None:
     assert (project / ".agents" / "skills" / "messy").is_symlink()
 
 
+@pytest.mark.skipif(
+    hasattr(os, "geteuid") and os.geteuid() == 0,
+    reason="root bypasses POSIX permission bits, so chmod(0o000) below cannot make the file unreadable",
+)
 def test_unreadable_skill_md_skipped(tmp_path: pathlib.Path) -> None:
     project = _project(tmp_path)
     _skill(project, "good-skill")
