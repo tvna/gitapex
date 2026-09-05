@@ -14,12 +14,11 @@ Loaded when this copy of the skill's own files lives in the gitapex repository -
 
 ## Deterministic-checker commands (Step 6)
 
-```
-python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py --strict-token-budget --allowed-root <repo-root> skills/<new-skill-name>
-python3 skills/evaluating-skill-quality/scripts/gitapex_scan_execution_requirements_drift.py skills/<new-skill-name>
-```
-
-Both are read-only against the target directory; run them once the draft directory exists on disk, before Step 7's handoff, and fix every finding they report -- Step 7 does not run either check itself.
+`SKILL.md`'s own Step 6 carries the exact commands -- this section adds
+no independent copy, to avoid the two drifting apart. Both are read-only
+against the target directory; run them once the draft directory exists
+on disk, before Step 7's handoff, and fix every finding they report --
+Step 7 does not run either check itself.
 
 ## Metadata schema and shape checker
 

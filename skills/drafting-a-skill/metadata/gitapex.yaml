@@ -266,6 +266,21 @@ spec:
       summary: "The PR closing https://github.com/tvna/gitapex/issues/1766 added checklist item 5 opening with drafting-process reasoning quoting AGENTS.md Section 1 -- why the check originated, not a normative statement. The repository owner, reviewing after merge, asked this framing be removed. Item 5's opening clause was reworded to state the check standalone, with no AGENTS.md reference."
       outcome:
         baseCommit: "e0e24d907684fa2b820a2001a42ee2200a4de446"
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1792"
+      summary: "Non-goals migrated out of SKILL.md's body: does not finalize the literal elicitation-probe wording used to resolve the four axes or the Agentic operation mechanism-fit verdicts -- that phrasing is eliciting-a-design's own job. No prior elision entry covered this bullet (the five at https://github.com/tvna/gitapex/issues/1583 predate the re-scope at https://github.com/tvna/gitapex/issues/1619); recorded here for the first time."
+      outcome:
+        baseCommit: "738f44150d7a576f7da4097bd0ae958c0e28332b"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1792"
+      summary: "Deleted the SKILL.md ## Non-goals section outright, applying Step 2's own earning-test table (scope cuts belong in metadata only) to itself. Previously deleted once (commit 14afb48, https://github.com/tvna/gitapex/issues/1583), silently re-added later (commit c8f96d7) with no log entry either time -- the undisclosed-drift pattern Step 2 exists to catch. Two bullets already had elision entries above; the third needed a new one (entry above)."
+      outcome:
+        baseCommit: "738f44150d7a576f7da4097bd0ae958c0e28332b"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1792"
+      summary: "Applied the split rule to the rest of the body (7904 -> 6211 tokens): moved Worked examples 2/3 to contract-structure.md; moved mkdir-regime rationale to decision-log-discipline.md; unified Step 6 commands with gitapex-cross-links.md (fixing Notes' now-false 'found nowhere else'); compressed wording, no judgment/gate changed. All 8 Stop boundaries and fixture-quoted strings verified byte-identical (a first pass broke 6 via blanket substitution; reverted before landing)."
+      outcome:
+        baseCommit: "738f44150d7a576f7da4097bd0ae958c0e28332b"
   skillDependencies:
     requires:
       - evaluating-skill-quality

@@ -33,3 +33,24 @@ Before treating a draft's contract shape as done:
 3. Does the Postcondition match what the last Step actually produces, word for word in substance -- not a rounder, more optimistic summary of it?
 4. If an Invariant is declared, is it genuinely true across every Step, including the failure/escalation branches -- not only the happy path?
 5. For each Step, walk it against three failure modes: could the Step's own precondition fail to hold, whether or not the Step itself states it; could the Step's own command or action itself fail; could the Step's own postcondition check fail to match? This is a write-time completeness question -- distinct from `formative-quality-dimensions.md` row 4's runtime validate -> fix -> repeat feedback loop, which re-runs at execution time on specific quality-critical steps only.
+
+## Two more worked examples
+
+**A candidate that fails the earning test.** Rename a git branch to
+convention. A Precondition, Postcondition, and Non-goals bullet added
+from habit each restate Step 1 or don't exist in this vocabulary at
+all. Corrected: one Step only, the scope cut logged as an elision in
+`metadata/gitapex.yaml` instead -- see `SKILL.md`'s own Step 2 earning
+test above.
+
+**A candidate whose review finding roots upstream, not in the draft
+itself.** A third candidate reaches Step 7 with a `battle-testing-a-skill`
+finding that the elicited Capability assumption (`Frontier`) is wrong
+for a body this thin -- but that call was `eliciting-a-design`'s own
+Part-adjacent axis resolution, not anything this skill's own Steps
+produced. This skill's own dispatch context cannot reopen that
+dialogue: it emits
+`StageDeviated{action: escalate, reason: "Capability assumption Frontier does not fit a lean body; needs eliciting-a-design re-run"}`
+and stops, rather than silently overriding the axis or looping the
+review -- see `SKILL.md`'s own Step 7 upstream-ambiguity escalation
+branch.

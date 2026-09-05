@@ -32,3 +32,16 @@ Two concurrent dispatches editing the same *existing* target's sidecar race the 
 - Context 1 does not close it uniformly: `executing-a-branch-plan` Step 6 dispatches a wave either via the Workflow tool (`isolation: 'worktree'`, closing the race the same way) or its own sequential fallback -- the same fallback mode Step 2's own mkdir bullet names -- which carries no such guarantee.
 
 A same-tree overwrite between two isolated worktrees still surfaces as an ordinary git conflict at landing, never a silent loss; the sequential-fallback mode carries no such backstop, so that race is real and currently open, not merely a future caller's hypothetical -- disclosed here as open, never framed as closed by caller-side isolation it does not uniformly have. This skill's own Precondition does not itself check for either case.
+
+## Blank-page creation race (why Step 2's `mkdir` guards only one regime)
+
+Step 2's bare `mkdir skills/<name>` (no `-p`, no side-effect file write)
+guards the shared-filesystem-view case only -- a sequential-fallback run,
+or two sessions in one checkout -- where its atomic `EEXIST` failure is
+what routes a second writer away via the Precondition's
+target-already-exists branch. An isolated-worktree dispatch is covered
+without it: two worktrees adding the same new `skills/<name>/` path
+always collide as a git add/add conflict at merge-back, and within one
+`executing-a-branch-plan` run the file-ownership edge already forbids two
+same-wave tasks sharing a path -- that regime's own collision is never
+silent either.
