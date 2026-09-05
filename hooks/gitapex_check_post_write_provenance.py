@@ -220,6 +220,9 @@ _COVERED_TOOLS = frozenset(
         "mcp__github__create_pull_request",
         "mcp__github__update_pull_request",
         "mcp__github__issue_write",
+        "mcp__plugin_github_github__create_pull_request",
+        "mcp__plugin_github_github__update_pull_request",
+        "mcp__plugin_github_github__issue_write",
     }
 )
 
