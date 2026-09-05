@@ -84,15 +84,19 @@ from typing import Any
 
 _API_ROOT = "https://api.github.com"
 _API_VERSION = "2022-11-28"
-# Same budget as gitapex_check_pr_duplicate_issue.py's own: that module's
-# docstring derives 9*10 + 25 = 115s worst case, so hooks.json's own
-# timeout for this entry must stay comfortably above that figure or the
-# fail-closed design below degrades to fail-open on hook-runner
-# cancellation.
+# Per-request budget mirrors gitapex_check_pr_duplicate_issue.py's own
+# (10s timeout, one 5s-spaced retry). Its worst case over _MAX_PAGES --
+# roughly 25s per page, ~250s total -- does NOT fit hooks.json's own
+# 130s timeout for this entry, so this module additionally bounds its own
+# total fetch time to _TIME_BUDGET_SECONDS and denies fail-closed before
+# the runner can kill the process (which would fail open per the runner
+# contract). Realistic backlogs are one page; the bound only bites under
+# sustained degradation, exactly when failing open would be wrong.
 _HTTP_TIMEOUT_SECONDS = 10
 _MAX_ATTEMPTS = 2
 _PER_PAGE = 100
 _MAX_PAGES = 10
+_TIME_BUDGET_SECONDS = 100.0
 
 _GATE_PROPOSAL_LABEL = "gate-proposal"
 
@@ -105,6 +109,12 @@ _CONTAINER_PREFIX = r"[ \t\r]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+|>[ \t]?)*"
 _FENCE_RE = re.compile(rf"^{_CONTAINER_PREFIX}(```|~~~).*?^{_CONTAINER_PREFIX}\1", re.DOTALL | re.MULTILINE)
 _UNTERMINATED_FENCE_RE = re.compile(rf"^{_CONTAINER_PREFIX}(?:```|~~~).*\Z", re.DOTALL | re.MULTILINE)
 _INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
+# An indented code block (4 spaces or a tab) is code per CommonMark even
+# without fences -- an illustrative sweep line shown that way must not
+# count as proof either. Stripped after fences (a fence may itself be
+# indented) and before inline code. Generator-emitted lines always start
+# at column 0, so stripping indented lines can only deny, never allow.
+_INDENTED_CODE_RE = re.compile(r"^(?:[ ]{4}|\t).*$", re.MULTILINE)
 
 _SWEEP_RE = re.compile(
     r"^[ \t]*Dedup-sweep:[ \t]*(\d+)[ \t]+open[ \t]+gate-proposal[ \t]+issues[ \t]+at[ \t]+(\S+)"
@@ -122,7 +132,8 @@ class GitHubApiError(RuntimeError):
 def _strip_fences(text: str | None) -> str:
     without_fences = _FENCE_RE.sub("", text or "")
     without_fences = _UNTERMINATED_FENCE_RE.sub("", without_fences)
-    return _INLINE_CODE_RE.sub("", without_fences)
+    without_indented = _INDENTED_CODE_RE.sub("", without_fences)
+    return _INLINE_CODE_RE.sub("", without_indented)
 
 
 def find_sweep_lines(body_text: str | None) -> list[tuple[int, str, str]]:
@@ -197,8 +208,14 @@ def fetch_open_gate_proposal_count(
     population through `list_issues`, so both sides count identically.
     """
     sleeper = sleeper if sleeper is not None else time.sleep
+    started = time.monotonic()
     total = 0
     for page in range(1, max_pages + 1):
+        if time.monotonic() - started > _TIME_BUDGET_SECONDS:
+            raise GitHubApiError(
+                f"time-budget-exhausted: {_TIME_BUDGET_SECONDS:.0f}s elapsed before the open-issue "
+                "listing completed -- denying fail-closed rather than trusting a partial count"
+            )
         url = (
             f"{_API_ROOT}/repos/{owner}/{repo}/issues?state=open"
             f"&labels={urllib.parse.quote(_GATE_PROPOSAL_LABEL)}"
@@ -222,10 +239,15 @@ def fetch_open_gate_proposal_count(
 
 
 def _is_gate_proposal_filing(labels: Any) -> bool:
+    # `None` (absent labels) means the filing cannot carry the label --
+    # correctly out of scope. Any other non-list shape is malformed input
+    # and denies fail-closed rather than silently downgrading to allow.
+    if labels is None:
+        return False
     if isinstance(labels, str):
         labels = [labels]
     if not isinstance(labels, list):
-        return False
+        raise ValueError(f"labels must be a string array, got {type(labels).__name__}")
     return any(isinstance(label, str) and label.lower() == _GATE_PROPOSAL_LABEL for label in labels)
 
 
@@ -242,7 +264,11 @@ def evaluate(
     """Return (passed, message) for the Dedup-sweep proof check."""
     if (method or "") != "create":
         return True, "not an issue creation -- nothing to sweep-check"
-    if not _is_gate_proposal_filing(labels):
+    try:
+        gate_proposal = _is_gate_proposal_filing(labels)
+    except ValueError as error:
+        return False, f"malformed issue labels ({error}) -- failing closed"
+    if not gate_proposal:
         return True, "not a gate-proposal filing -- nothing to sweep-check"
 
     sweeps = find_sweep_lines(body)

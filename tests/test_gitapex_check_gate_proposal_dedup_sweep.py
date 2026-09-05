@@ -127,6 +127,20 @@ def test_fenced_sweep_line_does_not_count() -> None:
     assert passed is False
 
 
+def test_indented_code_block_sweep_line_does_not_count() -> None:
+    # Indented code needs no fences to be code per CommonMark -- an
+    # illustrative sweep line shown that way must not count as proof.
+    body = "Example:\n\n    " + _body(3).splitlines()[-1] + "\n"
+    passed, _ = _evaluate(body, [_issues(3)])
+    assert passed is False
+
+
+def test_malformed_labels_shape_denies_fail_closed() -> None:
+    passed, message = _evaluate(_body(3), [_issues(3)], labels={"0": "gate-proposal"})
+    assert passed is False
+    assert "labels" in message
+
+
 def test_two_sweep_lines_deny_as_ambiguous() -> None:
     line = _body(3).splitlines()[-1]
     passed, _ = _evaluate(line + "\n" + line + "\n", [_issues(3)])
