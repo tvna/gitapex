@@ -320,6 +320,19 @@ def test_build_dedup_sweep_line_rejects_malformed_timestamp(timestamp: str) -> N
         builder.build_dedup_sweep_line(open_count=63, timestamp=timestamp)
 
 
+@pytest.mark.parametrize(
+    "verdict", ["RECLASSIFY needs clearer instruction", "ALREADY-SHIPPED foo", "new", "DUPLICATE-OF", ""]
+)
+def test_build_dedup_sweep_line_rejects_non_filing_verdicts(verdict: str) -> None:
+    with pytest.raises(ValueError, match="verdict"):
+        builder.build_dedup_sweep_line(open_count=63, timestamp="2026-09-05T11:00:00Z", verdict=verdict)
+
+
+def test_build_dedup_sweep_line_records_duplicate_of_target() -> None:
+    line = builder.build_dedup_sweep_line(open_count=63, timestamp="2026-09-05T11:00:00Z", verdict="DUPLICATE-OF #1571")
+    assert line == "Dedup-sweep: 63 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict DUPLICATE-OF #1571"
+
+
 def test_acm_body_carries_generator_made_sweep_line_after_refs() -> None:
     body = builder.build_gate_proposal_acm_body(
         retrospective_issue_number=1405,

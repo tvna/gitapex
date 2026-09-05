@@ -45,6 +45,7 @@ check must be able to recognize the header row this module emits.
 from __future__ import annotations
 
 import datetime as _datetime
+import re as _re
 
 # The literal label name every `gate-proposal`-classified issue this
 # design files carries (Decision 6). Exact-match string -- do not deviate;
@@ -80,18 +81,26 @@ _ACM_DIVIDER_ROW = "|---|---|---|---|---|"
 # (not a bare digit-shape regex, which would accept month 13).
 _DEDUP_SWEEP_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
+# The only verdicts a filed standalone can truthfully carry: a fresh
+# proposal (`NEW`), or a duplicate that still files standalone before
+# closing (issue #1806 row 3) naming its umbrella. `RECLASSIFY` and
+# `ALREADY-SHIPPED` never file, so they have no line shape here.
+_DEDUP_SWEEP_VERDICT_RE = _re.compile(r"^(?:NEW|DUPLICATE-OF #\d+)$")
 
-def build_dedup_sweep_line(open_count: int, timestamp: str) -> str:
+
+def build_dedup_sweep_line(open_count: int, timestamp: str, verdict: str = "NEW") -> str:
     """Return the `Dedup-sweep:` proof line for one Step 4b backlog sweep.
 
     `open_count` is the live count of open `gate-proposal` issues observed
     by the sweep; `timestamp` is when the sweep ran, UTC
-    `YYYY-MM-DDTHH:MM:SSZ`. Raises `ValueError` when `open_count` is not
-    a non-negative `int` (`bool` excluded explicitly -- `isinstance(True,
-    int)` is `True`, and a boolean count is the same contract violation
-    `build_gate_proposal_title`'s own 1-based-index check already fails
-    loudly on) or when `timestamp` is not a real calendar instant in that
-    exact format.
+    `YYYY-MM-DDTHH:MM:SSZ`; `verdict` is the Step 4b verdict this filing
+    records (`NEW` by default). Raises `ValueError` when `open_count` is
+    not a non-negative `int` (`bool` excluded explicitly --
+    `isinstance(True, int)` is `True`, and a boolean count is the same
+    contract violation `build_gate_proposal_title`'s own 1-based-index
+    check already fails loudly on), when `timestamp` is not a real
+    calendar instant in that exact format, or when `verdict` names a
+    non-filing outcome.
     """
     if isinstance(open_count, bool) or not isinstance(open_count, int):
         raise ValueError(f"open_count must be a non-negative int, got {open_count!r}")
@@ -103,7 +112,9 @@ def build_dedup_sweep_line(open_count: int, timestamp: str) -> str:
         _datetime.datetime.strptime(timestamp, _DEDUP_SWEEP_TIMESTAMP_FORMAT)
     except ValueError:
         raise ValueError(f"timestamp must be ISO-8601 UTC YYYY-MM-DDTHH:MM:SSZ, got {timestamp!r}") from None
-    return f"Dedup-sweep: {open_count} open gate-proposal issues at {timestamp}; verdict NEW"
+    if not isinstance(verdict, str) or not _DEDUP_SWEEP_VERDICT_RE.match(verdict):
+        raise ValueError(f"verdict must be NEW or DUPLICATE-OF #<N>, got {verdict!r}")
+    return f"Dedup-sweep: {open_count} open gate-proposal issues at {timestamp}; verdict {verdict}"
 
 
 def build_gate_proposal_title(
@@ -174,6 +185,7 @@ def build_gate_proposal_acm_body(
     *,
     dedup_sweep_open_count: int,
     dedup_sweep_timestamp: str,
+    dedup_sweep_verdict: str = "NEW",
 ) -> str:
     """Return the fully-populated Acceptance Criteria Map body for one
     `missing-deterministic-gate` repair (Decision 4), mapped directly from
@@ -213,7 +225,9 @@ def build_gate_proposal_acm_body(
     # rows 0-2 keep fixed positions for existing readers. Free-text fields
     # cannot forge one: `_sanitize_cell` collapses their newlines to
     # spaces, so no second `Dedup-sweep:` line can ever start inside them.
-    sweep_line = build_dedup_sweep_line(open_count=dedup_sweep_open_count, timestamp=dedup_sweep_timestamp)
+    sweep_line = build_dedup_sweep_line(
+        open_count=dedup_sweep_open_count, timestamp=dedup_sweep_timestamp, verdict=dedup_sweep_verdict
+    )
     return "\n".join(
         [
             _ACM_HEADER_ROW,

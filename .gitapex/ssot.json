@@ -296,6 +296,25 @@
       ]
     },
     {
+      "id": "gate-proposal-dedup-sweep",
+      "kind": "script",
+      "script": ["hooks/check-gate-proposal-dedup-sweep.sh", "hooks/gitapex_check_gate_proposal_dedup_sweep.py"],
+      "rule": "Denies mcp__github__issue_write (method create, gate-proposal label) when the body carries no single well-formed Dedup-sweep proof line generated only by skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py, or when its count differs from a live re-fetch of the open gate-proposal population; fails closed on a missing GH_TOKEN/GITHUB_TOKEN or an unfetchable count. Accepts verdict NEW or DUPLICATE-OF #N (issue #1806 row 3 requires duplicates to still file standalone). Fails closed (denies) rather than allowing the call through when jq is missing from PATH or the payload is not a single JSON object.",
+      "planes": ["pretooluse"],
+      "local_exclusion": "Grades the new issue's own body against live open-issue state on GitHub; 'currently-open gate-proposal issues' has no local/offline equivalent to check against.",
+      "trigger": "PreToolUse matcher mcp__github__issue_write (hooks/hooks.json)",
+      "policy_refs": [],
+      "cluster": ["plan-integrity", "github-operations"],
+      "tracking_issue": 1806,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "mcp-tool", "ref": "mcp__github__issue_write"},
+        {"kind": "runtime-resolved-reference", "ref": "GET /repos/{owner}/{repo}/issues?state=open&labels=gate-proposal"}
+      ]
+    },
+    {
       "id": "independent-review-pending",
       "kind": "script",
       "script": [".github/workflows/independent-review-pending.yml", ".github/scripts/gitapex_gate_independent_review_pending.py"],
