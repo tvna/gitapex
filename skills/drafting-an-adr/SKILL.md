@@ -1,6 +1,6 @@
 ---
 name: drafting-an-adr
-description: Use when a decision affecting architecture (structure, non-functional characteristics, dependencies, interfaces, or construction techniques) needs to be recorded before or after it's made. Applies Nygard's architecturally-significant criteria to judge warrant, then drafts an ADR from a MADR-derived template. Distinct from drafting-issues (same drafted-artifact shape, different artifact).
+description: Use when a decision affecting architecture (structure, non-functional characteristics, dependencies, interfaces, or construction techniques) needs to be recorded before or after it's made. Applies Nygard's architecturally-significant criteria to judge warrant, then drafts an ADR from a MADR-derived template -- a dedicated file, never a code comment or docstring. Distinct from drafting-issues (same drafted-artifact shape, different artifact).
 ---
 
 # Drafting an ADR
@@ -214,6 +214,11 @@ ADR** when not applicable.
   produces "drive-by ADRs".
 - Do not create the file at `docs/adr/` before
   `scripts/gitapex_check_adr_shape.py` passes on the drafted body.
+- Do not treat this skill's own output as self-certifying to any
+  downstream consumer that later cites the ADR by path: a citer must
+  still check the ADR's actual `Status` and content at the path it
+  cites, not treat the file's mere existence as proof the decision is
+  approved or still current.
 
 ## Related skills
 
