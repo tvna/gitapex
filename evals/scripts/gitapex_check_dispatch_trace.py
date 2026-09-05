@@ -84,6 +84,13 @@ from pydantic import BaseModel, ValidationError, field_validator
 # calling session's own live task list or conversation history.
 _HOME_COPY_STRIP_DIRS = ("tasks", "projects", "sessions", "shell-snapshots")
 
+# Kept in sync with gitapex_run_verified_isolated_dispatch.py's own sibling
+# copy (see that module's own _HOME_COPY_STRIP_FILES comment for the full
+# rationale) -- a named credential-storage file never copied into an
+# isolated $HOME, the same targeted, single-named-item philosophy the
+# ANTHROPIC_API_KEY environment strip already applies.
+_HOME_COPY_STRIP_FILES = (".credentials.json",)
+
 
 class ToolUseBlock(BaseModel):
     """One ``tool_use`` content block inside a transcript line's
@@ -278,6 +285,16 @@ def build_isolated_home(base_dir: Path) -> Path:
         raise FileNotFoundError(f"no {real_claude_dir} to build an isolated copy from")
     isolated_home = base_dir / "isolated-home"
     isolated_home.mkdir(parents=True, exist_ok=True)
+    # An explicit chmod, not only mkdir's own mode= (which mkdir applies
+    # before umask masking, so it does not reliably land on 0o700 alone) --
+    # a defense-in-depth permission set at the point this function itself
+    # creates a directory that will hold a copy of $HOME/.claude, ported
+    # from skills/evaluating-skill-quality/scripts/
+    # gitapex_run_verified_isolated_dispatch.py's own identical fix so the
+    # two copies stay in sync (issue #1809, Step 8 follow-up; see that
+    # module's own test_build_isolated_home_matches_sibling_copy_in_dispatch_trace
+    # drift guard).
+    isolated_home.chmod(0o700)
 
     def _ignore_top_level_strip_dirs(directory: str, names: list[str]) -> list[str]:
         # Only strip these names as direct children of real_claude_dir
@@ -286,7 +303,7 @@ def build_isolated_home(base_dir: Path) -> Path:
         # skill (e.g. a skill's own tasks/ content), which the prior
         # copy-then-rmtree approach never touched either.
         if Path(directory) == real_claude_dir:
-            return [n for n in names if n in _HOME_COPY_STRIP_DIRS]
+            return [n for n in names if n in _HOME_COPY_STRIP_DIRS or n in _HOME_COPY_STRIP_FILES]
         return []
 
     shutil.copytree(
@@ -399,7 +416,8 @@ def run_live_dispatch(
     ``build_isolated_home`` (or an equivalent) first -- this function does
     not verify isolation itself, only executes the already-isolated call, so
     a live proof run must still record the isolation check per
-    ``adversarial-self-audit.md``'s Verification procedure.
+    ``evaluating-skill-quality``'s own
+    ``scripts/gitapex_run_verified_isolated_dispatch.py``.
 
     Raises ``subprocess.TimeoutExpired`` if the dispatch does not finish
     within ``timeout_seconds`` (default 10 minutes -- a real observed

@@ -100,6 +100,9 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/364"
       summary: "The behavioral half (feed this skill a degraded copy of itself, confirm its own procedure catches the gap generically) was not built: no waza/model-CLI toolchain or live-dispatch budget was available this session to measure it, and an unverified fixture would be exactly the fail-open dimension 14 itself warns against. Recorded per this issue's own explicit escape hatch rather than silently dropped; full rationale in evals/README.md."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1809"
+      summary: "Two Procedure/Stop-boundary citations of adversarial-self-audit.md's own removed 'Verification procedure'/'Known entries' headings were repointed at the new gitapex_run_verified_isolated_dispatch.py's own printed guidance instead. Citation-only, no functional/frontmatter change. This fell outside the linked issue's own design doc/branch plan file-ownership map (an independent Step 8 review flagged the scope-of-record gap); recorded here to close it."
   skillDependencies:
     requires:
       - evaluating-skill-quality

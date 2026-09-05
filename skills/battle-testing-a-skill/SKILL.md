@@ -74,18 +74,19 @@ limits.
    dispatch that inherits them is not a neutral, portable evaluation.
    Requesting the exclusion is not proof it held: the verified mechanism is
    platform-specific and owned by `evaluating-skill-quality`'s Subagent
-   dispatch section; run its two-control verification procedure (does the
-   dispatched agent's self-report change between the positive- and
-   negative-control location) and record a new registry entry if none
-   exists. Only that test counts as proof -- an ancestry-only check on the
-   scratch path has already missed a real leak (see
+   dispatch section -- run its `gitapex_run_verified_isolated_dispatch.py`
+   for the dispatch itself; it verifies isolation from its own
+   orchestrating process before launching (reusing a matching Reviewed
+   entry in that skill's own `metadata/isolation-registry.yaml`, or
+   running a live positive/negative control pair and recording a new
+   entry otherwise). Only that test counts as proof -- an ancestry-only
+   check on the scratch path has already missed a real leak (see
    `references/provenance-and-caveats.md`, "Variance re-measurement"). No
    available mechanism -> stop; never fall back to the Agent-tool (or any
    other unverified) subagent dispatch merely because it happens to be
-   available -- follow `evaluating-skill-quality`'s
-   `references/adversarial-self-audit.md` No verified mechanism available
-   section to display the environment-fix-or-handoff code block that
-   section requires. If an operator explicitly authorizes proceeding anyway,
+   available -- if the script reports "No verified mechanism available,"
+   follow its own printed guidance (the environment-fix-or-handoff code
+   block it displays). If an operator explicitly authorizes proceeding anyway,
    disclose the contamination prominently in the trial's own report and
    grade every PASS from that trial provisional pending an isolated re-run.
    After each dispatch starts, capture `observed_tester_model` from trusted
@@ -225,8 +226,9 @@ to that re-derivation, not a substitute for it.
   current platform -- reaching that state is itself the finding, not
   license to dispatch anyway (step 2). Display the
   environment-fix-or-handoff code block `evaluating-skill-quality`'s
-  `references/adversarial-self-audit.md` No verified mechanism available
-  section requires, and wait for the operator to act on it.
+  `gitapex_run_verified_isolated_dispatch.py` itself prints when it
+  reports "No verified mechanism available," and wait for the operator to
+  act on it.
 
 ## Notes
 

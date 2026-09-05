@@ -1,0 +1,490 @@
+# Isolation verification registry (issue #1809).
+#
+# Structured migration of `references/adversarial-self-audit.md`'s former
+# hand-written "Known entries" prose (Isolation verification section). Read
+# and written by `scripts/gitapex_run_verified_isolated_dispatch.py`; see
+# that script's own module docstring for the schema's operational meaning
+# and `references/adversarial-self-audit.md`'s "Trust class of an entry"
+# subsection for what `trust_class` actually means.
+#
+# Field meanings:
+#   identifying_signals    -- this platform's own identity: relevant env
+#                              vars plus `claude --version` output. An exact
+#                              match against a run's own signals is required
+#                              before a `reviewed` entry may be reused.
+#   mechanism               -- the dispatch mechanism/recipe this entry
+#                              tested, in prose.
+#   leak_vector             -- which contamination axis this entry addresses
+#                              (e.g. claude_md_agents_md, home_task_list;
+#                              not a closed enum -- see
+#                              missing_marketplace_manifest_fallback below).
+#   result                  -- "isolated" or "contaminated" for this
+#                              mechanism/leak_vector pair.
+#   verified_alternative    -- the exact recipe that avoids the leak (may
+#                              restate the entry's own mechanism when result
+#                              is already "isolated").
+#   companion_flags         -- invocation flags the recipe needs to work.
+#   methodology_pitfalls    -- false-positive/false-negative modes found
+#                              while establishing this entry.
+#   trust_class             -- "reviewed" | "same-run-unreviewed". Carried
+#                              forward from each source entry's own
+#                              already-stated label (the corrected migration
+#                              rule -- see the design doc's Migration
+#                              section), never re-derived from merge status.
+#   date                    -- ISO date, or null when the source prose gave
+#                              none (see notes for what is/isn't known).
+#   notes                   -- free-form list: caveats, scope limits,
+#                              retractions, cross-references.
+#
+# Migrated from the copy of adversarial-self-audit.md on this branch as of
+# 2026-09-05 (branched from origin/main before PR #1793/issue #1802's own
+# third-vector entry merged) -- that entry is not yet present here and must
+# be added by whichever future change actually merges it.
+
+entries:
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: "true"
+      CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
+      claude_version: "2.1.220 (Claude Code)"
+    mechanism: >-
+      Dispatching a subagent through the harness's native Agent tool,
+      pointed at a project-instruction-file-free scratch copy of the review
+      target.
+    leak_vector: claude_md_agents_md
+    result: contaminated
+    verified_alternative: >-
+      Invoke `claude -p "<prompt>"` as a subprocess from a working
+      directory whose full parent-directory chain contains no
+      CLAUDE.md/AGENTS.md.
+    companion_flags: []
+    methodology_pitfalls: []
+    trust_class: reviewed
+    date: "2026-07-28"
+    notes:
+      - >-
+        Confirmed contaminated across two independent dispatches against
+        two different review targets; the dispatched agent's own
+        self-report disclosed the calling repository's CLAUDE.md was
+        present in its context from the start of the task, despite the
+        scratch-copy mitigation.
+      - >-
+        Originally observed at an unspecified date before 2026-07-28;
+        reconfirmed 2026-07-28 with identical identifying signals and
+        outcome.
+      - >-
+        The exclusion appears tied to the dispatching session's own project
+        root, not to any path referenced in the dispatch prompt.
+
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: "true"
+      CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
+      claude_version: "2.1.220 (Claude Code)"
+    mechanism: >-
+      claude -p subprocess launched with cwd isolation only, $HOME
+      inherited unchanged from the parent shell.
+    leak_vector: home_task_list
+    result: contaminated
+    verified_alternative: >-
+      Copy $HOME/.claude and $HOME/.claude.json into a fresh directory,
+      recreate its tasks/, projects/, sessions/, shell-snapshots/ subtrees
+      empty, then dispatch with CLAUDE_CODE_SESSION_ID unset and HOME
+      pointed at that copy.
+    companion_flags: []
+    methodology_pitfalls: []
+    trust_class: reviewed
+    date: "2026-07-28"
+    notes:
+      - >-
+        Leaks the calling session's real task list both with the
+        environment inherited unchanged and with only
+        CLAUDE_CODE_SESSION_ID unset -- $HOME, not that variable, controls
+        it.
+      - >-
+        Once a dispatched subprocess accumulates enough tool calls without
+        its own TaskCreate/TaskUpdate call, the harness injects an
+        unprompted system-reminder carrying the calling session's actual,
+        live task list.
+      - >-
+        Scope: bounded to a process sharing the exact $HOME directory, not
+        an account- or machine-wide leak; real by default since a plain
+        claude -p subprocess inherits $HOME unless overridden.
+      - >-
+        Verified alternative confirmed live: no task-list content leaked,
+        the copied settings file diffed byte-identical to the original
+        (permission rules and hooks intact), and the dispatched process
+        successfully executed a real script.
+
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: "true"
+      CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
+      claude_version: "2.1.220 (Claude Code)"
+    mechanism: >-
+      claude -p subprocess with cwd+HOME isolation, invoked with an
+      explicit non-default --model flag.
+    leak_vector: claude_md_agents_md
+    result: isolated
+    verified_alternative: >-
+      Same isolated cwd/HOME recipe as the plain-invocation entry above;
+      confirmed compatible with an explicit non-default --model selection.
+    companion_flags:
+      - "--model <explicit non-default selection>"
+    methodology_pitfalls:
+      - >-
+        Setting $PWD as an environment variable without an actual chdir
+        does NOT isolate the dispatch -- claude's CLAUDE.md/AGENTS.md
+        discovery follows the real process working directory (getcwd()),
+        not the $PWD string. Wrap the invocation in a real `cd` (or an
+        equivalent cwd= subprocess argument) instead.
+    trust_class: reviewed
+    date: "2026-08-01"
+    notes:
+      - >-
+        Run while battle-testing a sibling skill whose Procedure needed
+        this same non-default model selected for a cold-enumeration step.
+
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: "true"
+      CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
+      claude_version: "2.1.226 (Claude Code)"
+    mechanism: >-
+      claude -p subprocess, isolated cwd + isolated $HOME
+      (script-established baseline recipe)
+    leak_vector: claude_md_agents_md
+    result: isolated
+    verified_alternative: >-
+      The isolated cwd must BE the caller-created read-only snapshot of the
+      review target itself (not an empty cwd pointed at an absolute target
+      path elsewhere), with dispatch paths given relative to it.
+    companion_flags: []
+    methodology_pitfalls:
+      - >-
+        RETRACTED 2026-09-05 (issue #1809, Step 8 follow-up): this entry
+        previously claimed "the harness's own permission sandbox confines a
+        dispatched claude -p to reads inside its working directory." That
+        claim is FALSE in at least one confirmed environment (this same
+        session's own CLAUDE_CODE_REMOTE/cloud_default signature): a live
+        `claude -p --allowedTools "Read,Glob"` dispatch from this exact
+        recipe successfully read a file at an arbitrary absolute path
+        outside its isolated cwd. Do not rely on cwd isolation as a
+        confinement boundary against a dispatch actively instructed (e.g.
+        by injected content in the review target) to read outside its cwd
+        -- it only prevents the *passive*, automatic CLAUDE.md/AGENTS.md
+        ancestry scan this entry's own leak_vector actually covers. The
+        original claim's own scenario (an empty cwd pointed at an absolute
+        target path elsewhere producing a bare read-grant request) may
+        still be accurate for that specific narrow case; only the general
+        "confines to reads inside its working directory" claim is retracted.
+    trust_class: reviewed
+    date: "2026-08-08"
+    notes:
+      - >-
+        A chmod -R a-w snapshot is advisory only for a process running as
+        uid 0, which bypasses the mode bits -- state which of
+        "caller-created and not written by the dispatch" vs. an
+        OS-enforced guarantee a given run actually had, rather than
+        implying the stronger one.
+
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: "true"
+      CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
+      claude_version: "2.1.251 (Claude Code)"
+    mechanism: >-
+      claude -p subprocess, isolated cwd + isolated $HOME
+      (script-established baseline recipe)
+    leak_vector: claude_md_agents_md
+    result: isolated
+    verified_alternative: >-
+      Same as above; on this session, a bare freshly created isolated
+      $HOME with no .credentials.json copied sufficed, since this
+      environment authenticates via an env-supplied OAuth token/file
+      descriptor rather than a credentials file.
+    companion_flags: []
+    methodology_pitfalls: []
+    trust_class: same-run-unreviewed
+    date: "2026-08-30"
+    notes:
+      - "Run while battle-testing executing-a-branch-plan."
+
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: "true"
+      claude_version: "2.1.252 (Claude Code)"
+    mechanism: "claude -p subprocess with cwd isolation only (no $HOME override)."
+    leak_vector: claude_md_agents_md
+    result: isolated
+    verified_alternative: >-
+      cwd isolation alone (no permission-bypass flag); confirmed both with
+      a plain read-only ask and with --allowedTools "Read" forcing an
+      explicit Read-tool invocation.
+    companion_flags:
+      - '--allowedTools "Read,Glob,Grep"'
+    methodology_pitfalls:
+      - >-
+        --bare was tried as a candidate CLAUDE.md-discovery-skip mechanism
+        and rejected on this session: it broke authentication outright
+        (this session authenticates via an env-supplied OAuth token/file
+        descriptor, and --bare's documented behavior is that OAuth/keychain
+        are never read).
+    trust_class: same-run-unreviewed
+    date: "2026-09-01"
+    notes:
+      - >-
+        Run to dispatch evaluating-skill-quality reviews for a real pull
+        request's independent-review-pending check.
+      - >-
+        Scope: this run isolated cwd only, not $HOME -- the home_task_list
+        leak vector (see the cwd+HOME entries above) was not re-tested or
+        closed this round; a caller needing to avoid that leak too should
+        still apply its own verified_alternative.
+
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: "true"
+      CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
+      claude_version: "2.1.220 (Claude Code)"
+    mechanism: >-
+      claude -p --plugin-dir (pointed at a target directory) from the
+      isolated cwd+HOME recipe, loading this repository's own skills/
+      (with and without a root CLAUDE.md) as a session-scoped plugin.
+    leak_vector: claude_md_agents_md
+    result: isolated
+    verified_alternative: >-
+      --plugin-dir loading is not a CLAUDE.md-scanning code path on this
+      platform; the plugin copy does not need CLAUDE.md stripped from it.
+    companion_flags: []
+    methodology_pitfalls: []
+    trust_class: reviewed
+    date: "2026-07-30"
+    notes:
+      - >-
+        --plugin-dir also auto-triggers the real Skill tool from a fully
+        isolated cwd/HOME, useful for a future in-repo runner needing the
+        real, unmodified Skill content loaded.
+      - >-
+        Once auto-triggered this way, the skill's own Procedure correctly
+        reads this registry and shells out to a nested claude -p subprocess
+        via Bash (since the Agent tool is confirmed-contaminated) rather
+        than using the Agent tool -- correct but slow (observed >3
+        minutes). A caller needing a fast, deterministic proof run should
+        prefer explicit "dispatch via the Agent tool" prompt wording
+        instead of relying on this auto-trigger path.
+
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: "true"
+      CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
+      claude_version: "2.1.220 (Claude Code)"
+    mechanism: >-
+      claude plugin marketplace add + claude plugin install against the
+      isolated $HOME, then dispatch (real Skill-tool discovery path,
+      distinct from --plugin-dir's direct load).
+    leak_vector: missing_marketplace_manifest_fallback
+    result: contaminated
+    verified_alternative: >-
+      Confirm .claude-plugin/marketplace.json exists in the isolated
+      target before treating any resulting score as evidence of genuine
+      dispatch; this repository's own dispatch-trace tooling's run
+      subcommand now fails loudly (exit 2) before any dispatch is
+      attempted if it is missing.
+    companion_flags:
+      - "--permission-mode acceptEdits"
+      - '--allowedTools "Bash(python3 *)" "Bash(git *)"'
+    methodology_pitfalls:
+      - >-
+        Without the isolated target's own .claude-plugin/marketplace.json,
+        claude plugin marketplace add has nothing to register and the
+        Skill tool cannot find the target skill by name at all -- the
+        dispatch then silently falls back to reading SKILL.md directly and
+        reasoning about it in prose (simulated dispatch, not this skill's
+        own real Subagent dispatch procedure), with the resulting scores
+        reported as genuine.
+    trust_class: reviewed
+    date: "2026-07-31"
+    notes:
+      - >-
+        Real, disclosed cost: two consecutive gate cycles for this skill's
+        own references/rubric.md ran their isolated scoring dispatches
+        against a target copy missing this manifest. A genuine
+        re-dispatch, once caught mid-cycle, retracted the prior "zero
+        regressions" claim for two of three motivating fixtures.
+      - >-
+        Without the companion permission/allowedTools flags, the
+        shape-checker step this skill's own Procedure requires hits a
+        Bash-approval prompt the default permission mode blocks on,
+        silently truncating the dispatch's output to a bare approval
+        request.
+      - >-
+        This leak_vector is not one of the CLAUDE.md/AGENTS.md/$HOME
+        contamination axes the other entries in this registry cover -- it
+        is a distinct self-audit finding (a silent fallback to non-genuine,
+        simulated review) surfaced by the same recipe-verification work and
+        migrated here because it lived in the same source section.
+
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: "true"
+      CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
+      claude_version: "2.1.233 (Claude Code)"
+    mechanism: >-
+      claude -p reading its prompt from stdin, isolated cwd only, no
+      --dangerously-skip-permissions and no other permission-mode flag.
+    leak_vector: claude_md_agents_md
+    result: isolated
+    verified_alternative: >-
+      The isolated-cwd recipe alone still isolates CLAUDE.md/AGENTS.md
+      correctly with no permission-bypass flag; a dispatch whose entire
+      prompt is self-contained (no Read/Bash/Write needed) needs no
+      permission flag at all.
+    companion_flags: []
+    methodology_pitfalls: []
+    trust_class: same-run-unreviewed
+    date: "2026-08-15"
+    notes:
+      - >-
+        A separate, non-isolation finding from the same run:
+        --dangerously-skip-permissions was itself blocked outright on this
+        session ("Permission for this action was denied by the Claude Code
+        auto mode classifier"); dropping the flag entirely was not
+        blocked. Whether this block is a property of the CLI version
+        generally or only this session's own classifier configuration is
+        not confirmed -- do not extend "blocked" to an untested
+        platform/session.
+      - >-
+        Scope: did not re-test the $HOME-copy task-list-leak mitigation --
+        the dispatches this run performed were short, single-question
+        content reviews with no tool use, so that leak's own trigger
+        condition was never approached.
+      - >-
+        Run as part of a scorer-gated-skill-edits held-out gate cycle for
+        this skill's own references/rubric.md.
+
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: "true"
+      CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
+      claude_version: "2.1.241 (Claude Code)"
+    mechanism: >-
+      claude -p, prompt passed as a single self-contained CLI argument (not
+      stdin), no permission-bypass flag.
+    leak_vector: claude_md_agents_md
+    result: isolated
+    verified_alternative: >-
+      The isolated-cwd recipe alone still isolates CLAUDE.md/AGENTS.md
+      correctly with no permission-bypass flag.
+    companion_flags: []
+    methodology_pitfalls: []
+    trust_class: reviewed
+    date: "2026-08-25"
+    notes:
+      - >-
+        Run ahead of a same-session round of battle-testing-a-skill/
+        evaluating-skill-quality dispatches using this mechanism.
+
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: "true"
+      CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
+      claude_version: "2.1.245 (Claude Code)"
+    mechanism: >-
+      claude -p, prompt passed as a single self-contained CLI argument, no
+      permission-bypass flag.
+    leak_vector: claude_md_agents_md
+    result: isolated
+    verified_alternative: >-
+      The isolated-cwd recipe alone still isolates CLAUDE.md/AGENTS.md
+      correctly with no permission-bypass flag.
+    companion_flags: []
+    methodology_pitfalls: []
+    trust_class: reviewed
+    date: "2026-08-25"
+    notes:
+      - >-
+        Later run, same day as the 2.1.241 entry above, at a newer CLI
+        version -- run ahead of a same-session battle-testing-a-skill/
+        evaluating-skill-quality round for this repository's own
+        executing-a-branch-plan and drafting-a-pr-to-merge skills.
+      - "Negative control's ancestry confirmed via a filesystem walk from /."
+
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: "true"
+      CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
+      claude_version: "2.1.246 (Claude Code)"
+    mechanism: >-
+      claude -p, prompt passed as a single self-contained CLI argument, no
+      permission-bypass flag.
+    leak_vector: claude_md_agents_md
+    result: isolated
+    verified_alternative: >-
+      The isolated-cwd recipe alone still isolates CLAUDE.md/AGENTS.md
+      correctly with no permission-bypass flag.
+    companion_flags: []
+    methodology_pitfalls: []
+    trust_class: same-run-unreviewed
+    date: "2026-08-26"
+    notes:
+      - >-
+        Run ahead of a scorer-gated-skill-edits held-out gate cycle for two
+        rubric.md edits addressing dimension 5 and dimension 6 NOT-MATURE
+        findings.
+      - >-
+        Scratch directories were left under the session's own scratchpad
+        path rather than deleted immediately, since a same-session gate
+        run reused the same recipe.
+
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: "true"
+      claude_version: "2.1.251 (Claude Code)"
+    mechanism: >-
+      claude -p, prompt passed as a single self-contained CLI argument, no
+      permission-bypass flag.
+    leak_vector: claude_md_agents_md
+    result: isolated
+    verified_alternative: >-
+      The isolated-cwd recipe alone still isolates CLAUDE.md/AGENTS.md
+      correctly with no permission-bypass flag.
+    companion_flags: []
+    methodology_pitfalls: []
+    trust_class: same-run-unreviewed
+    date: null
+    notes:
+      - >-
+        Date not stated explicitly in source prose. Run ahead of an
+        isolated dispatch that re-graded state-management axis 9 and axis
+        3 against the same change; negative control's ancestry confirmed
+        via a filesystem walk from /.
+      - >-
+        Same claude_version (2.1.251) as the cwd+HOME isolation entry above
+        dated 2026-08-30, which may (not confirmed) place this entry
+        around the same date -- flagged as speculation, not fact.
+
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: 'true'
+      CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
+      claude_version: 2.1.261 (Claude Code)
+    mechanism: claude -p subprocess, isolated cwd + isolated $HOME (script-established
+      baseline recipe)
+    leak_vector: account_level_context_injection
+    result: contaminated
+    verified_alternative: None known yet. The isolated $HOME copy this recipe builds
+      does not appear to be the source (settings/hooks/skills are copied unmodified,
+      per the existing cwd+HOME entries) -- the injected content plausibly originates
+      from the harness itself, independent of both cwd and $HOME content. Not yet isolated
+      by any recipe this registry currently records.
+    companion_flags: []
+    methodology_pitfalls:
+    - 'Not part of the primary claude_md_agents_md leak vector this script''s own automated
+      two-control procedure checks -- found incidentally by reading the positive control''s
+      own transcript text during issue #1809''s Step 8 independent review, not by a
+      dedicated check. A caller relying solely on gitapex_run_verified_isolated_dispatch.py''s
+      own verifiedLeakVectors report would not learn of this leak.'
+    trust_class: same-run-unreviewed
+    date: '2026-09-05'
+    notes:
+    - A live positive-control run (per this script's own two-control procedure, from
+      a fresh isolated cwd carrying only the sentinel CLAUDE.md, and a fresh isolated
+      $HOME copy) reported the calling account's own userEmail and the calling session's
+      own currentDate context alongside the sentinel CLAUDE.md content, framed as "delivered
+      to me in the system-reminder" -- neither value is part of the sentinel file this
+      script writes. This means an account-level, session-independent context injection
+      reaches the dispatch regardless of the target content's own isolation, and (for
+      userEmail specifically) is a real PII leak if the dispatch is ever compromised
+      via injected content in an adversarial review target and instructed to exfiltrate
+      its own context.
+    - 'Discovered by an independent adversarial review-persona dispatch during issue
+      #1809''s own executing-a-branch-plan Step 8/drafting-a-pr-to-merge Step 8 rounds,
+      then independently reproduced live by this same session using this script''s own
+      real two-control run (not a synthetic test).'

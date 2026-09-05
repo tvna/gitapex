@@ -1,0 +1,182 @@
+# Issue #1809: keep skills/evaluating-skill-quality/metadata/isolation-registry.yaml
+# current without depending on an interactive session happening to dispatch
+# a review at a drifted `claude` CLI version. Runs
+# gitapex_run_verified_isolated_dispatch.py in --controls-only mode on a
+# schedule; on finding a new same-run-unreviewed entry, opens a pull request
+# proposing the registry update rather than committing it directly.
+#
+# Governance property this workflow must never violate (design doc
+# "Components" item 4, Testing section): this job proposes via PR, it never
+# merges or auto-promotes an entry to `reviewed` trust class -- that still
+# requires the existing human/PR review gate, preserving the Trust class
+# rule's own safety property (an entry becomes Reviewed once merged, not
+# once written). test_gitapex_isolation_registry_refresh_workflow.py asserts
+# this workflow's own YAML text contains no merge/auto-promote API call, not
+# merely as an assertion in prose.
+#
+# --controls-only mode never launches a real target dispatch (on a same-run
+# or reviewed entry alike) -- the one code path in the whole design allowed
+# to establish a same-run entry with zero human watching live, precisely
+# because it is also the one path guaranteed not to act on that entry in the
+# same run.
+#
+# Job-level permission scope (issue #1809, Step 8 follow-up -- disclosed,
+# and corrected once by a second independent review after the first
+# disclosure's own comparison turned out inaccurate): this job's own
+# `contents: write`/`pull-requests: write`/`issues: write` grant on the
+# default GITHUB_TOKEN is broader than the top-level `contents: read`
+# default. Job-level `issues: write` alone (default token, no separate PAT)
+# is this repository's own common pattern for a scheduled/event-triggered
+# job that only opens/closes issues (post-merge-retro.yml,
+# stale-retro-stub-autoclose.yml, acm-issue-gate.yml all do this) -- but the
+# *combination* this job needs (`contents: write` together with
+# `pull-requests: write`, to push a branch and open a PR from it, not only
+# open an issue) is unique to this workflow; no other job in this repository
+# needs that combination. The one comparable precedent for a job needing
+# more than issues-alone write power is apply-rulesets.yml, which instead
+# routes its own write through a separate, purpose-scoped PAT behind a
+# required-reviewer Environment gate, keeping its own job-level permissions
+# at `contents: read` and never escalating the default token at all. That
+# pattern was not adopted here: provisioning a new PAT and Environment is a
+# repository-owner action (a new secret, per AGENTS.md section 3's own
+# disclosure requirement) this PR cannot take on its own authority, and this
+# workflow's own actual risk profile is narrower than a generic mutating job
+# -- both triggers are `schedule`/parameterless `workflow_dispatch` (no
+# `pull_request`/`issue_comment`/any trigger carrying attacker-controlled
+# text), and no step interpolates `${{ github.event.* }}` anywhere
+# (confirmed: every `${{ }}` reference in this file resolves to a
+# `secrets.*` value, `github.token`, or a deterministic, non-attacker-
+# controlled workflow/repository-context value -- `github.server_url`,
+# `github.repository`, `github.repository_owner`, `github.run_id`,
+# `github.workflow` -- none of which an external contributor controls).
+# Revisit this if that risk profile ever changes (a trigger gains
+# attacker-controlled input, or this job's own write scope grows).
+
+name: Isolation registry refresh
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          fetch-depth: '0'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # Same rationale as skill-eval-gate.yml's own identically-named step:
+      # this job's own script invokes the `claude` CLI directly and needs
+      # this secret for authentication. Presence is checked; the value is
+      # never printed (CLAUDE.md section 4 -- secrets must not reach a log).
+      - name: Preflight -- require ANTHROPIC_API_KEY
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::No ANTHROPIC_API_KEY configured. Set repository" \
+              "secret ANTHROPIC_API_KEY under Settings -> Secrets and" \
+              "variables -> Actions before this workflow can run --" \
+              "gitapex_run_verified_isolated_dispatch.py invokes the claude" \
+              "CLI directly and needs this for authentication."
+            exit 1
+          fi
+
+      # Same pin as skill-eval-gate.yml's own "Install Claude Code CLI" step
+      # -- not provisioned by this repo's own Nix flake, not preinstalled on
+      # ubuntu-latest. Kept at the same version deliberately: bumping either
+      # copy without the other would leave two different CI-observed
+      # `claude_version` identifying signals for what is otherwise the same
+      # runner image, needlessly fragmenting the registry.
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code@2.1.240
+
+      # This is the one code path in the whole design allowed to establish a
+      # same-run entry with zero human watching live (see this file's own
+      # header comment) -- --controls-only never launches a real target
+      # dispatch, on a same-run or reviewed entry alike.
+      - name: Run isolation verification (controls-only)
+        id: run
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set +e
+          uv run --frozen python3 skills/evaluating-skill-quality/scripts/gitapex_run_verified_isolated_dispatch.py \
+            --controls-only \
+            --registry skills/evaluating-skill-quality/metadata/isolation-registry.yaml \
+            --history-markdown skills/evaluating-skill-quality/references/isolation-registry-history.md
+          echo "exit-code=$?" >> "$GITHUB_OUTPUT"
+
+      # A non-zero exit here means the live control run failed in a way
+      # suggesting a genuinely new contamination pattern (not merely "not
+      # yet verified at this version") -- opens an issue rather than
+      # silently no-op'ing, mirroring merge-retrospective's own
+      # gate-proposal pattern. Never opens or merges a PR on this branch.
+      # Uses this repository's own REST-wrapper script rather than the raw
+      # `gh issue create` CLI (issue #1809, Step 8 follow-up -- AGENTS.md
+      # section 3: "use platform-integrated tool calls...or the
+      # repository's approved REST API wrapper...do not invoke
+      # command-line GitHub tools directly").
+      - name: Open an issue on a new contamination finding
+        if: steps.run.outputs.exit-code != '0'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          uv run --frozen python3 .github/scripts/gitapex_isolation_registry_open_contamination_issue.py \
+            --owner "${{ github.repository_owner }}" \
+            --repo "$(basename "${{ github.repository }}")" \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      # Never runs `gh pr merge`/`gh pr edit --auto`/an auto-promote API
+      # call anywhere in this job -- test_gitapex_isolation_registry_refresh_workflow.py
+      # asserts this file's own text contains none, not merely a prose
+      # promise. Propose only: a human still reviews and merges. Uses this
+      # repository's own REST-wrapper script rather than the raw
+      # `gh pr create` CLI, for the same reason as the issue-open step
+      # above.
+      - name: Propose the registry update via PR
+        if: steps.run.outputs.exit-code == '0'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- \
+            skills/evaluating-skill-quality/metadata/isolation-registry.yaml \
+            skills/evaluating-skill-quality/references/isolation-registry-history.md; then
+            echo "No registry change to propose."
+            exit 0
+          fi
+          branch="isolation-registry-refresh/$(date -u +%Y-%m-%d)-${{ github.run_id }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add \
+            skills/evaluating-skill-quality/metadata/isolation-registry.yaml \
+            skills/evaluating-skill-quality/references/isolation-registry-history.md
+          git commit -m "chore(evaluating-skill-quality): scheduled isolation-registry same-run entry (Refs #1809)"
+          git push origin "$branch"
+          uv run --frozen python3 .github/scripts/gitapex_isolation_registry_propose_pr.py \
+            --owner "${{ github.repository_owner }}" \
+            --repo "$(basename "${{ github.repository }}")" \
+            --head "$branch" \
+            --base main \
+            --run-url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
