@@ -147,11 +147,14 @@ is still grading from a contaminated context.
   on before relying on any entry the current run itself wrote. If the
   script reports "No verified mechanism available," follow its own
   printed guidance rather than dispatching into a contaminated context.
-  Whether the exclusion, once verified, carries real deterministic
-  backing (a hook, a permission rule) or is enforced by this instruction
-  alone still depends on the environment -- check directly, the same
-  self-audit this skill already applies to its eval-tooling-install Stop
-  boundary below.
+  Where the local Docker+Harbor precondition holds, the containerized-evaluation
+  route in [references/evaluation-via-harbor.md](references/evaluation-via-harbor.md)
+  additionally applies -- strictly optional, never a substitute for the
+  exclusion requirement above. Whether the exclusion, once verified, carries
+  real deterministic backing (a hook, a permission rule) or is enforced
+  by this instruction alone still depends on the environment -- check
+  directly, the same self-audit this skill already applies to its
+  eval-tooling-install Stop boundary below.
 - Hand the dispatch step 3's shape-checker output as an established fact
   rather than having it re-run the script itself (Contract discipline's
   "never both" rule, `references/rubric.md`).
