@@ -40,8 +40,8 @@ WRAPPER = REPO_ROOT / "hooks" / "check-post-write-provenance.sh"
 _WRAPPER_NAME = "check-post-write-provenance.sh"
 # The wrapper's own self-revalidation arm, e.g.
 #   case "$tool_name" in
-#     mcp__github__create_pull_request | mcp__github__update_pull_request | ... ) ;;
-_CASE_ARM_RE = re.compile(r"^\s*(mcp__github__[\w|\s]*?)\)\s*;;", re.MULTILINE)
+#     mcp__github__create_pull_request | mcp__plugin_github_github__create_pull_request | ... ) ;;
+_CASE_ARM_RE = re.compile(r"^\s*(mcp__(?:github|plugin_github_github)__[\w|\s]*?)\)\s*;;", re.MULTILINE)
 
 
 def _matcher_tools() -> set[str]:
@@ -58,7 +58,9 @@ def _matcher_tools() -> set[str]:
 def _wrapper_case_tools() -> set[str]:
     """Every tool named by the wrapper's own `case "$tool_name"` arms."""
     match = _CASE_ARM_RE.search(WRAPPER.read_text(encoding="utf-8"))
-    assert match is not None, "the wrapper no longer carries a recognizable mcp__github__ case arm"
+    assert match is not None, (
+        "the wrapper no longer carries a recognizable mcp__github__ or mcp__plugin_github_github__ case arm"
+    )
     return {part.strip() for part in match.group(1).split("|") if part.strip()}
 
 
@@ -79,4 +81,4 @@ def test_the_matcher_and_the_checker_name_the_same_tools() -> None:
 def test_the_shared_list_is_non_empty() -> None:
     """A regex that stopped matching would make all three comparisons above
     trivially true against three empty sets."""
-    assert len(_matcher_tools()) >= 3
+    assert len(_matcher_tools()) >= 6
