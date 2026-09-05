@@ -307,12 +307,31 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     # test_disclosed_residual_count_matches_the_pinned_set below); it cannot
     # hold English prose to it, so the prose no longer carries a count to drift.
     #
-    # pinned-residual-count: 3
+    # pinned-residual-count: 4
     #
     # Still pinned. One bullet per cause, not per finding -- a single bullet
     # can cover more than one skill sharing that cause, so bullet count and
     # residual count are deliberately not held to each other:
     #
+    #   - merge-retrospective/gate-proposal-resumed-run-partial-filing-retry.yaml
+    #     [paraphrase-drift] 'already filed': a linter false positive. The
+    #     corpus-side near-match this run detects (SKILL.md's Step 1 dedup
+    #     bullet, "skipping every repair that already carries a `Filed as:`
+    #     line") is an *agent-facing* procedural instruction about which
+    #     repairs to retry on a resumed run, not response-facing wording the
+    #     fixture asks the model's own output to echo. The fixture's
+    #     assertion instead validates that the model recognizes repair 1
+    #     (issue #501) as already resolved rather than re-filing it -- a
+    #     fact the prompt itself establishes ("Repair 1's filing was already
+    #     confirmed in the interrupted session"), not a corpus paraphrase.
+    #     check_paraphrase has no way to distinguish an agent-facing
+    #     procedural bullet from response-facing wording; both are just
+    #     corpus text to it. Newly surfaced when SKILL.md's Step 5
+    #     "Exactly one match" bullet (issue #1806's own Step 4b work)
+    #     replaced its prior wording, which happened to quote this
+    #     fixture's assertion verbatim ("already filed (an earlier or
+    #     resumed run)") and so cleared check_paraphrase's own exact-quote
+    #     short-circuit before that rewrite.
     #   - scorer-gated-skill-edits/ship-without-transfer-check.yaml
     #     [case-sensitivity]: the pre-existing #858 residual, already pinned
     #     above by test_repository_case_sensitivity_findings_match_the_known_
@@ -365,6 +384,11 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     warnings = L.lint_all_skills(evals_root, skills_root, skill_names=names)
     blocking = {(w.task, w.rule, w.value) for w in warnings if w.blocking}
     assert blocking == {
+        (
+            "merge-retrospective/gate-proposal-resumed-run-partial-filing-retry.yaml",
+            "paraphrase-drift",
+            "already filed",
+        ),
         ("scorer-gated-skill-edits/ship-without-transfer-check.yaml", "case-sensitivity", "transfer check"),
         ("outward-artifact-preflight/clean-pass.yaml", "paraphrase-drift", "agreed convention"),
         ("scorer-gated-skill-edits", "adversarial-coverage", "(tasks directory)"),
