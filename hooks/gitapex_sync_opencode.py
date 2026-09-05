@@ -59,6 +59,12 @@ GENERATED_HEADER = (
 # exfiltration path nor a mutation path). read/glob/grep/list stay at
 # their default (allowed); `list` has no Claude-side counterpart but is
 # the OpenCode half of directory reading, which Claude's Read covers.
+# `*mcp*` uses OpenCode's own wildcard-pattern permission keys
+# (opencode.ai/docs/agents: keys match tool names as wildcards) to deny
+# MCP-server-provided tools under any server's naming scheme -- the
+# OpenCode half of the source's structural unavailability of
+# `mcp__github__*`. No built-in tool name contains "mcp", so nothing
+# legitimate is denied.
 REVIEW_PERSONA_PERMISSION = {
     "edit": "deny",
     "bash": "deny",
@@ -70,6 +76,7 @@ REVIEW_PERSONA_PERMISSION = {
     "external_directory": "deny",
     "skill": "deny",
     "lsp": "deny",
+    "*mcp*": "deny",
 }
 
 # Keys meaningful only to Claude Code's own agent loader. Dropped from the
@@ -248,6 +255,13 @@ def sync_agents(project_dir: Path, verify_only: bool, notes: list[str]) -> int:
             notes.append(f"SKIP: {src}: {error}")
             continue
         dst = agents_dst / filename
+        # Symlink check first: is_file() follows links, so a non-dangling
+        # symlink would otherwise take the REWRITE path below and
+        # write_text() would write through the link into whatever it
+        # points at (issue #1814 review finding). Mirrors sync_skills.
+        if dst.is_symlink():
+            notes.append(f"SKIP: {dst} exists in an unexpected form; left untouched")
+            continue
         if dst.is_file():
             try:
                 current = dst.read_text(encoding="utf-8")
@@ -260,7 +274,7 @@ def sync_agents(project_dir: Path, verify_only: bool, notes: list[str]) -> int:
                 continue
             notes.append(f"REWRITE: {dst}")
         else:
-            if dst.is_symlink() or dst.exists():
+            if dst.exists():
                 notes.append(f"SKIP: {dst} exists in an unexpected form; left untouched")
                 continue
             notes.append(f"WRITE: {dst}")

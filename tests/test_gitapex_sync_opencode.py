@@ -122,6 +122,9 @@ def test_agents_sync_rewrites_review_persona_for_opencode(tmp_path: pathlib.Path
     assert "tools:" not in persona.split("---")[1]
     for denied in ("edit: deny", "bash: deny", "task: deny", "webfetch: deny", "websearch: deny"):
         assert denied in persona
+    # MCP-server-provided tools are denied under any naming scheme
+    # (OpenCode wildcard-pattern permission keys).
+    assert "*mcp*: deny" in persona
     assert "description: Read-only review." in persona
     assert "mode: subagent" in persona
     assert "Body." in persona
@@ -412,12 +415,41 @@ def test_agents_rewrite_unexpected_form_and_verify(tmp_path: pathlib.Path) -> No
     dst_dir = project / ".opencode" / "agents"
     dst_dir.mkdir(parents=True)
     _write(dst_dir / "review-persona.md", "stale content\n")
-    (dst_dir / "branch-plan-task.md").symlink_to("elsewhere")
+    # A real directory where an agent copy belongs: unexpected form, left
+    # untouched (covers the non-symlink half of the guard).
+    (dst_dir / "branch-plan-task.md").mkdir()
     notes: list[str] = []
-    assert sync.sync_agents(project, True, notes) == 1  # rewrite counts; symlink skip does not
+    assert sync.sync_agents(project, True, notes) == 1  # rewrite counts; dir skip does not
     assert sync.sync_agents(project, False, notes) == 1
     assert "stale content" not in (dst_dir / "review-persona.md").read_text(encoding="utf-8")
+    assert (dst_dir / "branch-plan-task.md").is_dir()
     assert sync.sync_agents(project, False, []) == 0
+
+
+def test_agents_non_dangling_symlink_never_written_through(tmp_path: pathlib.Path) -> None:
+    # Regression test for the issue #1814 review finding: is_file() follows
+    # symlinks, so without the is_symlink-first guard a non-dangling link
+    # would take the REWRITE path and write_text() would write through it
+    # into whatever it points at.
+    project = _project(tmp_path)
+    agents = project / "agents"
+    _write(
+        agents / "review-persona.md",
+        "---\nname: review-persona\ndescription: Read-only review.\n---\n\nBody.\n",
+    )
+    _write(
+        agents / "branch-plan-task.md",
+        "---\nname: branch-plan-task\ndescription: Dispatch target.\n---\n\nBody.\n",
+    )
+    dst_dir = project / ".opencode" / "agents"
+    dst_dir.mkdir(parents=True)
+    victim = project / "victim.txt"
+    _write(victim, "untouched\n")
+    (dst_dir / "review-persona.md").symlink_to(victim)
+    notes: list[str] = []
+    assert sync.sync_agents(project, False, notes) == 1  # only branch-plan-task written
+    assert victim.read_text(encoding="utf-8") == "untouched\n"
+    assert (dst_dir / "review-persona.md").is_symlink()
 
 
 def test_agents_unreadable_dst_forces_rewrite(tmp_path: pathlib.Path) -> None:
