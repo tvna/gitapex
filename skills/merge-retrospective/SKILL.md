@@ -235,10 +235,9 @@ independent and never applied to each other's issue.
    check for recurrence (see above) for Step 5's `Recurrence note:`.
 4b. **Backlog-grounded proposal review.** For every
     `missing-deterministic-gate` repair, establish a review verdict
-    before Step 5 files anything -- Step 5 is sequence-gated on a
-    verdict existing for that repair. See
-    `references/backlog-grounded-proposal-review.md` for the sweep,
-    verdict vocabulary, and per-verdict filing actions.
+    before Step 5 files anything -- Step 5 is sequence-gated on it.
+    See `references/backlog-grounded-proposal-review.md` for sweep,
+    verdicts, and per-verdict filing actions.
 5. **File (or update) the retrospective issue** via
    `mcp__github__issue_write`, using the create-vs-update decision Step 0
    above already made -- this rewrite changes only what that one write
@@ -294,20 +293,25 @@ independent and never applied to each other's issue.
       the `gate-proposal` label constant -- the script itself never
       calls `issue_write` or `issue_read`. Then, as direct
       `mcp__github__*` tool calls:
-     - Search for an issue with that **exact** title, never substring.
-     - **No match:** create it with the script's own title, body, and
-       label, then re-fetch to confirm it exists before recording
-       anything as filed.
-     - **Exactly one match:** already filed (an earlier or resumed run)
-       -- treat as confirmed; do not create a duplicate.
+      - Search for an issue with that **exact** title, never substring.
+      - **No match:** create it with the script's own title, body, and
+        label (regenerating the sweep line per create -- reusing one
+        filing's line self-denies as stale), then re-fetch to confirm
+        it exists before recording anything as filed.
+      - **Exactly one match:** confirm its body still carries an
+        Acceptance Criteria Map first; a title match without one
+        fails closed and escalates instead of recording filed.
      - **More than one match:** fail closed and escalate -- the same
        discipline as Step 0's own ambiguous-stub-match handling above.
        Never guess which one is authoritative, and never file a third.
-     Once a filing is confirmed (created-and-verified, or already
-     existed), record `Filed as: #<issue number>` immediately alongside
-     that repair's own `Status: missing-deterministic-gate` line in this
-     retrospective issue's body -- add it there; never remove or replace
-     the `Status:` line itself.
+      Once a filing is confirmed (created-and-verified, or already
+      existed), record `Filed as: #<issue number>` immediately alongside
+      that repair's own `Status: missing-deterministic-gate` line in this
+      retrospective issue's body -- add it there; never remove or replace
+      the `Status:` line itself. A DUPLICATE-OF #N filing closes
+      immediately after its create (`state_reason: duplicate`,
+      referencing #N); the 4b.3 umbrella append stays best-effort,
+      never the record itself.
    - **A failed or unconfirmed filing blocks that repair's line, not the
      rest of the cycle -- and blocks closing.** If the script cannot
      compute a value for a repair (a required classification field is
@@ -318,12 +322,12 @@ independent and never applied to each other's issue.
      while any `missing-deterministic-gate` repair from this cycle still
      lacks a confirmed `Filed as:` line. A later, resumed run retries only
      the repairs still missing one -- but a `Filed as: #<N>` line already
-     present in this retrospective issue's own body is itself untrusted
-     state, not proof: the body is externally editable between runs (a
-     careless edit, or a hostile one), so re-fetch issue `#<N>` and
-     confirm it still exists and still carries the `gate-proposal` label
-     before skipping that repair, the same re-fetch discipline this step
-     already requires for a filing made in the current run. A `Filed as:`
+      present in this retrospective issue's own body is itself untrusted
+      state, not proof: the body is externally editable between runs (a
+      careless edit, or a hostile one), so re-fetch issue `#<N>` and
+      confirm it still exists with the `gate-proposal` label and this
+      repair's exact title before skipping it, under the same re-fetch
+      discipline this step already requires. A `Filed as:`
      line that does not re-verify this way is treated exactly like an
      unconfirmed write: proceed to (re-)file that repair through the
      exact-title search and create-or-match flow above, as if the line

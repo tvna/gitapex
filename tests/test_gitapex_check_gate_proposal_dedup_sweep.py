@@ -152,6 +152,12 @@ def test_malformed_timestamp_denies() -> None:
     assert passed is False
 
 
+def test_crlf_line_endings_still_verify() -> None:
+    body = _body(3).replace("\n", "\r\n")
+    passed, _ = _evaluate(body, [_issues(3)])
+    assert passed is True
+
+
 def test_duplicate_of_verdict_line_allows_on_matching_count() -> None:
     passed, _ = _evaluate(_body(3, verdict="DUPLICATE-OF #1571"), [_issues(3)])
     assert passed is True

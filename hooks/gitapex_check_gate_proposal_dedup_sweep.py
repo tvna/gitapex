@@ -44,6 +44,12 @@ Scope notes, named rather than left implicit:
   posture: missing token or unfetchable count denies. A hook-runner
   timeout fails open per the runner contract (same disclosed limit as
   `gitapex_gate_independent_review_pending.py`).
+- What this hook cannot prove: a hand-typed line carrying the correct
+  live count passes -- the hook proves a fresh count fetch, not that
+  Step 4b's backlog review or verdict-verification actually ran. Same
+  disclosed shape-vs-judgment limit as
+  `gitapex_gate_independent_review_pending.py`'s own recorded-verdict
+  check: presence and shape are verified, authorship is not.
 
 Reuses that sibling's REST/pagination/fail-closed shape (adapted from
 pulls to the issues endpoint) and carries its own copies of the
@@ -130,7 +136,8 @@ class GitHubApiError(RuntimeError):
 
 
 def _strip_fences(text: str | None) -> str:
-    without_fences = _FENCE_RE.sub("", text or "")
+    normalized = (text or "").replace("\r\n", "\n").replace("\r", "\n")
+    without_fences = _FENCE_RE.sub("", normalized)
     without_fences = _UNTERMINATED_FENCE_RE.sub("", without_fences)
     without_indented = _INDENTED_CODE_RE.sub("", without_fences)
     return _INLINE_CODE_RE.sub("", without_indented)
