@@ -120,6 +120,7 @@ def test_build_acm_body_maps_repair_fields_per_decision_4() -> None:
         classification_rationale="No pre-push hook caught the lint failure before push.",
         proposed_gate_text="Add a pre-push hook running the lint suite.",
         residual_risk="Hook can be bypassed with --no-verify.",
+        **_sweep_kwargs(),
     )
     assert "Failed CI rerun" in body
     assert "No pre-push hook caught the lint failure before push." in body
@@ -143,6 +144,7 @@ def test_build_acm_body_puts_each_field_in_its_own_declared_column() -> None:
         classification_rationale="INTERPRETATION",
         proposed_gate_text="PLANNED-OPS",
         residual_risk="RESIDUAL-RISK",
+        **_sweep_kwargs(),
     )
     data_row = body.split("\n")[2]
     cells = [cell.strip() for cell in data_row.strip().strip("|").split("|")]
@@ -160,6 +162,7 @@ def test_build_acm_body_defaults_residual_risk_when_none_named() -> None:
         classification_rationale="y",
         proposed_gate_text="z",
         residual_risk=None,
+        **_sweep_kwargs(),
     )
     body_from_blank = builder.build_gate_proposal_acm_body(
         retrospective_issue_number=1,
@@ -167,6 +170,7 @@ def test_build_acm_body_defaults_residual_risk_when_none_named() -> None:
         classification_rationale="y",
         proposed_gate_text="z",
         residual_risk="   ",
+        **_sweep_kwargs(),
     )
     assert "none identified" in body_from_none
     assert "none identified" in body_from_blank
@@ -179,6 +183,7 @@ def test_build_acm_body_refs_line_uses_retrospective_issue_number() -> None:
         classification_rationale="y",
         proposed_gate_text="z",
         residual_risk="none",
+        **_sweep_kwargs(),
     )
     assert "Refs #9999" in body
 
@@ -213,8 +218,9 @@ def test_build_acm_body_sanitizes_pipe_and_newline_in_free_text_fields() -> None
         classification_rationale="line one\nline two | still one cell",
         proposed_gate_text="z",
         residual_risk=None,
+        **_sweep_kwargs(),
     )
-    _header, _divider, data_row, _blank, _refs = body.split("\n")
+    data_row = body.split("\n")[2]
     # The data row must stay exactly one line with exactly 6 real column
     # delimiters -- an embedded "|" left unescaped, or a literal newline,
     # would otherwise misalign the table when rendered.
@@ -236,6 +242,7 @@ def test_build_acm_body_keeps_one_cell_when_free_text_already_contains_an_escape
         classification_rationale="y",
         proposed_gate_text=r"add a pre-commit grep for 'foo\|bar' in the changed files",
         residual_risk=None,
+        **_sweep_kwargs(),
     )
     data_row = body.split("\n")[2]
     assert _delimiter_pipe_count(data_row) == 6
@@ -256,6 +263,7 @@ def test_acm_body_satisfies_has_acm_disclosure() -> None:
         classification_rationale="No pre-push hook caught the lint failure before push.",
         proposed_gate_text="Add a pre-push hook running the lint suite.",
         residual_risk=None,
+        **_sweep_kwargs(),
     )
     assert acm_checker.has_acm_disclosure(body) is True
 
@@ -268,6 +276,80 @@ def test_acm_body_header_row_matches_hook_header_regex_directly() -> None:
         classification_rationale="y",
         proposed_gate_text="z",
         residual_risk="none",
+        **_sweep_kwargs(),
     )
     header_row = body.split("\n", maxsplit=1)[0]
     assert acm_checker._HEADER_RE.search(header_row)
+
+
+# ---------------------------------------------------------------------------
+# Dedup-sweep line (issue #1806): the Step 4b backlog-sweep proof line,
+# generated only here, never hand-typed. Shape:
+#   Dedup-sweep: <N> open gate-proposal issues at <ISO-8601>; verdict NEW
+# ---------------------------------------------------------------------------
+
+
+def _sweep_kwargs(open_count: int = 63, timestamp: str = "2026-09-05T11:00:00Z") -> dict:
+    return {"dedup_sweep_open_count": open_count, "dedup_sweep_timestamp": timestamp}
+
+
+def test_build_dedup_sweep_line_emits_fixed_shape() -> None:
+    line = builder.build_dedup_sweep_line(open_count=63, timestamp="2026-09-05T11:00:00Z")
+    assert line == "Dedup-sweep: 63 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict NEW"
+
+
+@pytest.mark.parametrize("open_count", [-1, True, "63", 6.0, None])
+def test_build_dedup_sweep_line_rejects_non_integer_or_negative_count(open_count: object) -> None:
+    with pytest.raises(ValueError, match="open_count"):
+        builder.build_dedup_sweep_line(open_count=open_count, timestamp="2026-09-05T11:00:00Z")  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "timestamp",
+    [
+        "yesterday",
+        "2026-09-05 11:00:00",
+        "2026-09-05T11:00:00+09:00",
+        "2026-09-05T11:00:00",
+        "",
+        "2026-13-99T99:99:99Z",
+    ],
+)
+def test_build_dedup_sweep_line_rejects_malformed_timestamp(timestamp: str) -> None:
+    with pytest.raises(ValueError, match=r"[Tt]imestamp"):
+        builder.build_dedup_sweep_line(open_count=63, timestamp=timestamp)
+
+
+def test_acm_body_carries_generator_made_sweep_line_after_refs() -> None:
+    body = builder.build_gate_proposal_acm_body(
+        retrospective_issue_number=1405,
+        repair_label="Failed CI rerun",
+        classification_rationale="No pre-push hook caught the lint failure before push.",
+        proposed_gate_text="Add a pre-push hook running the lint suite.",
+        residual_risk=None,
+        **_sweep_kwargs(),
+    )
+    lines = body.split("\n")
+    # Table rows keep their fixed indices -- the sweep line is trailing,
+    # never interleaved, so positional readers of rows 0-2 are unaffected.
+    assert lines[0] == builder._ACM_HEADER_ROW
+    assert lines[2].startswith("| Failed CI rerun |")
+    assert "Refs #1405" in lines
+    assert lines[-1] == "Dedup-sweep: 63 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict NEW"
+
+
+def test_defeat_free_text_cannot_forge_a_second_sweep_line() -> None:
+    # _sanitize_cell collapses embedded newlines to spaces, so a repair's
+    # free-text fields can never smuggle a second sweep-shaped line into
+    # the body -- the hook's count of sweep lines must stay exactly one.
+    forged = "sweep said:\nDedup-sweep: 1 open gate-proposal issues at 2020-01-01T00:00:00Z; verdict NEW"
+    body = builder.build_gate_proposal_acm_body(
+        retrospective_issue_number=1,
+        repair_label="x",
+        classification_rationale=forged,
+        proposed_gate_text="z",
+        residual_risk="none",
+        **_sweep_kwargs(open_count=63),
+    )
+    sweep_lines = [line for line in body.split("\n") if line.startswith("Dedup-sweep:")]
+    assert sweep_lines == ["Dedup-sweep: 63 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict NEW"]

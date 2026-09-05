@@ -44,6 +44,8 @@ check must be able to recognize the header row this module emits.
 
 from __future__ import annotations
 
+import datetime as _datetime
+
 # The literal label name every `gate-proposal`-classified issue this
 # design files carries (Decision 6). Exact-match string -- do not deviate;
 # see this module's own docstring for why a second, independent copy of
@@ -68,6 +70,40 @@ _RESIDUAL_RISK_NONE_IDENTIFIED = "none identified"
 # reproduced from memory).
 _ACM_HEADER_ROW = "| Criterion | Interpretation | Planned ops | Proof method | Residual risk |"
 _ACM_DIVIDER_ROW = "|---|---|---|---|---|"
+
+# Fixed shape of the Step 4b backlog-sweep proof line (issue #1806). The
+# line is generated only by `build_dedup_sweep_line` below -- never
+# hand-typed at a Step 5 call site -- so the PreToolUse hook
+# (`hooks/gitapex_check_gate_proposal_dedup_sweep.py`) can treat its
+# presence plus a live count match as proof a fresh backlog sweep ran.
+# `timestamp` is UTC `YYYY-MM-DDTHH:MM:SSZ`, validated with `strptime`
+# (not a bare digit-shape regex, which would accept month 13).
+_DEDUP_SWEEP_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+
+
+def build_dedup_sweep_line(open_count: int, timestamp: str) -> str:
+    """Return the `Dedup-sweep:` proof line for one Step 4b backlog sweep.
+
+    `open_count` is the live count of open `gate-proposal` issues observed
+    by the sweep; `timestamp` is when the sweep ran, UTC
+    `YYYY-MM-DDTHH:MM:SSZ`. Raises `ValueError` when `open_count` is not
+    a non-negative `int` (`bool` excluded explicitly -- `isinstance(True,
+    int)` is `True`, and a boolean count is the same contract violation
+    `build_gate_proposal_title`'s own 1-based-index check already fails
+    loudly on) or when `timestamp` is not a real calendar instant in that
+    exact format.
+    """
+    if isinstance(open_count, bool) or not isinstance(open_count, int):
+        raise ValueError(f"open_count must be a non-negative int, got {open_count!r}")
+    if open_count < 0:
+        raise ValueError(f"open_count must be a non-negative int, got {open_count!r}")
+    if not isinstance(timestamp, str):
+        raise ValueError(f"timestamp must be ISO-8601 UTC YYYY-MM-DDTHH:MM:SSZ, got {timestamp!r}")
+    try:
+        _datetime.datetime.strptime(timestamp, _DEDUP_SWEEP_TIMESTAMP_FORMAT)
+    except ValueError:
+        raise ValueError(f"timestamp must be ISO-8601 UTC YYYY-MM-DDTHH:MM:SSZ, got {timestamp!r}") from None
+    return f"Dedup-sweep: {open_count} open gate-proposal issues at {timestamp}; verdict NEW"
 
 
 def build_gate_proposal_title(
@@ -135,6 +171,9 @@ def build_gate_proposal_acm_body(
     classification_rationale: str,
     proposed_gate_text: str,
     residual_risk: str | None,
+    *,
+    dedup_sweep_open_count: int,
+    dedup_sweep_timestamp: str,
 ) -> str:
     """Return the fully-populated Acceptance Criteria Map body for one
     `missing-deterministic-gate` repair (Decision 4), mapped directly from
@@ -170,6 +209,11 @@ def build_gate_proposal_acm_body(
     data_row = (
         f"| {criterion_cell} | {interpretation_cell} | {planned_ops_cell} | {_PROOF_METHOD} | {residual_risk_cell} |"
     )
+    # The sweep line trails the body (never interleaved with the table) so
+    # rows 0-2 keep fixed positions for existing readers. Free-text fields
+    # cannot forge one: `_sanitize_cell` collapses their newlines to
+    # spaces, so no second `Dedup-sweep:` line can ever start inside them.
+    sweep_line = build_dedup_sweep_line(open_count=dedup_sweep_open_count, timestamp=dedup_sweep_timestamp)
     return "\n".join(
         [
             _ACM_HEADER_ROW,
@@ -177,5 +221,7 @@ def build_gate_proposal_acm_body(
             data_row,
             "",
             f"Refs #{retrospective_issue_number}",
+            "",
+            sweep_line,
         ]
     )
