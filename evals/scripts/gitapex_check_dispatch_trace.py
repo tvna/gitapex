@@ -297,14 +297,19 @@ def build_isolated_home(base_dir: Path) -> Path:
     isolated_home.chmod(0o700)
 
     def _ignore_top_level_strip_dirs(directory: str, names: list[str]) -> list[str]:
-        # Only strip these names as direct children of real_claude_dir
-        # itself -- an ignore_patterns-style recursive match could also
-        # exclude an unrelated same-named directory nested inside a vendored
-        # skill (e.g. a skill's own tasks/ content), which the prior
-        # copy-then-rmtree approach never touched either.
+        # Only strip _HOME_COPY_STRIP_DIRS names as direct children of
+        # real_claude_dir itself -- an ignore_patterns-style recursive match
+        # could also exclude an unrelated same-named directory nested inside
+        # a vendored skill (e.g. a skill's own tasks/ content), which the
+        # prior copy-then-rmtree approach never touched either.
+        # _HOME_COPY_STRIP_FILES is stripped at every depth instead -- a
+        # false-negative on a nested credential file costs a real secret
+        # exposure, and nothing legitimate is expected to share this exact
+        # filename (kept in sync with the sibling copy's own identical fix).
+        to_ignore = [n for n in names if n in _HOME_COPY_STRIP_FILES]
         if Path(directory) == real_claude_dir:
-            return [n for n in names if n in _HOME_COPY_STRIP_DIRS or n in _HOME_COPY_STRIP_FILES]
-        return []
+            to_ignore += [n for n in names if n in _HOME_COPY_STRIP_DIRS]
+        return to_ignore
 
     shutil.copytree(
         real_claude_dir,

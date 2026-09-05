@@ -469,9 +469,18 @@ def build_isolated_home(
 
     def _ignore_top_level_strip_dirs(directory: str, names: list[str]) -> list[str]:
         # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
+        # _HOME_COPY_STRIP_FILES is stripped at every depth, not only the top
+        # level -- unlike a same-named directory (where a false-positive
+        # exclusion nested inside vendored skill content is the real risk,
+        # per _HOME_COPY_STRIP_DIRS's own top-level-only scoping and its
+        # own regression test), a false-negative on a nested credential
+        # file costs a real secret exposure and nothing legitimate is
+        # expected to share this exact filename (an independent review's
+        # own finding: issue #1809, Step 8 follow-up).
+        to_ignore = [n for n in names if n in _HOME_COPY_STRIP_FILES]
         if Path(directory) == real_claude_dir:
-            return [n for n in names if n in _HOME_COPY_STRIP_DIRS or n in _HOME_COPY_STRIP_FILES]
-        return []
+            to_ignore += [n for n in names if n in _HOME_COPY_STRIP_DIRS]
+        return to_ignore
 
     shutil.copytree(real_claude_dir, isolated_home / ".claude", ignore=_ignore_top_level_strip_dirs)
     real_claude_json = real_home / ".claude.json"

@@ -419,6 +419,28 @@ def test_build_isolated_home_does_not_copy_credentials_file(tmp_path: Path, monk
     assert not (isolated_home / ".claude" / ".credentials.json").exists()
 
 
+def test_build_isolated_home_does_not_copy_nested_credentials_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Regression test for a 5th independent review's own finding: the
+    # top-level-only strip scoping that is deliberately correct for
+    # _HOME_COPY_STRIP_DIRS (see test_build_isolated_home_does_not_strip_nested_same_named_dir)
+    # was silently inherited by _HOME_COPY_STRIP_FILES too -- but a
+    # credential file one level deeper (e.g. under a plugin subdirectory)
+    # must still be stripped, since nothing legitimate is expected to share
+    # this exact filename at any depth (issue #1809, Step 8 follow-up).
+    real_home = tmp_path / "real-home"
+    (real_home / ".claude" / "plugins" / "some-plugin").mkdir(parents=True)
+    (real_home / ".claude" / "plugins" / "some-plugin" / ".credentials.json").write_text(
+        '{"token": "real-secret"}', encoding="utf-8"
+    )
+    monkeypatch.setenv("HOME", str(real_home))
+
+    isolated_home = gvid.build_isolated_home(tmp_path / "workdir")
+
+    assert not (isolated_home / ".claude" / "plugins" / "some-plugin" / ".credentials.json").exists()
+
+
 def test_build_isolated_home_raises_when_home_unset(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("HOME", raising=False)
     with pytest.raises(FileNotFoundError, match="HOME is not set"):
