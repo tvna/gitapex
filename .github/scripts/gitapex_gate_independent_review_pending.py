@@ -76,10 +76,66 @@ defending against a PR author who deliberately forges the marker this way
 is a distinct, harder threat this repository's own single-operator trust
 model does not currently need (see issue #1311's own residual risk).
 
-Deliberately stdlib-only and self-contained, matching this repository's
-existing `.github/scripts/*.py` convention of not importing across files.
+The `parse_verdict`/`check()` human-verdict path above is unmodified by
+issue #1858 (below) -- every paragraph above still describes exactly what
+it always described. Only a new branch, tried BEFORE that path and only
+ever falling through to it (never around it), was added.
 
-Usage::
+Trusted-bot exemption (issue #1858, design:
+docs/gitapex/specs/2026-09-06-dependabot-trusted-bot-gate-exemption-design.md).
+Dependabot's own PRs never carry a `## Independent review verdict` section
+-- nobody runs `drafting-a-pr-to-merge` against them -- so the human-verdict
+path above fails permanently for every Dependabot PR. `main()` now also
+accepts the PR author's identity (`--pr-author-login`/`--pr-author-id`/
+`--pr-author-type`) and, when given, tries `evaluate_bot_path` first:
+
+1. `is_trusted_bot`: the PR author's (login, id, type) must match ALL
+   THREE fields of one `.github/trusted-bots.yml` entry -- login alone is
+   never sufficient (a same-named non-bot account is a distinct GitHub
+   user id).
+2. **Critical-defect fix, closed by this issue's own design-doc revision**:
+   a bot-identity match on the PR's opener is NOT itself sufficient.
+   `dependabot/*` branches carry no branch protection of their own, so
+   anyone with push access could append a human commit to an open
+   Dependabot PR after the fact; the PR's `user` field stays
+   `dependabot[bot]` regardless (GitHub never changes it on `synchronize`).
+   `head_commit_identity_matches_bot` additionally requires the head
+   commit's OWN author and committer email (not the PR-level identity) to
+   match `.github/rulesets/main.json`'s existing
+   `commit_author_email_pattern`/`committer_email_pattern` rules (PR #1843)
+   -- the single source of truth for this repository's trusted-committer
+   emails, not a second copy in `trusted-bots.yml` that could drift from
+   it. A mismatch here falls through to the human-verdict path above,
+   never straight to FAIL: a legitimate human fix pushed to a bot-opened
+   PR should still be reviewable the normal way.
+3. Only once both match: `required_check_contexts` reads the required
+   status-check context list straight out of `main.json`'s own
+   `required_status_checks` rule (mirroring, not importing,
+   `gitapex_gate_ruleset_required_checks.py`'s own `rule_of_type()`
+   pattern), drops this check's own name, and `poll_bot_required_checks`
+   polls GitHub's Checks API for the head SHA until every remaining
+   context is `completed` -- PASS iff all conclude `success`/`neutral`/
+   `skipped`, FAIL immediately on any other conclusion, FAIL on timeout
+   naming whichever contexts never completed. A transient GitHub API
+   error while polling is retried within the same timeout budget, not
+   treated as an immediate FAIL or silently ignored.
+
+No change to `parse_verdict`/`check()` themselves, and every existing
+`--body`/`--head-sha`-only invocation (no `--pr-author-*` given at all)
+behaves exactly as before -- this is an additive branch ahead of the
+existing path, not a replacement of it.
+
+No longer stdlib-only (issue #1858): this file now also imports `yaml`
+(already a dependency of `.github/scripts/gitapex_gate_ruleset_required_checks.py`,
+used the same way here -- parsing `.github/trusted-bots.yml`) and
+`_gitapex_github_http` (issue #729's shared GitHub REST retry/pagination
+client -- explicitly exempted from this repository's own
+`.github/scripts/*.py` no-cross-file-imports convention by that module's
+own docstring; `gitapex_gate_retro_title_convention_citation.py` already
+sets this precedent). Still self-contained in the sense that matters:
+no other `.github/scripts/gitapex_*.py` gate/report file is imported.
+
+Usage (existing, human-verdict path -- unchanged)::
 
     python3 .github/scripts/gitapex_gate_independent_review_pending.py \\
         --body PR_BODY.txt --head-sha <sha>
@@ -90,19 +146,38 @@ A bare pipe here masks `printf`'s own exit status in a non-`pipefail` shell
 itself fail in ordinary use, but add `set -o pipefail` first if this
 recipe's producer is ever swapped for a command that can.
 
+Usage (trusted-bot exemption path; falls through to the above whenever the
+identity/email checks above do not both hold)::
+
+    GITHUB_TOKEN=... python3 .github/scripts/gitapex_gate_independent_review_pending.py \\
+        --body PR_BODY.txt --head-sha <sha> \\
+        --pr-author-login "dependabot[bot]" --pr-author-id 49699333 --pr-author-type Bot \\
+        --owner tvna --repo gitapex
+
 Exit codes:
-    0  A Verdict: CLEAN verdict naming the given head SHA is present.
-    1  No verdict section, an incomplete one, a non-CLEAN verdict, a
-       stale SHA (does not match --head-sha), or an unreadable/malformed
-       input.
+    0  A Verdict: CLEAN verdict naming the given head SHA is present
+       (human-verdict path), OR the PR author is a trusted bot whose head
+       commit's own author/committer email matches `main.json`'s
+       email-pattern rules AND every other required check has completed
+       successfully for that head SHA (bot-exemption path).
+    1  Neither of the above holds, or an unreadable/malformed input.
 """
 
 from __future__ import annotations
 
 import argparse
+import json
+import os
 import re
 import sys
+import time
+import urllib.request
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
+
+import yaml
+from _gitapex_github_http import GitHubApiError, default_opener, fetch_json_document
 
 # Issue #1343: the single source of truth for the recorded-verdict heading
 # text. Every runtime-facing use of it in this file (below) reads this
@@ -333,6 +408,502 @@ def check(body: str, head_sha: str) -> tuple[bool, str]:
     return True, f"CLEAN verdict recorded against current head {head_sha}"
 
 
+# ---------------------------------------------------------------------------
+# Trusted-bot exemption (issue #1858). Everything below is new; nothing
+# above this point (parse_verdict/check and their own helpers) is touched.
+# ---------------------------------------------------------------------------
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_TRUSTED_BOTS_PATH = _REPO_ROOT / ".github" / "trusted-bots.yml"
+DEFAULT_RULESET_PATH = _REPO_ROOT / ".github" / "rulesets" / "main.json"
+
+#: This check's own required-status-check context name -- excluded from
+#: `required_check_contexts`'s own return value so the bot path never
+#: waits on itself.
+_SELF_CHECK_CONTEXT = "independent-review-pending"
+
+_API_ROOT = "https://api.github.com"
+
+#: Design doc "Timing" section: "poll interval (e.g. every 15-30s)" and a
+#: "~15 min" extended job timeout (Decision logic detail's own "Poll
+#: outcome" section, matching this issue's own ACM).
+DEFAULT_POLL_TIMEOUT_SECONDS = 900.0
+DEFAULT_POLL_INTERVAL_SECONDS = 20.0
+
+#: Design doc's own "Poll outcome" bullet: a `skipped` conclusion does not
+#: block a required status check on GitHub's own native merge logic --
+#: matching `gitapex_gate_ruleset_required_checks.py`'s own documented
+#: principle (that module's own module docstring) -- so this poll outcome
+#: must not be stricter than GitHub's own blocking behavior for the same
+#: required-check list.
+_PASSING_CONCLUSIONS = frozenset({"success", "neutral", "skipped"})
+
+
+def _github_repository_part(index: int) -> str | None:
+    """Read the owner (index 0) or repo (index 1) half of the standard
+    GitHub Actions `$GITHUB_REPOSITORY` env var ("owner/repo"), or `None`
+    if unset/malformed. Lets a caller (Task C's workflow) omit
+    `--owner`/`--repo` entirely -- every GitHub Actions job already has
+    this env var set -- while an explicit `--owner`/`--repo` still
+    overrides it (argparse `default=` is only consulted when the flag is
+    omitted)."""
+    parts = os.environ.get("GITHUB_REPOSITORY", "").split("/", 1)
+    return parts[index] if len(parts) == 2 and parts[index] else None
+
+
+def load_trusted_bots(path: Path) -> list[dict[str, Any]]:
+    """Parse `.github/trusted-bots.yml` into a list of entry dicts.
+
+    Raises `OSError`/`yaml.YAMLError`/`ValueError` on an unreadable or
+    malformed file -- `main()`'s own bot-path wiring treats any of these
+    as "cannot confirm a bot-path candidate" and falls through to the
+    strict human-verdict path, never crashing and never silently trusting
+    everything or nothing."""
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(document, list):
+        raise ValueError(f"{path} must contain a YAML list of entries, found {type(document).__name__}")
+    return [entry for entry in document if isinstance(entry, dict)]
+
+
+def is_trusted_bot(login: str, user_id: int, user_type: str, entries: list[dict[str, Any]]) -> bool:
+    """Return True iff `(login, user_id, user_type)` matches ALL THREE
+    fields of at least one `.github/trusted-bots.yml` entry.
+
+    Design doc's own Decision logic detail: "Login alone is not
+    sufficient -- GitHub's own user id is immutable and namespace-unique,
+    closing the theoretical risk of a same-named non-bot account." A
+    forged entry whose `login` matches but whose `id`/`type` does not is
+    therefore a non-match, by construction (`and`, not `or`)."""
+    return any(
+        entry.get("login") == login and entry.get("id") == user_id and entry.get("type") == user_type
+        for entry in entries
+    )
+
+
+def load_ruleset(path: Path) -> dict[str, Any]:
+    """Parse `.github/rulesets/main.json`. Raises
+    `OSError`/`json.JSONDecodeError`/`ValueError` on an unreadable or
+    malformed file -- same fall-through contract as `load_trusted_bots`."""
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        raise ValueError(f"{path} must contain a JSON object, found {type(document).__name__}")
+    return document
+
+
+def _rule_of_type(ruleset: dict[str, Any], rule_type: str) -> dict[str, Any] | None:
+    """The single rule of `rule_type` in `ruleset["rules"]`, or `None`.
+
+    Mirrors `gitapex_gate_ruleset_required_checks.py`'s own `rule_of_type()`
+    pattern -- not imported, per this repository's own `.github/scripts/*.py`
+    convention of not importing across gate/report files (`_gitapex_github_http`
+    is the one shared exception, per that module's own docstring, used
+    elsewhere in this file instead)."""
+    for rule in ruleset.get("rules") or []:
+        if isinstance(rule, dict) and rule.get("type") == rule_type:
+            return rule
+    return None
+
+
+def required_check_contexts(ruleset: dict[str, Any]) -> list[str]:
+    """The required-status-check context names from `ruleset`'s own
+    `required_status_checks` rule, minus `_SELF_CHECK_CONTEXT`.
+
+    Type-discriminated by construction (`_rule_of_type` matches on
+    `type == "required_status_checks"` specifically): a `main.json`
+    fixture also carrying `deletion`/`pull_request`/
+    `commit_author_email_pattern`/`committer_email_pattern` rules never has
+    any of those read as check contexts, since only the one rule whose own
+    `type` is `"required_status_checks"` is ever inspected here.
+
+    Returns an empty list if that rule is absent or malformed (including a
+    rule present but carrying no `required_status_checks` entries at all).
+    This is deliberately indistinguishable from "the rule is present but
+    genuinely names zero other contexts" -- `poll_bot_required_checks`
+    below treats an empty list as a fail-closed condition either way,
+    mirroring `gitapex_gate_ruleset_required_checks.py`'s own
+    `find_unreachable_contexts`: "a pull request rule with nothing to
+    check blocks nothing" is itself a finding there, never a silent pass,
+    and this design's own residual-risk section names the same
+    fail-closed default for this gate."""
+    rule = _rule_of_type(ruleset, "required_status_checks")
+    if rule is None:
+        return []
+    parameters = rule.get("parameters")
+    if not isinstance(parameters, dict):
+        return []
+    entries = parameters.get("required_status_checks")
+    if not isinstance(entries, list):
+        return []
+    contexts = [
+        entry["context"] for entry in entries if isinstance(entry, dict) and isinstance(entry.get("context"), str)
+    ]
+    return [context for context in contexts if context != _SELF_CHECK_CONTEXT]
+
+
+def _email_matches_pattern(email: str, operator: Any, pattern: Any) -> bool:
+    """Whether `email` matches `pattern` under `operator`, GitHub's own
+    four `commit_author_email_pattern`/`committer_email_pattern` operators
+    (`EmailPatternParameters` in `gitapex_gate_ruleset_required_checks.py`).
+    An unrecognized/missing operator or a non-string/empty pattern is
+    fail-closed to "no match", never treated as vacuously true -- this
+    function has no caller that should ever proceed on an ambiguous
+    schema."""
+    if not isinstance(pattern, str) or not pattern:
+        return False
+    if operator == "starts_with":
+        return email.startswith(pattern)
+    if operator == "ends_with":
+        return email.endswith(pattern)
+    if operator == "contains":
+        return pattern in email
+    if operator == "regex":
+        try:
+            return re.search(pattern, email) is not None
+        except re.error:
+            return False
+    return False
+
+
+def _email_satisfies_rule(email: str, rule: dict[str, Any] | None) -> bool:
+    """Whether `email` is ALLOWED by `rule` (a `commit_author_email_pattern`/
+    `committer_email_pattern` rule dict), honoring `negate` the same way
+    GitHub's own schema documents it (`EmailPatternParameters`'s own
+    docstring, quoted there): "If true, the rule will fail if the pattern
+    matches" -- so with `negate` true, `email` is allowed only when the
+    pattern does NOT match; with `negate` false/absent (this repository's
+    actual `main.json` today), `email` is allowed only when it DOES
+    match. `rule is None` (the rule type is missing from `main.json`
+    entirely) is always a non-match -- fail-closed, never vacuously
+    true."""
+    if rule is None:
+        return False
+    parameters = rule.get("parameters")
+    if not isinstance(parameters, dict):
+        return False
+    matched = _email_matches_pattern(email, parameters.get("operator"), parameters.get("pattern"))
+    return (not matched) if parameters.get("negate") else matched
+
+
+def head_commit_identity_matches_bot(
+    author_email: str, committer_email: str, ruleset: dict[str, Any]
+) -> tuple[bool, str]:
+    """The critical-defect fix this issue's own design-doc Revision
+    section exists for: a PR-opener identity match is never, by itself,
+    sufficient to take the bot path. This additionally requires the head
+    commit's OWN author and committer email (not the PR's `user` field,
+    which GitHub never updates on a later `synchronize`) to BOTH match
+    `ruleset`'s own `commit_author_email_pattern`/`committer_email_pattern`
+    rules (`.github/rulesets/main.json`, PR #1843) -- the single source of
+    truth for this repository's trusted-committer emails, not a second,
+    separately-maintained copy in `trusted-bots.yml`.
+
+    Returns `(False, reason)` -- never raises, never a hard FAIL -- on any
+    mismatch, missing rule, or malformed ruleset: the caller
+    (`evaluate_bot_path`) falls through to the existing human-verdict path
+    in every one of these cases, exactly matching the design doc's own
+    "fall through, never a silent pass and never an outright hard FAIL
+    either" resolution -- a legitimate human fix pushed to a bot-opened PR
+    should still be reviewable the normal way, not permanently blocked by
+    a bot-only code path that no longer applies to it."""
+    author_rule = _rule_of_type(ruleset, "commit_author_email_pattern")
+    committer_rule = _rule_of_type(ruleset, "committer_email_pattern")
+    if author_rule is None or committer_rule is None:
+        return False, (
+            "main.json is missing a commit_author_email_pattern and/or committer_email_pattern rule; "
+            "cannot verify head-commit identity"
+        )
+    if not _email_satisfies_rule(author_email, author_rule):
+        return (
+            False,
+            f"head commit author email {author_email!r} does not match main.json's commit_author_email_pattern rule",
+        )
+    if not _email_satisfies_rule(committer_email, committer_rule):
+        return (
+            False,
+            f"head commit committer email {committer_email!r} does not match main.json's committer_email_pattern rule",
+        )
+    return True, "head commit author and committer email both match main.json's email-pattern rules"
+
+
+def fetch_head_commit_emails(
+    owner: str,
+    repo: str,
+    head_sha: str,
+    token: str,
+    opener: Callable[[urllib.request.Request], Any] = default_opener,
+    sleeper: Callable[[float], None] = time.sleep,
+) -> tuple[str, str]:
+    """GET `/repos/{owner}/{repo}/commits/{head_sha}` and return
+    `(author_email, committer_email)` from the commit object's OWN
+    `commit.author.email`/`commit.committer.email` fields -- deliberately
+    NOT the GitHub *user* account fields (`author.email`/`committer.email`
+    at the top level, which describe the linked GitHub account, not the
+    raw commit metadata). That distinction is exactly what
+    `head_commit_identity_matches_bot` needs: an account claiming to be
+    `dependabot[bot]` is a different fact from what emails this specific
+    commit was actually authored/committed with.
+
+    Raises `GitHubApiError` (via `_gitapex_github_http.fetch_json_document`,
+    which already retries transient 5xx/network failures) on any HTTP
+    failure or unexpected response shape -- the caller
+    (`evaluate_bot_path`) catches this and falls through to the
+    human-verdict path rather than propagating."""
+    url = f"{_API_ROOT}/repos/{owner}/{repo}/commits/{head_sha}"
+    document = fetch_json_document(url, token, opener, sleeper)
+    if not isinstance(document, dict):
+        raise GitHubApiError(f"GET {url} returned an unexpected shape: {type(document).__name__}")
+    commit = document.get("commit")
+    if not isinstance(commit, dict):
+        raise GitHubApiError(f"GET {url} response has no 'commit' object")
+    raw_author = commit.get("author")
+    raw_committer = commit.get("committer")
+    author: dict[str, Any] = raw_author if isinstance(raw_author, dict) else {}
+    committer: dict[str, Any] = raw_committer if isinstance(raw_committer, dict) else {}
+    author_email = author.get("email")
+    committer_email = committer.get("email")
+    if not isinstance(author_email, str) or not isinstance(committer_email, str):
+        raise GitHubApiError(f"GET {url} response is missing commit.author.email/commit.committer.email")
+    return author_email, committer_email
+
+
+def _fetch_check_runs(
+    owner: str,
+    repo: str,
+    head_sha: str,
+    token: str,
+    opener: Callable[[urllib.request.Request], Any],
+    sleeper: Callable[[float], None],
+) -> list[dict[str, Any]]:
+    """Every check-run GitHub reports for `head_sha`, paging through
+    `total_count` if more than one page's worth exist (defensive: this
+    repository's own required-check list is well under one page today,
+    but a response that silently dropped later pages would be a real
+    correctness gap, not merely untidy)."""
+    runs: list[dict[str, Any]] = []
+    page = 1
+    while True:
+        url = f"{_API_ROOT}/repos/{owner}/{repo}/commits/{head_sha}/check-runs?per_page=100&page={page}"
+        document = fetch_json_document(url, token, opener, sleeper)
+        if not isinstance(document, dict):
+            raise GitHubApiError(f"GET {url} returned an unexpected shape: {type(document).__name__}")
+        page_runs = document.get("check_runs")
+        if not isinstance(page_runs, list):
+            raise GitHubApiError(f"GET {url} response has no 'check_runs' array")
+        runs.extend(run for run in page_runs if isinstance(run, dict))
+        total_count = document.get("total_count")
+        if not isinstance(total_count, int) or len(runs) >= total_count or not page_runs:
+            break
+        page += 1
+    return runs
+
+
+def _latest_run_for_context(runs: list[dict[str, Any]], context: str) -> dict[str, Any] | None:
+    """The most-recent (by `started_at`, falling back to `id`) check run
+    named `context`, or `None` if none exists yet. Design doc's own
+    residual risks section: "most-recent-by-timestamp is the natural
+    default, matching how GitHub's own required-status-check evaluation
+    already behaves" for a re-run producing more than one run under the
+    same context name."""
+    matches = [run for run in runs if run.get("name") == context]
+    if not matches:
+        return None
+
+    def _sort_key(run: dict[str, Any]) -> tuple[str, int]:
+        started_at = run.get("started_at")
+        run_id = run.get("id")
+        return (started_at if isinstance(started_at, str) else "", run_id if isinstance(run_id, int) else 0)
+
+    return max(matches, key=_sort_key)
+
+
+def poll_bot_required_checks(
+    *,
+    owner: str,
+    repo: str,
+    head_sha: str,
+    contexts: list[str],
+    token: str,
+    timeout_seconds: float = DEFAULT_POLL_TIMEOUT_SECONDS,
+    poll_interval_seconds: float = DEFAULT_POLL_INTERVAL_SECONDS,
+    opener: Callable[[urllib.request.Request], Any] = default_opener,
+    sleeper: Callable[[float], None] = time.sleep,
+    clock: Callable[[], float] = time.monotonic,
+) -> tuple[bool, str]:
+    """Poll GitHub's Checks API for `head_sha` until every context in
+    `contexts` is `completed`, per the design doc's own "Poll outcome"
+    section:
+
+    - all `completed` with conclusion in `_PASSING_CONCLUSIONS` -> PASS.
+    - any `completed` with any other conclusion -> FAIL immediately,
+      naming that context and its actual conclusion (no more polling).
+    - `timeout_seconds` elapses with contexts still not `completed` ->
+      FAIL, naming which contexts never completed.
+    - a transient `GitHubApiError` while polling is retried within the
+      same `timeout_seconds` budget (via `sleeper`/another loop
+      iteration), never treated as an immediate FAIL nor silently
+      ignored; if errors persist until `timeout_seconds`, the FAIL
+      message says so explicitly rather than being conflated with an
+      ordinary pending-check timeout.
+
+    An empty `contexts` -- whether because `main.json`'s own
+    `required_status_checks` rule is entirely absent, or because it is
+    present but names nothing else -- is itself a fail-closed FAIL, never
+    silently treated as "nothing to check" (see `required_check_contexts`'s
+    own docstring and this issue's own defeat-test requirement)."""
+    if not contexts:
+        return False, (
+            "no required status checks to verify: main.json's required_status_checks rule is either "
+            "missing entirely or names no context besides independent-review-pending itself -- "
+            'refusing to treat this as "nothing to check"'
+        )
+
+    deadline = clock() + timeout_seconds
+    concluded: dict[str, str] = {}
+    last_error: str | None = None
+
+    while True:
+        try:
+            runs = _fetch_check_runs(owner, repo, head_sha, token, opener, sleeper)
+        except GitHubApiError as error:
+            last_error = str(error)
+        else:
+            last_error = None
+            for context in contexts:
+                if context in concluded:
+                    continue
+                run = _latest_run_for_context(runs, context)
+                if run is None or run.get("status") != "completed":
+                    continue
+                conclusion = run.get("conclusion")
+                if conclusion in _PASSING_CONCLUSIONS:
+                    concluded[context] = str(conclusion)
+                else:
+                    return False, (
+                        f"required check {context!r} completed with conclusion {conclusion!r} for head "
+                        f"{head_sha} (expected one of {sorted(_PASSING_CONCLUSIONS)})"
+                    )
+            if len(concluded) == len(contexts):
+                return True, f"all {len(contexts)} required check(s) completed successfully for head {head_sha}"
+
+        remaining = deadline - clock()
+        if remaining <= 0:
+            unresolved = sorted(context for context in contexts if context not in concluded)
+            if last_error is not None:
+                return False, (
+                    f"timed out after {timeout_seconds}s polling GitHub check-runs for head {head_sha}: "
+                    f"GitHub API errors persisted (last error: {last_error}); could not confirm status "
+                    f"for: {unresolved}"
+                )
+            return False, (
+                f"timed out after {timeout_seconds}s waiting for required checks on head {head_sha} to "
+                f"complete; still not completed: {unresolved}"
+            )
+        sleeper(min(poll_interval_seconds, remaining))
+
+
+def evaluate_bot_path(
+    *,
+    pr_author_login: str | None,
+    pr_author_id: int | None,
+    pr_author_type: str | None,
+    owner: str | None,
+    repo: str | None,
+    head_sha: str,
+    trusted_bots: list[dict[str, Any]],
+    ruleset: dict[str, Any],
+    token: str,
+    head_commit_author_email: str | None = None,
+    head_commit_committer_email: str | None = None,
+    poll_timeout_seconds: float = DEFAULT_POLL_TIMEOUT_SECONDS,
+    poll_interval_seconds: float = DEFAULT_POLL_INTERVAL_SECONDS,
+    opener: Callable[[urllib.request.Request], Any] = default_opener,
+    sleeper: Callable[[float], None] = time.sleep,
+    clock: Callable[[], float] = time.monotonic,
+) -> tuple[bool, str] | None:
+    """Return `(passed, message)` for the trusted-bot merge-gate path, or
+    `None` if this PR is not a bot-path candidate at all -- signalling
+    `main()` to fall back completely to the existing `check(body,
+    head_sha)` human-verdict path. Every `return None` below is a
+    deliberate fall-through, never a hard FAIL: only `main()`'s own
+    existing path decides FAIL once this function opts out.
+
+    Never returns a PASS unless ALL of the following hold, matching the
+    design doc's own architecture end to end:
+
+    1. The PR author's identity matches `.github/trusted-bots.yml` on all
+       three fields (`is_trusted_bot`).
+    2. `owner`/`repo` are resolvable (needed for every GitHub API call
+       below).
+    3. The head commit's own author/committer email match `ruleset`'s
+       `commit_author_email_pattern`/`committer_email_pattern` rules
+       (`head_commit_identity_matches_bot`) -- the critical-defect fix.
+    4. Every other required check has completed successfully for
+       `head_sha` (`poll_bot_required_checks`)."""
+    if pr_author_login is None or pr_author_id is None or pr_author_type is None:
+        return None
+    if not is_trusted_bot(pr_author_login, pr_author_id, pr_author_type, trusted_bots):
+        return None
+    if not owner or not repo:
+        print(
+            f"note: PR author {pr_author_login!r} matches a trusted-bots.yml entry, but --owner/--repo "
+            "could not be resolved (no $GITHUB_REPOSITORY and no explicit --owner/--repo) -- falling "
+            "back to the human-verdict path",
+            file=sys.stderr,
+        )
+        return None
+
+    author_email = head_commit_author_email
+    committer_email = head_commit_committer_email
+    if author_email is None or committer_email is None:
+        if not token:
+            print(
+                f"note: PR author {pr_author_login!r} matches a trusted-bots.yml entry, but no "
+                "head-commit email was given and GITHUB_TOKEN is unset to fetch it -- falling back to "
+                "the human-verdict path",
+                file=sys.stderr,
+            )
+            return None
+        try:
+            fetched_author, fetched_committer = fetch_head_commit_emails(owner, repo, head_sha, token, opener, sleeper)
+        except GitHubApiError as error:
+            print(
+                f"note: PR author {pr_author_login!r} matches a trusted-bots.yml entry, but the head "
+                f"commit {head_sha} email could not be fetched ({error}) -- falling back to the "
+                "human-verdict path",
+                file=sys.stderr,
+            )
+            return None
+        author_email = author_email if author_email is not None else fetched_author
+        committer_email = committer_email if committer_email is not None else fetched_committer
+
+    email_ok, email_message = head_commit_identity_matches_bot(author_email, committer_email, ruleset)
+    if not email_ok:
+        print(
+            f"note: PR author {pr_author_login!r} matches a trusted-bots.yml entry, but {email_message} "
+            "-- falling back to the human-verdict path (this specific commit was not actually "
+            "authored/committed by that bot)",
+            file=sys.stderr,
+        )
+        return None
+
+    if not token:
+        return False, "GITHUB_TOKEN is not set; cannot poll GitHub check-runs for the bot merge-gate path"
+
+    contexts = required_check_contexts(ruleset)
+    return poll_bot_required_checks(
+        owner=owner,
+        repo=repo,
+        head_sha=head_sha,
+        contexts=contexts,
+        token=token,
+        timeout_seconds=poll_timeout_seconds,
+        poll_interval_seconds=poll_interval_seconds,
+        opener=opener,
+        sleeper=sleeper,
+        clock=clock,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Required status check: pass only if a CLEAN Step 8 independent-review "
@@ -346,6 +917,50 @@ def main(argv: list[str] | None = None) -> int:
         "--head-sha",
         required=True,
         help="The PR's current head commit SHA (e.g. github.event.pull_request.head.sha).",
+    )
+
+    bot_group = parser.add_argument_group(
+        "trusted-bot exemption (issue #1858)",
+        "Optional. When the PR author's identity matches .github/trusted-bots.yml AND the head "
+        "commit's own author/committer email match main.json's email-pattern rules, this gate polls "
+        "required check-runs directly instead of requiring a recorded human verdict. Omitting "
+        "--pr-author-login/--pr-author-id/--pr-author-type (or an identity that does not match) keeps "
+        "the existing --body/--head-sha-only behavior completely unchanged.",
+    )
+    bot_group.add_argument("--pr-author-login", help="github.event.pull_request.user.login")
+    bot_group.add_argument("--pr-author-id", type=int, help="github.event.pull_request.user.id")
+    bot_group.add_argument("--pr-author-type", help="github.event.pull_request.user.type")
+    bot_group.add_argument(
+        "--owner", default=_github_repository_part(0), help="Repository owner; defaults from $GITHUB_REPOSITORY."
+    )
+    bot_group.add_argument(
+        "--repo", default=_github_repository_part(1), help="Repository name; defaults from $GITHUB_REPOSITORY."
+    )
+    bot_group.add_argument(
+        "--trusted-bots-path", default=str(DEFAULT_TRUSTED_BOTS_PATH), help="Path to .github/trusted-bots.yml."
+    )
+    bot_group.add_argument(
+        "--ruleset-path", default=str(DEFAULT_RULESET_PATH), help="Path to .github/rulesets/main.json."
+    )
+    bot_group.add_argument(
+        "--head-commit-author-email",
+        help="Overrides the fetched commit.author.email (skips the GitHub API fetch when given).",
+    )
+    bot_group.add_argument(
+        "--head-commit-committer-email",
+        help="Overrides the fetched commit.committer.email (skips the GitHub API fetch when given).",
+    )
+    bot_group.add_argument(
+        "--poll-timeout-seconds",
+        type=float,
+        default=DEFAULT_POLL_TIMEOUT_SECONDS,
+        help="How long to poll GitHub check-runs before failing on a still-pending required check.",
+    )
+    bot_group.add_argument(
+        "--poll-interval-seconds",
+        type=float,
+        default=DEFAULT_POLL_INTERVAL_SECONDS,
+        help="Delay between successive check-run polls.",
     )
     args = parser.parse_args(argv)
 
@@ -375,18 +990,64 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: could not read --body: {error}", file=sys.stderr)
         return 1
 
-    passed, message = check(body, args.head_sha)
+    bot_result: tuple[bool, str] | None = None
+    if args.pr_author_login is not None or args.pr_author_id is not None or args.pr_author_type is not None:
+        try:
+            trusted_bots = load_trusted_bots(Path(args.trusted_bots_path))
+        except (OSError, yaml.YAMLError, ValueError) as error:
+            print(
+                f"warning: could not read {args.trusted_bots_path}: {error}; falling back to the human-verdict path",
+                file=sys.stderr,
+            )
+            trusted_bots = []
+        try:
+            ruleset = load_ruleset(Path(args.ruleset_path))
+        except (OSError, json.JSONDecodeError, ValueError) as error:
+            print(
+                f"warning: could not read {args.ruleset_path}: {error}; falling back to the human-verdict path",
+                file=sys.stderr,
+            )
+            ruleset = {}
+        bot_result = evaluate_bot_path(
+            pr_author_login=args.pr_author_login,
+            pr_author_id=args.pr_author_id,
+            pr_author_type=args.pr_author_type,
+            owner=args.owner,
+            repo=args.repo,
+            head_sha=args.head_sha,
+            trusted_bots=trusted_bots,
+            ruleset=ruleset,
+            token=os.environ.get("GITHUB_TOKEN", ""),
+            head_commit_author_email=args.head_commit_author_email,
+            head_commit_committer_email=args.head_commit_committer_email,
+            poll_timeout_seconds=args.poll_timeout_seconds,
+            poll_interval_seconds=args.poll_interval_seconds,
+        )
+
+    took_bot_path = bot_result is not None
+    passed, message = bot_result if bot_result is not None else check(body, args.head_sha)
     if passed:
         print(f"PASS: {message}")
         return 0
 
     print(f"FAIL: {message}", file=sys.stderr)
-    print(
-        f"Record a '## {CANONICAL_HEADING_TEXT}' section in the PR body with "
-        "'- Verdict: CLEAN' and '- Verified commit: <current head SHA>' once "
-        "drafting-a-pr-to-merge's Step 8 review completes clean against this exact commit.",
-        file=sys.stderr,
-    )
+    if took_bot_path:
+        # The bot path's own FAIL (a required check failed/timed out) has
+        # nothing to do with the human-verdict heading below -- printing
+        # that hint here would be actively misleading remediation advice.
+        print(
+            "This is the trusted-bot merge-gate path (issue #1858): fix or re-run the named required "
+            "check(s) against this exact head commit; recording a "
+            f"'## {CANONICAL_HEADING_TEXT}' section does not apply here.",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            f"Record a '## {CANONICAL_HEADING_TEXT}' section in the PR body with "
+            "'- Verdict: CLEAN' and '- Verified commit: <current head SHA>' once "
+            "drafting-a-pr-to-merge's Step 8 review completes clean against this exact commit.",
+            file=sys.stderr,
+        )
     return 1
 
 
