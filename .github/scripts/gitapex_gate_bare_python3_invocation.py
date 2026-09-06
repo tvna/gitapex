@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""CI gate: every `.github/scripts/*.py` invocation from a GitHub Actions
-workflow `run:` step must go through `uv run`, never bare `python3`.
+"""CI gate: every `python3 <path>.py` invocation from a GitHub Actions
+workflow `run:` step must go through `uv run`, never bare `python3`, for
+any script path -- not just `.github/scripts/*.py`.
 
 Issue #1035 (refs #1024/#1031's whole-branch review, finding I4 and its
 underlying C1 root cause): a follow-up pydantic-CLI-arg-validation change
@@ -21,29 +22,39 @@ drifted from that convention. This gate closes that drift so a future PR
 cannot silently reintroduce it.
 
 Scope: parses each workflow file's YAML and scans every step's `run:`
-string, line by line, for a `python3 .github/scripts/*.py` invocation
-that is not immediately preceded (only `uv run` plus zero or more
-`--flag`/`--flag=value` tokens allowed in between -- no shell operator, no
-other command word) by `uv run` on the same line -- the same shape as the
-manual `grep -rn "python3 \\.github/scripts" .github/workflows/*.yml |
-grep -v "uv run"` this issue's own Facts section used to inventory the
-original 24 call sites, scoped to parsed `run:` step text (not arbitrary
-comment lines elsewhere in the file) to avoid false-flagging prose that
-merely mentions the invocation shape without executing it. The adjacency
-requirement (not merely "`uv run` appears somewhere on the line") closes
-a defeat found in review: `uv run --frozen true && python3
-.github/scripts/gate.py` would otherwise read as covered, since a plain
-same-line substring check cannot tell "wraps this invocation" from
-"appears elsewhere on this line, followed by an unrelated command".
+string, line by line, for a `python3 <path>.py` invocation (any script
+path, not just `.github/scripts/*.py` -- issue #1050 widened this from
+the original directory-enumerated scope, see below) that is not
+immediately preceded (only `uv run` plus zero or more `--flag`/
+`--flag=value` tokens allowed in between -- no shell operator, no other
+command word) by `uv run` on the same line, scoped to parsed `run:` step
+text (not arbitrary comment lines elsewhere in the file) to avoid
+false-flagging prose that merely mentions the invocation shape without
+executing it. The adjacency requirement (not merely "`uv run` appears
+somewhere on the line") closes a defeat found in review: `uv run
+--frozen true && python3 .github/scripts/gate.py` would otherwise read
+as covered, since a plain same-line substring check cannot tell "wraps
+this invocation" from "appears elsewhere on this line, followed by an
+unrelated command".
 
 A whole-line shell comment (the line's first non-whitespace character is
-`#`) is skipped before matching, since a `python3 .github/scripts/*.py`
-phrase inside one never executes -- code review found this class of false
+`#`) is skipped before matching, since a `python3 <path>.py` phrase
+inside one never executes -- code review found this class of false
 positive live (a `# python3 .github/scripts/gate.py` documentation line).
 A *trailing* comment after real code on the same line is not stripped
 (see the residual-risk bullets below): telling a trailing comment apart
 from a quoted string containing `#` needs real shell parsing, which is
 out of scope here.
+
+Issue #1050: the original scope (`.github/scripts/*.py` only) needed a
+follow-up issue each time a new script directory appeared in a
+workflow -- `evals/scripts/*.py` (issue #1040) and
+`skills/scorer-gated-skill-edits/scripts/*.py` both entered real
+production use before the first directory-by-directory widening ever
+shipped. This module's own `.gitapex/ssot.json` `local_invocation`
+convention already states `uv run` with no stated directory exception,
+so the match below is deliberately path-independent (any `.py` path) to
+match that convention exactly, rather than an enumerated allowlist.
 
 Residual risk, stated rather than hidden (issue #1035's own Acceptance
 Criteria Map already names the general shape; the bullets below are this
@@ -76,10 +87,10 @@ Usage:
     uv run --frozen python3 .github/scripts/gitapex_gate_bare_python3_invocation.py [workflows_dir] [hooks_dir] [ssot_path]
 
 Exit codes:
-    0  every `.github/scripts/*.py` invocation found in a `run:` step uses
+    0  every `python3 <path>.py` invocation found in a `run:` step uses
        `uv run`, and every `hooks/*.sh` shell-variable-indirected
        invocation (see below) is likewise clean.
-    1  a bare `python3 .github/scripts/*.py` invocation was found (in a
+    1  a bare `python3 <path>.py` invocation was found (in a
        workflow `run:` step or, indirected through a shell variable, in a
        `hooks/*.sh` file), a bare `hooks/*.sh` invocation of a registered
        `hooks/*.py` target whose own gate requires a third-party Python
@@ -165,20 +176,23 @@ SSOT_PATH = pathlib.Path(".gitapex/ssot.json")
 # every real call site in this repository's own workflow files.
 _UV_RUN_PREFIX = r"\buv\s+run(?:\s+-[\w-]+(?:=\S+)?)*\s+"
 
-# A literal `python3 .github/scripts/<name>.py` invocation anywhere on a
-# line. Deliberately loose (no anchoring on line start) so it matches
+# A literal `python3 <path>.py` invocation anywhere on a line, any script
+# path (issue #1050: widened from the original `.github/scripts/`-only
+# literal to match this repository's own `uv run` convention exactly,
+# rather than an enumerated directory allowlist). Deliberately loose (no
+# anchoring on line start, no path-prefix constraint) so it matches
 # equally inside a plain `run:` line, a `|`-piped line, and an
-# `xargs ... python3 script.py` line -- the three shapes this
-# repository's 24 original call sites actually used.
-_SCRIPT_INVOCATION_RE = re.compile(r"python3\s+\.github/scripts/\S+\.py")
-# `_UV_RUN_PREFIX` immediately followed by a `python3 .github/scripts/*.py`
+# `xargs ... python3 script.py` line -- the shapes this repository's
+# real call sites actually use, across every directory a script lives in.
+_SCRIPT_INVOCATION_RE = re.compile(r"python3\s+\S+\.py")
+# `_UV_RUN_PREFIX` immediately followed by a `python3 <path>.py`
 # invocation. A match's END position lands exactly on the wrapped
 # invocation's own end (both patterns share the same `\.py` tail), so
 # comparing end positions -- not just "does this pattern match somewhere on
 # the line" -- is what proves `uv run` actually wraps a SPECIFIC invocation
 # rather than merely co-occurring with it (e.g. in a trailing comment, or
 # before an unrelated `&&`-joined command).
-_UV_WRAPPED_INVOCATION_RE = re.compile(_UV_RUN_PREFIX + r"python3\s+\.github/scripts/\S+\.py")
+_UV_WRAPPED_INVOCATION_RE = re.compile(_UV_RUN_PREFIX + r"python3\s+\S+\.py")
 
 # A shell variable assignment (`VARNAME=...` or `VARNAME="..."`, no space
 # around `=` -- real bash assignment syntax) at the start of a line
@@ -188,9 +202,16 @@ _UV_WRAPPED_INVOCATION_RE = re.compile(_UV_RUN_PREFIX + r"python3\s+\.github/scr
 _SHELL_ASSIGNMENT_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 # A `.github/scripts/*.py` path appearing anywhere in an assignment's
 # right-hand side (e.g. `"${repo_root}/.github/scripts/gate.py"`).
-# Deliberately the same shape as `_SCRIPT_INVOCATION_RE` minus the
-# `python3\s+` prefix, since here it is matched against an assignment's
-# RHS, not an invocation.
+# Issue #1050 widened `_SCRIPT_INVOCATION_RE` above to any `.py` path, but
+# this regex deliberately did NOT follow -- the `hooks/*.sh`
+# shell-variable-indirected scan below stays scoped to
+# `.github/scripts/*.py` only (issue #1050's own Non-goals; the sibling
+# `evals/scripts/*.py`/arbitrary-path extension was scoped to
+# `.github/workflows/*.yml` only, matching that gate's own pre-existing
+# file-type scope). No longer "the same shape as `_SCRIPT_INVOCATION_RE`
+# minus the `python3\s+` prefix" -- that relationship held before issue
+# #1050 and has not held since; stated as its own independent pattern now
+# to avoid the same drift recurring.
 _GITHUB_SCRIPTS_PATH_RE = re.compile(r"\.github/scripts/\S+\.py")
 # A trailing shell comment: `#` at the very start of the (already-stripped)
 # RHS, or preceded by whitespace. Applied to an assignment's RHS before
@@ -207,8 +228,8 @@ _TRAILING_COMMENT_RE = re.compile(r"(?:^|\s)#")
 
 
 def find_bare_invocations(workflows_dir: pathlib.Path = WORKFLOWS_DIR) -> list[tuple[str, int, str]]:
-    """Return (file, line_number, line) for each bare `python3
-    .github/scripts/*.py` invocation found in a workflow `run:` step.
+    """Return (file, line_number, line) for each bare `python3 <path>.py`
+    invocation (any script path) found in a workflow `run:` step.
     Empty list means every such invocation in the scanned files goes
     through `uv run`."""
     findings: list[tuple[str, int, str]] = []
@@ -465,12 +486,12 @@ def main() -> int:
 
     findings = find_bare_invocations(workflows_dir)
     if findings:
-        print("Bare `python3 .github/scripts/*.py` invocations, or workflows that could not be verified:")
+        print("Bare `python3 <path>.py` invocations, or workflows that could not be verified:")
         for path, lineno, line in findings:
             print(f"  {path}:{lineno}: {line}")
         exit_code = 1
     else:
-        print("No bare `python3 .github/scripts/*.py` invocations found; every call site uses `uv run`.")
+        print("No bare `python3 <path>.py` invocations found; every call site uses `uv run`.")
         exit_code = 0
 
     # HARD-FAIL tier (issue #1697; formerly WARNING-only under issue
