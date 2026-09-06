@@ -904,15 +904,14 @@ strictly.
   step has no access to yet. **A sibling-skill seam is graded by this
   section's own classification triggers, not by dimension 5's
   substitute** -- see that substitute's own scoping note there.
-- **Repository-scoped** -- fails condition (c) or (d) outright, or fails
-  Mixed's own narrowness conditions above, via one of three triggers. An
-  unhedged origin-repo fact-claim scattered through the portable core
-  itself -- not isolated to one disclosed bundled file, per Mixed-via-
-  bundled-convention's own shape -- is a direct condition-(c) failure
-  needing no trigger number; the three named triggers below instead
-  cover the narrower near-miss cases. A repository-scoped skill that
-  reads as if it were portable is a dimension-1/6 defect (it misleads a
-  future vendoring decision), not the scoping choice itself.
+- **Repository-scoped** -- reached one of two ways: fails condition (c)
+  outright (an unhedged origin-repo fact-claim scattered through the
+  portable core itself -- not isolated to one disclosed bundled file,
+  per Mixed-via-bundled-convention's own shape -- needs no trigger
+  number), or fails condition (d) or Mixed's own narrowness conditions
+  above via one of three named triggers below. A repository-scoped skill
+  that reads as if it were portable is a dimension-1/6 defect (it
+  misleads a future vendoring decision), not the scoping choice itself.
   An undeclared level that turns out to be repository-scoped is itself a
   finding, not something to silently infer and move past. Declared as
   the `portability` field in the skill's `metadata/gitapex.yaml` sidecar
@@ -926,7 +925,7 @@ strictly.
   |---|---|
   | 1 -- inherently repo-bound purpose | The skill's own reason for existing presupposes this specific repository's identity, tooling, or workflow -- not merely touches it in passing, but could not be restated as a general procedure without changing what the skill is for (e.g. a skill whose entire point is auditing this repository's own plugin-distribution surface). Fails condition (d) directly -- see condition (d) above for why this leaves no narrow Mixed way |
   | 2 -- sibling fan-out or clean-interface failure | More than one real sibling-skill dependency, or a single one that fails the no-fan-out, clean-interface, or uncleaned-baggage-free condition Mixed-via-clean-sibling requires (e.g. citing a sibling's own internal section number or bundled file path, not just its public contract). See [Sibling-skill dependency portability](#sibling-skill-dependency-portability) |
-  | 3 -- non-skill-file dependency, no fallback | A hard dependency on a non-skill file living outside this skill's own directory, where the target discloses no fallback a vendoring consumer could use once that outside file does not travel with the copy (no adaptation note, no stated "replace this with your own equivalent" convention). A target with a stated fallback at this step is Mixed-via-file instead, not this trigger. See [Dependency file portability](#dependency-file-portability) for this trigger's own fallback predicate and the porting-boundary-map path that can satisfy it |
+  | 3 -- non-skill-file dependency fails Mixed-via-file | A hard dependency on a non-skill file living outside this skill's own directory that does not land on Mixed-via-file above: either the target discloses no fallback a vendoring consumer could use once that outside file does not travel with the copy (no adaptation note, no stated "replace this with your own equivalent" convention), or a fallback is disclosed but the dependency still fails Mixed-via-file's own cleanly-named/no-undisclosed-baggage narrowness. A disclosed fallback is necessary, not sufficient, for Mixed-via-file -- it still must clear that sub-type's own narrowness above to land there, not this trigger. See [Dependency file portability](#dependency-file-portability) for this trigger's own fallback predicate and the porting-boundary-map path that can satisfy it |
 
 ### Sibling-skill dependency portability
 
@@ -993,12 +992,17 @@ it fully clears this section's own location test.
   belongs in `metadata/gitapex.yaml`'s `spec.references` instead.
 
 **Trigger 3's own fallback predicate.** A hard dependency on a file
-living outside the skill's own directory is Mixed-via-file when the
-target discloses a fallback a vendoring consumer could use once that
-file does not travel with the copy (an adaptation note, a stated
-"replace this with your own equivalent" convention); it is
-Repository-scoped via trigger 3 instead when no such fallback is
-disclosed. A dimension-6 [porting-boundary map](#6-durability)
+living outside the skill's own directory is Repository-scoped via
+trigger 3 whenever no fallback a vendoring consumer could use once that
+file does not travel with the copy is disclosed (no adaptation note, no
+stated "replace this with your own equivalent" convention). A disclosed
+fallback is necessary, not sufficient, for Mixed-via-file: the
+dependency must also still clear that sub-type's own
+cleanly-named/no-undisclosed-baggage narrowness above (Mixed,
+Mixed-via-file row) to actually land there -- a disclosed fallback whose
+underlying dependency is not cleanly named, or carries undisclosed
+baggage, stays Repository-scoped via trigger 3 rather than promoting to
+Mixed-via-file. A dimension-6 [porting-boundary map](#6-durability)
 satisfies this predicate directly wherever one exists: it is checkable
 at this same classification step by reading the entry itself, unlike
 dimension 5's own Mixed-portability substitute, whose first condition
