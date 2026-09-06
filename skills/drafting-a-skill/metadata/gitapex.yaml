@@ -296,6 +296,11 @@ spec:
       summary: "The repository owner corrected dimension 4's new list/table-over-prose rule: it read as scoped to a `references/` section only, but the principle applies to any markdown file under the skill folder, `SKILL.md` included. Reworded the bullet and its Good/Bad entries to name both `SKILL.md` and `references/` explicitly."
       outcome:
         baseCommit: "304e0e79a848bc0bfff4f65aba7d310643544bf1"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner asked SKILL.md itself be checked against skill-writing-fundamentals.md's own newly-added dimension 4 rule (list/table over continuous prose for principle enumeration), citing Step 2's `references` decision-log bullet as an example. Confirmed: that bullet bundled seven independent rules into one prose paragraph. Restructured into a seven-item sub-list, content unchanged. Other dense bullets checked and left as-is (single-action-with-rationale, not principle enumeration)."
+      outcome:
+        baseCommit: "7850380780f180726317c9ce4451a54eb3fdc61b"
   skillDependencies:
     requires:
       - evaluating-skill-quality
