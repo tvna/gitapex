@@ -600,13 +600,14 @@ def test_dry_run_against_real_committed_corpus_produces_correlation_without_erro
     exit_code = m.main(["--split", split, "--dry-run", "--n-resamples", "50"])
     assert exit_code == 0
     payload = json.loads(capsys.readouterr().out)
-    assert payload["skipped"] == []  # every one of this repository's real 24 skills is runnable today
+    assert payload["skipped"] == []  # every one of this repository's real 23 skills is runnable today
     # The exact, known-stable contract (effectiveness-corpus-methodology.md's
-    # deterministic split over 24 total skills, 5 of them landing on `test`
-    # by the index-mod-5 rule), not just ">= 2" -- a corpus that quietly
-    # shrank to 2 entries would still pass a bare lower-bound check (issue
-    # #1143 adversarial review round).
-    expected_n = {"selection": 19, "test": 5, "all": 24}[split]
+    # deterministic split over 23 total skills -- 24 minus explaining-the-work,
+    # retired per issue #1808 -- 4 of them landing on `test` by the
+    # index-mod-5 rule), not just ">= 2" -- a corpus that quietly shrank to 2
+    # entries would still pass a bare lower-bound check (issue #1143
+    # adversarial review round).
+    expected_n = {"selection": 19, "test": 4, "all": 23}[split]
     assert len(payload["pairs"]) == expected_n
     assert [c["metric"] for c in payload["correlations"]] == ["negative_delta_risk", "body_structure"]
     for correlation in payload["correlations"]:

@@ -69,12 +69,6 @@
       "split": "selection"
     },
     {
-      "skill": "explaining-the-work",
-      "skill_md": "skills/explaining-the-work/SKILL.md",
-      "eval_yaml": "evals/explaining-the-work/eval.yaml",
-      "split": "test"
-    },
-    {
       "skill": "grounding-in-primary-sources",
       "skill_md": "skills/grounding-in-primary-sources/SKILL.md",
       "eval_yaml": "evals/grounding-in-primary-sources/eval.yaml",

@@ -1,6 +1,6 @@
 # drafting-an-adr eval status
 
-The committed eval suite (`evals/drafting-an-adr/`) has 18 task files under
+The committed eval suite (`evals/drafting-an-adr/`) has 19 task files under
 `tasks/` and no committed no-skill baseline run; only `claude-sonnet-4.6`
 is targeted by `eval.yaml` -- cross-model behavior is currently
 unmeasured.
@@ -28,7 +28,7 @@ initial `battle-testing-a-skill` audit found the original five did not
 cover the diff-sourced retrofit case or a staged multi-turn escalation
 attempt. The remaining eleven were added to satisfy
 `gitapex_gate_skill_branch_fixture_coverage.py`: since this SKILL.md is brand
-new relative to `main`, every one of its 17 Stop-boundary bullets counts
+new relative to `main`, every one of its 18 Stop-boundary bullets counts
 as newly introduced, and that gate requires at least as many fixtures as
 Stop-boundary/dispatch-branch bullets -- each of the eleven targets a
 distinct bullet the first seven did not already exercise (degenerate

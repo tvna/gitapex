@@ -70,8 +70,7 @@ When the fresh arrival is from an unknown or low-trust author, this
 skill and `screening-a-low-trust-contribution` are both expected to fire
 on the same event -- this skill handles content/response, the other
 handles diff/metadata threat screening. Apply both; neither substitutes
-for the other. (Mirrors `outward-artifact-preflight` + `explaining-the-work`'s
-established co-firing pattern.)
+for the other.
 
 ## Global constraints
 
