@@ -2,18 +2,9 @@
 
 Required reading on the in-repo ordinary path -- `SKILL.md`'s own Step 6
 sweeps this file's Formative quality dimensions table unconditionally,
-and the same Step's inline judgment calls (the Design-by-Contract
-definitions, the SDO test, the domain-gap example) already draw on the
-other three sections below. All four sections that used to live in
-separate files (`contract-structure.md`, `guidance-form-and-sdo.md`,
-`mechanism-fit-and-cohesion.md`, `formative-quality-dimensions.md`) are
-merged here for the same reason: none of their own former on-demand
-triggers were a checkable, structural precondition -- each was a bare
-sufficiency judgment ("when the inline floor isn't enough," "for a
-borderline case") that resolves to true on effectively every non-trivial
-draft. See this skill's own decision log for the full analysis; the
-Formative quality dimensions table's own row 5 below states the general
-principle this merge is one instance of.
+and Steps 2, 3, and Non-goals cite its other three sections directly.
+See this skill's own decision log for why these four sections live in
+one file.
 
 ## Table of contents
 
