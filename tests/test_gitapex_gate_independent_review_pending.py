@@ -1061,6 +1061,48 @@ def test_evaluate_bot_path_falls_through_on_head_commit_email_mismatch() -> None
     assert result is None
 
 
+def test_evaluate_bot_path_falls_through_when_head_commit_email_fetch_raises_api_error(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Coverage gap flagged by Codecov (issue #1858): the `except
+    # GitHubApiError: ... return None` branch inside evaluate_bot_path
+    # (guarding the fetch_head_commit_emails call) was confirmed correct
+    # only by code reading, never exercised at runtime. The design doc's
+    # own Revision section requires falling through to the strict,
+    # pre-existing human-verdict path when the head commit's own identity
+    # cannot even be fetched -- never a silent bot-path PASS, and never a
+    # hard FAIL that would block every PR (bot or not) over a transient
+    # GitHub API failure (see this exact except clause's own
+    # except-fail-open WAIVED comment). No --head-commit-author-email/
+    # --head-commit-committer-email override is given, forcing the fetch;
+    # the injected opener makes fetch_head_commit_emails's own
+    # fetch_json_document call raise GitHubApiError (a non-5xx status,
+    # e.g. commit-not-found, so request_with_retry's own retry loop
+    # returns after exactly one attempt rather than retrying).
+    def _raising_opener(request: urllib.request.Request) -> _FakeResponse:
+        raise urllib.error.HTTPError(request.full_url, 404, "not found", {}, _FakeResponse(404, "commit not found"))  # type: ignore[arg-type]
+
+    result = gate.evaluate_bot_path(
+        pr_author_login=_DEPENDABOT_LOGIN,
+        pr_author_id=_DEPENDABOT_ID,
+        pr_author_type=_DEPENDABOT_TYPE,
+        owner="tvna",
+        repo="gitapex",
+        head_sha=_SHA,
+        trusted_bots=_TRUSTED_BOTS,
+        ruleset=_RULESET_WITH_ALL_RULE_TYPES,
+        token="tok",
+        opener=_raising_opener,
+        sleeper=lambda _s: None,
+    )
+
+    assert result is None
+    err = capsys.readouterr().err
+    assert _DEPENDABOT_LOGIN in err
+    assert "head" in err and "could not be fetched" in err
+    assert "falling back to the human-verdict path" in err
+
+
 def test_evaluate_bot_path_full_flow_passes(monkeypatch: pytest.MonkeyPatch) -> None:
     # required_check_contexts(_RULESET_WITH_ALL_RULE_TYPES) yields
     # ["pytest", "ruff"] (independent-review-pending excluded) -- both
