@@ -221,3 +221,7 @@ stops, rather than silently overriding the axis or looping the review.
 | `untrusted-input-triage` | Step 1's untrusted-source handling applies its Extract/Ignore/Flag/Tag discipline, not re-derived. |
 | `drafting-an-adr` | The shared-bundled-script-parent policy's own last-resort escalation records its decision through that skill. |
 | `grounding-in-primary-sources` | The guidance-form "cite primary sources" rule applies that skill's discipline, not re-derived. |
+
+## Notes
+
+- **Install/vendoring-time integrity** (whether this `SKILL.md` and its `references/` are the untampered, intended copies) is a separate question from the runtime content trust Steps 1/7 cover -- a clean Step 6 run says nothing about it. Verify it through the calling repository's own vendoring/install process, not this skill's own output.

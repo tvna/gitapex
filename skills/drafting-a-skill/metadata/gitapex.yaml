@@ -319,6 +319,11 @@ spec:
       summary: "Notes migrated out of SKILL.md's body: attribution, not a live dependency -- the \"Create when / Don't create for\" list shape this skill's drafting judgment is built on follows writing-skills' own structure, credited for the shape's origin, now living in eliciting-a-design's own mechanism-fit gate. RED-GREEN-REFACTOR is a deliberately rejected import. skill-creator is named only as a rejected source for its benchmark loop, description-optimization loop, and .skill-packaging."
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "An independent battle-testing-a-skill dispatch (isolated, controls verified) found this Notes-removal a real defect, not a metadata duplicate: dimension 12 (Supply-chain/install-time provenance) FAILed -- a Mixed-portability skill's body must disclose install/vendoring-time integrity, separate from runtime content trust, per rubric.md's own explicit Notes-vs-metadata exception (\"a live warning a reader must see before acting\"). Restored the one bullet the earlier removal wrongly migrated."
+      outcome:
+        baseCommit: "77ab70bf4b37f716c393736fcd1f2e7394a543de"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
       summary: "The repository owner flagged frontmatter's compatibility field as too long (833 chars, the longest in the repository). The AskUserQuestion-dependency clause explained its own historical mechanism (how metadata choices used to be elicited directly, now resolved upstream via eliciting-a-design/scorer-gated-skill-edits) -- creation background, not a runtime constraint. Trimmed to the bare compatibility fact plus a Precondition pointer; every genuine constraint kept."
       outcome:
         baseCommit: "4fa1778e09390afe2f371f9419d279e9aa18456d"
