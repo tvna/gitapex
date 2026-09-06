@@ -103,6 +103,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -194,11 +195,9 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     new_remaining = 0
     saw_source_header = False
 
-    def _reject_if_hunk_incomplete(boundary: str) -> None:
-        # a private closure with no name accessible from outside this
-        # function to reference directly; its raise path is exercised
-        # through parse_added_lines' own over-declared-hunk-count
-        # regression test instead.
+    def _reject_if_hunk_incomplete(
+        boundary: str,
+    ) -> None:  # function-body-test-coverage: WAIVED: a private closure nested inside parse_added_lines, with no name accessible from outside this function to reference directly; its raise path is exercised through parse_added_lines' own over-declared-hunk-count regression test instead
         if in_hunk:
             raise ScanError(
                 f"hunk header for {path!r} declared more pre-/post-image line(s) than its body "
@@ -360,7 +359,15 @@ def run_scoped_pytest(
     data untrustworthy (a test that errors before reaching the code
     under test proves nothing about whether that code is covered), so
     this never silently proceeds to grade coverage from a red run.
+
+    Runs with a `COVERAGE_FILE` pointed at a file next to
+    `coverage_json_path` rather than the default `.coverage` -- this
+    gate's own test suite calls this function from inside a pytest run
+    that may itself be measuring coverage under the very same default
+    filename, and two concurrent xdist workers each starting their own
+    scoped subprocess would otherwise race on that one shared file.
     """
+    env = {**os.environ, "COVERAGE_FILE": str(coverage_json_path.parent / ".coverage.patch-coverage")}
     try:
         completed = subprocess.run(  # noqa: S603
             [  # noqa: S607
@@ -378,6 +385,7 @@ def run_scoped_pytest(
             errors="replace",
             timeout=timeout,
             check=False,
+            env=env,
         )
     except subprocess.TimeoutExpired as error:
         raise ScanError(f"pytest timed out after {timeout}s while measuring patch coverage") from error

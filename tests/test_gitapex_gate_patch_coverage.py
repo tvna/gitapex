@@ -482,12 +482,12 @@ def test_run_scoped_pytest_produces_a_real_coverage_report(tmp_path: pathlib.Pat
 
 
 @pytest.mark.slow
-def test_run_scoped_pytest_raises_on_a_failing_or_uncollectable_run() -> None:
+def test_run_scoped_pytest_raises_on_a_failing_or_uncollectable_run(tmp_path: pathlib.Path) -> None:
     with pytest.raises(gate.ScanError, match="pytest exited"):
         gate.run_scoped_pytest(
             ["tests/test_gitapex_gate_patch_coverage_no_such_file.py"],
             REPO_ROOT,
-            REPO_ROOT / "does-not-matter.json",
+            tmp_path / "does-not-matter.json",
             60,
         )
 
@@ -545,6 +545,33 @@ def test_main_bad_root_exits_2(monkeypatch: pytest.MonkeyPatch, capsys: pytest.C
     exit_code = gate.main(["--root", "/no/such/directory"])
     assert exit_code == 2
     assert "--root must be an existing directory" in capsys.readouterr().err
+
+
+# --- GatePatchCoverageArgs validators (direct unit tests) --------------------
+
+
+def test_root_must_exist_raises_value_error_for_a_non_directory(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(ValueError, match="must be an existing directory"):
+        gate.GatePatchCoverageArgs._root_must_exist(tmp_path / "does-not-exist")
+
+
+def test_root_must_exist_accepts_a_real_directory(tmp_path: pathlib.Path) -> None:
+    assert gate.GatePatchCoverageArgs._root_must_exist(tmp_path) == tmp_path
+
+
+def test_coverage_json_must_exist_if_given_raises_for_a_missing_file(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(ValueError, match="must name an existing file"):
+        gate.GatePatchCoverageArgs._coverage_json_must_exist_if_given(tmp_path / "does-not-exist.json")
+
+
+def test_coverage_json_must_exist_if_given_accepts_none() -> None:
+    assert gate.GatePatchCoverageArgs._coverage_json_must_exist_if_given(None) is None
+
+
+def test_coverage_json_must_exist_if_given_accepts_a_real_file(tmp_path: pathlib.Path) -> None:
+    real = tmp_path / "coverage.json"
+    real.write_text("{}", encoding="utf-8")
+    assert gate.GatePatchCoverageArgs._coverage_json_must_exist_if_given(real) == real
 
 
 def test_main_bad_coverage_json_path_exits_2(
