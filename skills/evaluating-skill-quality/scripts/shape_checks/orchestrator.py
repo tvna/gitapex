@@ -196,6 +196,14 @@ def _sidecar_unreadable_results(evidence: str) -> list[CheckResult]:
             evidence,
         ),
         CheckResult(
+            "shape-waivers-well-formed",
+            False,
+            "spec.shapeWaivers, if present, is a non-empty list of item "
+            "mappings, each with check/reason and no unrecognized key, "
+            f"reason <= {REFERENCES_ENTRY_MAX_CHARS} chars",
+            evidence,
+        ),
+        CheckResult(
             "skill-dependencies-well-formed",
             False,
             "spec.skillDependencies, if present, is a mapping with only "
@@ -405,6 +413,89 @@ def _external_citations_well_formed_result(
         ),
         declared,
     )
+
+
+def _shape_waivers_well_formed_result(
+    spec_is_mapping: bool,
+    spec_raw: object,
+    schema_errors: list[jsonschema.exceptions.ValidationError],
+    shape_waivers: object,
+) -> tuple[CheckResult, dict[str, str]]:
+    """The ``shape-waivers-well-formed`` check (schema-backed, issue
+    #1329) -- also returns the check-name -> reason mapping the caller
+    threads into ``_no_voodoo_constant_checks``/
+    ``_script_execution_intent_checks`` (the two checks issue #1329
+    scopes this to), populated only on the well-formed-True branch,
+    matching external-citations-well-formed's own declared-list
+    convention. When the same check name appears in more than one item,
+    the last one wins -- a benign, undetected edge case (most likely a
+    copy/paste duplicate), not a rejected shape; ``shapeWaiverItem``
+    carries no schema-level uniqueness constraint on ``check`` for the
+    same reason ``referenceItem`` carries none on ``kind``.
+    """
+    shape_waivers_well_formed_rule = (
+        "spec.shapeWaivers, if present, is a non-empty list of item "
+        "mappings, each with check/reason and no unrecognized key, "
+        f"reason <= {REFERENCES_ENTRY_MAX_CHARS} chars"
+    )
+    if not spec_is_mapping:
+        return (
+            CheckResult(
+                "shape-waivers-well-formed",
+                False,
+                shape_waivers_well_formed_rule,
+                f"spec is not a mapping: {spec_raw!r}",
+            ),
+            {},
+        )
+    errors = _errors_under(schema_errors, "spec", "shapeWaivers")
+    if errors:
+        return (
+            CheckResult(
+                "shape-waivers-well-formed", False, shape_waivers_well_formed_rule, _join_schema_errors(errors)
+            ),
+            {},
+        )
+    if shape_waivers is None:
+        return (
+            CheckResult("shape-waivers-well-formed", True, shape_waivers_well_formed_rule, "not declared (optional)"),
+            {},
+        )
+    count = len(shape_waivers) if isinstance(shape_waivers, list) else 0
+    noun = "entry" if count == 1 else "entries"
+    waivers_by_check: dict[str, str] = {}
+    if isinstance(shape_waivers, list):
+        for item in shape_waivers:
+            if not isinstance(item, dict):
+                continue
+            check_name = item.get("check")
+            reason = item.get("reason")
+            if isinstance(check_name, str) and isinstance(reason, str):
+                waivers_by_check[check_name] = reason
+    return (
+        CheckResult("shape-waivers-well-formed", True, shape_waivers_well_formed_rule, f"{count} {noun}"),
+        waivers_by_check,
+    )
+
+
+def _shape_waivers_citation_sources(waivers_by_check: dict[str, str]) -> list[tuple[str, str]]:
+    """``spec.shapeWaivers[].reason`` free text fed into
+    ``sidecar_citation_sources`` (issue #1329, independent-review
+    finding), the same treatment ``_lifecycle_reason_citation_sources``
+    above already gives ``spec.lifecycle.experimental/deprecated.reason``
+    -- both are free-text justification fields on this sidecar, and
+    ``no-bare-issue-citation``'s own documented scope
+    (``gitapex_check_skill_shape.py``'s module docstring) already names
+    "the metadata sidecar's own ... lifecycle.experimental/deprecated.reason
+    text" as covered for exactly the vendoring/portability reason a bare
+    ``#N`` there loses its meaning once the sidecar travels with its
+    skill directory; a shapeWaivers reason is the identical shape and
+    identical rationale, so omitting it here would have been an
+    inconsistency, not a deliberate narrower scope."""
+    return [
+        (f"metadata/gitapex.yaml:spec.shapeWaivers[check={check_name}].reason", reason_text)
+        for check_name, reason_text in waivers_by_check.items()
+    ]
 
 
 def _lifecycle_reason_citation_sources(lifecycle_dict: dict[str, object]) -> list[tuple[str, str]]:

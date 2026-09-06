@@ -137,8 +137,9 @@ def _issue_citation_checks(
     """The bare GitHub issue/PR-number citation scan over SKILL.md body,
     references/*.md, and (unlike every other check built on
     ``_citation_sources``) the metadata/gitapex.yaml sidecar's own
-    spec.references entries and lifecycle.experimental/deprecated.reason
-    text, passed in via ``extra_sources``. A bare number in the sidecar
+    spec.references entries, lifecycle.experimental/deprecated.reason
+    text, and spec.shapeWaivers[].reason text (issue #1329), passed in
+    via ``extra_sources``. A bare number in the sidecar
     loses its meaning the moment the sidecar travels with its skill
     directory to another repository, so this scan covers the sidecar's
     own free text too. A full

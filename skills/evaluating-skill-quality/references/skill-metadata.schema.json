@@ -36,7 +36,7 @@
       "type": "object",
       "required": ["portability", "capabilityAssumption"],
       "additionalProperties": true,
-      "description": "additionalProperties is deliberately true: gitapex_check_skill_shape.py's own _parse_manifest docstring states that any spec key other than the eight gated ones below (e.g. the reserved-but-ungated spec.evalStatus) is 'still deliberately skipped' -- tolerated, not rejected. Only the eight keys enumerated in `properties` below carry a real shape contract; anything else is unenforced free-form space by design, not an oversight.",
+      "description": "additionalProperties is deliberately true: any spec key other than the nine gated ones below (e.g. the reserved-but-ungated spec.evalStatus) is tolerated, not rejected -- gitapex_check_skill_shape.check_shape validates only the keys this schema's own `properties` enumerates below, via jsonschema.Draft202012Validator. Only the nine keys enumerated in `properties` below carry a real shape contract; anything else is unenforced free-form space by design, not an oversight.",
       "properties": {
         "portability": {
           "type": "string",
@@ -67,6 +67,12 @@
           "minItems": 1,
           "description": "spec.externalCitations: a Portable skill's own opt-in declaration that a specific evals/ or docs/ path citation it carries names an input source or output destination for the skill's own procedure, not a control dependency the procedure reads to decide how to behave -- see references/rubric.md's Portability level section for the underlying distinction. Supplements the bundled shape checker's existing GENERIC_ROLE_HEDGE_PHRASES nearby-hedge-phrase rescue for the inline-code repo-path citation check; it does not replace it, so a skill relying on the existing hedge-phrase convention (e.g. establishing-ubiquitous-language) is unaffected. Each declared path must exactly (literal substring) match a real citation the checker finds in SKILL.md/references/*.md, or it is a stale-declaration finding. If present, must be non-empty -- the same 'explicit empty list is not a valid way to say not yet declared' rule spec.references already uses; omit the key entirely instead.",
           "items": { "$ref": "#/$defs/externalCitationItem" }
+        },
+        "shapeWaivers": {
+          "type": "array",
+          "minItems": 1,
+          "description": "spec.shapeWaivers: an operator-declared, per-skill, per-CheckResult-name waiver for a bundled-script shape check that would otherwise FAIL repo-wide with no opt-out -- currently consulted by no-voodoo-constant and script-execution-intent-stated only (shape_checks/bundled_scripts.py, imported by gitapex_check_skill_shape.py), though the shape here is not itself limited to those two names. A waived check still reports PASS with its own would-be offenders and the declared reason both visible in evidence (shape-waivers-well-formed's own sibling check), never a silent PASS. If present, must be non-empty -- the same 'explicit empty list is not a valid way to say not yet declared' rule spec.references/spec.externalCitations already use; omit the key entirely instead. Naming the same check in two items is schema-valid (no uniqueItems constraint, matching referenceItem's own lack of one on kind); the last matching item wins at read time, a benign edge case, not a rejected shape.",
+          "items": { "$ref": "#/$defs/shapeWaiverItem" }
         }
       },
       "allOf": [
@@ -133,6 +139,29 @@
           "type": "string",
           "enum": ["input-source", "output-destination"],
           "description": "Whether this skill's own procedure treats the cited path as something it reads (input-source) or as a downstream consumer of its own result (output-destination) -- either way, not a control dependency the procedure's own behavior branches on. See references/rubric.md's Portability level section for the full input-source/output-destination-vs-control-dependency distinction."
+        }
+      }
+    },
+    "shapeWaiverItem": {
+      "type": "object",
+      "required": ["check", "reason"],
+      "additionalProperties": false,
+      "description": "One declared shape-check waiver. check is a bare CheckResult name (e.g. \"no-voodoo-constant\"), matched by exact string equality at read time -- this schema does not validate check against the checker's own live set of CheckResult names (that set lives in code, not in this schema, and changes independently of it); a typo'd or retired check name is schema-valid but inert (nothing ever consults it), the same tolerated-but-unenforced tradeoff spec's own additionalProperties: true already accepts one level up.",
+      "properties": {
+        "check": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The exact CheckResult name this waiver applies to, e.g. \"no-voodoo-constant\" or \"script-execution-intent-stated\" -- the two names currently consulting spec.shapeWaivers at all; declaring any other name here is schema-valid but has no effect until some check chooses to consult it."
+        },
+        "reason": {
+          "allOf": [
+            { "$ref": "#/$defs/lifecycleReason" },
+            {
+              "pattern": "^[^\\x00-\\x1f]*\\Z",
+              "description": "No control characters (0x00-0x1F: CR, LF, tab, ESC, and the rest) anywhere in the string, including as the final character -- unlike spec.lifecycle's own reason fields, this value is echoed raw into a single-line CheckResult.evidence string (shape_checks/bundled_scripts.py's _waived_or_offenders_result, consumed by gitapex_check_skill_shape.py's format_report) that a downstream reader -- human or, per this skill's own SKILL.md Subagent dispatch section, an LLM dispatch instructed to treat that output as an established fact rather than re-running the script -- trusts as one plain-text row. An embedded CR/LF could otherwise forge an adjacent fake report line (e.g. impersonating a different check's own PASS status); an embedded ESC could inject a terminal escape sequence for a human running the script directly. Anchored with \\Z rather than $ deliberately: Python's re module (the engine jsonschema's own pattern keyword uses, unflagged) treats a bare $ as matching immediately before a single trailing newline, not only at the true string end, so a reason consisting of or ending in exactly one \\n would silently satisfy ^[^\\x00-\\x1f]*$ despite still containing the excluded character -- an independent-review finding against this exact pattern's first version, confirmed by direct repro before this fix. \\Z has no such trailing-newline dispensation. Scoped to this field alone via allOf rather than tightening the shared lifecycleReason $def, which spec.lifecycle's own reason fields also use in contexts that do not echo the value the same way."
+            }
+          ],
+          "description": "REFERENCES_ENTRY_MAX_CHARS, the same free-text cap spec.references' own summary field and spec.lifecycle's own reason fields use. Required and non-empty by this $ref's own minLength: 1 -- an empty or missing reason is a rejected shape, not a silent no-justification waiver."
         }
       }
     },
