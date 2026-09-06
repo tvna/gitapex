@@ -39,27 +39,18 @@ def test_governance_filenames_and_skill_paths():
     assert "governance: skills/foo/metadata/gitapex.yaml" in result.stdout
 
 
-def test_trusted_bots_allowlist_is_governance():
+def test_new_governance_filenames_are_governance():
     # gitapex issue #1875: .github/trusted-bots.yml (PR #1859 / issue #1858)
     # is an identity-based bypass allowlist for the independent-review-pending
-    # merge gate -- it must classify as governance, not fall through to
-    # no-match, the same as any other governance-sensitive file above.
-    result = run([".github/trusted-bots.yml"])
+    # merge gate; .github/rulesets/main.json (Step 8 adversarial review
+    # finding) carries the second trust anchor for that same bot exemption
+    # (same class per .github/CODEOWNERS's own rationale for both paths).
+    # Both must classify as governance, not fall through to no-match, the
+    # same as any other governance-sensitive file above.
+    result = run([".github/trusted-bots.yml", ".github/rulesets/main.json"])
     assert result.returncode == 0
     assert "governance: .github/trusted-bots.yml" in result.stdout
-    assert "no-match: .github/trusted-bots.yml" not in result.stdout
-
-
-def test_main_ruleset_is_governance():
-    # gitapex issue #1875 (Step 8 adversarial review finding): .github/rulesets/main.json
-    # carries the commit_author_email_pattern/committer_email_pattern rules that are
-    # the second trust anchor for the independent-review-pending bot exemption
-    # (issue #1858) -- the same governance-sensitivity class as trusted-bots.yml
-    # above, per .github/CODEOWNERS's own identical rationale for this path.
-    result = run([".github/rulesets/main.json"])
-    assert result.returncode == 0
     assert "governance: .github/rulesets/main.json" in result.stdout
-    assert "no-match: .github/rulesets/main.json" not in result.stdout
 
 
 def test_trusted_bots_and_main_ruleset_near_miss_paths_are_no_match():

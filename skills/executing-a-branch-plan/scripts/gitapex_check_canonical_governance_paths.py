@@ -80,12 +80,8 @@ _GOVERNANCE_FILENAMES = (
     # identity from independent review, the same governance-sensitivity
     # class as the other entries above.
     ".github/trusted-bots.yml",
-    # commit_author_email_pattern/committer_email_pattern rules here are the
-    # second trust anchor head_commit_identity_matches_bot() depends on
-    # (issue #1858) -- an unreviewed edit to either pattern could loosen it
-    # enough for an arbitrary commit email to pass, the same class of risk
-    # trusted-bots.yml above is already protected against (see
-    # .github/CODEOWNERS's own identical rationale for this path).
+    # Same governance-sensitivity class and rationale as .github/CODEOWNERS's
+    # own entry for this path (issue #1858's second trust anchor).
     ".github/rulesets/main.json",
 )
 
