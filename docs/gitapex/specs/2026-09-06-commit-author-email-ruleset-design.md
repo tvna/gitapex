@@ -42,14 +42,19 @@ Design-only。`.github/rulesets/main.json`は一切変更していない。issue
 }
 ```
 
-(`negate`は許可リストとして機能する向き、実装前にOpenAPI仕様で最終確認 -- Open Questions参照。上記2つの`pattern`が非対称なのは、Fact 6のとおりauthor側に`noreply@github.com`が出現しないため。)
+(`negate`は省略する。GitHub REST APIのOpenAPI定義を実装時に直接引用して確定済み: 「If true, the rule will fail if the pattern matches.」つまり`negate`省略/falseは「パターンに非マッチなら失敗」であり、まさに許可リスト方向の挙動になる -- 元Open Questionの1つはこれで解決済み。上記2つの`pattern`が非対称なのは、Fact 6のとおりauthor側に`noreply@github.com`が出現しないため。)
 
 ## Non-goals(この設計では扱わない、意図的)
 
 - **`required_signatures`**: 署名鍵がGitHub側のどのアカウントに登録され「Verified」と認識されるかが未確認(Fact 3)なため、今回は見送る。鍵登録状況を確認したうえで別issueで扱う。パターンチェックだけではメールアドレス文字列のなりすまし自体は防げない(暗号的な身元証明ではない)ため、根絶にはならない残存リスクとして別途扱う。
 - 専用の許可リストファイルの新設(Fact 5のとおり既存流儀に合わせ`main.json`直書きとする)。
 
-## Open Questions
+## Residual risk(実装時の独立レビューで追加指摘)
 
-- `commit_author_email_pattern`/`committer_email_pattern`の`negate`パラメータの正確な挙動(「マッチで失敗」か「非マッチで失敗」か)が、生成AI要約経由の情報にとどまっている。実装時にGitHub REST APIのOpenAPI定義(一次情報)で確定させる。
-- vsajanアカウントが`t@t.com`を登録メールに持っているという推測自体は、GitHubがメールを非公開にするため今後も直接確認できない。
+- 正規表現パターンは大文字小文字を区別する(GitHubのAPIスキーマに`case_insensitive`等のオプションは存在しないことを確認済み)。将来、tvna自身のgit設定でメールの大文字小文字表記が揺れた場合、正当なコミットが誤ってブロックされる可能性がある。実害は小さいが未解消の残存リスクとして記録する。
+- ルール自体の存在確認だけでは、`negate: true`への反転(許可リストを拒否リストに反転させる一言変更)や将来のPRによる削除を防げない -- 実装側で`.github/scripts/gitapex_gate_ruleset_required_checks.py`にこの2点を検知する専用チェックを追加して対応済み(独立レビューでの指摘、実装PR参照)。
+
+## Open Questions(解決済み、記録として残す)
+
+- ~~`commit_author_email_pattern`/`committer_email_pattern`の`negate`パラメータの正確な挙動~~ -- 上記「提案する設計」の注記で解決済み。
+- vsajanアカウントが`t@t.com`を登録メールに持っているという推測自体は、GitHubがメールを非公開にするため今後も直接確認できない(未解決、解決不能な種類の未確認事項)。

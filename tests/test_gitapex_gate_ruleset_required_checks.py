@@ -139,6 +139,15 @@ def test_a_job_level_name_overrides_the_job_id(tmp_path: pathlib.Path) -> None:
         (lambda r: r.update({"extra": 1}), "Extra inputs are not permitted"),
         (lambda r: r.pop("conditions"), "Field required"),
         (lambda r: r["rules"].pop(0), "has no 'deletion' rule"),
+        # issue #1840: the two email-allowlist rules must be as unremovable
+        # (and un-invertible) as any of the four rules above -- a future PR
+        # that quietly drops or flips one of these must fail here, not pass
+        # silently the way it did before this gate's own schema knew about
+        # either rule type at all.
+        (lambda r: r["rules"].pop(4), "has no 'commit_author_email_pattern' rule"),
+        (lambda r: r["rules"].pop(5), "has no 'committer_email_pattern' rule"),
+        (lambda r: r["rules"][4]["parameters"].update({"negate": True}), "inverts the allowlist into a denylist"),
+        (lambda r: r["rules"][5]["parameters"].update({"negate": True}), "inverts the allowlist into a denylist"),
     ],
 )
 def test_each_shape_finding_is_reported(mutate: Any, expected: str, tmp_path: pathlib.Path) -> None:
@@ -538,6 +547,18 @@ def test_the_schema_layer_rejects_what_the_key_set_check_could_not_see(
     mutate(ruleset)
     findings = gate.find_schema_violations(ruleset)
     assert any(expected in finding for finding in findings), findings
+
+
+@pytest.mark.parametrize("operator", ["starts_with", "ends_with", "contains", "regex"])
+def test_email_pattern_accepts_every_documented_operator(operator: str) -> None:
+    # GitHub's own schema for commit_author_email_pattern/committer_email_pattern
+    # documents exactly these four operator values; main.json only exercises
+    # "regex" in practice, so this pins the other three against silent
+    # rejection too -- a defeat-test suite that only shows the model rejecting
+    # bad input, never confirms it accepts every value it is supposed to.
+    ruleset = json.loads(json.dumps(VALID))
+    ruleset["rules"][4]["parameters"]["operator"] = operator
+    assert gate.find_schema_violations(ruleset) == []
 
 
 def test_the_committed_ruleset_validates_against_the_schema() -> None:

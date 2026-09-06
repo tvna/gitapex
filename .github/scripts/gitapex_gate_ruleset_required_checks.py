@@ -46,8 +46,20 @@ DEFAULT_RULESET = REPO_ROOT / ".github" / "rulesets" / "main.json"
 DEFAULT_WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 
 #: Rules whose absence would leave `main` deletable or rewritable even with a
-#: pull request requirement in place.
-REQUIRED_RULE_TYPES = ("deletion", "non_fast_forward", "pull_request", "required_status_checks")
+#: pull request requirement in place, or would silently reopen the issue
+#: #1840 third-party-misattribution incident these last two exist to close.
+REQUIRED_RULE_TYPES = (
+    "deletion",
+    "non_fast_forward",
+    "pull_request",
+    "required_status_checks",
+    "commit_author_email_pattern",
+    "committer_email_pattern",
+)
+
+#: The two email-allowlist rule types issue #1840 added, checked together by
+#: `_find_email_pattern_violations` below.
+_EMAIL_PATTERN_RULE_TYPES = ("commit_author_email_pattern", "committer_email_pattern")
 
 #: GitHub's own placeholder ref for "whatever the default branch is called".
 #: Pinning the literal name instead would silently stop protecting anything if
@@ -312,6 +324,7 @@ def find_shape_violations(ruleset: dict[str, Any]) -> list[str]:
     )
     findings.extend(_find_condition_violations(ruleset))
     findings.extend(_find_pull_request_violations(ruleset))
+    findings.extend(_find_email_pattern_violations(ruleset))
     return findings
 
 
@@ -371,6 +384,36 @@ def _find_pull_request_violations(ruleset: dict[str, Any]) -> list[str]:
             f"pull_request.allowed_merge_methods is {methods!r}; none of "
             f"{sorted(_MERGE_METHODS_PRODUCING_A_REVIEWED_COMMIT)} is allowed, so no reviewed merge path remains"
         )
+    return findings
+
+
+def _find_email_pattern_violations(ruleset: dict[str, Any]) -> list[str]:
+    """The two issue #1840 email-allowlist rules must not be silently inverted.
+
+    Presence alone (`REQUIRED_RULE_TYPES`) proves the rule exists, not that it
+    still does what it exists for. Per GitHub's own schema, `negate: true`
+    means "the rule will fail if the pattern matches" -- flipping an
+    allowlist (fail on non-match) into a denylist (fail on match) that blocks
+    exactly the emails this repository wants to allow and lets every other
+    email through. That is the opposite of issue #1840's own fix, and a
+    one-word edit (`"negate": true`) would still satisfy every other check in
+    this file, including the schema layer, which only knows `negate` is a
+    `bool | None`, not which value keeps the policy correct.
+
+    Runs only after `find_schema_violations` passed, so if either rule is
+    present its `parameters.negate` is known to be `bool | None`, never some
+    other type.
+    """
+    findings: list[str] = []
+    for rule_type in _EMAIL_PATTERN_RULE_TYPES:
+        rule = rule_of_type(ruleset, rule_type)
+        if rule is None:
+            continue  # already reported as a missing rule
+        if rule["parameters"].get("negate") is True:
+            findings.append(
+                f"{rule_type}.negate is True, which inverts the allowlist into a denylist -- "
+                "the opposite of what issue #1840 added this rule to enforce"
+            )
     return findings
 
 
