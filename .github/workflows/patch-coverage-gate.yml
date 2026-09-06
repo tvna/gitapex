@@ -1,0 +1,74 @@
+# Issue #1568 (gate-proposal-umbrella, consolidating #1493/#1509/#1539/
+# #1555/#1703/#1718/#1724/#1862). A diff-added line inside this
+# repository's own coverage-tracked source directories must be exercised
+# by a test -- see .github/scripts/gitapex_gate_patch_coverage.py's own
+# module docstring for the exact coverage rule, scope, and waiver
+# convention. This job runs that scan against exactly the diff this PR
+# adds.
+#
+# Deliberately no `paths:` filter -- drift gate:
+# tests/test_gitapex_gate_patch_coverage.py's own
+# test_the_workflow_has_no_paths_filter. See that test's docstring for why
+# (GitHub's own skipped-vs-never-ran distinction for a required check).
+name: Patch-coverage gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  patch-coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      # `ref:`/`fetch-depth: '0'` below is this gate's own diff-post-image
+      # checkout pin -- drift gate:
+      # tests/test_gitapex_gate_patch_coverage.py's own
+      # test_the_workflow_checks_out_the_head_sha_with_full_history. See
+      # that test's docstring for why (this gate correlates diff-derived
+      # line numbers with tree content, the same requirement
+      # function-body-test-coverage-gate.yml states for itself and for
+      # the identical reason -- this gate additionally runs the checked-
+      # out tree's own tests to measure coverage, which needs the same
+      # full working tree).
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          fetch-depth: '0'
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # git merge-base below -- drift gate:
+      # tests/test_gitapex_gate_patch_coverage.py's own
+      # test_the_workflow_uses_merge_base_not_base_sha.
+      #
+      # The two `git diff` flags below (--no-renames, -c
+      # core.quotePath=false) -- drift gate:
+      # tests/test_gitapex_gate_patch_coverage.py's own
+      # test_the_workflow_passes_the_two_flags_the_gate_depends_on. See
+      # that test's docstring for why each matters.
+      - name: Grade patch coverage for this diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if ! merge_base=$(git merge-base "$BASE_SHA" "$HEAD_SHA"); then
+            echo "::error::git merge-base failed between $BASE_SHA and $HEAD_SHA" >&2
+            exit 1
+          fi
+          git -c core.quotePath=false diff -U0 --no-renames "$merge_base" "$HEAD_SHA" -- '*.py' \
+            | uv run --frozen python3 .github/scripts/gitapex_gate_patch_coverage.py
