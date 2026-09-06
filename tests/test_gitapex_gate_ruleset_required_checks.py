@@ -48,6 +48,14 @@ VALID: dict[str, Any] = {
                 "required_status_checks": [{"context": "always-runs"}],
             },
         },
+        {
+            "type": "commit_author_email_pattern",
+            "parameters": {"operator": "regex", "pattern": "^noreply@example\\.com$"},
+        },
+        {
+            "type": "committer_email_pattern",
+            "parameters": {"operator": "regex", "pattern": "^noreply@example\\.com$"},
+        },
     ],
 }
 
@@ -511,6 +519,16 @@ def test_a_non_mapping_jobs_key_reaches_the_gates_own_exit_path(tmp_path: pathli
         (lambda r: r.update({"target": "everything"}), "target"),
         (lambda r: r.update({"name": ""}), "name"),
         (lambda r: r["rules"][3]["parameters"]["required_status_checks"].append({"ctx": "x"}), "Extra inputs"),
+        # commit_author_email_pattern/committer_email_pattern: defeat-tests for
+        # the two rule types added by issue #1840, deliberately constructed to
+        # break the new EmailPatternParameters model rather than only exercise
+        # its happy path (evaluating-deterministic-gate-quality dimension 15).
+        (lambda r: r["rules"][4]["parameters"].update({"operator": "matches"}), "Input should be"),
+        (lambda r: r["rules"][4]["parameters"].update({"pattern": ""}), "at least 1 character"),
+        (lambda r: r["rules"][4]["parameters"].pop("pattern"), "Field required"),
+        (lambda r: r["rules"][4]["parameters"].pop("operator"), "Field required"),
+        (lambda r: r["rules"][5]["parameters"].update({"negate": "not-a-bool"}), "valid boolean"),
+        (lambda r: r["rules"][4]["parameters"].update({"unexpected_field": True}), "Extra inputs are not permitted"),
     ],
 )
 def test_the_schema_layer_rejects_what_the_key_set_check_could_not_see(
