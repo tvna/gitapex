@@ -445,6 +445,26 @@ def test_main_returns_one_and_prints_findings_on_bare_invocation(
     assert "x.py" in out
 
 
+def test_main_flags_a_bare_invocation_outside_github_scripts(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Issue #1050: main()'s own CLI-level output must stay path-independent
+    too, not just find_bare_invocations() -- a bare invocation of a script
+    outside `.github/scripts/` (e.g. `evals/scripts/*.py`) fails the same
+    way, and the printed message no longer names `.github/scripts/*.py`
+    specifically."""
+    workflows_dir = _write(
+        tmp_path,
+        "bare.yml",
+        "jobs:\n  a:\n    steps:\n      - name: run\n        run: python3 evals/scripts/x.py\n",
+    )
+    monkeypatch.setattr("sys.argv", ["prog", str(workflows_dir)])
+    assert gate.main() == 1
+    out = capsys.readouterr().out
+    assert "Bare `python3 <path>.py` invocations" in out
+    assert "evals/scripts/x.py" in out
+
+
 # --- hooks/*.sh shell-variable-indirected invocations (WARNING tier,
 # issue #1446 Item 2): a hooks/*.sh script almost never invokes a
 # `.github/scripts/*.py` gate directly on the same line -- it assigns the
