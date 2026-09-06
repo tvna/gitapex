@@ -122,6 +122,9 @@ spec:
       summary: "the entry above's own fix was itself wrong: it and the Cleanup-git-command caveat below were both added by commit `0a069a68`, so both must share its own true immediate parent (`c13c6437`) under that same entry's own stated convention -- Cleanup got it right, axis-7 was instead pointed at `52213559`, an unrelated drafting-a-skill commit with no relation to this file. Found via an adversarial dispatch for https://github.com/tvna/gitapex/issues/1740. Corrected to `c13c6437`."
       outcome:
         baseCommit: "184042e4be722d9debe33cc349113fb499723234"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1809"
+      summary: "One Stop-boundary citation of adversarial-self-audit.md's own removed 'No verified mechanism available' section was repointed at the new gitapex_run_verified_isolated_dispatch.py's own printed guidance for that condition. Citation-only, no functional/frontmatter change. This fell outside the linked issue's own design doc/branch plan file-ownership map (an independent Step 8 review flagged the scope-of-record gap); recorded here to close it."
   skillDependencies:
     requires:
       - drafting-a-skill

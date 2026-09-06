@@ -130,22 +130,24 @@ is still grading from a contaminated context.
   throughout steps 1-6.
 - Required, not optional: when the calling repository carries its own
   project-instruction file (for example `CLAUDE.md` or `AGENTS.md`),
-  exclude that file from the dispatch's context before dispatching. The
-  mechanism is platform-dependent, not a fixed choice this skill can
-  hardcode -- consult
+  exclude that file from the dispatch's context before dispatching. Run
+  `scripts/gitapex_run_verified_isolated_dispatch.py` for the dispatch
+  itself, rather than hand-rolling this check or launching a bare
+  `Agent`-tool/`claude -p` dispatch directly -- it verifies isolation
+  itself, from its own orchestrating process, before ever launching the
+  real dispatch: reusing a matching Reviewed entry in
+  `metadata/isolation-registry.yaml` when this run's own identifying
+  signals match one exactly, or otherwise running a live control pair
+  and recording a new entry. The omission must not depend on a human
+  asking whether it happened, and requesting the exclusion is not proof
+  it held; only the script's own two-control behavioral test counts as
+  verification, never a filesystem-only check. Read
   [references/adversarial-self-audit.md](references/adversarial-self-audit.md)'s
-  Isolation verification section for the current platform's verified
-  mechanism: unconditionally compare this session's own identifying
-  signals against any existing Known entry before trusting it, and run
-  the Verification procedure in full -- recording a new entry -- whenever
-  none matches or a signal differs. The omission must not depend on a
-  human asking whether it happened, and requesting the exclusion is not
-  proof it held; only that section's own two-part behavioral test counts
-  as verification, and it records why a filesystem-only check does not.
-  Read what that section's Trust class rule says about an entry the current run wrote before relying on one. If no platform mechanism can be
-  verified, follow that section's "No verified mechanism available"
-  subsection rather than dispatching into a contaminated context. Where the
-  local Docker+Harbor precondition holds, the containerized-evaluation
+  Isolation verification section for the Trust class rule this depends
+  on before relying on any entry the current run itself wrote. If the
+  script reports "No verified mechanism available," follow its own
+  printed guidance rather than dispatching into a contaminated context.
+  Where the local Docker+Harbor precondition holds, the containerized-evaluation
   route in [references/evaluation-via-harbor.md](references/evaluation-via-harbor.md)
   additionally applies -- strictly optional, never a substitute for the
   exclusion requirement above. Whether the exclusion, once verified, carries

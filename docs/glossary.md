@@ -217,7 +217,7 @@ isolation-for-neutrality exists to prevent."
 
 Superseded terms: bare "isolated"/"isolation", and "contaminated" /
 "contaminated context" as used for this concept in
-`skills/evaluating-skill-quality/SKILL.md` lines 119 and 145, since that
+`skills/evaluating-skill-quality/SKILL.md` lines 120 and 149, since that
 same skill's own `adversarial-self-audit.md` uses "contaminated" for the
 unrelated `Instruction-file airgap` concept instead. Resolved by the
 repository owner, directly, per the Resolve step (#1203). Not yet
