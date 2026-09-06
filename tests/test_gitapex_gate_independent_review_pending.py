@@ -9,6 +9,7 @@ current head commit.
 
 from __future__ import annotations
 
+import base64
 import json
 import pathlib
 import re
@@ -651,6 +652,27 @@ def test_load_ruleset_rejects_non_object_json(tmp_path: pathlib.Path) -> None:
         gate.load_ruleset(path)
 
 
+def test_parse_trusted_bots_parses_real_shaped_yaml() -> None:
+    # Direct test of the text-parsing half load_trusted_bots (local disk)
+    # and main()'s own --trust-anchor-ref branch (the GitHub Contents API,
+    # via fetch_repo_file_at_ref) both now share.
+    assert gate._parse_trusted_bots(yaml.safe_dump(_TRUSTED_BOTS), "source-label") == _TRUSTED_BOTS
+
+
+def test_parse_trusted_bots_rejects_non_list_yaml() -> None:
+    with pytest.raises(ValueError, match="must contain a YAML list"):
+        gate._parse_trusted_bots("not-a-list: true\n", "source-label")
+
+
+def test_parse_ruleset_parses_real_shaped_json() -> None:
+    assert gate._parse_ruleset(json.dumps(_RULESET_WITH_ALL_RULE_TYPES), "source-label") == _RULESET_WITH_ALL_RULE_TYPES
+
+
+def test_parse_ruleset_rejects_non_object_json() -> None:
+    with pytest.raises(ValueError, match="must contain a JSON object"):
+        gate._parse_ruleset("[]", "source-label")
+
+
 # ---------------------------------------------------------------------------
 # required_check_contexts: must read only required_status_checks, never the
 # other rule types (the PR #1843 concern this design explicitly guards
@@ -823,6 +845,56 @@ def test_latest_run_for_context_returns_none_when_no_run_matches() -> None:
 
 
 # ---------------------------------------------------------------------------
+# fetch_repo_file_at_ref: the second-revision trust-anchor-ref-pinning fix.
+# ---------------------------------------------------------------------------
+
+
+def _contents_api_body(text: str) -> str:
+    return json.dumps({"content": base64.b64encode(text.encode("utf-8")).decode("ascii"), "encoding": "base64"})
+
+
+def test_fetch_repo_file_at_ref_decodes_base64_content() -> None:
+    def opener(request: urllib.request.Request) -> _FakeResponse:
+        assert "contents/.github/trusted-bots.yml?ref=deadbeef" in request.full_url
+        return _FakeResponse(200, _contents_api_body("- login: dependabot[bot]\n"))
+
+    text = gate.fetch_repo_file_at_ref("o", "r", ".github/trusted-bots.yml", "deadbeef", "tok", opener, lambda _s: None)
+    assert text == "- login: dependabot[bot]\n"
+
+
+def test_fetch_repo_file_at_ref_raises_when_encoding_is_not_base64() -> None:
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        return _FakeResponse(200, json.dumps({"content": "irrelevant", "encoding": "none"}))
+
+    with pytest.raises(gate.GitHubApiError, match="no base64-encoded 'content' field"):
+        gate.fetch_repo_file_at_ref("o", "r", "path", "ref", "tok", opener, lambda _s: None)
+
+
+def test_fetch_repo_file_at_ref_raises_when_content_field_missing() -> None:
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        return _FakeResponse(200, json.dumps({"encoding": "base64"}))
+
+    with pytest.raises(gate.GitHubApiError, match="no base64-encoded 'content' field"):
+        gate.fetch_repo_file_at_ref("o", "r", "path", "ref", "tok", opener, lambda _s: None)
+
+
+def test_fetch_repo_file_at_ref_raises_on_undecodable_base64() -> None:
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        return _FakeResponse(200, json.dumps({"content": "not-valid-base64!!!", "encoding": "base64"}))
+
+    with pytest.raises(gate.GitHubApiError, match="could not be base64/UTF-8 decoded"):
+        gate.fetch_repo_file_at_ref("o", "r", "path", "ref", "tok", opener, lambda _s: None)
+
+
+def test_fetch_repo_file_at_ref_raises_on_unexpected_shape() -> None:
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        return _FakeResponse(200, json.dumps(["not", "an", "object"]))
+
+    with pytest.raises(gate.GitHubApiError, match="unexpected shape"):
+        gate.fetch_repo_file_at_ref("o", "r", "path", "ref", "tok", opener, lambda _s: None)
+
+
+# ---------------------------------------------------------------------------
 # poll_bot_required_checks: simulated-bot-PR tests (ACM's own literal
 # wording) plus the fail-closed-on-empty-contexts defeat test.
 # ---------------------------------------------------------------------------
@@ -982,6 +1054,53 @@ def test_poll_bot_required_checks_times_out_when_errors_persist() -> None:
     assert "timed out" in message
     assert "GitHub API errors persisted" in message
     assert "pytest" in message
+
+
+def test_poll_bot_required_checks_catches_a_context_re_run_into_failure_after_already_passing() -> None:
+    # Defeat test for the second-revision fix: an earlier implementation
+    # cached a context as permanently "concluded" the first time it saw a
+    # passing conclusion, and never looked at it again for the rest of the
+    # same poll call -- so a manual re-run into a *worse* conclusion, while
+    # this same poll session was still open waiting on another context,
+    # would be silently missed. GitHub's own check-runs endpoint always
+    # returns the complete, current set for a head SHA (never a delta), so
+    # a realistic fake here returns pytest as already-passing on iteration
+    # 1 (while ruff is still pending), then, on iteration 2, a NEWER
+    # pytest run (later started_at) reporting failure alongside ruff now
+    # passing too.
+    iteration_1 = _check_runs_body(
+        [
+            {"name": "pytest", "status": "completed", "conclusion": "success", "id": 1, "started_at": "t1"},
+            {"name": "ruff", "status": "in_progress", "id": 2, "started_at": "t1"},
+        ]
+    )
+    iteration_2 = _check_runs_body(
+        [
+            {"name": "pytest", "status": "completed", "conclusion": "success", "id": 1, "started_at": "t1"},
+            {"name": "pytest", "status": "completed", "conclusion": "failure", "id": 3, "started_at": "t2"},
+            {"name": "ruff", "status": "completed", "conclusion": "success", "id": 2, "started_at": "t1"},
+        ]
+    )
+    calls = {"n": 0}
+
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        calls["n"] += 1
+        return _FakeResponse(200, iteration_1 if calls["n"] == 1 else iteration_2)
+
+    passed, message = gate.poll_bot_required_checks(
+        owner="o",
+        repo="r",
+        head_sha="sha",
+        contexts=["pytest", "ruff"],
+        token="tok",
+        timeout_seconds=5.0,
+        poll_interval_seconds=0,
+        opener=opener,
+        sleeper=lambda _s: None,
+    )
+    assert passed is False, message
+    assert "pytest" in message
+    assert "failure" in message
 
 
 # ---------------------------------------------------------------------------
@@ -1264,6 +1383,176 @@ def test_main_bot_path_pass_via_full_wiring(
     assert captured["token"] == "tok"
     assert captured["trusted_bots"] == _TRUSTED_BOTS
     assert captured["ruleset"] == _RULESET_WITH_ALL_RULE_TYPES
+
+
+def test_main_bot_path_pass_via_trust_anchor_ref_fetches_from_api_not_local_disk(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The second-revision fix: --trust-anchor-ref given -> both trust
+    # anchors come from fetch_repo_file_at_ref (the GitHub Contents API)
+    # at that ref, never from --trusted-bots-path/--ruleset-path (left
+    # pointing at files that do not even exist here, to prove local disk
+    # is never consulted). fetch_repo_file_at_ref's own HTTP/base64
+    # mechanics are already covered directly above; this test's own job is
+    # main()'s wiring (which path, which ref, which owner/repo/token), so
+    # it fakes that one function directly, matching this file's own
+    # established pattern for a main()-level wiring test (see
+    # test_main_bot_path_pass_via_full_wiring's own evaluate_bot_path
+    # fake).
+    body_file = tmp_path / "body.txt"
+    body_file.write_text("irrelevant for the bot path", encoding="utf-8")
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+
+    fetch_calls: list[tuple[str, str, str, str, str]] = []
+
+    def fake_fetch_repo_file_at_ref(owner: str, repo: str, path: str, ref: str, token: str) -> str:
+        fetch_calls.append((owner, repo, path, ref, token))
+        if path == ".github/trusted-bots.yml":
+            return yaml.safe_dump(_TRUSTED_BOTS)
+        return json.dumps(_RULESET_WITH_ALL_RULE_TYPES)
+
+    monkeypatch.setattr(gate, "fetch_repo_file_at_ref", fake_fetch_repo_file_at_ref)
+
+    captured: dict[str, object] = {}
+
+    def fake_evaluate_bot_path(**kwargs: object) -> tuple[bool, str]:
+        captured.update(kwargs)
+        return True, "all good"
+
+    monkeypatch.setattr(gate, "evaluate_bot_path", fake_evaluate_bot_path)
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--owner",
+            "tvna",
+            "--repo",
+            "gitapex",
+            "--trust-anchor-ref",
+            "deadbeef",
+            "--trusted-bots-path",
+            str(tmp_path / "nonexistent-trusted-bots.yml"),
+            "--ruleset-path",
+            str(tmp_path / "nonexistent-main.json"),
+        ]
+    )
+    assert exit_code == 0
+    assert "PASS: all good" in capsys.readouterr().out
+    assert [call[2] for call in fetch_calls] == [".github/trusted-bots.yml", ".github/rulesets/main.json"]
+    assert all(call[3] == "deadbeef" for call in fetch_calls)
+    assert all(call[0] == "tvna" and call[1] == "gitapex" and call[4] == "tok" for call in fetch_calls)
+    assert captured["trusted_bots"] == _TRUSTED_BOTS
+    assert captured["ruleset"] == _RULESET_WITH_ALL_RULE_TYPES
+
+
+def test_main_bot_path_falls_back_when_trust_anchor_ref_given_but_token_unset(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(_CLEAN_BODY, encoding="utf-8")
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--owner",
+            "tvna",
+            "--repo",
+            "gitapex",
+            "--trust-anchor-ref",
+            "deadbeef",
+        ]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "GITHUB_TOKEN is unset" in captured.err
+    assert "PASS: CLEAN verdict" in captured.out
+
+
+def test_main_bot_path_falls_back_when_trust_anchor_ref_given_but_owner_repo_unresolved(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(_CLEAN_BODY, encoding="utf-8")
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--trust-anchor-ref",
+            "deadbeef",
+        ]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "owner/--repo could not be resolved" in captured.err
+    assert "PASS: CLEAN verdict" in captured.out
+
+
+def test_main_bot_path_falls_back_when_trust_anchor_fetch_raises_api_error(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(_CLEAN_BODY, encoding="utf-8")
+
+    def fake_fetch_repo_file_at_ref(owner: str, repo: str, path: str, ref: str, token: str) -> str:
+        raise gate.GitHubApiError(f"GET .../{path}?ref={ref} failed: HTTP 404: not found")
+
+    monkeypatch.setattr(gate, "fetch_repo_file_at_ref", fake_fetch_repo_file_at_ref)
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--owner",
+            "tvna",
+            "--repo",
+            "gitapex",
+            "--trust-anchor-ref",
+            "deadbeef",
+        ]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "could not load the bot-path allowlist/ruleset" in captured.err
+    assert "PASS: CLEAN verdict" in captured.out
 
 
 def test_main_bot_path_fail_prints_bot_specific_hint_not_the_verdict_hint(

@@ -6,7 +6,10 @@ Design agreed via `eliciting-a-design` dialogue on 2026-09-06. Revised same day 
 an independent adversarial review (`executing-a-branch-plan`'s pre-PR
 `design-doc-adversarial-review`) found one CONFIRMED critical defect -- see
 "Revision: head-commit identity check" below, folded into Architecture/Decision
-logic detail/Residual risks. Not yet implemented.
+logic detail/Residual risks. Revised again same day after `drafting-a-pr-to-merge`
+Step 8's own independent review (against the implemented PR) found two more
+CONFIRMED findings -- see "Second revision: trust-anchor ref pinning + poll
+re-check fix" below.
 
 ### Revision: head-commit identity check (critical defect closed)
 
@@ -31,6 +34,53 @@ second copy that could drift from it. A commit whose author/committer PR
 metadata says "opened by dependabot[bot]" but whose actual commit emails
 don't match falls through to the existing human-verdict path, matching this
 design's original intent rather than merely its original wording.
+
+### Second revision: trust-anchor ref pinning + poll re-check fix (two Step 8 review findings closed)
+
+`drafting-a-pr-to-merge`'s own Step 8 independent review (five parallel axis
+reviewers against the implemented PR, not this design doc alone) found two more
+CONFIRMED issues, verified by re-reading the actual workflow/CODEOWNERS/gate-script
+files rather than accepted on the axis reviewers' own say-so:
+
+1. **Trust anchors read from an untrusted ref.** `load_trusted_bots`/`load_ruleset`
+   read `.github/trusted-bots.yml`/`.github/rulesets/main.json` off local disk, at
+   a path relative to the running script's own location. `independent-review-pending.yml`'s
+   checkout step passed no explicit `ref:`, so for a `pull_request`-triggered
+   workflow `actions/checkout` resolves its own default -- the PR's own merge ref,
+   i.e. the PR's own proposed content for both files, not a ref the PR itself cannot
+   influence. Confirmed additionally that `.github/rulesets/main.json` had **no**
+   CODEOWNERS entry at all (only `.github/trusted-bots.yml` did), so the one file
+   the critical-defect fix above depends on entirely (point 2, Decision logic
+   detail) carried zero forced-review protection.
+
+   Fix: `main()` now accepts `--trust-anchor-ref`; the workflow passes
+   `github.event.pull_request.base.sha` (a commit no PR ref can move). When given,
+   both files are fetched via the GitHub Contents API (`fetch_repo_file_at_ref`)
+   from that ref instead of local disk -- omitting the flag (every unit test)
+   keeps the prior local-disk-read behavior unchanged. `.github/rulesets/main.json`
+   also now carries the same `@tvna` CODEOWNERS entry `.github/trusted-bots.yml`
+   already had, as defense in depth on top of the ref-pinning fix, not a substitute
+   for it (a live GitHub Settings toggle this repository's own tracked files cannot
+   themselves confirm is enabled).
+
+2. **`poll_bot_required_checks` permanently remembered a context's first passing
+   conclusion.** Once a required context was observed `completed`/passing on one
+   poll iteration, the original implementation never looked at that context again
+   for the rest of the same poll call (a `concluded` dict, checked-and-skipped on
+   every later iteration). GitHub's own check-runs endpoint always returns the
+   complete, current set for a head SHA (never a delta) -- so a context re-run
+   (e.g. a manual "Re-run this job" click) into a *worse* conclusion after already
+   being marked concluded would never be caught, and the poll could report an
+   incorrect PASS naming "all required checks completed successfully" while one of
+   them had, in fact, most recently failed.
+
+   Fix: every context's own conclusion is now re-derived from the latest full
+   check-runs snapshot on every iteration -- nothing is cached as permanently
+   concluded once seen passing once. This also resolves the "Duplicate check-run
+   reruns" residual risk below more completely than originally scoped: not only is
+   the most-recent run per context authoritative within a single snapshot, but a
+   later snapshot's worse conclusion for an already-seen-passing context is no
+   longer silently ignored.
 
 ## Problem
 
@@ -153,11 +203,16 @@ could drift apart.
 
 ```
 /.github/trusted-bots.yml @tvna
+/.github/rulesets/main.json @tvna
 ```
 
-Same rationale as the existing `harden-checkout` entry: this file grants an
-identity-based gate exemption, so an unreviewed edit could silently widen who
-bypasses independent review.
+Same rationale as the existing `harden-checkout` entry: `trusted-bots.yml` grants
+an identity-based gate exemption, so an unreviewed edit could silently widen who
+bypasses independent review. `main.json`'s entry is the second-revision fix above
+-- its `commit_author_email_pattern`/`committer_email_pattern` rules are equally
+load-bearing for the critical-defect fix (Decision logic detail's own
+"Head-commit identity check"), so an unreviewed loosening of either pattern is the
+same class of risk.
 
 ### Timing (resolved via `architecture-tradeoff`)
 
@@ -250,11 +305,13 @@ taking the bot path.
   not cryptographically verify a check run's own content -- matching this
   repository's existing single-operator trust model (same disclosed limit as
   `gitapex_gate_independent_review_pending.py`'s own module docstring).
-- Duplicate check-run reruns for the same context name: this design does not
-  specify which one is authoritative when more than one run exists for the same
-  required context on the same head SHA -- left as an implementation-phase
-  decision (most-recent-by-timestamp is the natural default, matching how GitHub's
-  own required-status-check evaluation already behaves).
+- Duplicate check-run reruns for the same context name: most-recent-by-timestamp
+  is authoritative when more than one run exists for the same required context on
+  the same head SHA, matching how GitHub's own required-status-check evaluation
+  already behaves -- and (second revision above) every context's own conclusion is
+  now re-derived from a fresh snapshot on every poll iteration rather than cached
+  once seen passing, so a same-poll-session rerun into a worse conclusion is still
+  caught, not only the single-snapshot tie-break this bullet originally scoped.
 - A required check re-run without a `synchronize` event (e.g. a manual "Re-run
   failed jobs" click with no new commit) does not itself re-trigger this workflow,
   since its own triggers are `opened`/`ready_for_review`/`synchronize`/`edited`/

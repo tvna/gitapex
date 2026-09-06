@@ -118,7 +118,26 @@ accepts the PR author's identity (`--pr-author-login`/`--pr-author-id`/
    `skipped`, FAIL immediately on any other conclusion, FAIL on timeout
    naming whichever contexts never completed. A transient GitHub API
    error while polling is retried within the same timeout budget, not
-   treated as an immediate FAIL or silently ignored.
+   treated as an immediate FAIL or silently ignored. Every context's own
+   conclusion is re-derived from the latest full check-runs snapshot on
+   every poll iteration, never cached once seen passing -- a context
+   re-run mid-poll into a worse conclusion is still caught.
+4. **Second revision, a Step 8 review finding closed before this issue's
+   own PR merged**: `.github/trusted-bots.yml` and `.github/rulesets/main.json`
+   are two more trust anchors this bot path depends on entirely (point 1
+   and point 2 above respectively) -- reading either from this job's own
+   checkout is reading whatever the PR under evaluation itself currently
+   has checked out, for a `pull_request`-triggered workflow the PR's own
+   proposed content, not a ref the PR itself cannot influence. `main()`
+   now also accepts `--trust-anchor-ref` (the workflow passes
+   `github.event.pull_request.base.sha`, an immutable base-branch commit
+   no PR ref can move); when given, both files are fetched via the GitHub
+   Contents API (`fetch_repo_file_at_ref`) from that ref instead of local
+   disk. CODEOWNERS-gating both paths (`.github/trusted-bots.yml` already
+   was; `.github/rulesets/main.json` now is too) is defense in depth on
+   top of this, not a substitute for it -- a live GitHub Settings toggle
+   ("Require review from Code Owners") this repository's own tracked
+   files cannot themselves confirm is enabled.
 
 No change to `parse_verdict`/`check()` themselves, and every existing
 `--body`/`--head-sha`-only invocation (no `--pr-author-*` given at all)
@@ -156,7 +175,7 @@ identity/email checks above do not both hold)::
     GITHUB_TOKEN=... uv run --frozen python3 .github/scripts/gitapex_gate_independent_review_pending.py \\
         --body PR_BODY.txt --head-sha <sha> \\
         --pr-author-login "dependabot[bot]" --pr-author-id 49699333 --pr-author-type Bot \\
-        --owner tvna --repo gitapex
+        --owner tvna --repo gitapex --trust-anchor-ref <base branch sha>
 
 Exit codes:
     0  A Verdict: CLEAN verdict naming the given head SHA is present
@@ -170,6 +189,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
@@ -471,20 +491,43 @@ def _read_utf8_or_raise(path: Path) -> str:
         raise ValueError(f"{path} is not valid UTF-8: {error}") from error
 
 
+def _parse_trusted_bots(text: str, source: str) -> list[dict[str, Any]]:
+    """Parse `text` (the raw content of `.github/trusted-bots.yml`, read
+    from either local disk or `fetch_repo_file_at_ref`) into a list of
+    entry dicts. Raises `ValueError`/`yaml.YAMLError` on malformed
+    content, `source` naming where it came from for the error message
+    only -- shared by `load_trusted_bots` (local disk) and `main()`'s own
+    `--trust-anchor-ref` branch (the GitHub Contents API) so both paths
+    parse identically."""
+    document = yaml.safe_load(text)
+    if not isinstance(document, list):
+        raise ValueError(f"{source} must contain a YAML list of entries, found {type(document).__name__}")
+    return [entry for entry in document if isinstance(entry, dict)]
+
+
 def load_trusted_bots(path: Path) -> list[dict[str, Any]]:
-    """Parse `.github/trusted-bots.yml` into a list of entry dicts.
+    """Parse `.github/trusted-bots.yml` off local disk into a list of
+    entry dicts.
 
     Raises `ValueError` (an unreadable or non-UTF-8 file, see
     `_read_utf8_or_raise`) or `yaml.YAMLError` (malformed YAML) on a bad
     file -- `main()`'s own bot-path wiring treats any of these as "cannot
     confirm a bot-path candidate" and falls through to the strict
     human-verdict path, never crashing and never silently trusting
-    everything or nothing."""
+    everything or nothing.
+
+    Reads whatever this job's own working tree currently has checked
+    out -- for a `pull_request`-triggered workflow, that is the PR's own
+    proposed content, not a ref the PR itself cannot influence. `main()`
+    only calls this when `--trust-anchor-ref` is omitted (every unit test,
+    and any caller without a GitHub API token available); the real
+    workflow always passes `--trust-anchor-ref` instead, routing through
+    `fetch_repo_file_at_ref`/`_parse_trusted_bots` so a PR cannot widen its
+    own bot-exemption eligibility merely by editing this file within its
+    own diff -- see that flag's own `main()` help text and the design
+    doc's own second revision section."""
     text = _read_utf8_or_raise(path)
-    document = yaml.safe_load(text)
-    if not isinstance(document, list):
-        raise ValueError(f"{path} must contain a YAML list of entries, found {type(document).__name__}")
-    return [entry for entry in document if isinstance(entry, dict)]
+    return _parse_trusted_bots(text, str(path))
 
 
 def is_trusted_bot(login: str, user_id: int, user_type: str, entries: list[dict[str, Any]]) -> bool:
@@ -502,16 +545,71 @@ def is_trusted_bot(login: str, user_id: int, user_type: str, entries: list[dict[
     )
 
 
-def load_ruleset(path: Path) -> dict[str, Any]:
-    """Parse `.github/rulesets/main.json`. Raises `ValueError` (an
-    unreadable or non-UTF-8 file, see `_read_utf8_or_raise`) or
-    `json.JSONDecodeError` (malformed JSON) on a bad file -- same
-    fall-through contract as `load_trusted_bots`."""
-    text = _read_utf8_or_raise(path)
+def _parse_ruleset(text: str, source: str) -> dict[str, Any]:
+    """Parse `text` (the raw content of `.github/rulesets/main.json`, read
+    from either local disk or `fetch_repo_file_at_ref`) into a dict.
+    Raises `ValueError`/`json.JSONDecodeError` on malformed content,
+    `source` naming where it came from for the error message only --
+    shared by `load_ruleset` (local disk) and `main()`'s own
+    `--trust-anchor-ref` branch (the GitHub Contents API)."""
     document = json.loads(text)
     if not isinstance(document, dict):
-        raise ValueError(f"{path} must contain a JSON object, found {type(document).__name__}")
+        raise ValueError(f"{source} must contain a JSON object, found {type(document).__name__}")
     return document
+
+
+def load_ruleset(path: Path) -> dict[str, Any]:
+    """Parse `.github/rulesets/main.json` off local disk. Raises
+    `ValueError` (an unreadable or non-UTF-8 file, see
+    `_read_utf8_or_raise`) or `json.JSONDecodeError` (malformed JSON) on a
+    bad file -- same fall-through contract as `load_trusted_bots`, and the
+    same "PR's own working tree, not a ref it cannot influence" caveat:
+    `main()` only calls this when `--trust-anchor-ref` is omitted; see
+    `load_trusted_bots`'s own docstring."""
+    text = _read_utf8_or_raise(path)
+    return _parse_ruleset(text, str(path))
+
+
+def fetch_repo_file_at_ref(
+    owner: str,
+    repo: str,
+    path: str,
+    ref: str,
+    token: str,
+    opener: Callable[[urllib.request.Request], Any] = default_opener,
+    sleeper: Callable[[float], None] = time.sleep,
+) -> str:
+    """GET the UTF-8 text content of `path` at `ref` via GitHub's Contents
+    API (`GET /repos/{owner}/{repo}/contents/{path}?ref={ref}`).
+
+    This exists so the two bot-path trust anchors
+    (`.github/trusted-bots.yml`, `.github/rulesets/main.json`) can be read
+    from a ref the PR under evaluation cannot itself move -- `main()`'s own
+    `--trust-anchor-ref` wiring always passes the PR's base commit SHA
+    (`github.event.pull_request.base.sha`), never the PR's own head, so a
+    PR cannot widen its own bot-exemption eligibility merely by editing
+    either file within its own diff (the CODEOWNERS review gate on both
+    paths is defense in depth on top of this, not a substitute for it --
+    see the design doc's own second revision section).
+
+    Raises `GitHubApiError` (via `fetch_json_document`, which already
+    retries transient 5xx/network failures) on any HTTP failure or
+    unexpected/non-base64 response shape -- the caller (`main()`) catches
+    this and falls through to the human-verdict path, the same
+    fail-closed contract every other bot-path GitHub API call in this file
+    already has."""
+    url = f"{_API_ROOT}/repos/{owner}/{repo}/contents/{path}?ref={ref}"
+    document = fetch_json_document(url, token, opener, sleeper)
+    if not isinstance(document, dict):
+        raise GitHubApiError(f"GET {url} returned an unexpected shape: {type(document).__name__}")
+    encoded = document.get("content")
+    encoding = document.get("encoding")
+    if not isinstance(encoded, str) or encoding != "base64":
+        raise GitHubApiError(f"GET {url} response has no base64-encoded 'content' field")
+    try:
+        return base64.b64decode(encoded).decode("utf-8")
+    except (ValueError, UnicodeDecodeError) as error:
+        raise GitHubApiError(f"GET {url} content could not be base64/UTF-8 decoded: {error}") from error
 
 
 def _rule_of_type(ruleset: dict[str, Any], rule_type: str) -> dict[str, Any] | None:
@@ -775,7 +873,20 @@ def poll_bot_required_checks(
     `required_status_checks` rule is entirely absent, or because it is
     present but names nothing else -- is itself a fail-closed FAIL, never
     silently treated as "nothing to check" (see `required_check_contexts`'s
-    own docstring and this issue's own defeat-test requirement)."""
+    own docstring and this issue's own defeat-test requirement).
+
+    Every context's own conclusion is re-read from the latest full
+    check-runs snapshot on EVERY poll iteration -- never cached as
+    permanently "concluded" once seen passing once. GitHub's own
+    check-runs endpoint always returns the complete, current set for
+    `head_sha` (never a delta), so a context that reports `success` on one
+    iteration but is later re-run (a real, GitHub-supported action) and
+    concludes `failure` on a subsequent iteration must still be caught
+    while this same poll call is still open waiting on some other context
+    -- a Step 8 review found an earlier revision's own `concluded` cache
+    stopped re-checking a context the moment it first saw a passing
+    conclusion, so a same-poll-session re-run's own worse conclusion for
+    that same context was silently never looked at again."""
     if not contexts:
         return False, (
             "no required status checks to verify: main.json's required_status_checks rule is either "
@@ -784,8 +895,8 @@ def poll_bot_required_checks(
         )
 
     deadline = clock() + timeout_seconds
-    concluded: dict[str, str] = {}
     last_error: str | None = None
+    unresolved: list[str] = list(contexts)
 
     while True:
         try:
@@ -794,35 +905,32 @@ def poll_bot_required_checks(
             last_error = str(error)
         else:
             last_error = None
+            unresolved = []
             for context in contexts:
-                if context in concluded:
-                    continue
                 run = _latest_run_for_context(runs, context)
                 if run is None or run.get("status") != "completed":
+                    unresolved.append(context)
                     continue
                 conclusion = run.get("conclusion")
-                if conclusion in _PASSING_CONCLUSIONS:
-                    concluded[context] = str(conclusion)
-                else:
+                if conclusion not in _PASSING_CONCLUSIONS:
                     return False, (
                         f"required check {context!r} completed with conclusion {conclusion!r} for head "
                         f"{head_sha} (expected one of {sorted(_PASSING_CONCLUSIONS)})"
                     )
-            if len(concluded) == len(contexts):
+            if not unresolved:
                 return True, f"all {len(contexts)} required check(s) completed successfully for head {head_sha}"
 
         remaining = deadline - clock()
         if remaining <= 0:
-            unresolved = sorted(context for context in contexts if context not in concluded)
             if last_error is not None:
                 return False, (
                     f"timed out after {timeout_seconds}s polling GitHub check-runs for head {head_sha}: "
                     f"GitHub API errors persisted (last error: {last_error}); could not confirm status "
-                    f"for: {unresolved}"
+                    f"for: {sorted(unresolved)}"
                 )
             return False, (
                 f"timed out after {timeout_seconds}s waiting for required checks on head {head_sha} to "
-                f"complete; still not completed: {unresolved}"
+                f"complete; still not completed: {sorted(unresolved)}"
             )
         sleeper(min(poll_interval_seconds, remaining))
 
@@ -977,6 +1085,19 @@ def main(argv: list[str] | None = None) -> int:
         help="Overrides the fetched commit.committer.email (skips the GitHub API fetch when given).",
     )
     bot_group.add_argument(
+        "--trust-anchor-ref",
+        help=(
+            "Git ref (e.g. github.event.pull_request.base.sha) to fetch .github/trusted-bots.yml and "
+            ".github/rulesets/main.json from via the GitHub Contents API, instead of this checkout's own "
+            "working tree -- so a PR cannot widen its own bot-exemption eligibility merely by editing "
+            "either trust-anchor file within its own diff. Requires --owner/--repo (or $GITHUB_REPOSITORY) "
+            "and GITHUB_TOKEN; a failure to resolve either, or a GitHub API error while fetching, falls "
+            "through to the human-verdict path like any other bot-path failure below. Omitting this flag "
+            "keeps reading --trusted-bots-path/--ruleset-path from local disk, unchanged (used by this "
+            "script's own test suite, which has no real GitHub API to call)."
+        ),
+    )
+    bot_group.add_argument(
         "--poll-timeout-seconds",
         type=float,
         default=DEFAULT_POLL_TIMEOUT_SECONDS,
@@ -1027,9 +1148,34 @@ def main(argv: list[str] | None = None) -> int:
         # path below (fail closed to the strict path, not a falsy
         # placeholder passed into the bot-path logic).
         try:
-            trusted_bots = load_trusted_bots(Path(args.trusted_bots_path))
-            ruleset = load_ruleset(Path(args.ruleset_path))
-        except (yaml.YAMLError, json.JSONDecodeError, ValueError) as error:
+            if args.trust_anchor_ref:
+                # Design doc's own second revision: read both trust
+                # anchors from a ref the PR under evaluation cannot move
+                # (the PR's own base commit), never from this job's own
+                # working tree -- see fetch_repo_file_at_ref's own
+                # docstring for why.
+                token_for_anchors = os.environ.get("GITHUB_TOKEN", "")
+                if not args.owner or not args.repo:
+                    raise ValueError(
+                        "--trust-anchor-ref given but --owner/--repo could not be resolved "
+                        "(no $GITHUB_REPOSITORY and no explicit --owner/--repo)"
+                    )
+                if not token_for_anchors:
+                    raise ValueError("--trust-anchor-ref given but GITHUB_TOKEN is unset")
+                trusted_bots_text = fetch_repo_file_at_ref(
+                    args.owner, args.repo, ".github/trusted-bots.yml", args.trust_anchor_ref, token_for_anchors
+                )
+                trusted_bots = _parse_trusted_bots(
+                    trusted_bots_text, f".github/trusted-bots.yml@{args.trust_anchor_ref}"
+                )
+                ruleset_text = fetch_repo_file_at_ref(
+                    args.owner, args.repo, ".github/rulesets/main.json", args.trust_anchor_ref, token_for_anchors
+                )
+                ruleset = _parse_ruleset(ruleset_text, f".github/rulesets/main.json@{args.trust_anchor_ref}")
+            else:
+                trusted_bots = load_trusted_bots(Path(args.trusted_bots_path))
+                ruleset = load_ruleset(Path(args.ruleset_path))
+        except (yaml.YAMLError, json.JSONDecodeError, ValueError, GitHubApiError) as error:
             print(
                 f"warning: could not load the bot-path allowlist/ruleset ({error}); the bot path is "
                 "never attempted this run -- falling back to the human-verdict path",
