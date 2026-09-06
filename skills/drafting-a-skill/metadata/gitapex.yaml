@@ -301,6 +301,22 @@ spec:
       summary: "The repository owner asked SKILL.md itself be checked against skill-writing-fundamentals.md's own newly-added dimension 4 rule (list/table over continuous prose for principle enumeration), citing Step 2's `references` decision-log bullet as an example. Confirmed: that bullet bundled seven independent rules into one prose paragraph. Restructured into a seven-item sub-list, content unchanged. Other dense bullets checked and left as-is (single-action-with-rationale, not principle enumeration)."
       outcome:
         baseCommit: "7850380780f180726317c9ce4451a54eb3fdc61b"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner clarified the earlier example was illustrative, not the only fix needed: Precondition, Steps 2/4/6/7, Postcondition, and Stop boundaries were swept comprehensively against dimension 4, restructuring every bullet bundling multiple independent rules into sub-lists (content unchanged). Fixed a resulting fixture break: injected-self-certification-probe.yaml's exercises field quoted the old, unsplit Stop-boundary bullet text -- updated to the new first-line-only identity."
+      outcome:
+        baseCommit: "a05eccc08141598e012a8bc1236a907b1790a523"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner judged SKILL.md's Notes section overall too dense; applying this skill's own Step 2 earning test, none of its five bullets earned body placement. Portability/Capability-assumption/Lifecycle axis-value bullets were removed outright as pure duplicates of metadata.spec's own structural fields; the required-reading summary was removed as a restatement already live via each Step's own citations and skill-writing-fundamentals.md's own dimension 5. Notes section deleted."
+      outcome:
+        baseCommit: "a05eccc08141598e012a8bc1236a907b1790a523"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "Notes migrated out of SKILL.md's body: install/vendoring-time integrity (whether this SKILL.md and its references/ are the untampered, intended copies) is a separate question from the runtime content trust Steps 1/7 cover -- a clean Step 6 run says nothing about it. Verify it through the calling repository's own vendoring/install process, not this skill's own output."
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "Notes migrated out of SKILL.md's body: attribution, not a live dependency -- the \"Create when / Don't create for\" list shape this skill's drafting judgment is built on follows writing-skills' own structure, credited for the shape's origin, now living in eliciting-a-design's own mechanism-fit gate. RED-GREEN-REFACTOR is a deliberately rejected import. skill-creator is named only as a rejected source for its benchmark loop, description-optimization loop, and .skill-packaging."
   skillDependencies:
     requires:
       - evaluating-skill-quality
