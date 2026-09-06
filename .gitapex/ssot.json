@@ -2070,7 +2070,7 @@
         "--",
         "*.py"
       ],
-      "trigger": ".github/workflows/patch-coverage-gate.yml on pull_request, plus tests/test_gitapex_gate_patch_coverage.py inside the pytest step of .github/workflows/test.yml",
+      "trigger": ".github/workflows/patch-coverage-gate.yml on pull_request, plus tests/test_gitapex_gate_patch_coverage.py and tests/test_gitapex_gate_patch_coverage_properties.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": ["pyproject-coverage"],
       "cluster": "test-integrity",
       "tracking_issue": 1568,
@@ -2081,6 +2081,7 @@
         {"kind": "file-glob", "ref": ".github/scripts/*.py"},
         {"kind": "file-glob", "ref": "skills/*/scripts/*.py"},
         {"kind": "file-glob", "ref": "evals/scripts/*.py"},
+        {"kind": "file-glob", "ref": "pyproject.toml"},
         {"kind": "cross-registry-consistency", "ref": "diff-added lines in pyproject.toml's [tool.coverage.run] source directories <-> a covering test execution in tests/test_<stem>.py or tests/test_<stem>_properties.py"},
         {"kind": "workflow-event", "ref": "patch-coverage-gate.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},

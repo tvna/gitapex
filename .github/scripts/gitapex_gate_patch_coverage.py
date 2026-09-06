@@ -71,12 +71,13 @@ Waiver
 ``# patch-coverage: WAIVED: <reason>`` -- a non-whitespace reason is
 mandatory, matched via `tokenize` exactly like this repository's sibling
 diff-scoped gates, so the marker is honoured only as a real comment
-token. For a per-line finding, the waiver may sit anywhere in the
-source file (matching `_waived_lines`'s own file-wide scope, the
-simplest correct rule for a line-level finding with no enclosing-scope
-concept to anchor narrower). For a whole-file "no test file exists"
-finding, the waiver clears it if it appears on any of this diff's own
-added lines in that file.
+token. For a per-line finding, the waiver comment must sit on that
+exact violated line (`findings_for_file`'s own `line in waived_lines`
+check is a per-line-number match, not a file-wide one). For a
+whole-file "no test file exists" finding, the waiver clears it if it
+appears on any of this diff's own added lines in that file --
+`_waived_lines`'s own file-wide scan is what makes that broader match
+possible for this one finding kind.
 
 Exit codes
 ----------
