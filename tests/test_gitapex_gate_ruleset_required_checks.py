@@ -561,6 +561,41 @@ def test_email_pattern_accepts_every_documented_operator(operator: str) -> None:
     assert gate.find_schema_violations(ruleset) == []
 
 
+def test_find_email_pattern_violations_flags_a_negated_author_rule() -> None:
+    # Direct name coverage for _find_email_pattern_violations: the schema
+    # layer alone cannot catch negate: true (it only knows `bool | None`),
+    # so this policy check is the only thing that can.
+    ruleset = json.loads(json.dumps(VALID))
+    ruleset["rules"][4]["parameters"]["negate"] = True
+    findings = gate._find_email_pattern_violations(ruleset)
+    assert any("commit_author_email_pattern" in f and "inverts the allowlist" in f for f in findings)
+
+
+def test_find_email_pattern_violations_flags_a_negated_committer_rule() -> None:
+    ruleset = json.loads(json.dumps(VALID))
+    ruleset["rules"][5]["parameters"]["negate"] = True
+    findings = gate._find_email_pattern_violations(ruleset)
+    assert any("committer_email_pattern" in f and "inverts the allowlist" in f for f in findings)
+
+
+def test_find_email_pattern_violations_is_clean_when_the_rules_are_absent() -> None:
+    # Absence is find_shape_violations' own "has no X rule" finding's job
+    # (via REQUIRED_RULE_TYPES); this function must not double-report it.
+    ruleset = json.loads(json.dumps(VALID))
+    ruleset["rules"] = ruleset["rules"][:4]
+    assert gate._find_email_pattern_violations(ruleset) == []
+
+
+def test_find_shape_violations_reports_email_pattern_inversion() -> None:
+    # Direct name coverage for find_shape_violations itself: confirms the
+    # new _find_email_pattern_violations call is actually wired into it,
+    # not only unit-tested in isolation above.
+    ruleset = json.loads(json.dumps(VALID))
+    ruleset["rules"][4]["parameters"]["negate"] = True
+    findings = gate.find_shape_violations(ruleset)
+    assert any("inverts the allowlist" in f for f in findings)
+
+
 def test_the_committed_ruleset_validates_against_the_schema() -> None:
     # The live pass that matters: the model is only worth anything if this
     # repository's own source of truth satisfies it.
