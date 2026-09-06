@@ -639,11 +639,14 @@ def test_parse_section_labels_still_matches_after_a_closed_fence():
     assert gate.parse_section_labels(text) == {"real heading"}
 
 
-def test_explaining_the_work_skill_md_actually_has_section_headings():
+def test_a_real_skill_md_actually_has_section_headings():
     # Sanity check that the self-validation test above (and the repo-wide
     # one below) isn't vacuously true because no real file ever triggers
-    # Check C's scope condition at all.
-    path = REPO_ROOT / "skills" / "explaining-the-work" / "SKILL.md"
+    # Check C's scope condition at all. explaining-the-work used to be
+    # this repository's own example (retired per issue #1808);
+    # executing-a-branch-plan is another real file with genuine
+    # ###-level section headings.
+    path = REPO_ROOT / "skills" / "executing-a-branch-plan" / "SKILL.md"
     assert gate.parse_section_labels(path.read_text(encoding="utf-8"))
 
 
@@ -1773,7 +1776,6 @@ def test_real_split_json_partition_declarations_are_pinned_exactly():
     assert declared == {
         "battle-testing-a-skill": None,
         "evaluating-skill-quality": (35, 44, 18),
-        "explaining-the-work": (3, 2, 9),
         "merge-retrospective": (11, 7, 5),
         "scorer-gated-skill-edits": None,
     }
@@ -1792,7 +1794,6 @@ def test_real_split_json_arithmetic_exclusions_are_pinned_exactly():
         exclusions[path.parent.name] = set(data.get("split_arithmetic_exclusions") or [])
     assert exclusions == {
         "evaluating-skill-quality": {"dispatch-required-negative-control.yaml"},
-        "explaining-the-work": set(),
         "merge-retrospective": set(),
     }
 

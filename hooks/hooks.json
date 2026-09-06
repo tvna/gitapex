@@ -40,6 +40,11 @@
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-issue-acm-disclosure.sh\"",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-gate-proposal-dedup-sweep.sh\"",
+            "timeout": 130
           }
         ]
       },
