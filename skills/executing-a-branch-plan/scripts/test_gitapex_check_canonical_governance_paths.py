@@ -39,6 +39,17 @@ def test_governance_filenames_and_skill_paths():
     assert "governance: skills/foo/metadata/gitapex.yaml" in result.stdout
 
 
+def test_trusted_bots_allowlist_is_governance():
+    # gitapex issue #1875: .github/trusted-bots.yml (PR #1859 / issue #1858)
+    # is an identity-based bypass allowlist for the independent-review-pending
+    # merge gate -- it must classify as governance, not fall through to
+    # no-match, the same as any other governance-sensitive file above.
+    result = run([".github/trusted-bots.yml"])
+    assert result.returncode == 0
+    assert "governance: .github/trusted-bots.yml" in result.stdout
+    assert "no-match: .github/trusted-bots.yml" not in result.stdout
+
+
 def test_hook_script_prefix_and_skill_scripts_path():
     result = run(["hooks/check-x.sh", "skills/foo/scripts/bar.py"])
     assert result.returncode == 0

@@ -75,6 +75,11 @@ _GOVERNANCE_FILENAMES = (
     ".github/dependabot.yml",
     "renovate.json",
     ".claude/settings.json",
+    # Identity-based bypass allowlist for the independent-review-pending
+    # merge gate (PR #1859 / issue #1858) -- an edit here can exempt an
+    # identity from independent review, the same governance-sensitivity
+    # class as the other entries above.
+    ".github/trusted-bots.yml",
 )
 
 _HOOK_SCRIPT_PREFIXES = ("hooks/", ".github/scripts/")
