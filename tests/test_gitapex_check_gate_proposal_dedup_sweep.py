@@ -188,6 +188,43 @@ def test_fetch_failure_denies_fail_closed() -> None:
     assert passed is False
 
 
+def test_malformed_non_json_2xx_response_denies_fail_closed_not_a_traceback() -> None:
+    """Regression test for a gap an adversarial correctness review found
+    live: a 2xx status carrying a non-JSON body (an intercepting proxy, a
+    malformed API response) used to propagate an uncaught
+    json.JSONDecodeError straight out of `_call`, contradicting this
+    module's own documented "never an uncaught traceback" contract. Must
+    now surface as an ordinary fail-closed deny instead."""
+
+    class _Response:
+        status = 200
+
+        def read(self) -> bytes:
+            return b"not json at all"
+
+        def __enter__(self) -> _Response:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            return None
+
+    def _non_json_opener(request: object) -> _Response:
+        return _Response()
+
+    passed, message = checker.evaluate(
+        "tvna",
+        "gitapex",
+        "create",
+        ["gate-proposal"],
+        _body(3),
+        "token",
+        opener=_non_json_opener,
+        sleeper=lambda _: None,
+    )
+    assert passed is False
+    assert "malformed-response" in message
+
+
 def test_pagination_sums_across_pages() -> None:
     passed, _ = _evaluate(_body(150), [_issues(100), _issues(50)])
     assert passed is True
@@ -199,6 +236,45 @@ def test_evaluate_never_raises_on_arbitrary_text() -> None:
         second = _evaluate(text, [[]])
         assert first == second
         assert isinstance(first[0], bool)
+
+
+def test_owner_and_repo_are_url_escaped_including_path_separator() -> None:
+    """Regression test for a URL-injection gap an adversarial security
+    review found live: `owner`/`repo` come straight from the tool_input
+    this hook gates and were previously spliced into the request URL with
+    no encoding at all. A value containing "/" must not be able to widen
+    the intended /repos/{owner}/{repo}/issues path -- confirmed here by
+    reading the actual request URL a fake opener receives, not merely by
+    asserting the fetch's own return value."""
+    captured: dict[str, str] = {}
+
+    def _capturing_opener(request: Any) -> Any:
+        captured["url"] = request.full_url
+
+        class _Response:
+            def read(self) -> bytes:
+                return b"[]"
+
+            def __enter__(self) -> _Response:
+                self.status = 200
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                return None
+
+        return _Response()
+
+    count = checker.fetch_open_gate_proposal_count(
+        "weird/owner?x=1",
+        "weird#repo",
+        "token",
+        opener=_capturing_opener,
+        sleeper=lambda _: None,
+    )
+    assert count == 0
+    assert "weird/owner?x=1" not in captured["url"]
+    assert "weird#repo" not in captured["url"]
+    assert "/repos/weird%2Fowner%3Fx%3D1/weird%23repo/issues" in captured["url"]
 
 
 def test_pagination_bound_exhaustion_denies_fail_closed() -> None:
@@ -218,3 +294,18 @@ def test_find_sweep_lines_never_raises_and_is_deterministic() -> None:
         "Dedup-sweep: -5 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict NEW",
     ]:
         assert checker.find_sweep_lines(text) == checker.find_sweep_lines(text)
+
+
+def test_main_denies_gracefully_when_payload_path_is_a_directory(tmp_path: Any, capsys: Any) -> None:
+    """Regression test for a gap an adversarial correctness review found
+    live: main()'s payload-read only ever caught FileNotFoundError and
+    UnicodeDecodeError, so a --payload path naming a directory
+    (IsADirectoryError, a subclass of OSError but not FileNotFoundError)
+    propagated an uncaught traceback instead of this module's own
+    documented "error: ..." exit-1 shape."""
+    exit_code = checker.main(["--payload", str(tmp_path)])
+    assert exit_code == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "error:" in captured.err
+    assert "could not be read" in captured.err

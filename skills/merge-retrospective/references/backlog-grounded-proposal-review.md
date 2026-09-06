@@ -17,8 +17,12 @@ backlog grows this step's input cost sublinearly.
 
 ## 4b.2 Independent verdict
 
-Dispatch a fresh, read-only `review-persona` review over the repair plus
-the 4b.1 backlog. It returns, per repair, exactly one verdict:
+Dispatch one fresh, read-only `review-persona` review per cycle, covering
+every `missing-deterministic-gate` repair from Step 4 together against
+the 4b.1 backlog -- never one dispatch per repair; a per-repair dispatch
+would have no cross-repair view and so could never produce this same
+step's own batch-level CLUSTER grouping below. It returns, per repair,
+exactly one verdict:
 
 - NEW: no existing proposal or shipped gate covers it.
 - DUPLICATE-OF #N: umbrella or standalone issue #N already covers it.

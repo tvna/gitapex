@@ -103,11 +103,25 @@ _API_VERSION = "2022-11-28"
 # the runner can kill the process (which would fail open per the runner
 # contract). Realistic backlogs are one page; the bound only bites under
 # sustained degradation, exactly when failing open would be wrong.
+#
+# _TIME_BUDGET_SECONDS is checked only at the top of each page's own loop
+# iteration (fetch_open_gate_proposal_count below), never mid-page -- so
+# the worst case the deny actually needs to fit inside hooks.json's 130s
+# timeout is not _TIME_BUDGET_SECONDS alone, it is _TIME_BUDGET_SECONDS
+# plus one more full page's own worst-case cost (~25s, the per-request
+# budget above), plus this process's own bash/jq/interpreter-startup
+# overhead before `started = time.monotonic()` below ever runs. A prior
+# value of 100.0 here left only ~5s of margin under that arithmetic
+# (100 + 25 = 125, against a 130s timeout, with startup overhead not even
+# counted) -- found live by an adversarial correctness/security review,
+# not hypothesised. 60.0 leaves roughly 45s of margin instead
+# (60 + 25 = 85, against 130s), comfortably covering realistic startup
+# overhead as well.
 _HTTP_TIMEOUT_SECONDS = 10
 _MAX_ATTEMPTS = 2
 _PER_PAGE = 100
 _MAX_PAGES = 10
-_TIME_BUDGET_SECONDS = 100.0
+_TIME_BUDGET_SECONDS = 60.0
 
 _GATE_PROPOSAL_LABEL = "gate-proposal"
 
@@ -190,7 +204,21 @@ def _call(
             last_body = str(error)
 
         if 200 <= last_code < 300:
-            return json.loads(last_body) if last_body else {}
+            if not last_body:
+                return {}
+            try:
+                return json.loads(last_body)
+            except json.JSONDecodeError as error:
+                # A 2xx status with a non-JSON body (an intercepting proxy,
+                # a malformed API response) would otherwise propagate an
+                # uncaught json.JSONDecodeError past every caller's own
+                # GitHubApiError handling, contradicting this module's own
+                # documented "never an uncaught traceback" contract. Found
+                # live by an adversarial correctness review, not
+                # hypothesised.
+                raise GitHubApiError(
+                    f"malformed-response: HTTP {last_code} returned a non-JSON body ({error})"
+                ) from error
         if last_code != 0 and last_code < 500:
             break
         if attempt < max_attempts:
@@ -228,8 +256,15 @@ def fetch_open_gate_proposal_count(
                 f"time-budget-exhausted: {_TIME_BUDGET_SECONDS:.0f}s elapsed before the open-issue "
                 "listing completed -- denying fail-closed rather than trusting a partial count"
             )
+        # owner/repo come straight from the tool_input this hook gates and
+        # are never validated for character set -- quoted with safe="" (not
+        # urllib.parse.quote's own "/" default) so a value containing "/",
+        # "?", or "#" cannot break out of this path segment or reinterpret
+        # the hardcoded query suffix that follows it. Found live by an
+        # adversarial security review, not hypothesised.
         url = (
-            f"{_API_ROOT}/repos/{owner}/{repo}/issues?state=open"
+            f"{_API_ROOT}/repos/{urllib.parse.quote(owner, safe='')}/{urllib.parse.quote(repo, safe='')}"
+            f"/issues?state=open"
             f"&labels={urllib.parse.quote(_GATE_PROPOSAL_LABEL)}"
             f"&per_page={_PER_PAGE}&page={page}"
         )
@@ -336,6 +371,15 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     except UnicodeDecodeError as error:
         print(f"error: payload ({payload_source}) is not valid UTF-8: {error}", file=sys.stderr)
+        return 1
+    except OSError as error:
+        # A directory path (IsADirectoryError) or an unreadable file
+        # (PermissionError) would otherwise propagate an uncaught
+        # exception past this module's own documented "never an uncaught
+        # traceback" contract -- neither is a FileNotFoundError, so
+        # neither was caught by the branch above. Found live by an
+        # adversarial correctness review, not hypothesised.
+        print(f"error: payload ({payload_source}) could not be read: {error}", file=sys.stderr)
         return 1
     try:
         payload = json.loads(raw) if raw.strip() else {}

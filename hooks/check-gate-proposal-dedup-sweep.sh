@@ -1,6 +1,6 @@
 #!/bin/bash
-# PreToolUse hook (matcher: mcp__github__issue_write): blocks a
-# `gate-proposal` issue-creation call whose body carries no fresh
+# PreToolUse hook (matcher: mcp__(github|plugin_github_github)__issue_write):
+# blocks a `gate-proposal` issue-creation call whose body carries no fresh
 # `Dedup-sweep:` backlog-sweep proof line (issue #1806).
 #
 # Only fires when tool_input.method == "create" AND the filing carries the
@@ -45,13 +45,37 @@ if ! printf '%s' "$input" | jq -e -s 'length == 1 and (.[0] | type == "object")'
   deny "Blocked by hooks/check-gate-proposal-dedup-sweep.sh: hook payload is not a single JSON object -- cannot verify the Dedup-sweep proof line. Failing closed."
 fi
 
+# `.tool_name == null` covers both absent and explicit null; only a present
+# non-string, non-null value denies -- same guard
+# hooks/check-pr-duplicate-issue.sh's own identical check applies (issue
+# #1315).
+if ! printf '%s' "$input" | jq -e '(.tool_name == null) or (.tool_name | type == "string")' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-gate-proposal-dedup-sweep.sh: tool_name in the payload is not a string. Failing closed."
+fi
+
+# NOT `(.tool_input // {}) | type == "object"`: jq's `//` treats `false`
+# (like `null`) as falsy and substitutes `{}`, so that shape would pass
+# this check for `tool_input: false` -- same false-clear
+# hooks/check-pr-duplicate-issue.sh's own identical comment documents --
+# then crash the payload-extraction jq call below with "Cannot index
+# boolean with string" under `set -e`, past deny(). An explicit `== null`
+# check treats `false` and `null` as distinct, matching jq's own type()
+# output.
+if ! printf '%s' "$input" | jq -e '(.tool_input == null) or (.tool_input | type == "object")' >/dev/null 2>&1; then
+  deny "Blocked by hooks/check-gate-proposal-dedup-sweep.sh: tool_input in the payload is not a JSON object. Failing closed."
+fi
+
 tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')
 
 # Defense in depth: the hooks.json matcher already restricts this hook to
-# mcp__github__issue_write, but never trust that alone.
-if [ "$tool_name" != "mcp__github__issue_write" ]; then
-  exit 0
-fi
+# mcp__(github|plugin_github_github)__issue_write, but never trust that
+# alone -- both namespaced forms must be listed here too (same case-list
+# pattern hooks/check-post-write-provenance.sh already uses), or the
+# plugin-namespaced tool name variant silently skips this gate entirely.
+case "$tool_name" in
+  mcp__github__issue_write | mcp__plugin_github_github__issue_write) ;;
+  *) exit 0 ;;
+esac
 
 method=$(printf '%s' "$input" | jq -r '.tool_input.method // empty')
 
@@ -82,10 +106,26 @@ fi
 # bodies -- the same reason hooks/check-pr-duplicate-issue.sh documents.
 payload=$(printf '%s' "$input" | jq -c '{owner: (.tool_input.owner // ""), repo: (.tool_input.repo // ""), method: (.tool_input.method // ""), labels: (.tool_input.labels // []), body: (.tool_input.body // "")}')
 
-err_file=$(mktemp /tmp/dedup_sweep_err.XXXXXX)
-trap 'rm -f "$err_file"' EXIT
-if ! printf '%s' "$payload" | "${python3_cmd[@]}" "$check_script" 2>"$err_file"; then
-  deny "Blocked by hooks/check-gate-proposal-dedup-sweep.sh: $(cat "$err_file")"
+# `2>&1` (stdout+stderr combined into one captured string) rather than an
+# `mktemp`-based stderr-only capture: an unguarded `mktemp` call crashes
+# this script under `set -e` on an unwritable/full /tmp (PR #1213's own
+# fix for that class in six sibling hooks), and this shape needs no temp
+# file at all. Mirrors hooks/check-pr-duplicate-issue.sh's own
+# check_output/check_exit scheme exactly, including its FAIL:-vs-bug
+# distinction below.
+if check_output=$(printf '%s' "$payload" | "${python3_cmd[@]}" "$check_script" 2>&1); then
+  check_exit=0
+else
+  check_exit=$?
 fi
 
-exit 0
+if [ "$check_exit" -eq 0 ]; then
+  exit 0
+fi
+
+if printf '%s' "$check_output" | grep -q '^FAIL:'; then
+  reason=$(printf '%s' "$check_output" | sed -n 's/^FAIL: //p')
+  deny "Blocked by hooks/check-gate-proposal-dedup-sweep.sh: $reason"
+fi
+
+deny "Blocked by hooks/check-gate-proposal-dedup-sweep.sh: gitapex_check_gate_proposal_dedup_sweep.py exited $check_exit without a recognized FAIL message -- this looks like a bug in the check script itself, not a genuine Dedup-sweep finding. Failing closed. Output: $check_output"
