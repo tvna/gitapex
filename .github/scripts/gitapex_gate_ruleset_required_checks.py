@@ -174,13 +174,52 @@ class RequiredStatusChecksRule(BaseModel):
     parameters: RequiredStatusChecksParameters
 
 
+class EmailPatternParameters(BaseModel):
+    """Every field GitHub's `commit_author_email_pattern`/`committer_email_pattern`
+    rules accept (confirmed against
+    https://docs.github.com/en/rest/repos/rules?apiVersion=2022-11-28).
+
+    `negate` is optional and, per that same schema, defaults to allowlist
+    semantics when omitted: "If true, the rule will fail if the pattern
+    matches" -- so omitted/false already means "fail when the pattern does
+    NOT match", which is exactly what an email allowlist needs with no
+    `negate` field at all.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = None
+    negate: bool | None = None
+    operator: Literal["starts_with", "ends_with", "contains", "regex"]
+    pattern: str = Field(min_length=1)
+
+
+class CommitAuthorEmailPatternRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["commit_author_email_pattern"]
+    parameters: EmailPatternParameters
+
+
+class CommitterEmailPatternRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["committer_email_pattern"]
+    parameters: EmailPatternParameters
+
+
 #: Discriminated on `type`, so an unknown rule type is a validation error naming
 #: the offending value rather than a silently-ignored entry. Extending this
 #: union is the deliberate cost of adopting a new rule type: the same change
 #: must then also update `.gitapex/ssot.json` and the runbook, which is the
 #: coupling that keeps those two documents true.
 CommittedRule = Annotated[
-    DeletionRule | NonFastForwardRule | PullRequestRule | RequiredStatusChecksRule,
+    DeletionRule
+    | NonFastForwardRule
+    | PullRequestRule
+    | RequiredStatusChecksRule
+    | CommitAuthorEmailPatternRule
+    | CommitterEmailPatternRule,
     Field(discriminator="type"),
 ]
 
