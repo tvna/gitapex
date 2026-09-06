@@ -912,14 +912,19 @@ strictly.
 - **Repository-scoped** -- reached one of two ways: fails condition (c)
   outright -- whether that origin-repo content is scattered through the
   portable core itself (not isolated to one disclosed bundled file), or
-  isolated to one bundled file that itself still fails Mixed-via-
-  bundled-convention's own narrowness above (not distinctly named, no
-  `SKILL.md` replace-or-drop instruction, or fails the control test) --
-  needs no trigger number in either shape; or fails condition (d) or
-  Mixed's own narrowness conditions for (a)/(b) via one of three named
-  triggers below. A repository-scoped skill that reads as if it were
-  portable is a dimension-1/6 defect (it misleads a future vendoring
-  decision), not the scoping choice itself.
+  isolated to one bundled file a procedure step does read to decide how
+  to behave (a real condition-(c) issue under Mixed-via-bundled-
+  convention's own control test above) that still fails that sub-type's
+  own remaining narrowness (not distinctly named, or no `SKILL.md`
+  replace-or-drop instruction) -- needs no trigger number in either
+  shape; or fails condition (d) or Mixed's own narrowness conditions for
+  (a)/(b) via one of three named triggers below. A merely-illustrative
+  bundled file no procedure step depends on leaves condition (c)
+  unaffected per that sub-type's own control test above -- not a
+  Repository-scoped outcome on its own. A repository-scoped skill that
+  reads as if it were portable is a dimension-1/6 defect (it misleads a
+  future vendoring decision),
+  not the scoping choice itself.
   An undeclared level that turns out to be repository-scoped is itself a
   finding, not something to silently infer and move past. Declared as
   the `portability` field in the skill's `metadata/gitapex.yaml` sidecar
