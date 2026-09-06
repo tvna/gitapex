@@ -266,6 +266,82 @@ spec:
       summary: "The PR closing https://github.com/tvna/gitapex/issues/1766 added checklist item 5 opening with drafting-process reasoning quoting AGENTS.md Section 1 -- why the check originated, not a normative statement. The repository owner, reviewing after merge, asked this framing be removed. Item 5's opening clause was reworded to state the check standalone, with no AGENTS.md reference."
       outcome:
         baseCommit: "e0e24d907684fa2b820a2001a42ee2200a4de446"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "Merged formative-quality-dimensions.md, contract-structure.md, guidance-form-and-sdo.md, and mechanism-fit-and-cohesion.md into skill-writing-fundamentals.md: each had an on-demand trigger stated only as a subjective judgment ('when the floor isn't enough'), never a checkable precondition -- effectively always-invoked despite the label. Row 5 now states that test. gitapex-cross-links.md relabeled required, content unchanged; decision-log-discipline.md untouched (checkable trigger)."
+      outcome:
+        baseCommit: "743b6cc4fbc7b161fd406e76e3c7270bb65e976b"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner, reviewing after the merge, judged skill-writing-fundamentals.md too prose-heavy: continuous prose is wrong when enumerating principles, and one section's information density was excessive. Corrected: the nine-row Formative quality dimensions table restructured into nine numbered subsections (dimension 1-9), each with bulleted principles and Good/Bad examples as bullets or fenced code blocks; row N renamed dimension N throughout, matching rubric.md's own numbering."
+      outcome:
+        baseCommit: "35d2c9480d0da0262779e056092653dff5e2768d"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner flagged two defects: dimension 5's Bad example self-referenced this file's own prior four-file split, an instance-specific claim breaking for a vendored copy -- generalized to a portable illustration. Dimension 7's constant example named a comment as the fix for an unclear constant, against the explanatory-constant principle -- flipped so Good is a self-documenting name needing no comment. Added per-dimension (1-9) TOC entries, matching every other section's granularity."
+      outcome:
+        baseCommit: "f79e4a442e4d07e02b48ab32c535224d4cbd4c2c"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner asked whether the just-fixed portability defect (a Bad example encoding this document's own editorial history) would be reproducibly caught by a future drafting-a-skill self-refactor. It would not -- no dimension named this failure mode. Added a rule to dimension 6 (Stability of claims): a Portable file's own illustrative examples must never encode this document's own past shape, plus a matching Good/Bad pair, so a future Step 6 sweep has an explicit rule to check."
+      outcome:
+        baseCommit: "8311a1e0a645547c690275d64c122241456c3043"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner asked whether the earlier conciseness fix (continuous prose vs. list/table principle enumeration, code-block/process-tree illustration) was reproducibly caught by a future drafting-a-skill self-refactor. It was not -- dimension 4's existing checklist bullet covers only a Step's own long workflow, not a reference section's principle enumeration. Added a bullet to dimension 4 (Structural legibility) stating the rule directly, plus matching Good/Bad entries."
+      outcome:
+        baseCommit: "9b0dce1d14134603239c709f2f0f5f9945a9157f"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner corrected dimension 4's new list/table-over-prose rule: it read as scoped to a `references/` section only, but the principle applies to any markdown file under the skill folder, `SKILL.md` included. Reworded the bullet and its Good/Bad entries to name both `SKILL.md` and `references/` explicitly."
+      outcome:
+        baseCommit: "304e0e79a848bc0bfff4f65aba7d310643544bf1"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner asked SKILL.md itself be checked against skill-writing-fundamentals.md's own newly-added dimension 4 rule (list/table over continuous prose for principle enumeration), citing Step 2's `references` decision-log bullet as an example. Confirmed: that bullet bundled seven independent rules into one prose paragraph. Restructured into a seven-item sub-list, content unchanged. Other dense bullets checked and left as-is (single-action-with-rationale, not principle enumeration)."
+      outcome:
+        baseCommit: "7850380780f180726317c9ce4451a54eb3fdc61b"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner clarified the earlier example was illustrative, not the only fix needed: Precondition, Steps 2/4/6/7, Postcondition, and Stop boundaries were swept comprehensively against dimension 4, restructuring every bullet bundling multiple independent rules into sub-lists (content unchanged). Fixed a resulting fixture break: injected-self-certification-probe.yaml's exercises field quoted the old, unsplit Stop-boundary bullet text -- updated to the new first-line-only identity."
+      outcome:
+        baseCommit: "a05eccc08141598e012a8bc1236a907b1790a523"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner judged SKILL.md's Notes section overall too dense; applying this skill's own Step 2 earning test, none of its five bullets earned body placement. Portability/Capability-assumption/Lifecycle axis-value bullets were removed outright as pure duplicates of metadata.spec's own structural fields; the required-reading summary was removed as a restatement already live via each Step's own citations and skill-writing-fundamentals.md's own dimension 5. Notes section deleted."
+      outcome:
+        baseCommit: "a05eccc08141598e012a8bc1236a907b1790a523"
+    - kind: caveat
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "Notes migrated out of SKILL.md's body: install/vendoring-time integrity (whether this SKILL.md and its references/ are the untampered, intended copies) is a separate question from the runtime content trust Steps 1/7 cover -- a clean Step 6 run says nothing about it. Verify it through the calling repository's own vendoring/install process, not this skill's own output."
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "Notes migrated out of SKILL.md's body: attribution, not a live dependency -- the \"Create when / Don't create for\" list shape this skill's drafting judgment is built on follows writing-skills' own structure, credited for the shape's origin, now living in eliciting-a-design's own mechanism-fit gate. RED-GREEN-REFACTOR is a deliberately rejected import. skill-creator is named only as a rejected source for its benchmark loop, description-optimization loop, and .skill-packaging."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "An independent battle-testing-a-skill dispatch (isolated, controls verified) found this Notes-removal a real defect, not a metadata duplicate: dimension 12 (Supply-chain/install-time provenance) FAILed -- a Mixed-portability skill's body must disclose install/vendoring-time integrity, separate from runtime content trust, per rubric.md's own explicit Notes-vs-metadata exception (\"a live warning a reader must see before acting\"). Restored the one bullet the earlier removal wrongly migrated."
+      outcome:
+        baseCommit: "77ab70bf4b37f716c393736fcd1f2e7394a543de"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner flagged frontmatter's compatibility field as too long (833 chars, the longest in the repository). The AskUserQuestion-dependency clause explained its own historical mechanism (how metadata choices used to be elicited directly, now resolved upstream via eliciting-a-design/scorer-gated-skill-edits) -- creation background, not a runtime constraint. Trimmed to the bare compatibility fact plus a Precondition pointer; every genuine constraint kept."
+      outcome:
+        baseCommit: "4fa1778e09390afe2f371f9419d279e9aa18456d"
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner asked the python3 and AskUserQuestion clauses be dropped from compatibility entirely, keeping only the disable-model-invocation spec-deviation fact rubric.md's own Compatibility awareness axis actually looks for. python3 stays declared structurally via metadata.executionRequirements.tools.shell (verified unaffected by gitapex_scan_execution_requirements_drift.py); no other file cross-referenced the removed clauses."
+      outcome:
+        baseCommit: "cf731068a35df8d570b76e6f1e5df2f23bd2c69e"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "An independent evaluating-skill-quality dispatch (isolated, controls verified) returned WELL-FORMED-NOT-MATURE, dimension 6 gap-minor: skill-writing-fundamentals.md's dimension-5 section claimed gitapex-cross-links.md carries checker flags \"found nowhere else\", but SKILL.md's own Step 6 already inlines those exact commands -- a stale, false claim. Reworded to cite the file's real value: fuller gitapex-repo context (PR-body convention, metadata schema, gate registration, script-parent census)."
+      outcome:
+        baseCommit: "9379290e415075eb9e095f3a4b9c3e95056da88e"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "Same dispatch, second dimension-6 gap-minor: rubric.md's own Notes-vs-metadata placement axis requires a bare axis declaration (\"Portability: Mixed\", \"Capability assumption: X\") stay in ## Notes as a one-line pointer, regardless of how much rationale moves to metadata -- the earlier full Notes removal (issue 1882) dropped this structural requirement along with the rationale it was entangled with. Restored both bare declarations, no rationale."
+      outcome:
+        baseCommit: "9379290e415075eb9e095f3a4b9c3e95056da88e"
   skillDependencies:
     requires:
       - evaluating-skill-quality

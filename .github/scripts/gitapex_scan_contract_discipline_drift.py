@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 """Deterministic gate: keep `evaluating-skill-quality`'s own Contract
-discipline section and `drafting-a-skill`'s own `contract-structure.md`
-from silently diverging.
+discipline section and `drafting-a-skill`'s own `skill-writing-
+fundamentals.md` (its Contract structure section) from silently
+diverging.
 
 Issue #1194's own Acceptance Criteria Map: `drafting-a-skill/references/
-contract-structure.md` restates `evaluating-skill-quality/references/
-rubric.md`'s "## Contract discipline" section (its Fault-attribution and
-Never-both rules) so a drafting agent has the same vocabulary the review
-that later grades a draft already uses. Prose that only restates a
-section has nothing holding it to that section once either side changes
--- this repository's own established failure mode for exactly this shape
-of duplication (see `gitapex_scan_contract_axis_vocabulary_drift.py`'s and
+skill-writing-fundamentals.md`'s own Contract structure section restates
+`evaluating-skill-quality/references/rubric.md`'s "## Contract discipline"
+section (its Fault-attribution and Never-both rules) so a drafting agent
+has the same vocabulary the review that later grades a draft already
+uses. Prose that only restates a section has nothing holding it to that
+section once either side changes -- this repository's own established
+failure mode for exactly this shape of duplication (see
+`gitapex_scan_contract_axis_vocabulary_drift.py`'s and
 `gitapex_scan_skill_quality_rubric_vocabulary_drift.py`'s own docstrings
-for two prior instances). This gate closes it for this pair.
+for two prior instances). This gate closes it for this pair. (Issue
+#1882: `contract-structure.md` merged into `skill-writing-fundamentals.md`
+alongside three sibling reference files that shared its own on-demand
+mislabeling; only this gate's own path constant changed, not its logic.)
 
 Two independent checks, both fail-closed (dimension 15: a missing or
 unreadable file, or a missing/duplicate/empty section, exits 2 rather
@@ -44,7 +49,7 @@ Usage::
     uv run --frozen python3 .github/scripts/gitapex_scan_contract_discipline_drift.py
     git diff -U0 --merge-base origin/main HEAD \\
         -- 'skills/evaluating-skill-quality/references/rubric.md' \\
-           'skills/drafting-a-skill/references/contract-structure.md' \\
+           'skills/drafting-a-skill/references/skill-writing-fundamentals.md' \\
       | uv run --frozen python3 .github/scripts/gitapex_scan_contract_discipline_drift.py --diff -
 
 A bare pipe in the second form masks `git diff`'s own exit status in a
@@ -73,7 +78,7 @@ from _gitapex_vocabulary_lock import ScanError, extract_section, read_text
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 RUBRIC_MD = "skills/evaluating-skill-quality/references/rubric.md"
-CONTRACT_STRUCTURE_MD = "skills/drafting-a-skill/references/contract-structure.md"
+CONTRACT_STRUCTURE_MD = "skills/drafting-a-skill/references/skill-writing-fundamentals.md"
 CONTRACT_DISCIPLINE_HEADING = "## Contract discipline"
 
 ACK_TOKEN_RE = re.compile(r"<!--\s*contract-discipline-ack\s*:\s*\S.*?-->")
