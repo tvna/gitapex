@@ -271,6 +271,11 @@ spec:
       summary: "Merged formative-quality-dimensions.md, contract-structure.md, guidance-form-and-sdo.md, and mechanism-fit-and-cohesion.md into skill-writing-fundamentals.md: each had an on-demand trigger stated only as a subjective judgment ('when the floor isn't enough'), never a checkable precondition -- effectively always-invoked despite the label. Row 5 now states that test. gitapex-cross-links.md relabeled required, content unchanged; decision-log-discipline.md untouched (checkable trigger)."
       outcome:
         baseCommit: "743b6cc4fbc7b161fd406e76e3c7270bb65e976b"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner, reviewing after the merge, judged skill-writing-fundamentals.md too prose-heavy: continuous prose is wrong when enumerating principles, and one section's information density was excessive. Corrected: the nine-row Formative quality dimensions table restructured into nine numbered subsections (dimension 1-9), each with bulleted principles and Good/Bad examples as bullets or fenced code blocks; row N renamed dimension N throughout, matching rubric.md's own numbering."
+      outcome:
+        baseCommit: "35d2c9480d0da0262779e056092653dff5e2768d"
   skillDependencies:
     requires:
       - evaluating-skill-quality

@@ -138,7 +138,7 @@ branch this same PR added. `no-direct-invocation.yaml` and
 been run through `gitapex_score_contract.py` against hand-crafted
 compliant and resisting replies, so their own discrimination is argued
 from the assertion shape, not measured. Nor does the corpus cover any of
-the nine rows in `references/skill-writing-fundamentals.md`'s own Formative quality dimensions table -- zero
+the nine dimensions in `references/skill-writing-fundamentals.md`'s own Formative quality dimensions section -- zero
 fixtures cite any of them. **Ablation state**: ablation-capable, not yet
 run -- `evals/scripts/gitapex_run_ablation.py` exists in this repository
 and could produce a no-skill baseline for this suite; none has been run

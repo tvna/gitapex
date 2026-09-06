@@ -1,7 +1,7 @@
 # Skill Writing Fundamentals
 
 Required reading on the in-repo ordinary path -- `SKILL.md`'s own Step 6
-sweeps this file's Formative quality dimensions table unconditionally,
+sweeps this file's Formative quality dimensions section unconditionally,
 and Steps 2, 3, and Non-goals cite its other three sections directly.
 See this skill's own decision log for why these four sections live in
 one file.
@@ -20,7 +20,7 @@ one file.
   - [Step 3 and Step 5 are advisory, not a second grading](#step-3-and-step-5-are-advisory-not-a-second-grading)
   - [Shared bundled-script parent: a placement policy](#shared-bundled-script-parent-a-placement-policy)
 - [Formative quality dimensions](#formative-quality-dimensions)
-  - [How to use this table while drafting](#how-to-use-this-table-while-drafting)
+  - [How to use this section while drafting](#how-to-use-this-section-while-drafting)
 
 ## Contract structure for a drafted skill
 
@@ -65,7 +65,7 @@ Before treating a draft's contract shape as done:
 2. Does any Step re-check something the Precondition already established? If so, drop the re-check or move the condition down into the Precondition -- never keep both.
 3. Does the Postcondition match what the last Step actually produces, word for word in substance -- not a rounder, more optimistic summary of it?
 4. If an Invariant is declared, is it genuinely true across every Step, including the failure/escalation branches -- not only the happy path?
-5. For each Step, walk it against three failure modes: could the Step's own precondition fail to hold, whether or not the Step itself states it; could the Step's own command or action itself fail; could the Step's own postcondition check fail to match? This is a write-time completeness question -- distinct from this file's own Formative quality dimensions table, row 4's runtime validate -> fix -> repeat feedback loop, which re-runs at execution time on specific quality-critical steps only.
+5. For each Step, walk it against three failure modes: could the Step's own precondition fail to hold, whether or not the Step itself states it; could the Step's own command or action itself fail; could the Step's own postcondition check fail to match? This is a write-time completeness question -- distinct from this file's own Formative quality dimensions section, dimension 4's runtime validate -> fix -> repeat feedback loop, which re-runs at execution time on specific quality-critical steps only.
 
 ## Guidance form and Single Decisive Outcome (SDO)
 
@@ -112,11 +112,12 @@ judgment's current version and for the tracking issue recording the move.
 
 ### Step 3 and Step 5 are advisory, not a second grading
 
-`evaluating-skill-quality`'s own rubric states plainly, in its own text, that the cohesion check has exactly one owner -- per Contract discipline's never-both rule, it decides the whole-artifact boundary once, there -- and that its own Blind spot pass runs as a precondition step of that skill's own procedure, alongside its Agentic operation mechanism-fit checks -- not a step this skill could duplicate without also duplicating that ownership. The rubric file stating this, and its exact quoted wording, are cited in this skill's own `references/gitapex-cross-links.md`.
+Ownership rationale, not a restatement of what each Step's own output-format instruction already says in `SKILL.md`:
 
-Step 3 (cohesion) and Step 5 (domain-gap sweep) exist anyway, for a narrower reason than "grade this against the rubric": a draft with an obvious split or an obvious blind spot, caught here, avoids a wasted round trip to `evaluating-skill-quality`'s own review and back. Both Steps are therefore advisory self-checks only, per the phrasing rule `SKILL.md` already states at each Step directly -- not repeated here a third time, since this section's own job is the ownership rationale above (why the rubric's exact-owner language applies), not the output-format instruction itself.
-
-Practically, this means Step 3 borrows `evaluating-skill-quality`'s own seven-way cohesion taxonomy (functional / sequential / communicational / procedural / temporal / logical / coincidental, from Stevens/Myers/ Constantine, extended by Yourdon and Constantine) as a lens for looking at the draft, and Step 5 asks the same shape of question the Blind spot pass asks ("does this target's specific domain expose a quality concern no generic check would catch") -- without either Step re-deriving or restating a verdict evaluating-skill-quality will produce on its own authority moments later.
+- `evaluating-skill-quality`'s own rubric states plainly that the cohesion check has exactly one owner -- per Contract discipline's never-both rule, it decides the whole-artifact boundary once, there. The rubric's exact quoted wording is cited in this skill's own `references/gitapex-cross-links.md`.
+- That same rubric's Blind spot pass runs as a precondition step of `evaluating-skill-quality`'s own procedure, alongside its Agentic operation mechanism-fit checks -- not a step this skill could duplicate without also duplicating that ownership.
+- Step 3 (cohesion) and Step 5 (domain-gap sweep) exist anyway, for a narrower reason than "grade this against the rubric": a draft with an obvious split or an obvious blind spot, caught here, avoids a wasted round trip to `evaluating-skill-quality`'s own review and back. Both Steps are therefore advisory self-checks only.
+- Practically: Step 3 borrows `evaluating-skill-quality`'s own seven-way cohesion taxonomy (functional / sequential / communicational / procedural / temporal / logical / coincidental, from Stevens/Myers/Constantine, extended by Yourdon and Constantine) as a lens for looking at the draft. Step 5 asks the same shape of question the Blind spot pass asks ("does this target's specific domain expose a quality concern no generic check would catch"). Neither Step re-derives or restates a verdict `evaluating-skill-quality` will produce on its own authority moments later.
 
 ### Shared bundled-script parent: a placement policy
 
@@ -130,30 +131,186 @@ When the drafted skill's Step 6 checkers are already bundled by `evaluating-skil
 
 ## Formative quality dimensions
 
-Nine formative concerns, one per row, each a writing-time precursor to
-one of `evaluating-skill-quality`'s own nine review dimensions
+Nine formative concerns, one per dimension, each a writing-time precursor
+to one of `evaluating-skill-quality`'s own nine review dimensions
 (`references/rubric.md`). The two lists share numbering and a name on
 purpose -- they are the same nine concerns, viewed from opposite sides of
-the DDD boundary this skill's own `SKILL.md` describes: this table asks
+the DDD boundary this skill's own `SKILL.md` describes: this section asks
 "how do I write this well," the rubric asks "is what got written good
-enough to ship." Neither owns the other's verdict; a row here is a
-drafting habit, not a passing grade. Load this table's own worked
-guidance once a first draft exists (see "How to use this table" below);
+enough to ship." Neither owns the other's verdict; a dimension here is a
+drafting habit, not a passing grade. Load this section's own worked
+guidance once a first draft exists (see "How to use this section" below);
 before that, `SKILL.md`'s own Step 2 already covers the load-bearing
 judgment calls the ordinary path needs.
 
-| # | Formative dimension | Writing-time instruction | Example pair | Gate-side cross-reference |
-|---|---|---|---|---|
-| 1 | Name and description legibility | Write the `description:` frontmatter so a reader picks this skill out of a list of thirty without opening it -- state the trigger (when to use it) and the boundary (what it's not), not just the topic. | Good: "Use when authoring a brand-new skill from a blank page... Distinct from scorer-gated-skill-edits (iterates an existing SKILL.md)." Bad: "Helps with skills." | Dimension 1, Discovery -- name and description |
-| 2 | Economy of words | Cut a sentence that restates what the next sentence already implies. If a paragraph survives having its middle sentence deleted with no loss of meaning, delete it now rather than leaving it for review to flag. | Good: "Elicit the metadata choices; never infer them." Bad: "It's important to make sure that the metadata choices are properly elicited from the user, since inferring them can sometimes lead to mistakes." | Dimension 2, Conciseness |
-| 3 | Explicit freedom vs. constraint | State plainly, per Step, whether it's a hard rule ("never," "always") or a judgment call ("assess," "consider") -- a reader should never have to guess which. | Good: "Never skip Step 2's gate under time pressure" (hard) vs. "Judge whether the interpretation needs a human decision" (judgment). Bad: a Step phrased as advice ("you might want to check...") for something that is actually mandatory. | Dimension 3, Degree of freedom |
-| 4 | Structural legibility | One Step, one action (see this file's own Guidance form section's SDO test). Number Steps so a later Step can reference an earlier one by number without the numbering having drifted, and state what a Step iterating a finite set actually finishes on -- both a positive finding and an explicit "none found" are observable results; silence is neither. Use one term per concept throughout the skill and its references -- never two names for the same idea. Give a long or skippable-but-risky workflow as a copyable, ordered checklist, not a prose paragraph the reader has to re-parse into steps. Write a validate -> fix -> repeat feedback loop ("only proceed once validation passes") on any quality-critical step where errors are likely and costly -- leaving one out there is a gap, not a simplification. Match a template's strictness to its stakes: an exact template where the format is a hard contract, a "sensible default, use judgment" template where adaptation helps. Make branch triggers distinct and complete -- one checkable entry condition per branch (including reject/stop/escalate routes), no sibling branch sharing it, no input state left unmatched -- reusing this skill's own Step 3 cohesion enumeration as that inventory instead of re-deriving one, per this skill's own "never both" rule. Give real input/output pairs over description of what good output looks like: include at least one worked example showing the procedure run end-to-end on a plausible input, not a schema in the abstract. The per-Step three-failure-mode completeness walk (precondition, action, postcondition) is a separate write-time requirement, owned by this file's own Contract structure section's drafting checklist item 5 -- not restated here. | Good: "route back to Step 1" (a number in *this* draft's own Steps, kept true by the draft's own renumbering discipline); one term per concept throughout (always "job statement", never "task description" for the same idea); a long optional-but-risky workflow given as a numbered, copyable checklist; a quality-critical step reading "validate -> fix -> repeat, only proceed once validation passes"; an exact frontmatter template beside a "use judgment" Worked-example template; a branch table with one checkable condition per branch, reusing Step 3's own cohesion findings rather than re-deriving them; `executing-a-branch-plan`'s own "Worked example" section, walking a 3-row ACM through wave assignment. Bad: a cross-reference that drifts silently after a Step gets renumbered, or a Step whose "nothing found" case has no stated output at all; two names for the same concept scattered across `SKILL.md` and its references; a long, skippable-but-risky workflow given as a prose paragraph instead of a checklist; a quality-critical step with no validate/fix loop; a template that is either rigidly exact where judgment was needed or vague where an exact contract was needed; two branches selected by the same trigger, or an input state matching none; a Steps list with no example, leaving a reader to construct their own first real test case. | Dimension 4, Clarity and structure |
-| 5 | Load-bearing vs. on-demand split | Put content every invocation needs in `SKILL.md`'s own body; put content only some invocations need in a `references/` file, loaded conditionally. A reference file's own on-demand trigger must itself be a checkable, structural precondition (an environment fact, a dispatch-context identity, a resume/fresh-start state) -- a trigger stated only as a subjective sufficiency judgment ("when the inline floor isn't enough," "for a borderline case"), with no such fact behind it, resolves to true on effectively every non-trivial invocation and is load-bearing in practice regardless of its on-demand label. Two of this skill's own three reference files stay required for that reason: `gitapex-cross-links.md` (Step 6's own exact checker flags, found nowhere else, gitapex-repo only) and this file (Step 6's own unconditional formative-dimensions sweep, plus the Steps 2/3/Non-goals judgment calls the other three sections above carry). `decision-log-discipline.md` is the one genuinely on-demand file left -- its own trigger (resuming an existing target's sidecar, or a concurrent-dispatch race) is a checkable dispatch-context/concurrency state, not a sufficiency judgment. Name each reference file for its content (`decision-handoff.md`, not `doc2.md`), organised by domain, and link to it from `SKILL.md` exactly at the branch point where it becomes necessary -- the pointer states what context requires the read and what the reader will obtain, never a bare "see reference." | Good: `decision-log-discipline.md`'s own trigger, "resuming from an existing target's sidecar, or two dispatches racing on one target" -- a checkable dispatch-context/concurrency state, not a sufficiency judgment; this skill's own `SKILL.md` staying self-sufficient for the ordinary path, pointing to a reference only when a specific question needs more depth than the body already gives. Bad: this file's own prior split into four separate files (including this one), three of which were gated only by "when the inline floor isn't enough" or "for a borderline case" -- no checkable fact behind either phrase, which is why all three are merged into this one file now (see this skill's own decision log); a reference file named `doc2.md` with no branch-point pointer anywhere in `SKILL.md`, or a pointer that says only "see reference" without saying what question it answers. | Dimension 5, Progressive disclosure |
-| 6 | Stability of claims | Avoid a claim likely to go stale without a mechanism keeping it honest -- a specific line count, a "the only skill that..." superlative, a bare issue number. Where a claim must be precise and could drift, either cite a deterministic gate that locks it or mark it as a point-in-time fact. Use forward slashes in every path (`references/rubric.md`), never backslashes. Name an MCP tool fully qualified as `Server:tool` (e.g. `GitHub:create_issue`), never a bare tool name. Never assume a tool or package is installed without saying so, and never assume installing one is even possible -- install capability differs by surface (Claude Code allows local installs but discourages global ones; the Claude API surface has no runtime package installation at all). Offer a default with an escape hatch, not a menu of options. For content declared (or read as) Portable: state the skill's own issue-filing/PR-body/workflow-ordering convention as an illustrative default with a stated fallback to the consumer repository's real convention, never asserted as the one correct shape; and let no procedural step read, cite as authority, or branch on a path outside the skill's own folder -- a citation as illustrative context is fine, deciding what to do next from it is not. | Good: "cite dimension 15 by number" backed by a drift gate; a path written `references/rubric.md`; a tool call named `GitHub:create_issue`; "install the package if your surface allows it, otherwise skip this step" instead of a bare `pip install X`; "use option A by default; pass `--no-a` to opt out" instead of a three-way menu; a Portable skill's issue step reading "open a tracking issue per your repository's own convention (this skill's own default: one issue per branch)." Bad: "references/rubric.md (2227 lines)" stated as fact with nothing keeping the number honest -- exactly the kind of claim this repository's own vocabulary-lock gate family exists to catch once it's this skill's own content going stale; a backslash path (`references\rubric.md`); a bare tool name with no server prefix; `pip install X` with no fallback stated for a no-install surface; a menu of three interchangeable options with no stated default; a Portable skill asserting "always open a tracking issue before any branch" as the one correct shape with no fallback, or a step that tells the model to go check a repository-specific path to decide what to do next. | Dimension 6, Durability |
-| 7 | Script necessity and minimalism | Only bundle a script when a check genuinely needs to be deterministic rather than judged -- and when one is bundled, give it a docstring stating what it checks and why prose alone wasn't enough. Applies only if the drafted skill ships code at all. When a script is bundled, make it handle its own error conditions (a missing file, permission denied) rather than throwing and leaving the invoking model to cope -- solve, don't punt. Justify every configuration value in a comment; a constant the author cannot justify, the model cannot either. Key a script's own comments to whether the skill tells the model to execute it or read it as reference: execute-only comments are Interface documentation (what a caller must know -- inputs, outputs, flags, exit codes); read-as-reference comments carry more Implementation documentation (tricky aspects, non-obvious reasons, invariants) -- never blend the two, and never let a top-of-file usage comment wander into internal mechanism. When the script is shared with, or reachable from, another skill, give it exactly one owner: that skill's own `scripts/` bundles it, and every other consumer declares the dependency in its own sidecar metadata rather than reaching for it undeclared. | Good: a shape-checker with a documented exit-code contract; a checker that catches a missing file and reports which file and why rather than raising an unhandled traceback; `TIMEOUT_SECONDS = 30  # matches the CI job's own step timeout` instead of a bare `30`; an execute-only script's top comment stating its flags and exit codes, nothing about its internals; one skill's `scripts/` bundling a checker with a sibling skill's `skillDependencies.requires` naming it. Bad: a script that reimplements a judgment call review would make anyway, just in Python; a script that throws on a missing file and leaves the model to cope; a magic constant with no comment explaining why that value was chosen; a read-as-reference script's comments that never state what a caller needs to know at all; a script one skill's own default path constant reaches into a sibling skill's `scripts/` directory for, with no declared dependency either side. | Dimension 7, Bundled scripts |
-| 8 | Eval preparation | Before treating a draft as finished, enumerate at least three scenarios the drafted skill must handle correctly -- including the guardrail/failure case it exists to prevent -- and sketch a fixture skeleton under `evals/<skill>/` (this repository's own layout: one `tasks/<scenario>.yaml` fixture per scenario, each naming its expected behavior, beside the suite's own `eval.yaml`) that a later with/without-skill baseline run can point at. This is preparation only: it does not run the baseline itself and does not build new eval-execution infrastructure -- scoring a documented "without the skill" baseline against these scenarios is `evaluating-skill-quality`'s own Behavioural evidence pass, not a drafting-time deliverable. | Good: three scenario prompts sketched for the curl-explainer candidate -- a plain GET, a POST with a body, and the guardrail case (a flag reading a secret from a file) -- each stubbed as its own `evals/<skill>/tasks/*.yaml` fixture naming what the draft should (and should not) do. Bad: shipping a draft with no scenario list at all, leaving the first real eval run to discover the guardrail case was never considered. | Dimension 8, Behavioural evidence |
-| 9 | Model-agnostic phrasing | Don't write a Step that only works if the executing model happens to interpret an ambiguous instruction the way the author had in mind. Where a Step depends on a specific model/effort tier's own judgment strength, pin it explicitly (see `executing-a-branch-plan`'s own Notes section for a real pinned-step precedent) rather than leaving the dependency implicit. | Good: naming which Steps carry a model/effort pin and why. Bad: a Step that works during authoring (tested against one strong model) but silently degrades under a weaker one, with nothing in the text warning a reader this could happen. | Dimension 9, Cross-model robustness |
+### 1. Name and description legibility
 
-### How to use this table while drafting
+Write the `description:` frontmatter so a reader picks this skill out of a list of thirty without opening it -- state the trigger (when to use it) and the boundary (what it's not), not just the topic.
 
-Load it once a first draft exists, then treat it as a checklist pass over that draft, not a constraint to satisfy sentence by sentence while writing. Trying to hit all nine rows on the first pass produces prose optimized for the checklist rather than for the reader; draft first, using `SKILL.md`'s own inlined guidance, then sweep against this table once there's a real draft to sweep.
+```
+Good: "Use when authoring a brand-new skill from a blank page...
+       Distinct from scorer-gated-skill-edits (iterates an existing SKILL.md)."
+Bad:  "Helps with skills."
+```
+
+*Gate-side cross-reference: Dimension 1, Discovery -- name and description*
+
+### 2. Economy of words
+
+Cut a sentence that restates what the next sentence already implies. If a paragraph survives having its middle sentence deleted with no loss of meaning, delete it now rather than leaving it for review to flag.
+
+```
+Good: "Elicit the metadata choices; never infer them."
+Bad:  "It's important to make sure that the metadata choices are properly
+       elicited from the user, since inferring them can sometimes lead
+       to mistakes."
+```
+
+*Gate-side cross-reference: Dimension 2, Conciseness*
+
+### 3. Explicit freedom vs. constraint
+
+State plainly, per Step, whether it's a hard rule ("never," "always") or a judgment call ("assess," "consider") -- a reader should never have to guess which.
+
+```
+Good (hard rule):    "Never skip Step 2's gate under time pressure."
+Good (judgment call): "Judge whether the interpretation needs a human decision."
+Bad: a Step phrased as advice ("you might want to check...") for
+     something that is actually mandatory.
+```
+
+*Gate-side cross-reference: Dimension 3, Degree of freedom*
+
+### 4. Structural legibility
+
+- One Step, one action (see this file's own Guidance form section's SDO test).
+- Number Steps so a later Step can reference an earlier one by number without the numbering having drifted.
+- State what a Step iterating a finite set actually finishes on -- both a positive finding and an explicit "none found" are observable results; silence is neither.
+- Use one term per concept throughout the skill and its references -- never two names for the same idea.
+- Give a long or skippable-but-risky workflow as a copyable, ordered checklist, not a prose paragraph the reader has to re-parse into steps.
+- Write a validate -> fix -> repeat feedback loop ("only proceed once validation passes") on any quality-critical step where errors are likely and costly -- leaving one out there is a gap, not a simplification.
+- Match a template's strictness to its stakes: an exact template where the format is a hard contract, a "sensible default, use judgment" template where adaptation helps.
+- Make branch triggers distinct and complete -- one checkable entry condition per branch (including reject/stop/escalate routes), no sibling branch sharing it, no input state left unmatched -- reusing this skill's own Step 3 cohesion enumeration as that inventory instead of re-deriving one, per this skill's own "never both" rule.
+- Give real input/output pairs over description of what good output looks like: include at least one worked example showing the procedure run end-to-end on a plausible input, not a schema in the abstract.
+- The per-Step three-failure-mode completeness walk (precondition, action, postcondition) is a separate write-time requirement, owned by this file's own Contract structure section's drafting checklist item 5 -- not restated here.
+
+Good:
+- "route back to Step 1" (a number in *this* draft's own Steps, kept true by the draft's own renumbering discipline)
+- One term per concept throughout (always "job statement", never "task description" for the same idea)
+- A long optional-but-risky workflow given as a numbered, copyable checklist
+- A quality-critical step reading "validate -> fix -> repeat, only proceed once validation passes"
+- An exact frontmatter template beside a "use judgment" Worked-example template
+- A branch table with one checkable condition per branch, reusing Step 3's own cohesion findings rather than re-deriving them
+- `executing-a-branch-plan`'s own "Worked example" section, walking a 3-row ACM through wave assignment
+
+Bad:
+- A cross-reference that drifts silently after a Step gets renumbered, or a Step whose "nothing found" case has no stated output at all
+- Two names for the same concept scattered across `SKILL.md` and its references
+- A long, skippable-but-risky workflow given as a prose paragraph instead of a checklist
+- A quality-critical step with no validate/fix loop
+- A template that is either rigidly exact where judgment was needed or vague where an exact contract was needed
+- Two branches selected by the same trigger, or an input state matching none
+- A Steps list with no example, leaving a reader to construct their own first real test case
+
+*Gate-side cross-reference: Dimension 4, Clarity and structure*
+
+### 5. Load-bearing vs. on-demand split
+
+- Put content every invocation needs in `SKILL.md`'s own body; put content only some invocations need in a `references/` file, loaded conditionally.
+- A reference file's own on-demand trigger must itself be a checkable, structural precondition (an environment fact, a dispatch-context identity, a resume/fresh-start state) -- a trigger stated only as a subjective sufficiency judgment ("when the inline floor isn't enough," "for a borderline case"), with no such fact behind it, resolves to true on effectively every non-trivial invocation and is load-bearing in practice regardless of its on-demand label.
+- Two of this skill's own three reference files stay required for that reason: `gitapex-cross-links.md` (Step 6's own exact checker flags, found nowhere else, gitapex-repo only) and this file (Step 6's own unconditional formative-dimensions sweep, plus the Steps 2/3/Non-goals judgment calls the other three sections above carry).
+- `decision-log-discipline.md` is the one genuinely on-demand file left -- its own trigger (resuming an existing target's sidecar, or a concurrent-dispatch race) is a checkable dispatch-context/concurrency state, not a sufficiency judgment.
+- Name each reference file for its content (`decision-handoff.md`, not `doc2.md`), organised by domain, and link to it from `SKILL.md` exactly at the branch point where it becomes necessary -- the pointer states what context requires the read and what the reader will obtain, never a bare "see reference."
+
+Good:
+- `decision-log-discipline.md`'s own trigger, "resuming from an existing target's sidecar, or two dispatches racing on one target" -- a checkable dispatch-context/concurrency state, not a sufficiency judgment
+- This skill's own `SKILL.md` staying self-sufficient for the ordinary path, pointing to a reference only when a specific question needs more depth than the body already gives
+
+Bad:
+- This file's own prior split into four separate files (including this one), three of which were gated only by "when the inline floor isn't enough" or "for a borderline case" -- no checkable fact behind either phrase, which is why all three are merged into this one file now (see this skill's own decision log)
+- A reference file named `doc2.md` with no branch-point pointer anywhere in `SKILL.md`, or a pointer that says only "see reference" without saying what question it answers
+
+*Gate-side cross-reference: Dimension 5, Progressive disclosure*
+
+### 6. Stability of claims
+
+- Avoid a claim likely to go stale without a mechanism keeping it honest -- a specific line count, a "the only skill that..." superlative, a bare issue number.
+- Where a claim must be precise and could drift, either cite a deterministic gate that locks it or mark it as a point-in-time fact.
+- Use forward slashes in every path (`references/rubric.md`), never backslashes.
+- Name an MCP tool fully qualified as `Server:tool` (e.g. `GitHub:create_issue`), never a bare tool name.
+- Never assume a tool or package is installed without saying so, and never assume installing one is even possible -- install capability differs by surface (Claude Code allows local installs but discourages global ones; the Claude API surface has no runtime package installation at all).
+- Offer a default with an escape hatch, not a menu of options.
+- For content declared (or read as) Portable: state the skill's own issue-filing/PR-body/workflow-ordering convention as an illustrative default with a stated fallback to the consumer repository's real convention, never asserted as the one correct shape; and let no procedural step read, cite as authority, or branch on a path outside the skill's own folder -- a citation as illustrative context is fine, deciding what to do next from it is not.
+
+Good:
+- "cite dimension 15 by number" backed by a drift gate
+- A path written `references/rubric.md`
+- A tool call named `GitHub:create_issue`
+- "install the package if your surface allows it, otherwise skip this step" instead of a bare `pip install X`
+- "use option A by default; pass `--no-a` to opt out" instead of a three-way menu
+- A Portable skill's issue step reading "open a tracking issue per your repository's own convention (this skill's own default: one issue per branch)."
+
+Bad:
+- "references/rubric.md (2227 lines)" stated as fact with nothing keeping the number honest -- exactly the kind of claim this repository's own vocabulary-lock gate family exists to catch once it's this skill's own content going stale
+- A backslash path (`references\rubric.md`)
+- A bare tool name with no server prefix
+- `pip install X` with no fallback stated for a no-install surface
+- A menu of three interchangeable options with no stated default
+- A Portable skill asserting "always open a tracking issue before any branch" as the one correct shape with no fallback, or a step that tells the model to go check a repository-specific path to decide what to do next
+
+*Gate-side cross-reference: Dimension 6, Durability*
+
+### 7. Script necessity and minimalism
+
+- Only bundle a script when a check genuinely needs to be deterministic rather than judged -- and when one is bundled, give it a docstring stating what it checks and why prose alone wasn't enough. Applies only if the drafted skill ships code at all.
+- When a script is bundled, make it handle its own error conditions (a missing file, permission denied) rather than throwing and leaving the invoking model to cope -- solve, don't punt.
+- Justify every configuration value in a comment; a constant the author cannot justify, the model cannot either.
+- Key a script's own comments to whether the skill tells the model to execute it or read it as reference: execute-only comments are Interface documentation (what a caller must know -- inputs, outputs, flags, exit codes); read-as-reference comments carry more Implementation documentation (tricky aspects, non-obvious reasons, invariants) -- never blend the two, and never let a top-of-file usage comment wander into internal mechanism.
+- When the script is shared with, or reachable from, another skill, give it exactly one owner: that skill's own `scripts/` bundles it, and every other consumer declares the dependency in its own sidecar metadata rather than reaching for it undeclared.
+
+```
+Good: TIMEOUT_SECONDS = 30  # matches the CI job's own step timeout
+Bad:  TIMEOUT_SECONDS = 30
+```
+
+Good (other examples):
+- A shape-checker with a documented exit-code contract
+- A checker that catches a missing file and reports which file and why rather than raising an unhandled traceback
+- An execute-only script's top comment stating its flags and exit codes, nothing about its internals
+- One skill's `scripts/` bundling a checker with a sibling skill's `skillDependencies.requires` naming it
+
+Bad (other examples):
+- A script that reimplements a judgment call review would make anyway, just in Python
+- A script that throws on a missing file and leaves the model to cope
+- A read-as-reference script's comments that never state what a caller needs to know at all
+- A script one skill's own default path constant reaches into a sibling skill's `scripts/` directory for, with no declared dependency either side
+
+*Gate-side cross-reference: Dimension 7, Bundled scripts*
+
+### 8. Eval preparation
+
+Before treating a draft as finished, enumerate at least three scenarios the drafted skill must handle correctly -- including the guardrail/failure case it exists to prevent -- and sketch a fixture skeleton under `evals/<skill>/` (this repository's own layout: one `tasks/<scenario>.yaml` fixture per scenario, each naming its expected behavior, beside the suite's own `eval.yaml`) that a later with/without-skill baseline run can point at. This is preparation only: it does not run the baseline itself and does not build new eval-execution infrastructure -- scoring a documented "without the skill" baseline against these scenarios is `evaluating-skill-quality`'s own Behavioural evidence pass, not a drafting-time deliverable.
+
+Good: three scenario prompts sketched for the curl-explainer candidate:
+- a plain GET
+- a POST with a body
+- the guardrail case (a flag reading a secret from a file)
+
+...each stubbed as its own `evals/<skill>/tasks/*.yaml` fixture naming what the draft should (and should not) do.
+
+Bad: shipping a draft with no scenario list at all, leaving the first real eval run to discover the guardrail case was never considered.
+
+*Gate-side cross-reference: Dimension 8, Behavioural evidence*
+
+### 9. Model-agnostic phrasing
+
+Don't write a Step that only works if the executing model happens to interpret an ambiguous instruction the way the author had in mind. Where a Step depends on a specific model/effort tier's own judgment strength, pin it explicitly (see `executing-a-branch-plan`'s own Notes section for a real pinned-step precedent) rather than leaving the dependency implicit.
+
+Good: naming which Steps carry a model/effort pin and why.
+Bad: a Step that works during authoring (tested against one strong model) but silently degrades under a weaker one, with nothing in the text warning a reader this could happen.
+
+*Gate-side cross-reference: Dimension 9, Cross-model robustness*
+
+### How to use this section while drafting
+
+Load it once a first draft exists, then treat it as a checklist pass over that draft, not a constraint to satisfy sentence by sentence while writing. Trying to hit all nine dimensions on the first pass produces prose optimized for the checklist rather than for the reader; draft first, using `SKILL.md`'s own inlined guidance, then sweep against this section once there's a real draft to sweep.
