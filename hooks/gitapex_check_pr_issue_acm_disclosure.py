@@ -28,8 +28,8 @@ Citation vocabulary:
   (GitHub never treats a title keyword as auto-closing -- see
   docs.github.com's own "Linking a pull request to an issue" page).
   Deliberately broader than this repository's own documented
-  Closes/Fixes/Refs convention (skills/merge-retrospective/SKILL.md,
-  skills/explaining-the-work/SKILL.md) -- a PR body reading "Resolves
+  Closes/Fixes/Refs convention (skills/merge-retrospective/SKILL.md)
+  -- a PR body reading "Resolves
   #123" really does auto-close #123 on GitHub, so excluding it here
   would be a real bypass of this hook's whole purpose, not a style
   choice. Not back-porting this wider vocabulary to those other skills'

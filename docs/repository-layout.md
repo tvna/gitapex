@@ -23,7 +23,6 @@ consumer's agent.
 plugin.json        Agent Plugins Specification (agent-plugins.org) v1.0.0 manifest — the plugin-identity source of truth (name, version, description, author, homepage, repository, license); .claude-plugin/plugin.json below is generated from it, never hand-edited
 .claude-plugin/    marketplace.json + plugin.json (Claude Code/Codex manifests; plugin.json here is an auto-generated mirror of the repository-root plugin.json above — see gitapex_generate_plugin_manifest.py)
 skills/            one directory per skill (SKILL.md, metadata/gitapex.yaml, optionally references/) — deployed by apm/Claude/Codex
-  explaining-the-work/  routes code-comment/commit/test explanation responsibility to the right artifact
   planning-a-branch-from-an-issue/  turns a GitHub issue into an implementation-ready branch/PR plan with an Acceptance Criteria Map
   drafting-issues/  drafts a new GitHub issue with an Acceptance Criteria Map before creation, so planning-a-branch-from-an-issue can read one instead of building it
 docs/              documentation (this file, versioning policy, design specs, motivation.md) — not deployed

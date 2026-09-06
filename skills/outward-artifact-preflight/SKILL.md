@@ -10,10 +10,7 @@ convention" and check 2's ASCII-only default illustrate gitapex's own
 policy; check 4's raw-fetch hook is likewise gitapex's own illustration
 of that channel, not a required dependency. Each states an inline
 fallback to substitute the calling repository's actual policy or
-tooling where it differs. The explaining-the-work coupling
-(Relationship to other skills) names a sibling skill gitapex happens to
-also install -- apply it where that sibling is installed, skip it
-otherwise.
+tooling where it differs.
 
 This is an interim measure: a manual stand-in for the deterministic
 preflight or CI gate this repository has not built yet. Run this
@@ -48,11 +45,9 @@ destined for a public sink.
       by default an ASCII equivalent for any non-ASCII glyph (an emoji,
       for instance), unless the calling repository's own documented
       character-set policy (check 2's fallback) already permits it.
-   4. Commit messages follow a separate, narrower rule (where installed,
-      the explaining-the-work skill routes commit-log content to one
-      line plus a `Closes #N`/`Refs #N` issue pointer, nothing more) --
-      do not add a PR-body trailer to a commit message just because it
-      is disclosed there.
+   4. Commit messages follow a separate, narrower rule -- do not add a
+      PR-body trailer to a commit message just because it is disclosed
+      there.
    5. A calling repository may have already ratified a concrete
       instance of item 2 -- recorded in its own contributor-facing docs
       (a `CONTRIBUTING.md`, governance doc, or equivalent), naming a
@@ -312,15 +307,6 @@ platform's keyword list.
 
 Either rewrite alone removes the trigger; using both together is not
 required.
-
-## Relationship to other skills
-
-Finalizing a commit or PR message can trigger both this skill and the
-explaining-the-work skill at once, where both are installed -- that is
-expected, not a conflict. explaining-the-work routes what the text
-should say (How/What/Why); this skill checks whether the text, once
-written, is safe to publish (provenance, ASCII, closing-keyword
-citations). Apply both; neither substitutes for the other.
 
 ## Stop boundary
 

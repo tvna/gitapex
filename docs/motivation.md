@@ -136,11 +136,6 @@ between as-is and to-be -- only the authoring step changes.
 
 ## Relationship to the skills in this repository
 
-`explaining-the-work` (added alongside this document) addresses an
-adjacent thread from the same design session -- routing comment, commit,
-and test explanation responsibility to the right artifact -- not the
-contract-join gate shown above directly.
-
 The to-be diagram's `issue-to-branch` skill lane is now implemented
 (`skills/planning-a-branch-from-an-issue/`, tvna/gitapex#4, renamed from
 `issue-to-branch` in #281). The contract-join gate +
