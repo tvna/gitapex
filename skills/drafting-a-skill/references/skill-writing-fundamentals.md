@@ -20,6 +20,15 @@ one file.
   - [Step 3 and Step 5 are advisory, not a second grading](#step-3-and-step-5-are-advisory-not-a-second-grading)
   - [Shared bundled-script parent: a placement policy](#shared-bundled-script-parent-a-placement-policy)
 - [Formative quality dimensions](#formative-quality-dimensions)
+  - [1. Name and description legibility](#1-name-and-description-legibility)
+  - [2. Economy of words](#2-economy-of-words)
+  - [3. Explicit freedom vs. constraint](#3-explicit-freedom-vs-constraint)
+  - [4. Structural legibility](#4-structural-legibility)
+  - [5. Load-bearing vs. on-demand split](#5-load-bearing-vs-on-demand-split)
+  - [6. Stability of claims](#6-stability-of-claims)
+  - [7. Script necessity and minimalism](#7-script-necessity-and-minimalism)
+  - [8. Eval preparation](#8-eval-preparation)
+  - [9. Model-agnostic phrasing](#9-model-agnostic-phrasing)
   - [How to use this section while drafting](#how-to-use-this-section-while-drafting)
 
 ## Contract structure for a drafted skill
@@ -227,7 +236,7 @@ Good:
 - This skill's own `SKILL.md` staying self-sufficient for the ordinary path, pointing to a reference only when a specific question needs more depth than the body already gives
 
 Bad:
-- This file's own prior split into four separate files (including this one), three of which were gated only by "when the inline floor isn't enough" or "for a borderline case" -- no checkable fact behind either phrase, which is why all three are merged into this one file now (see this skill's own decision log)
+- A reference file split off on a trigger stated only as "when the inline floor isn't enough" or "for a borderline case" -- no checkable fact behind either phrase, so it loads on effectively every non-trivial invocation despite its on-demand label
 - A reference file named `doc2.md` with no branch-point pointer anywhere in `SKILL.md`, or a pointer that says only "see reference" without saying what question it answers
 
 *Gate-side cross-reference: Dimension 5, Progressive disclosure*
@@ -264,13 +273,13 @@ Bad:
 
 - Only bundle a script when a check genuinely needs to be deterministic rather than judged -- and when one is bundled, give it a docstring stating what it checks and why prose alone wasn't enough. Applies only if the drafted skill ships code at all.
 - When a script is bundled, make it handle its own error conditions (a missing file, permission denied) rather than throwing and leaving the invoking model to cope -- solve, don't punt.
-- Justify every configuration value in a comment; a constant the author cannot justify, the model cannot either.
+- Name a configuration constant so its own identifier carries what it is and why this value, per the explanatory-constant principle -- a constant that needs a comment to be understood is a naming defect, not a documentation gap. Reach for a comment only when an external fact a name genuinely cannot carry (a sibling system's own setting this value must stay in sync with) would otherwise be invisible to the next editor.
 - Key a script's own comments to whether the skill tells the model to execute it or read it as reference: execute-only comments are Interface documentation (what a caller must know -- inputs, outputs, flags, exit codes); read-as-reference comments carry more Implementation documentation (tricky aspects, non-obvious reasons, invariants) -- never blend the two, and never let a top-of-file usage comment wander into internal mechanism.
 - When the script is shared with, or reachable from, another skill, give it exactly one owner: that skill's own `scripts/` bundles it, and every other consumer declares the dependency in its own sidecar metadata rather than reaching for it undeclared.
 
 ```
-Good: TIMEOUT_SECONDS = 30  # matches the CI job's own step timeout
-Bad:  TIMEOUT_SECONDS = 30
+Good: CI_STEP_TIMEOUT_SECONDS = 30
+Bad:  TIMEOUT_SECONDS = 30  # matches the CI job's own step timeout
 ```
 
 Good (other examples):

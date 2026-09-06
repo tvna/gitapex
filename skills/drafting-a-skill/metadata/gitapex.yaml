@@ -276,6 +276,11 @@ spec:
       summary: "The repository owner, reviewing after the merge, judged skill-writing-fundamentals.md too prose-heavy: continuous prose is wrong when enumerating principles, and one section's information density was excessive. Corrected: the nine-row Formative quality dimensions table restructured into nine numbered subsections (dimension 1-9), each with bulleted principles and Good/Bad examples as bullets or fenced code blocks; row N renamed dimension N throughout, matching rubric.md's own numbering."
       outcome:
         baseCommit: "35d2c9480d0da0262779e056092653dff5e2768d"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner flagged two defects: dimension 5's Bad example self-referenced this file's own prior four-file split, an instance-specific claim breaking for a vendored copy -- generalized to a portable illustration. Dimension 7's constant example named a comment as the fix for an unclear constant, against the explanatory-constant principle -- flipped so Good is a self-documenting name needing no comment. Added per-dimension (1-9) TOC entries, matching every other section's granularity."
+      outcome:
+        baseCommit: "f79e4a442e4d07e02b48ab32c535224d4cbd4c2c"
   skillDependencies:
     requires:
       - evaluating-skill-quality
