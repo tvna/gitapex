@@ -202,9 +202,16 @@ _UV_WRAPPED_INVOCATION_RE = re.compile(_UV_RUN_PREFIX + r"python3\s+\S+\.py")
 _SHELL_ASSIGNMENT_RE = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 # A `.github/scripts/*.py` path appearing anywhere in an assignment's
 # right-hand side (e.g. `"${repo_root}/.github/scripts/gate.py"`).
-# Deliberately the same shape as `_SCRIPT_INVOCATION_RE` minus the
-# `python3\s+` prefix, since here it is matched against an assignment's
-# RHS, not an invocation.
+# Issue #1050 widened `_SCRIPT_INVOCATION_RE` above to any `.py` path, but
+# this regex deliberately did NOT follow -- the `hooks/*.sh`
+# shell-variable-indirected scan below stays scoped to
+# `.github/scripts/*.py` only (issue #1050's own Non-goals; the sibling
+# `evals/scripts/*.py`/arbitrary-path extension was scoped to
+# `.github/workflows/*.yml` only, matching that gate's own pre-existing
+# file-type scope). No longer "the same shape as `_SCRIPT_INVOCATION_RE`
+# minus the `python3\s+` prefix" -- that relationship held before issue
+# #1050 and has not held since; stated as its own independent pattern now
+# to avoid the same drift recurring.
 _GITHUB_SCRIPTS_PATH_RE = re.compile(r"\.github/scripts/\S+\.py")
 # A trailing shell comment: `#` at the very start of the (already-stripped)
 # RHS, or preceded by whitespace. Applied to an assignment's RHS before
