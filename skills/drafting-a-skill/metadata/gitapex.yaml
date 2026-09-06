@@ -281,6 +281,11 @@ spec:
       summary: "The repository owner flagged two defects: dimension 5's Bad example self-referenced this file's own prior four-file split, an instance-specific claim breaking for a vendored copy -- generalized to a portable illustration. Dimension 7's constant example named a comment as the fix for an unclear constant, against the explanatory-constant principle -- flipped so Good is a self-documenting name needing no comment. Added per-dimension (1-9) TOC entries, matching every other section's granularity."
       outcome:
         baseCommit: "f79e4a442e4d07e02b48ab32c535224d4cbd4c2c"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner asked whether the just-fixed portability defect (a Bad example encoding this document's own editorial history) would be reproducibly caught by a future drafting-a-skill self-refactor. It would not -- no dimension named this failure mode. Added a rule to dimension 6 (Stability of claims): a Portable file's own illustrative examples must never encode this document's own past shape, plus a matching Good/Bad pair, so a future Step 6 sweep has an explicit rule to check."
+      outcome:
+        baseCommit: "8311a1e0a645547c690275d64c122241456c3043"
   skillDependencies:
     requires:
       - evaluating-skill-quality

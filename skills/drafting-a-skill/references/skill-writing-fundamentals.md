@@ -250,6 +250,7 @@ Bad:
 - Never assume a tool or package is installed without saying so, and never assume installing one is even possible -- install capability differs by surface (Claude Code allows local installs but discourages global ones; the Claude API surface has no runtime package installation at all).
 - Offer a default with an escape hatch, not a menu of options.
 - For content declared (or read as) Portable: state the skill's own issue-filing/PR-body/workflow-ordering convention as an illustrative default with a stated fallback to the consumer repository's real convention, never asserted as the one correct shape; and let no procedural step read, cite as authority, or branch on a path outside the skill's own folder -- a citation as illustrative context is fine, deciding what to do next from it is not.
+- For a Portable file's own illustrative Good/Bad examples: never encode this document's own literal editorial history (a past file split, a past rename, a specific prior wording) as the example itself -- a vendored copy carries none of that history, so the pattern has to generalize without it.
 
 Good:
 - "cite dimension 15 by number" backed by a drift gate
@@ -258,6 +259,7 @@ Good:
 - "install the package if your surface allows it, otherwise skip this step" instead of a bare `pip install X`
 - "use option A by default; pass `--no-a` to opt out" instead of a three-way menu
 - A Portable skill's issue step reading "open a tracking issue per your repository's own convention (this skill's own default: one issue per branch)."
+- A Bad example stated as a generalized pattern ("a reference file split off on a subjective sufficiency trigger") rather than this document's own literal past shape
 
 Bad:
 - "references/rubric.md (2227 lines)" stated as fact with nothing keeping the number honest -- exactly the kind of claim this repository's own vocabulary-lock gate family exists to catch once it's this skill's own content going stale
@@ -266,6 +268,7 @@ Bad:
 - `pip install X` with no fallback stated for a no-install surface
 - A menu of three interchangeable options with no stated default
 - A Portable skill asserting "always open a tracking issue before any branch" as the one correct shape with no fallback, or a step that tells the model to go check a repository-specific path to decide what to do next
+- An illustrative example reading "this file's own prior split into four separate files ... merged into this one file now" -- true only for this one repository's own past instance, meaningless once vendored elsewhere
 
 *Gate-side cross-reference: Dimension 6, Durability*
 
