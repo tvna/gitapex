@@ -7,3 +7,8 @@
 # branch protection's "Require review from Code Owners" is enabled, which is
 # a GitHub Settings change outside this repo's tracked files.
 /.github/actions/harden-checkout/ @tvna
+
+# .github/trusted-bots.yml grants an identity-based exemption from the
+# independent-review-pending merge gate (issue #1858) -- an unreviewed
+# edit could silently widen who bypasses independent review.
+/.github/trusted-bots.yml @tvna
