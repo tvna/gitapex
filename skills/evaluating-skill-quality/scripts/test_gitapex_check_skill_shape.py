@@ -7733,6 +7733,53 @@ def test_no_voodoo_constant_clean_scan_ignores_irrelevant_waiver(tmp_path):
     assert result.evidence == "none"
 
 
+def test_shape_waivers_well_formed_skips_non_dict_item_defensively():
+    # A non-dict item can never actually reach this function through
+    # check_shape()'s own real path: the schema's own `items:
+    # {$ref: shapeWaiverItem, type: object}` rule means a non-object
+    # entry always produces a schema error first, which the caller's
+    # `errors = _errors_under(...)` check catches and returns on before
+    # this loop ever runs (the same reasoning
+    # _external_citations_well_formed_result's own analogous
+    # `isinstance(c, dict)` guard rests on). Unit-tested directly, with a
+    # deliberately empty `schema_errors` list bypassing that gate, so the
+    # function's own defensive fallback -- skip a non-dict item rather
+    # than raise -- is pinned as a unit, independent of whether today's
+    # calling context can currently reach it.
+    result, waivers_by_check = css._shape_waivers_well_formed_result(
+        True, {}, [], ["not-a-dict", {"check": "no-voodoo-constant", "reason": "ok"}]
+    )
+    assert result.passed is True
+    assert result.evidence == "2 entries"
+    assert waivers_by_check == {"no-voodoo-constant": "ok"}
+
+
+def test_shape_waivers_well_formed_skips_non_list_value_defensively():
+    # Same defensive-only reasoning as the non-dict-item test above,
+    # applied to spec.shapeWaivers itself being present but not a list
+    # (e.g. a bare string) -- schema-unreachable via check_shape()'s real
+    # path (spec.shapeWaivers: {"type": "array"} would already have
+    # produced a schema error), pinned here as a unit.
+    result, waivers_by_check = css._shape_waivers_well_formed_result(True, {}, [], "not-a-list")
+    assert result.passed is True
+    assert result.evidence == "0 entries"
+    assert waivers_by_check == {}
+
+
+def test_shape_waivers_well_formed_skips_non_string_check_or_reason_defensively():
+    # Same defensive-only reasoning again, applied to an item that is a
+    # dict but whose check/reason values are not strings -- also
+    # schema-unreachable via check_shape()'s real path
+    # (shapeWaiverItem.check/reason are both {"type": "string"}), pinned
+    # here as a unit.
+    result, waivers_by_check = css._shape_waivers_well_formed_result(
+        True, {}, [], [{"check": 123, "reason": "ok"}, {"check": "no-voodoo-constant", "reason": 456}]
+    )
+    assert result.passed is True
+    assert result.evidence == "2 entries"
+    assert waivers_by_check == {}
+
+
 def test_script_execution_intent_waived_passes_with_reason_and_offenders_in_evidence(tmp_path):
     d = _write_shape_waivers_sidecar(
         _write_skill(tmp_path),
