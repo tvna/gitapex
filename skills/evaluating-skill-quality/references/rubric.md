@@ -875,7 +875,12 @@ strictly.
   or (c) in one of the three narrow ways below, clearing the other two.
   A wider failure -- more than one condition failing, or a single
   failure that does not fit any of these three narrow ways -- is
-  Repository-scoped instead, via the matching trigger below, not Mixed.
+  Repository-scoped instead, not Mixed: a condition-(c) failure needs no
+  trigger number (see Repository-scoped below), while a condition (a),
+  (b), or (d) failure cites whichever of the three named triggers below
+  applies -- more than one can apply at once when more than one
+  condition fails, which is still Repository-scoped either way, not an
+  undefined case.
 
   | Sub-type | Fails | Narrowness requirement |
   |---|---|---|
@@ -905,13 +910,16 @@ strictly.
   section's own classification triggers, not by dimension 5's
   substitute** -- see that substitute's own scoping note there.
 - **Repository-scoped** -- reached one of two ways: fails condition (c)
-  outright (an unhedged origin-repo fact-claim scattered through the
-  portable core itself -- not isolated to one disclosed bundled file,
-  per Mixed-via-bundled-convention's own shape -- needs no trigger
-  number), or fails condition (d) or Mixed's own narrowness conditions
-  above via one of three named triggers below. A repository-scoped skill
-  that reads as if it were portable is a dimension-1/6 defect (it
-  misleads a future vendoring decision), not the scoping choice itself.
+  outright -- whether that origin-repo content is scattered through the
+  portable core itself (not isolated to one disclosed bundled file), or
+  isolated to one bundled file that itself still fails Mixed-via-
+  bundled-convention's own narrowness above (not distinctly named, no
+  `SKILL.md` replace-or-drop instruction, or fails the control test) --
+  needs no trigger number in either shape; or fails condition (d) or
+  Mixed's own narrowness conditions for (a)/(b) via one of three named
+  triggers below. A repository-scoped skill that reads as if it were
+  portable is a dimension-1/6 defect (it misleads a future vendoring
+  decision), not the scoping choice itself.
   An undeclared level that turns out to be repository-scoped is itself a
   finding, not something to silently infer and move past. Declared as
   the `portability` field in the skill's `metadata/gitapex.yaml` sidecar
