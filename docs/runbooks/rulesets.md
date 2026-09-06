@@ -62,6 +62,25 @@ convenience:
 | `required_status_checks` | 8 contexts | 7 different contexts | Contexts are check-run names, which are job ids, confirmed by reading the real check runs on a merged pull request rather than guessed from workflow names. |
 | `required_signatures` | omitted | present | Not a policy preference -- a measured fact about this repository. `main` already contains unsigned commits, and every commit on the branch that introduces this ruleset is unsigned (`git log --format='%H %G?'` reports `N`). Turning the rule on would reject the very merge that applies it, and the merge-commit path documented in the row above produces an unsigned commit by default. Enabling it is a separate change that has to come with a signing story first -- e.g. a workflow minting a short-lived GitHub App installation token and creating the commit server-side via the GraphQL `createCommitOnBranch` mutation, which GitHub signs and shows as Verified. |
 
+Two further rules, not in `tvna/claude-md`'s own worked example, were added by
+issue #1840 after a real incident: `commit_author_email_pattern` and
+`committer_email_pattern`. A stray local git config (`t <t@t.com>`) let 44
+commits on a legitimate, tvna-authored and tvna-merged pull request (#1380)
+show up on GitHub as authored by an unrelated third-party account -- GitHub
+links a commit to an account purely by matching the commit's email against
+that account's own registered emails, with no bearing on push access (that
+account held none here). These two rules allowlist author/committer email to
+exactly the 4 identities this repository's commits actually carry:
+`noreply@anthropic.com` (Claude), `31282861+tvna@users.noreply.github.com`
+(tvna), `noreply@github.com` (GitHub's own web-UI merge commits, committer
+side only), and dependabot's own noreply address. Both rules omit `negate`
+deliberately: GitHub's own schema states "If true, the rule will fail if the
+pattern matches", so omitted/false already gives allowlist semantics (fails
+on non-match) with no `negate` field needed. Not cryptographic proof of
+identity -- anyone can still set an allowlisted string in a local git
+config -- which is why `required_signatures` (row above) stays a separate,
+not-yet-ready follow-up rather than folded into this same change.
+
 The eight required contexts are `actionlint`, `ruff`, `pytest`, `mypy`,
 `exception-handler-gaps`, `hidden-characters`, `plugin-root-brace-notation`, and
 `provenance-disclosure`.

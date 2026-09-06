@@ -47,6 +47,22 @@
           {"context": "skill-branch-fixture-coverage"}
         ]
       }
+    },
+    {
+      "type": "commit_author_email_pattern",
+      "parameters": {
+        "name": "allow only known committers (author side)",
+        "operator": "regex",
+        "pattern": "^(noreply@anthropic\\.com|31282861\\+tvna@users\\.noreply\\.github\\.com|49699333\\+dependabot\\[bot\\]@users\\.noreply\\.github\\.com)$"
+      }
+    },
+    {
+      "type": "committer_email_pattern",
+      "parameters": {
+        "name": "allow only known committers (committer side)",
+        "operator": "regex",
+        "pattern": "^(noreply@anthropic\\.com|31282861\\+tvna@users\\.noreply\\.github\\.com|noreply@github\\.com|49699333\\+dependabot\\[bot\\]@users\\.noreply\\.github\\.com)$"
+      }
     }
   ]
 }
