@@ -144,11 +144,20 @@ jobs:
           PR_AUTHOR_ID: ${{ github.event.pull_request.user.id }}
           PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
           # Issue #1858 (Step 8 second-revision finding): the PR's base
-          # commit -- a ref the PR itself cannot move -- so the script can
-          # fetch .github/trusted-bots.yml/.github/rulesets/main.json from
-          # a trust anchor independent of this job's own checkout instead
-          # of from the PR's own proposed content.
+          # commit -- so the script can fetch
+          # .github/trusted-bots.yml/.github/rulesets/main.json from a
+          # trust anchor independent of this job's own checkout instead of
+          # from the PR's own proposed content. PR_BASE_REF/DEFAULT_BRANCH
+          # (a second Step 8 review round's own finding against this fix)
+          # let the script refuse PR_BASE_SHA outright when the PR's own
+          # base has been retargeted away from this repository's real
+          # default branch -- base.sha alone is only actually immune to
+          # the PR's own influence as long as base.ref stays that branch;
+          # default_branch comes from the repository object itself, never
+          # from the PR.
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
@@ -158,4 +167,6 @@ jobs:
             --pr-author-login "$PR_AUTHOR_LOGIN" \
             --pr-author-id "$PR_AUTHOR_ID" \
             --pr-author-type "$PR_AUTHOR_TYPE" \
-            --trust-anchor-ref "$PR_BASE_SHA"
+            --trust-anchor-ref "$PR_BASE_SHA" \
+            --trust-anchor-base-ref "$PR_BASE_REF" \
+            --repo-default-branch "$DEFAULT_BRANCH"

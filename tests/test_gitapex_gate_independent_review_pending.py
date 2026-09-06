@@ -1439,6 +1439,10 @@ def test_main_bot_path_pass_via_trust_anchor_ref_fetches_from_api_not_local_disk
             "gitapex",
             "--trust-anchor-ref",
             "deadbeef",
+            "--trust-anchor-base-ref",
+            "main",
+            "--repo-default-branch",
+            "main",
             "--trusted-bots-path",
             str(tmp_path / "nonexistent-trusted-bots.yml"),
             "--ruleset-path",
@@ -1479,6 +1483,10 @@ def test_main_bot_path_falls_back_when_trust_anchor_ref_given_but_token_unset(
             "gitapex",
             "--trust-anchor-ref",
             "deadbeef",
+            "--trust-anchor-base-ref",
+            "main",
+            "--repo-default-branch",
+            "main",
         ]
     )
     assert exit_code == 0
@@ -1509,6 +1517,10 @@ def test_main_bot_path_falls_back_when_trust_anchor_ref_given_but_owner_repo_unr
             _DEPENDABOT_TYPE,
             "--trust-anchor-ref",
             "deadbeef",
+            "--trust-anchor-base-ref",
+            "main",
+            "--repo-default-branch",
+            "main",
         ]
     )
     assert exit_code == 0
@@ -1547,11 +1559,131 @@ def test_main_bot_path_falls_back_when_trust_anchor_fetch_raises_api_error(
             "gitapex",
             "--trust-anchor-ref",
             "deadbeef",
+            "--trust-anchor-base-ref",
+            "main",
+            "--repo-default-branch",
+            "main",
         ]
     )
     assert exit_code == 0
     captured = capsys.readouterr()
     assert "could not load the bot-path allowlist/ruleset" in captured.err
+    assert "PASS: CLEAN verdict" in captured.out
+
+
+def test_main_bot_path_falls_back_when_trust_anchor_ref_is_empty_string(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Second-revision review round 2's own defeat test: an
+    # explicitly-given-but-empty --trust-anchor-ref must be refused, never
+    # silently treated the same as the flag being omitted (which would
+    # silently fall back to the local-disk read this whole fix exists to
+    # stop trusting).
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(_CLEAN_BODY, encoding="utf-8")
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--owner",
+            "tvna",
+            "--repo",
+            "gitapex",
+            "--trust-anchor-ref",
+            "",
+        ]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "--trust-anchor-ref was given but is empty" in captured.err
+    assert "PASS: CLEAN verdict" in captured.out
+
+
+def test_main_bot_path_falls_back_when_trust_anchor_base_ref_or_default_branch_unresolved(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(_CLEAN_BODY, encoding="utf-8")
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--owner",
+            "tvna",
+            "--repo",
+            "gitapex",
+            "--trust-anchor-ref",
+            "deadbeef",
+            # --trust-anchor-base-ref/--repo-default-branch both omitted.
+        ]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "could not be resolved" in captured.err
+    assert "refusing to trust a ref without confirming it is this repository's own default branch" in captured.err
+    assert "PASS: CLEAN verdict" in captured.out
+
+
+def test_main_bot_path_falls_back_when_trust_anchor_base_ref_does_not_match_default_branch(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The core defeat test for the second-revision review round 2 finding:
+    # a PR retargeted to a different base branch (e.g. one carrying forged
+    # trust-anchor content) must never have its --trust-anchor-ref
+    # trusted just because *a* base-ref/default-branch pair was given --
+    # they must actually agree.
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(_CLEAN_BODY, encoding="utf-8")
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--owner",
+            "tvna",
+            "--repo",
+            "gitapex",
+            "--trust-anchor-ref",
+            "deadbeef",
+            "--trust-anchor-base-ref",
+            "attacker-controlled-branch",
+            "--repo-default-branch",
+            "main",
+        ]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "not this repository's own default branch" in captured.err
+    assert "attacker-controlled-branch" in captured.err
     assert "PASS: CLEAN verdict" in captured.out
 
 

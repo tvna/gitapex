@@ -9,7 +9,9 @@ an independent adversarial review (`executing-a-branch-plan`'s pre-PR
 logic detail/Residual risks. Revised again same day after `drafting-a-pr-to-merge`
 Step 8's own independent review (against the implemented PR) found two more
 CONFIRMED findings -- see "Second revision: trust-anchor ref pinning + poll
-re-check fix" below.
+re-check fix" below, item 3 of which records a THIRD round (Step 8 run again
+against that same fix) finding two further CONFIRMED issues, closed in the same
+commit as item 3 itself.
 
 ### Revision: head-commit identity check (critical defect closed)
 
@@ -81,6 +83,30 @@ files rather than accepted on the axis reviewers' own say-so:
    the most-recent run per context authoritative within a single snapshot, but a
    later snapshot's worse conclusion for an already-seen-passing context is no
    longer silently ignored.
+
+3. **A second Step 8 review round, run against the fix above itself, found two more
+   issues before this PR's own head commit was treated as clean.**
+
+   - `base.sha`'s own "immutable, no PR ref can move it" premise (point 1 above)
+     silently assumed the PR's `base.ref` stays this repository's real default
+     branch -- nothing checked that. Since `edited` is one of this workflow's own
+     trigger types, a PR could retarget its own `base` to a different, possibly
+     branch-protection-free branch carrying forged `trusted-bots.yml`/`main.json`
+     content, and the next re-run would fetch from that forged base instead.
+     Fix: `main()` now also requires `--trust-anchor-base-ref`
+     (`github.event.pull_request.base.ref`) to equal `--repo-default-branch`
+     (`github.event.repository.default_branch` -- the repository object's own
+     field, never the PR's) before trusting `--trust-anchor-ref` at all; any
+     mismatch, or either value unresolved, refuses the bot path the same way every
+     other bot-path failure already does.
+   - An explicitly-given-but-empty `--trust-anchor-ref` was treated identically to
+     the flag being omitted -- silently falling back to the local-disk read this
+     whole fix exists to stop trusting, with no warning printed at all (unlike
+     every other bot-path fallback in this file). Fix: an empty value is now
+     refused with its own explicit error, the same as any other unresolved
+     trust-anchor input; the silent local-disk fallback is reserved for the flag
+     being omitted entirely (every unit test, and any caller with no GitHub API
+     token available).
 
 ## Problem
 

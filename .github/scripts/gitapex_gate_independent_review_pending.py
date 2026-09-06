@@ -130,14 +130,27 @@ accepts the PR author's identity (`--pr-author-login`/`--pr-author-id`/
    has checked out, for a `pull_request`-triggered workflow the PR's own
    proposed content, not a ref the PR itself cannot influence. `main()`
    now also accepts `--trust-anchor-ref` (the workflow passes
-   `github.event.pull_request.base.sha`, an immutable base-branch commit
-   no PR ref can move); when given, both files are fetched via the GitHub
-   Contents API (`fetch_repo_file_at_ref`) from that ref instead of local
-   disk. CODEOWNERS-gating both paths (`.github/trusted-bots.yml` already
-   was; `.github/rulesets/main.json` now is too) is defense in depth on
-   top of this, not a substitute for it -- a live GitHub Settings toggle
-   ("Require review from Code Owners") this repository's own tracked
-   files cannot themselves confirm is enabled.
+   `github.event.pull_request.base.sha`); when given, both files are
+   fetched via the GitHub Contents API (`fetch_repo_file_at_ref`) from
+   that ref instead of local disk. CODEOWNERS-gating both paths
+   (`.github/trusted-bots.yml` already was; `.github/rulesets/main.json`
+   now is too) is defense in depth on top of this, not a substitute for
+   it -- a live GitHub Settings toggle ("Require review from Code Owners")
+   this repository's own tracked files cannot themselves confirm is
+   enabled. `base.sha` is only actually immune to the PR's own influence
+   as long as the PR's own `base.ref` stays this repository's real
+   default branch -- a second Step 8 review round (against this very
+   fix) found nothing checked that: a PR could edit its own `base` to an
+   unprotected branch carrying forged trust-anchor content, since
+   `edited` is one of this workflow's own trigger types. `main()` now
+   also requires `--trust-anchor-base-ref`
+   (`github.event.pull_request.base.ref`) to equal `--repo-default-branch`
+   (`github.event.repository.default_branch`, not PR-influenceable)
+   before trusting `--trust-anchor-ref` at all; any mismatch, or either
+   value missing, refuses the bot path the same way every other bot-path
+   failure does. A `--trust-anchor-ref` given but empty is refused the
+   same way too, rather than silently falling back to the local-disk read
+   below (that fallback is reserved for the flag being omitted entirely).
 
 No change to `parse_verdict`/`check()` themselves, and every existing
 `--body`/`--head-sha`-only invocation (no `--pr-author-*` given at all)
@@ -175,7 +188,8 @@ identity/email checks above do not both hold)::
     GITHUB_TOKEN=... uv run --frozen python3 .github/scripts/gitapex_gate_independent_review_pending.py \\
         --body PR_BODY.txt --head-sha <sha> \\
         --pr-author-login "dependabot[bot]" --pr-author-id 49699333 --pr-author-type Bot \\
-        --owner tvna --repo gitapex --trust-anchor-ref <base branch sha>
+        --owner tvna --repo gitapex --trust-anchor-ref <base branch sha> \\
+        --trust-anchor-base-ref main --repo-default-branch main
 
 Exit codes:
     0  A Verdict: CLEAN verdict naming the given head SHA is present
@@ -1090,11 +1104,32 @@ def main(argv: list[str] | None = None) -> int:
             "Git ref (e.g. github.event.pull_request.base.sha) to fetch .github/trusted-bots.yml and "
             ".github/rulesets/main.json from via the GitHub Contents API, instead of this checkout's own "
             "working tree -- so a PR cannot widen its own bot-exemption eligibility merely by editing "
-            "either trust-anchor file within its own diff. Requires --owner/--repo (or $GITHUB_REPOSITORY) "
-            "and GITHUB_TOKEN; a failure to resolve either, or a GitHub API error while fetching, falls "
-            "through to the human-verdict path like any other bot-path failure below. Omitting this flag "
-            "keeps reading --trusted-bots-path/--ruleset-path from local disk, unchanged (used by this "
-            "script's own test suite, which has no real GitHub API to call)."
+            "either trust-anchor file within its own diff. Requires --owner/--repo (or $GITHUB_REPOSITORY), "
+            "GITHUB_TOKEN, and --trust-anchor-base-ref/--repo-default-branch to actually agree (see those "
+            "flags' own help); a failure to resolve any of these, or a GitHub API error while fetching, "
+            "falls through to the human-verdict path like any other bot-path failure below -- an "
+            "explicitly-given-but-empty value is treated the same as a resolution failure, never silently "
+            "as 'flag omitted'. Omitting this flag entirely keeps reading "
+            "--trusted-bots-path/--ruleset-path from local disk, unchanged (used by this script's own test "
+            "suite, which has no real GitHub API to call)."
+        ),
+    )
+    bot_group.add_argument(
+        "--trust-anchor-base-ref",
+        help=(
+            "github.event.pull_request.base.ref -- the PR's own current base branch name. Required "
+            "alongside --trust-anchor-ref; must equal --repo-default-branch or the ref is refused (a PR "
+            "retargeted to a different, possibly branch-protection-free base branch could otherwise supply "
+            "forged trust-anchor content at that base's own tip -- a Step 8 review finding this flag "
+            "closes, see the design doc's own second revision section)."
+        ),
+    )
+    bot_group.add_argument(
+        "--repo-default-branch",
+        help=(
+            "github.event.repository.default_branch -- this repository's own default branch name, per "
+            "the GitHub Actions event payload (not attacker-influenceable by the PR itself). Compared "
+            "against --trust-anchor-base-ref; see that flag's own help."
         ),
     )
     bot_group.add_argument(
@@ -1148,12 +1183,31 @@ def main(argv: list[str] | None = None) -> int:
         # path below (fail closed to the strict path, not a falsy
         # placeholder passed into the bot-path logic).
         try:
-            if args.trust_anchor_ref:
+            if args.trust_anchor_ref is not None:
                 # Design doc's own second revision: read both trust
                 # anchors from a ref the PR under evaluation cannot move
                 # (the PR's own base commit), never from this job's own
                 # working tree -- see fetch_repo_file_at_ref's own
-                # docstring for why.
+                # docstring for why. Every check below raises ValueError
+                # (never silently falls back to the local-disk `else`
+                # branch, which is reserved for --trust-anchor-ref being
+                # omitted entirely) -- a given-but-untrustworthy value
+                # must refuse the bot path, not quietly downgrade to the
+                # exact local-disk read this flag exists to replace.
+                if not args.trust_anchor_ref:
+                    raise ValueError("--trust-anchor-ref was given but is empty")
+                if not args.trust_anchor_base_ref or not args.repo_default_branch:
+                    raise ValueError(
+                        "--trust-anchor-ref given but --trust-anchor-base-ref/--repo-default-branch "
+                        "could not be resolved -- refusing to trust a ref without confirming it is this "
+                        "repository's own default branch"
+                    )
+                if args.trust_anchor_base_ref != args.repo_default_branch:
+                    raise ValueError(
+                        f"--trust-anchor-ref given, but the PR's base ref {args.trust_anchor_base_ref!r} "
+                        f"is not this repository's own default branch {args.repo_default_branch!r} -- "
+                        "refusing to trust anchor files from a base branch a PR could itself retarget to"
+                    )
                 token_for_anchors = os.environ.get("GITHUB_TOKEN", "")
                 if not args.owner or not args.repo:
                     raise ValueError(
