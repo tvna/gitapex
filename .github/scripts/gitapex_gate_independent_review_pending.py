@@ -455,23 +455,32 @@ def _github_repository_part(index: int) -> str | None:
     return parts[index] if len(parts) == 2 and parts[index] else None
 
 
-def load_trusted_bots(path: Path) -> list[dict[str, Any]]:
-    """Parse `.github/trusted-bots.yml` into a list of entry dicts.
-
-    Raises `ValueError` (an unreadable or non-UTF-8 file, converted at the
-    read boundary itself -- matching `gitapex_detect_changed_gate_scripts.py`'s
-    own `registered_gate_paths` pattern rather than leaving the read
-    boundary unguarded) or `yaml.YAMLError` (malformed YAML) on a bad file
-    -- `main()`'s own bot-path wiring treats any of these as "cannot
-    confirm a bot-path candidate" and falls through to the strict
-    human-verdict path, never crashing and never silently trusting
-    everything or nothing."""
+def _read_utf8_or_raise(path: Path) -> str:
+    """Read `path` as UTF-8 text, converting an unreadable file or invalid
+    UTF-8 content into `ValueError` at this read boundary -- matching
+    `gitapex_detect_changed_gate_scripts.py`'s own `registered_gate_paths`
+    pattern rather than leaving the read boundary unguarded. Shared by
+    `load_trusted_bots`/`load_ruleset` below: both need the identical
+    read-or-raise step before parsing their own, different format (YAML vs
+    JSON)."""
     try:
-        text = path.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8")
     except OSError as error:
         raise ValueError(f"{path} could not be read: {error}") from error
     except UnicodeDecodeError as error:
         raise ValueError(f"{path} is not valid UTF-8: {error}") from error
+
+
+def load_trusted_bots(path: Path) -> list[dict[str, Any]]:
+    """Parse `.github/trusted-bots.yml` into a list of entry dicts.
+
+    Raises `ValueError` (an unreadable or non-UTF-8 file, see
+    `_read_utf8_or_raise`) or `yaml.YAMLError` (malformed YAML) on a bad
+    file -- `main()`'s own bot-path wiring treats any of these as "cannot
+    confirm a bot-path candidate" and falls through to the strict
+    human-verdict path, never crashing and never silently trusting
+    everything or nothing."""
+    text = _read_utf8_or_raise(path)
     document = yaml.safe_load(text)
     if not isinstance(document, list):
         raise ValueError(f"{path} must contain a YAML list of entries, found {type(document).__name__}")
@@ -495,16 +504,10 @@ def is_trusted_bot(login: str, user_id: int, user_type: str, entries: list[dict[
 
 def load_ruleset(path: Path) -> dict[str, Any]:
     """Parse `.github/rulesets/main.json`. Raises `ValueError` (an
-    unreadable or non-UTF-8 file, converted at the read boundary itself --
-    same pattern as `load_trusted_bots`) or `json.JSONDecodeError`
-    (malformed JSON) on a bad file -- same fall-through contract as
-    `load_trusted_bots`."""
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as error:
-        raise ValueError(f"{path} could not be read: {error}") from error
-    except UnicodeDecodeError as error:
-        raise ValueError(f"{path} is not valid UTF-8: {error}") from error
+    unreadable or non-UTF-8 file, see `_read_utf8_or_raise`) or
+    `json.JSONDecodeError` (malformed JSON) on a bad file -- same
+    fall-through contract as `load_trusted_bots`."""
+    text = _read_utf8_or_raise(path)
     document = json.loads(text)
     if not isinstance(document, dict):
         raise ValueError(f"{path} must contain a JSON object, found {type(document).__name__}")

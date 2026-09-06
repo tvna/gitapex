@@ -583,23 +583,47 @@ def test_is_trusted_bot_positive_match_all_three_fields_agree() -> None:
     assert gate.is_trusted_bot(_DEPENDABOT_LOGIN, _DEPENDABOT_ID, _DEPENDABOT_TYPE, _TRUSTED_BOTS) is True
 
 
-def test_is_trusted_bot_negative_match_id_disagrees() -> None:
+@pytest.mark.parametrize(
+    ("login", "user_id", "user_type"),
+    [
+        pytest.param("someone-else[bot]", _DEPENDABOT_ID, _DEPENDABOT_TYPE, id="login-disagrees"),
+        pytest.param(_DEPENDABOT_LOGIN, 1, _DEPENDABOT_TYPE, id="id-disagrees"),
+        pytest.param(_DEPENDABOT_LOGIN, _DEPENDABOT_ID, "User", id="type-disagrees"),
+    ],
+)
+def test_is_trusted_bot_negative_match_when_one_field_disagrees(login: str, user_id: int, user_type: str) -> None:
     # Defeat test (design doc's own Testing section + this issue's ACM): a
-    # forged/different id must never be treated as a match even though the
-    # login agrees.
-    assert gate.is_trusted_bot(_DEPENDABOT_LOGIN, 1, _DEPENDABOT_TYPE, _TRUSTED_BOTS) is False
-
-
-def test_is_trusted_bot_negative_match_type_disagrees() -> None:
-    assert gate.is_trusted_bot(_DEPENDABOT_LOGIN, _DEPENDABOT_ID, "User", _TRUSTED_BOTS) is False
-
-
-def test_is_trusted_bot_negative_match_login_disagrees() -> None:
-    assert gate.is_trusted_bot("someone-else[bot]", _DEPENDABOT_ID, _DEPENDABOT_TYPE, _TRUSTED_BOTS) is False
+    # forged/different login, id, or type must never be treated as a match
+    # even though the other two fields agree.
+    assert gate.is_trusted_bot(login, user_id, user_type, _TRUSTED_BOTS) is False
 
 
 def test_is_trusted_bot_false_on_empty_allowlist() -> None:
     assert gate.is_trusted_bot(_DEPENDABOT_LOGIN, _DEPENDABOT_ID, _DEPENDABOT_TYPE, []) is False
+
+
+# ---------------------------------------------------------------------------
+# _read_utf8_or_raise: the shared read-boundary helper load_trusted_bots/
+# load_ruleset both sit on top of.
+# ---------------------------------------------------------------------------
+
+
+def test_read_utf8_or_raise_returns_file_contents(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "some.txt"
+    path.write_text("hello", encoding="utf-8")
+    assert gate._read_utf8_or_raise(path) == "hello"
+
+
+def test_read_utf8_or_raise_converts_missing_file_to_value_error(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(ValueError, match="could not be read"):
+        gate._read_utf8_or_raise(tmp_path / "nonexistent.txt")
+
+
+def test_read_utf8_or_raise_converts_undecodable_file_to_value_error(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "bad.txt"
+    path.write_bytes(b"\xff\xfe bad")
+    with pytest.raises(ValueError, match="not valid UTF-8"):
+        gate._read_utf8_or_raise(path)
 
 
 # ---------------------------------------------------------------------------
@@ -680,20 +704,19 @@ def test_head_commit_identity_matches_bot_when_both_emails_match() -> None:
     assert ok is True
 
 
-def test_head_commit_identity_matches_bot_fails_on_author_email_mismatch() -> None:
-    ok, message = gate.head_commit_identity_matches_bot(
-        "someone@example.com", _DEPENDABOT_EMAIL, _RULESET_WITH_ALL_RULE_TYPES
-    )
+@pytest.mark.parametrize(
+    ("author_email", "committer_email", "expected_substring"),
+    [
+        pytest.param("someone@example.com", _DEPENDABOT_EMAIL, "author email", id="author-mismatch"),
+        pytest.param(_DEPENDABOT_EMAIL, "someone@example.com", "committer email", id="committer-mismatch"),
+    ],
+)
+def test_head_commit_identity_matches_bot_fails_on_email_mismatch(
+    author_email: str, committer_email: str, expected_substring: str
+) -> None:
+    ok, message = gate.head_commit_identity_matches_bot(author_email, committer_email, _RULESET_WITH_ALL_RULE_TYPES)
     assert ok is False
-    assert "author email" in message
-
-
-def test_head_commit_identity_matches_bot_fails_on_committer_email_mismatch() -> None:
-    ok, message = gate.head_commit_identity_matches_bot(
-        _DEPENDABOT_EMAIL, "someone@example.com", _RULESET_WITH_ALL_RULE_TYPES
-    )
-    assert ok is False
-    assert "committer email" in message
+    assert expected_substring in message
 
 
 def test_head_commit_identity_matches_bot_fails_when_email_pattern_rules_absent() -> None:
