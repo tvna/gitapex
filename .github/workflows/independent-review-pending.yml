@@ -47,14 +47,13 @@
 # falling through to the human-verdict path this header describes --
 # unchanged for every human/agent PR. See
 # docs/gitapex/specs/2026-09-06-dependabot-trusted-bot-gate-exemption-design.md
-# (in particular its own "Revision: head-commit identity check" and
-# "Second revision: trust-anchor ref pinning" sections) and
-# gitapex_gate_independent_review_pending.py's own module docstring for
-# the full bot-path design. --trust-anchor-ref (PR_BASE_SHA below) makes
-# the script fetch .github/trusted-bots.yml and .github/rulesets/main.json
-# via the GitHub API from the PR's base commit -- a ref the PR itself
-# cannot move -- rather than from this job's own checkout, which for this
-# `pull_request`-triggered workflow is the PR's own proposed content.
+# and gitapex_gate_independent_review_pending.py's own module docstring
+# for the full bot-path design. --trust-anchor-ref (PR_BASE_SHA below)
+# makes the script fetch .github/trusted-bots.yml and
+# .github/rulesets/main.json via the GitHub API from the PR's base commit
+# -- a ref the PR itself cannot move -- rather than from this job's own
+# checkout, which for this `pull_request`-triggered workflow is the PR's
+# own proposed content.
 name: Independent review pending
 
 on:
@@ -143,12 +142,10 @@ jobs:
           PR_AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
           PR_AUTHOR_ID: ${{ github.event.pull_request.user.id }}
           PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
-          # Issue #1858 (Step 8 second-revision finding): the PR's base
-          # commit -- so the script can fetch
+          # Issue #1858: the PR's base commit -- so the script can fetch
           # .github/trusted-bots.yml/.github/rulesets/main.json from a
           # trust anchor independent of this job's own checkout instead of
           # from the PR's own proposed content. PR_BASE_REF/DEFAULT_BRANCH
-          # (a second Step 8 review round's own finding against this fix)
           # let the script refuse PR_BASE_SHA outright when the PR's own
           # base has been retargeted away from this repository's real
           # default branch -- base.sha alone is only actually immune to

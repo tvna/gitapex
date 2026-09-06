@@ -2,111 +2,11 @@
 
 ## Status
 
-Design agreed via `eliciting-a-design` dialogue on 2026-09-06. Revised same day after
-an independent adversarial review (`executing-a-branch-plan`'s pre-PR
-`design-doc-adversarial-review`) found one CONFIRMED critical defect -- see
-"Revision: head-commit identity check" below, folded into Architecture/Decision
-logic detail/Residual risks. Revised again same day after `drafting-a-pr-to-merge`
-Step 8's own independent review (against the implemented PR) found two more
-CONFIRMED findings -- see "Second revision: trust-anchor ref pinning + poll
-re-check fix" below, item 3 of which records a THIRD round (Step 8 run again
-against that same fix) finding two further CONFIRMED issues, closed in the same
-commit as item 3 itself.
-
-### Revision: head-commit identity check (critical defect closed)
-
-The first draft matched bot identity against `github.event.pull_request.user`
-only -- the PR's **opener**, which GitHub does not change on a later
-`synchronize` event. `dependabot/*` branches are not covered by this
-repository's own branch protection (`main.json`'s `ref_name.include` is
-`~DEFAULT_BRANCH` only), so anyone with push access could append a commit to
-an open Dependabot PR's branch after the fact; the PR's `user` field would
-still read `dependabot[bot]`, so the gate would take the bot path (CI-green
-only) and silently skip the independent-review requirement for a commit
-Dependabot never wrote -- defeating the exact protection issue #1311 exists
-for, and contradicting this design's own "Out of scope: human/agent PRs keep
-the existing rule unchanged" statement in practice, if not in wording.
-
-Fix: the bot path additionally requires the **head commit's own** author and
-committer email to match that bot's already-registered
-`commit_author_email_pattern`/`committer_email_pattern` entries in
-`main.json` (PR #1843) -- not a new, separately-maintained email field in
-`trusted-bots.yml`, reusing the existing single source of truth instead of a
-second copy that could drift from it. A commit whose author/committer PR
-metadata says "opened by dependabot[bot]" but whose actual commit emails
-don't match falls through to the existing human-verdict path, matching this
-design's original intent rather than merely its original wording.
-
-### Second revision: trust-anchor ref pinning + poll re-check fix (two Step 8 review findings closed)
-
-`drafting-a-pr-to-merge`'s own Step 8 independent review (five parallel axis
-reviewers against the implemented PR, not this design doc alone) found two more
-CONFIRMED issues, verified by re-reading the actual workflow/CODEOWNERS/gate-script
-files rather than accepted on the axis reviewers' own say-so:
-
-1. **Trust anchors read from an untrusted ref.** `load_trusted_bots`/`load_ruleset`
-   read `.github/trusted-bots.yml`/`.github/rulesets/main.json` off local disk, at
-   a path relative to the running script's own location. `independent-review-pending.yml`'s
-   checkout step passed no explicit `ref:`, so for a `pull_request`-triggered
-   workflow `actions/checkout` resolves its own default -- the PR's own merge ref,
-   i.e. the PR's own proposed content for both files, not a ref the PR itself cannot
-   influence. Confirmed additionally that `.github/rulesets/main.json` had **no**
-   CODEOWNERS entry at all (only `.github/trusted-bots.yml` did), so the one file
-   the critical-defect fix above depends on entirely (point 2, Decision logic
-   detail) carried zero forced-review protection.
-
-   Fix: `main()` now accepts `--trust-anchor-ref`; the workflow passes
-   `github.event.pull_request.base.sha` (a commit no PR ref can move). When given,
-   both files are fetched via the GitHub Contents API (`fetch_repo_file_at_ref`)
-   from that ref instead of local disk -- omitting the flag (every unit test)
-   keeps the prior local-disk-read behavior unchanged. `.github/rulesets/main.json`
-   also now carries the same `@tvna` CODEOWNERS entry `.github/trusted-bots.yml`
-   already had, as defense in depth on top of the ref-pinning fix, not a substitute
-   for it (a live GitHub Settings toggle this repository's own tracked files cannot
-   themselves confirm is enabled).
-
-2. **`poll_bot_required_checks` permanently remembered a context's first passing
-   conclusion.** Once a required context was observed `completed`/passing on one
-   poll iteration, the original implementation never looked at that context again
-   for the rest of the same poll call (a `concluded` dict, checked-and-skipped on
-   every later iteration). GitHub's own check-runs endpoint always returns the
-   complete, current set for a head SHA (never a delta) -- so a context re-run
-   (e.g. a manual "Re-run this job" click) into a *worse* conclusion after already
-   being marked concluded would never be caught, and the poll could report an
-   incorrect PASS naming "all required checks completed successfully" while one of
-   them had, in fact, most recently failed.
-
-   Fix: every context's own conclusion is now re-derived from the latest full
-   check-runs snapshot on every iteration -- nothing is cached as permanently
-   concluded once seen passing once. This also resolves the "Duplicate check-run
-   reruns" residual risk below more completely than originally scoped: not only is
-   the most-recent run per context authoritative within a single snapshot, but a
-   later snapshot's worse conclusion for an already-seen-passing context is no
-   longer silently ignored.
-
-3. **A second Step 8 review round, run against the fix above itself, found two more
-   issues before this PR's own head commit was treated as clean.**
-
-   - `base.sha`'s own "immutable, no PR ref can move it" premise (point 1 above)
-     silently assumed the PR's `base.ref` stays this repository's real default
-     branch -- nothing checked that. Since `edited` is one of this workflow's own
-     trigger types, a PR could retarget its own `base` to a different, possibly
-     branch-protection-free branch carrying forged `trusted-bots.yml`/`main.json`
-     content, and the next re-run would fetch from that forged base instead.
-     Fix: `main()` now also requires `--trust-anchor-base-ref`
-     (`github.event.pull_request.base.ref`) to equal `--repo-default-branch`
-     (`github.event.repository.default_branch` -- the repository object's own
-     field, never the PR's) before trusting `--trust-anchor-ref` at all; any
-     mismatch, or either value unresolved, refuses the bot path the same way every
-     other bot-path failure already does.
-   - An explicitly-given-but-empty `--trust-anchor-ref` was treated identically to
-     the flag being omitted -- silently falling back to the local-disk read this
-     whole fix exists to stop trusting, with no warning printed at all (unlike
-     every other bot-path fallback in this file). Fix: an empty value is now
-     refused with its own explicit error, the same as any other unresolved
-     trust-anchor input; the silent local-disk fallback is reserved for the flag
-     being omitted entirely (every unit test, and any caller with no GitHub API
-     token available).
+Design agreed via `eliciting-a-design` dialogue on 2026-09-06, then revised twice
+after independent review (`design-doc-adversarial-review` and, later,
+`drafting-a-pr-to-merge` Step 8) found and closed 3 confirmed defects. This
+document describes the settled design; Decision logic detail and Residual risks
+below reflect the current, reviewed state.
 
 ## Problem
 
@@ -139,7 +39,7 @@ Dependabot PR. Measured directly against the live repository (2026-09-06):
   requirement, replacing it with a machine-checkable substitute for bot PRs.
 - A new `.github/trusted-bots.yml` allowlist, with anti-spoofing identity checks
   (login + GitHub `user.type == "Bot"` + numeric `user.id`).
-- CODEOWNERS coverage for the new allowlist file.
+- CODEOWNERS coverage for the new allowlist file and for `.github/rulesets/main.json`.
 
 ### Out of scope
 
@@ -149,11 +49,13 @@ Dependabot PR. Measured directly against the live repository (2026-09-06):
   merge gate; merging itself stays a human action.
 - A schema/drift-verification gate for `trusted-bots.yml` itself (e.g. an analogue
   of `gitapex_gate_ruleset_required_checks.py`) -- left as an implementation-phase
-  decision (`planning-a-branch-from-an-issue` / `executing-a-branch-plan`), not
-  resolved here.
+  decision, not resolved here.
 - Making `main.json`'s current required-checks list live via `apply-rulesets.yml` --
   unrelated to this change; that dispatch remains a separate, human-gated action
   per `docs/runbooks/rulesets.md`.
+- Cryptographic verification of a check run's own content, or of the head commit's
+  author/committer email -- both stay unsigned, account-level signals, matching
+  this repository's existing single-operator trust model (see Residual risks).
 
 ## Architecture
 
@@ -163,7 +65,8 @@ PR event (opened/ready_for_review/synchronize/edited/reopened)
         v
 independent-review-pending.yml
         |
-        +-- reads github.event.pull_request.user.{login,id,type}
+        +-- reads github.event.pull_request.user.{login,id,type},
+        |   .base.{sha,ref}, and github.event.repository.default_branch
         |
         v
 gitapex_gate_independent_review_pending.py
@@ -175,7 +78,17 @@ gitapex_gate_independent_review_pending.py
         |     parse PR body for '## Independent review verdict',
         |     require Verdict: CLEAN + Verified commit == head SHA
         |
-   YES -+-- bot-identity match (login+id+type) found; NEXT: head-commit check
+   YES -+-- bot-identity match found; NEXT: trust-anchor + head-commit checks
+        |
+        v
+   base.ref == repository's real default branch?
+        |
+   NO --+-- fall through to the existing human-verdict path (a PR retargeted
+        |   to a different base branch cannot supply its own trust anchors)
+        |
+   YES -+-- fetch .github/trusted-bots.yml and .github/rulesets/main.json via
+        |   the GitHub Contents API at base.sha -- never from this job's own
+        |   working tree, which is the PR's own proposed content
         |
         v
    fetch head commit (author email, committer email) via GitHub API
@@ -183,23 +96,21 @@ gitapex_gate_independent_review_pending.py
         +-- BOTH emails match that bot's own commit_author_email_pattern /
         |   committer_email_pattern entries in main.json (PR #1843)?
         |
-   NO --+-- fall through to the existing human-verdict path above
-        |   (the PR's opener claims to be the bot, but this specific commit
-        |    was not actually authored/committed by it -- fail closed to the
-        |    strict rule, never silently trust the PR-level identity alone)
+   NO --+-- fall through to the existing human-verdict path (the PR's opener
+        |   claims to be the bot, but this specific commit was not actually
+        |   authored/committed by it)
         |
-   YES -+-- new bot path:
-              1. read required check contexts from
-                 .github/rulesets/main.json's `required_status_checks` rule
-                 (type-discriminated -- main.json also carries deletion/
-                 pull_request/commit_author_email_pattern/committer_email_pattern
-                 rules that must NOT be read as check contexts, per PR #1843)
-              2. exclude "independent-review-pending" itself from that list
-              3. poll GitHub check-runs for the head SHA until every remaining
-                 required context is completed (bounded by an extended job
-                 timeout, ~15 min)
-              4. PASS iff all completed successfully; FAIL on any failure/
-                 cancellation or on timeout
+   YES -+-- bot path:
+              1. read required check contexts from main.json's own
+                 `required_status_checks` rule (type-discriminated -- other
+                 rule types in the same file are never misread as contexts)
+              2. exclude "independent-review-pending" itself
+              3. poll GitHub check-runs for the head SHA until every
+                 remaining context is completed (bounded by an extended job
+                 timeout, ~15 min), re-deriving each context's own conclusion
+                 from the latest snapshot on every iteration
+              4. PASS iff all completed successfully; FAIL on any
+                 failure/cancellation or on timeout
 ```
 
 ### `.github/trusted-bots.yml` (new)
@@ -219,11 +130,10 @@ verified live in this repository's `commit_author_email_pattern`/
 `49699333+dependabot[bot]@users.noreply.github.com`).
 
 `trusted-bots.yml` deliberately carries no separate email field: the head-commit
-identity check (see the Revision note above and Decision logic detail below) reads
-the email pattern straight out of `main.json`'s own
-`commit_author_email_pattern`/`committer_email_pattern` rules, so there is exactly
-one place this repository's own trusted-committer emails are declared, not two that
-could drift apart.
+identity check (Decision logic detail below) reads the email pattern straight out
+of `main.json`'s own `commit_author_email_pattern`/`committer_email_pattern` rules,
+so there is exactly one place this repository's own trusted-committer emails are
+declared, not two that could drift apart.
 
 ### CODEOWNERS
 
@@ -234,11 +144,9 @@ could drift apart.
 
 Same rationale as the existing `harden-checkout` entry: `trusted-bots.yml` grants
 an identity-based gate exemption, so an unreviewed edit could silently widen who
-bypasses independent review. `main.json`'s entry is the second-revision fix above
--- its `commit_author_email_pattern`/`committer_email_pattern` rules are equally
-load-bearing for the critical-defect fix (Decision logic detail's own
-"Head-commit identity check"), so an unreviewed loosening of either pattern is the
-same class of risk.
+bypasses independent review. `main.json`'s entry covers the same class of risk --
+its `commit_author_email_pattern`/`committer_email_pattern` rules are equally
+load-bearing for the head-commit identity check below.
 
 ### Timing (resolved via `architecture-tradeoff`)
 
@@ -268,28 +176,36 @@ them):
   match one `trusted-bots.yml` entry. Login alone is not sufficient -- GitHub's own
   user id is immutable and namespace-unique, closing the theoretical risk of a
   same-named non-bot account.
-- **Head-commit identity check** (closes the critical defect the Revision note
-  above describes): even after a bot-identity match, fetch the head commit's own
-  author email and committer email (one GitHub API call, same client the polling
-  step already needs) and require **both** to match the corresponding pattern in
-  `main.json`'s `commit_author_email_pattern`/`committer_email_pattern` rules. This
-  runs regardless of which event fired the workflow (`opened`, `synchronize`, etc.)
-  -- there is no special-casing by event type, since the PR's `user` field is
-  static across `synchronize` but the head SHA is not, and it is the head SHA's own
-  commit identity that must be re-checked every time. A mismatch here (bot opened
-  the PR, but this specific commit wasn't actually authored/committed by it) falls
-  through to the existing human-verdict path -- never silently treated as a pass
-  and never treated as an outright hard FAIL either, since a legitimate human fix
-  pushed to a bot-opened PR should still be reviewable the normal way, not
-  permanently blocked by a bot-only code path that no longer applies to it.
+- **Trust-anchor sourcing**: `.github/trusted-bots.yml` and `.github/rulesets/main.json`
+  are fetched via the GitHub Contents API at the PR's own base commit
+  (`github.event.pull_request.base.sha`), never read from this job's own working
+  tree -- which for a `pull_request`-triggered workflow is the PR's own proposed
+  content, and could otherwise let a PR widen its own bot-exemption eligibility by
+  editing either file within its own diff. That base ref is trusted only when
+  `github.event.pull_request.base.ref` equals `github.event.repository.default_branch`
+  (the repository object's own field, never the PR's) -- a PR retargeted to a
+  different, possibly unprotected base branch cannot supply forged trust-anchor
+  content instead. Both files also carry a CODEOWNERS entry as defense in depth on
+  top of this, not a substitute for it (a live GitHub Settings toggle this
+  repository's own tracked files cannot themselves confirm is enabled).
+- **Head-commit identity check**: even after a bot-identity match, fetch the head
+  commit's own author email and committer email (one GitHub API call, same client
+  the polling step already needs) and require **both** to match the corresponding
+  pattern in `main.json`'s `commit_author_email_pattern`/`committer_email_pattern`
+  rules -- not the PR's `user` field, which GitHub never updates on a later
+  `synchronize`, and it is the head SHA's own commit identity that must be
+  re-checked every time regardless of which event fired the workflow. A mismatch
+  here (bot opened the PR, but this specific commit wasn't actually
+  authored/committed by it) falls through to the existing human-verdict path --
+  never silently treated as a pass and never treated as an outright hard FAIL
+  either, since a legitimate human fix pushed to a bot-opened PR should still be
+  reviewable the normal way.
 - **Poll outcome**:
   - all remaining required contexts `completed` with conclusion `success`,
     `neutral`, or `skipped` -> PASS. `skipped` is included deliberately, matching
     `gitapex_gate_ruleset_required_checks.py`'s own documented principle that a
     `skipped` conclusion does not block a required status check on GitHub's own
-    native merge logic (that script's module docstring) -- this design's poll
-    outcome must not be stricter than GitHub's own blocking behavior for the same
-    required-check list.
+    native merge logic.
   - any required context `completed` with any other conclusion (`failure`,
     `cancelled`, `timed_out`, `action_required`, `stale`) -> FAIL immediately
     (fail-closed default; no need to keep polling)
@@ -298,46 +214,42 @@ them):
   - a transient GitHub API error while polling (rate limit, 5xx) is retried
     within the same timeout budget rather than treated as an immediate FAIL or
     silently ignored; an error that persists until the timeout is reached is
-    reported as a timeout FAIL naming which contexts could not be confirmed,
-    not conflated with an ordinary pending-check timeout
+    reported as a timeout FAIL naming which contexts could not be confirmed
+  - every context's own conclusion is re-derived from the latest full check-runs
+    snapshot on every poll iteration -- nothing is cached as permanently
+    concluded once seen passing, so a context re-run (e.g. a manual "Re-run this
+    job" click) into a worse conclusion mid-poll is still caught
   - poll interval (e.g. every 15-30s) is an implementation-phase choice, not
     fixed by this design
 
 ## Testing
 
 Follows this repository's existing `.github/scripts/*.py` + `tests/test_*.py`
-convention: direct-name-coverage tests for the new bot-branch functions, defeat
-tests for a forged `trusted-bots.yml` entry (login match without id/type match),
-a test confirming `main.json`'s non-`required_status_checks` rule types are
-never misread as check contexts (the PR #1843 concern this design explicitly
-guards against), and -- the test this design's own critical-defect fix exists
-for -- a test asserting that a bot-identity match (PR opener is `dependabot[bot]`)
-with a head commit whose author/committer email does NOT match `main.json`'s
-email-pattern rules falls through to the existing human-verdict path rather than
-taking the bot path.
+convention: direct-name-coverage tests for every new bot-branch function, defeat
+tests for a forged `trusted-bots.yml` entry (login match without id/type match), a
+head-commit email mismatch, a PR retargeted to a different base branch, and a
+required check re-run into failure mid-poll; a test confirming `main.json`'s
+non-`required_status_checks` rule types are never misread as check contexts (the
+PR #1843 concern this design explicitly guards against).
 
 ## Residual risks
 
 - Poll timeout value may need retuning if a required job's typical runtime grows
-  (Premortem from the `architecture-tradeoff` round: pytest currently completes in
-  ~3-4 minutes, well under the proposed 15-minute ceiling, but this is not a hard
-  guarantee).
+  (pytest currently completes in ~3-4 minutes, well under the 15-minute ceiling,
+  but this is not a hard guarantee).
 - Required-context names in `main.json` and actual check-run names can drift by
   rename; no dedicated drift gate for this specific coupling is added in this
-  design (left to the implementation phase per Out of scope above).
-- Anti-spoofing (PR-opener identity plus the head-commit email check) closes the
-  account-level and commit-substitution risks this session's independent design
-  review actually found and reproduced as a concrete attack path, but it still does
-  not cryptographically verify a check run's own content -- matching this
-  repository's existing single-operator trust model (same disclosed limit as
-  `gitapex_gate_independent_review_pending.py`'s own module docstring).
+  design.
+- Anti-spoofing (bot identity, the head-commit email check, and trust-anchor-ref
+  pinned to the repository's own default branch) closes every account-level and
+  commit/ref-substitution attack path independent review found and reproduced,
+  but none of it cryptographically verifies a check run's own content, or the
+  head commit's email fields themselves (unsigned git metadata) -- matching this
+  repository's existing single-operator trust model.
 - Duplicate check-run reruns for the same context name: most-recent-by-timestamp
   is authoritative when more than one run exists for the same required context on
   the same head SHA, matching how GitHub's own required-status-check evaluation
-  already behaves -- and (second revision above) every context's own conclusion is
-  now re-derived from a fresh snapshot on every poll iteration rather than cached
-  once seen passing, so a same-poll-session rerun into a worse conclusion is still
-  caught, not only the single-snapshot tie-break this bullet originally scoped.
+  already behaves.
 - A required check re-run without a `synchronize` event (e.g. a manual "Re-run
   failed jobs" click with no new commit) does not itself re-trigger this workflow,
   since its own triggers are `opened`/`ready_for_review`/`synchronize`/`edited`/

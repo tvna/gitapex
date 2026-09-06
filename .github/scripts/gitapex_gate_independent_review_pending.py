@@ -93,23 +93,42 @@ accepts the PR author's identity (`--pr-author-login`/`--pr-author-id`/
    THREE fields of one `.github/trusted-bots.yml` entry -- login alone is
    never sufficient (a same-named non-bot account is a distinct GitHub
    user id).
-2. **Critical-defect fix, closed by this issue's own design-doc revision**:
-   a bot-identity match on the PR's opener is NOT itself sufficient.
+2. A bot-identity match on the PR's opener is not itself sufficient:
    `dependabot/*` branches carry no branch protection of their own, so
    anyone with push access could append a human commit to an open
-   Dependabot PR after the fact; the PR's `user` field stays
-   `dependabot[bot]` regardless (GitHub never changes it on `synchronize`).
-   `head_commit_identity_matches_bot` additionally requires the head
-   commit's OWN author and committer email (not the PR-level identity) to
-   match `.github/rulesets/main.json`'s existing
-   `commit_author_email_pattern`/`committer_email_pattern` rules (PR #1843)
-   -- the single source of truth for this repository's trusted-committer
-   emails, not a second copy in `trusted-bots.yml` that could drift from
-   it. A mismatch here falls through to the human-verdict path above,
-   never straight to FAIL: a legitimate human fix pushed to a bot-opened
-   PR should still be reviewable the normal way.
-3. Only once both match: `required_check_contexts` reads the required
-   status-check context list straight out of `main.json`'s own
+   Dependabot PR after the fact, and the PR's `user` field stays
+   `dependabot[bot]` regardless (GitHub never changes it on
+   `synchronize`). `head_commit_identity_matches_bot` additionally
+   requires the head commit's OWN author and committer email (not the
+   PR-level identity) to match `.github/rulesets/main.json`'s existing
+   `commit_author_email_pattern`/`committer_email_pattern` rules (PR
+   #1843) -- the single source of truth for this repository's
+   trusted-committer emails, not a second copy in `trusted-bots.yml`
+   that could drift from it. A mismatch here falls through to the
+   human-verdict path above, never straight to FAIL: a legitimate human
+   fix pushed to a bot-opened PR should still be reviewable the normal
+   way.
+3. Both `.github/trusted-bots.yml` and `.github/rulesets/main.json` are
+   fetched via the GitHub Contents API (`fetch_repo_file_at_ref`) at the
+   PR's own base commit (`--trust-anchor-ref`, the workflow passes
+   `github.event.pull_request.base.sha`), never read from this job's own
+   working tree -- which for a `pull_request`-triggered workflow is the
+   PR's own proposed content, and could otherwise let a PR widen its own
+   bot-exemption eligibility by editing either file within its own diff.
+   That ref is trusted only when `--trust-anchor-base-ref`
+   (`github.event.pull_request.base.ref`) equals `--repo-default-branch`
+   (`github.event.repository.default_branch`, not PR-influenceable) -- a
+   PR retargeted to a different, possibly unprotected base branch cannot
+   supply forged trust-anchor content instead. An empty or unresolved
+   value for any of these three flags refuses the bot path the same way
+   every other bot-path failure does, rather than silently falling back
+   to the local-disk read below (that fallback is reserved for
+   `--trust-anchor-ref` being omitted entirely). Both files also carry a
+   CODEOWNERS entry as defense in depth on top of this, not a substitute
+   for it (a live GitHub Settings toggle this repository's own tracked
+   files cannot themselves confirm is enabled).
+4. Only once all the above match: `required_check_contexts` reads the
+   required status-check context list straight out of `main.json`'s own
    `required_status_checks` rule (mirroring, not importing,
    `gitapex_gate_ruleset_required_checks.py`'s own `rule_of_type()`
    pattern), drops this check's own name, and `poll_bot_required_checks`
@@ -122,35 +141,6 @@ accepts the PR author's identity (`--pr-author-login`/`--pr-author-id`/
    conclusion is re-derived from the latest full check-runs snapshot on
    every poll iteration, never cached once seen passing -- a context
    re-run mid-poll into a worse conclusion is still caught.
-4. **Second revision, a Step 8 review finding closed before this issue's
-   own PR merged**: `.github/trusted-bots.yml` and `.github/rulesets/main.json`
-   are two more trust anchors this bot path depends on entirely (point 1
-   and point 2 above respectively) -- reading either from this job's own
-   checkout is reading whatever the PR under evaluation itself currently
-   has checked out, for a `pull_request`-triggered workflow the PR's own
-   proposed content, not a ref the PR itself cannot influence. `main()`
-   now also accepts `--trust-anchor-ref` (the workflow passes
-   `github.event.pull_request.base.sha`); when given, both files are
-   fetched via the GitHub Contents API (`fetch_repo_file_at_ref`) from
-   that ref instead of local disk. CODEOWNERS-gating both paths
-   (`.github/trusted-bots.yml` already was; `.github/rulesets/main.json`
-   now is too) is defense in depth on top of this, not a substitute for
-   it -- a live GitHub Settings toggle ("Require review from Code Owners")
-   this repository's own tracked files cannot themselves confirm is
-   enabled. `base.sha` is only actually immune to the PR's own influence
-   as long as the PR's own `base.ref` stays this repository's real
-   default branch -- a second Step 8 review round (against this very
-   fix) found nothing checked that: a PR could edit its own `base` to an
-   unprotected branch carrying forged trust-anchor content, since
-   `edited` is one of this workflow's own trigger types. `main()` now
-   also requires `--trust-anchor-base-ref`
-   (`github.event.pull_request.base.ref`) to equal `--repo-default-branch`
-   (`github.event.repository.default_branch`, not PR-influenceable)
-   before trusting `--trust-anchor-ref` at all; any mismatch, or either
-   value missing, refuses the bot path the same way every other bot-path
-   failure does. A `--trust-anchor-ref` given but empty is refused the
-   same way too, rather than silently falling back to the local-disk read
-   below (that fallback is reserved for the flag being omitted entirely).
 
 No change to `parse_verdict`/`check()` themselves, and every existing
 `--body`/`--head-sha`-only invocation (no `--pr-author-*` given at all)
@@ -539,7 +529,7 @@ def load_trusted_bots(path: Path) -> list[dict[str, Any]]:
     `fetch_repo_file_at_ref`/`_parse_trusted_bots` so a PR cannot widen its
     own bot-exemption eligibility merely by editing this file within its
     own diff -- see that flag's own `main()` help text and the design
-    doc's own second revision section."""
+    doc's own Decision logic detail section."""
     text = _read_utf8_or_raise(path)
     return _parse_trusted_bots(text, str(path))
 
@@ -604,7 +594,7 @@ def fetch_repo_file_at_ref(
     PR cannot widen its own bot-exemption eligibility merely by editing
     either file within its own diff (the CODEOWNERS review gate on both
     paths is defense in depth on top of this, not a substitute for it --
-    see the design doc's own second revision section).
+    see the design doc's own Decision logic detail section).
 
     Raises `GitHubApiError` (via `fetch_json_document`, which already
     retries transient 5xx/network failures) on any HTTP failure or
@@ -896,11 +886,8 @@ def poll_bot_required_checks(
     `head_sha` (never a delta), so a context that reports `success` on one
     iteration but is later re-run (a real, GitHub-supported action) and
     concludes `failure` on a subsequent iteration must still be caught
-    while this same poll call is still open waiting on some other context
-    -- a Step 8 review found an earlier revision's own `concluded` cache
-    stopped re-checking a context the moment it first saw a passing
-    conclusion, so a same-poll-session re-run's own worse conclusion for
-    that same context was silently never looked at again."""
+    while this same poll call is still open waiting on some other
+    context."""
     if not contexts:
         return False, (
             "no required status checks to verify: main.json's required_status_checks rule is either "
@@ -1120,8 +1107,7 @@ def main(argv: list[str] | None = None) -> int:
             "github.event.pull_request.base.ref -- the PR's own current base branch name. Required "
             "alongside --trust-anchor-ref; must equal --repo-default-branch or the ref is refused (a PR "
             "retargeted to a different, possibly branch-protection-free base branch could otherwise supply "
-            "forged trust-anchor content at that base's own tip -- a Step 8 review finding this flag "
-            "closes, see the design doc's own second revision section)."
+            "forged trust-anchor content at that base's own tip)."
         ),
     )
     bot_group.add_argument(
@@ -1184,11 +1170,11 @@ def main(argv: list[str] | None = None) -> int:
         # placeholder passed into the bot-path logic).
         try:
             if args.trust_anchor_ref is not None:
-                # Design doc's own second revision: read both trust
-                # anchors from a ref the PR under evaluation cannot move
-                # (the PR's own base commit), never from this job's own
-                # working tree -- see fetch_repo_file_at_ref's own
-                # docstring for why. Every check below raises ValueError
+                # Read both trust anchors from a ref the PR under
+                # evaluation cannot move (the PR's own base commit), never
+                # from this job's own working tree -- see
+                # fetch_repo_file_at_ref's own docstring for why. Every
+                # check below raises ValueError
                 # (never silently falls back to the local-disk `else`
                 # branch, which is reserved for --trust-anchor-ref being
                 # omitted entirely) -- a given-but-untrustworthy value
