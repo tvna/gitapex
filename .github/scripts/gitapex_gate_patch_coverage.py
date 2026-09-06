@@ -35,13 +35,24 @@ uses) and runs only the union of those test files via `pytest`
 (measured at 17s for a 1-file change), reusing this repository's own
 `pyproject.toml`-configured `--cov=` scope and writing a fresh coverage
 JSON report to compare against. A `--coverage-json` override is
-accepted for CI callers that already have a fresh report from their own
-prior step, to avoid running the same tests twice in one job.
+accepted for a CI caller that already has a fresh report from its own
+prior step (e.g. `test.yml`'s own `coverage-combine` job), to avoid
+running the same tests twice in one job -- this repository's own
+`patch-coverage-gate.yml` does not currently take that path (it is a
+standalone job with its own scoped pytest run, disclosed as a real,
+avoidable cost rather than folded into `coverage-combine` in this first
+version); the flag exists for that future integration.
 
 A source file with added lines but no corresponding test file at all is
 graded uncovered outright (no coverage data to consult) -- this is
 exactly issue #1493's own "brand-new file's own 0% floor" case,
 satisfied automatically rather than as a special-cased branch.
+
+Every in-scope file's own corresponding test file(s), across the whole
+diff, run together in one `pytest` invocation (never one invocation per
+file) -- so an unrelated, already-broken test in one file's own test
+suite blocks grading every other file's own findings too, fail-closed
+rather than silently grading a possibly-untrustworthy partial run.
 
 For a file whose test file(s) exist, coverage is graded per line:
 ``statements = executed_lines | missing_lines`` (from the coverage JSON
@@ -111,9 +122,9 @@ import sys
 import tempfile
 import tokenize
 import tomllib
-from typing import NamedTuple
+from typing import Annotated, NamedTuple
 
-from pydantic import BaseModel, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 DEFAULT_PYPROJECT = "pyproject.toml"
@@ -416,6 +427,23 @@ def load_coverage_json(path: pathlib.Path) -> dict[str, object]:
     return data
 
 
+def _coverage_entry_for_path(files_section: object, path: str) -> object:
+    """Return `files_section[path]`, matching a coverage-report key after
+    normalizing its own backslashes to forward slashes -- the same
+    normalization `gitapex_gate_evals_scripts_coverage.py`'s own
+    `select_files`/`select_files_in_source` already apply. `path` (from
+    `parse_added_lines`, always git's own forward-slash form) needs no
+    normalization of its own; only a coverage-report key generated on a
+    backslash-path platform could otherwise fail to match an actually-
+    measured file."""
+    if not isinstance(files_section, dict):
+        return None
+    for raw_path, info in files_section.items():
+        if isinstance(raw_path, str) and raw_path.replace("\\", "/") == path:
+            return info
+    return None
+
+
 def findings_for_file(
     path: str,
     added: set[int],
@@ -450,7 +478,7 @@ def findings_for_file(
         return ([], [finding]) if (added & waived_lines) else ([finding], [])
 
     files_section = coverage_data.get("files")
-    file_info = files_section.get(path) if isinstance(files_section, dict) else None
+    file_info = _coverage_entry_for_path(files_section, path)
     if not isinstance(file_info, dict):
         raise ScanError(
             f"{path}: has a corresponding test file ({', '.join(test_files)}) but no entry in the "
@@ -458,7 +486,11 @@ def findings_for_file(
         )
     executed_raw = file_info.get("executed_lines")
     missing_raw = file_info.get("missing_lines")
-    if not isinstance(executed_raw, list) or not isinstance(missing_raw, list):
+    if (
+        not isinstance(executed_raw, list)
+        or not isinstance(missing_raw, list)
+        or not all(isinstance(n, int) and not isinstance(n, bool) for n in (*executed_raw, *missing_raw))
+    ):
         raise ScanError(f"{path}: coverage report entry has no numeric executed_lines/missing_lines")
     executed = set(executed_raw)
     statements = executed | set(missing_raw)
@@ -529,7 +561,7 @@ class GatePatchCoverageArgs(BaseModel):
     root: pathlib.Path
     pyproject: pathlib.Path
     coverage_json: pathlib.Path | None
-    pytest_timeout: int
+    pytest_timeout: Annotated[int, Field(gt=0)]
 
     @field_validator("root")
     @classmethod

@@ -38,6 +38,7 @@ from conftest import (
     assert_workflow_feeds_merge_base_to,
     assert_workflow_has_no_trigger_path_filter,
 )
+from pydantic import ValidationError
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / ".github" / "scripts" / "gitapex_gate_patch_coverage.py"
@@ -409,6 +410,51 @@ def test_findings_for_file_missing_or_non_list_lines_is_a_scan_error(tmp_path: p
         gate.findings_for_file(path, {1}, ["tests/test_foo.py"], coverage_data, tmp_path)
 
 
+def test_findings_for_file_non_int_line_numbers_is_a_scan_error(tmp_path: pathlib.Path) -> None:
+    """A coverage report whose line-number lists contain a non-int element
+    (e.g. a string) must fail closed rather than silently intersecting to
+    an empty, falsely-clean match."""
+    path = "skills/x/scripts/foo.py"
+    (tmp_path / "skills" / "x" / "scripts").mkdir(parents=True)
+    (tmp_path / path).write_text("x = 1\n", encoding="utf-8")
+    coverage_data: dict[str, object] = {"files": {path: {"executed_lines": ["1"], "missing_lines": []}}}
+    with pytest.raises(gate.ScanError, match="no numeric executed_lines/missing_lines"):
+        gate.findings_for_file(path, {1}, ["tests/test_foo.py"], coverage_data, tmp_path)
+
+
+def test_findings_for_file_bool_line_numbers_is_a_scan_error(tmp_path: pathlib.Path) -> None:
+    """`bool` is an `int` subclass in Python; a report saying `true`/`false`
+    there is malformed, not a real line number, matching
+    gitapex_gate_evals_scripts_coverage.py's own identical `bool` rejection
+    for `percent_covered`."""
+    path = "skills/x/scripts/foo.py"
+    (tmp_path / "skills" / "x" / "scripts").mkdir(parents=True)
+    (tmp_path / path).write_text("x = 1\n", encoding="utf-8")
+    coverage_data: dict[str, object] = {"files": {path: {"executed_lines": [True], "missing_lines": []}}}
+    with pytest.raises(gate.ScanError, match="no numeric executed_lines/missing_lines"):
+        gate.findings_for_file(path, {1}, ["tests/test_foo.py"], coverage_data, tmp_path)
+
+
+# --- _coverage_entry_for_path -------------------------------------------------
+
+
+def test_coverage_entry_for_path_matches_a_backslash_normalized_key() -> None:
+    """A coverage report generated on a backslash-path platform must still
+    match a diff-derived, always-forward-slash path -- the same
+    normalization gitapex_gate_evals_scripts_coverage.py's own
+    select_files/select_files_in_source already apply."""
+    files_section = {"skills\\x\\scripts\\foo.py": {"executed_lines": [1]}}
+    assert gate._coverage_entry_for_path(files_section, "skills/x/scripts/foo.py") == {"executed_lines": [1]}
+
+
+def test_coverage_entry_for_path_returns_none_for_no_match() -> None:
+    assert gate._coverage_entry_for_path({"other.py": {}}, "skills/x/scripts/foo.py") is None
+
+
+def test_coverage_entry_for_path_returns_none_for_a_non_dict_files_section() -> None:
+    assert gate._coverage_entry_for_path("not-a-dict", "skills/x/scripts/foo.py") is None
+
+
 # --- find_violations (unit, coverage_json supplied) -------------------------
 
 
@@ -572,6 +618,24 @@ def test_coverage_json_must_exist_if_given_accepts_a_real_file(tmp_path: pathlib
     real = tmp_path / "coverage.json"
     real.write_text("{}", encoding="utf-8")
     assert gate.GatePatchCoverageArgs._coverage_json_must_exist_if_given(real) == real
+
+
+def test_pytest_timeout_rejects_zero_or_negative(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(ValidationError):
+        gate.GatePatchCoverageArgs(
+            root=tmp_path, pyproject=tmp_path / "pyproject.toml", coverage_json=None, pytest_timeout=0
+        )
+    with pytest.raises(ValidationError):
+        gate.GatePatchCoverageArgs(
+            root=tmp_path, pyproject=tmp_path / "pyproject.toml", coverage_json=None, pytest_timeout=-1
+        )
+
+
+def test_main_zero_pytest_timeout_exits_2(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(sys, "stdin", _FakeStdin(b""))
+    exit_code = gate.main(["--pytest-timeout", "0"])
+    assert exit_code == 2
+    assert "pytest_timeout" in capsys.readouterr().err
 
 
 def test_main_bad_coverage_json_path_exits_2(

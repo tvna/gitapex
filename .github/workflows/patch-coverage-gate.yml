@@ -26,7 +26,13 @@ concurrency:
 jobs:
   patch-coverage:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Comfortably above the gate's own internal DEFAULT_PYTEST_TIMEOUT_SECONDS
+    # (900s = 15 min): a job-level timeout equal to the internal ceiling
+    # leaves zero headroom for checkout/setup, so a merely-slow (not hung)
+    # scoped pytest run would be killed by this job's own timeout first,
+    # surfacing as an opaque "job exceeded maximum execution time" instead
+    # of the gate's own actionable "pytest timed out after 900s" message.
+    timeout-minutes: 20
     permissions:
       contents: read
     steps:
