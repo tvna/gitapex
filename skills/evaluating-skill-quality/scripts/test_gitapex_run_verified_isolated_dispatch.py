@@ -441,6 +441,28 @@ def test_build_isolated_home_does_not_copy_nested_credentials_file(
     assert not (isolated_home / ".claude" / "plugins" / "some-plugin" / ".credentials.json").exists()
 
 
+def test_build_isolated_home_survives_a_dangling_symlink(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Regression test for issue #1854, found live on a macOS environment
+    # while running this script's own dogfooding self-review dispatch: a
+    # real $HOME/.claude/plugins/cache/... tree can contain a dangling
+    # symlink (a partially-removed marketplace-cache entry), and the
+    # default shutil.copytree(symlinks=False) dereferences every symlink,
+    # raising FileNotFoundError for one whose target no longer exists --
+    # copytree aggregates every such per-entry failure into a single
+    # shutil.Error only after the whole walk completes, aborting the
+    # entire isolated-$HOME build for a reason unrelated to isolation.
+    real_home = tmp_path / "real-home"
+    plugin_dir = real_home / ".claude" / "plugins" / "cache" / "some-plugin"
+    plugin_dir.mkdir(parents=True)
+    (plugin_dir / "dangling-link").symlink_to(real_home / "does-not-exist")
+    monkeypatch.setenv("HOME", str(real_home))
+
+    isolated_home = gvid.build_isolated_home(tmp_path / "workdir")
+
+    copied_link = isolated_home / ".claude" / "plugins" / "cache" / "some-plugin" / "dangling-link"
+    assert copied_link.is_symlink()
+
+
 def test_build_isolated_home_raises_when_home_unset(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("HOME", raising=False)
     with pytest.raises(FileNotFoundError, match="HOME is not set"):

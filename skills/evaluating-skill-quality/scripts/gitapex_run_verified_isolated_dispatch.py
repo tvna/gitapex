@@ -448,6 +448,23 @@ def build_isolated_home(
     ``$HOME`` is unset or the real ``$HOME/.claude`` does not exist, rather
     than guessing a fallback location, which would risk silently copying a
     different identity's config/skills into the "isolated" copy.
+
+    Copies symlinks as symlinks (``symlinks=True``) rather than the
+    ``shutil.copytree`` default of dereferencing them: a real
+    ``$HOME/.claude`` (e.g. a plugin marketplace cache under
+    ``.claude/plugins/cache/...``) can contain a dangling symlink left by a
+    partially-removed or stale cache entry, and dereferencing one raises
+    ``FileNotFoundError`` for that entry -- ``copytree`` aggregates every
+    such per-entry failure into one ``shutil.Error`` only after the whole
+    walk completes, aborting the entire isolated-``$HOME`` build for a
+    reason unrelated to actual isolation (issue #1854). Preserving the
+    symlink instead of dereferencing it does not change this script's
+    already-disclosed containment boundary: a dispatched subprocess's
+    Read/Glob/Grep tools were already confirmed (this module's own
+    docstring, "two further gaps" section) not to be confined to reads
+    inside ``cwd`` in every environment this script runs in, so a symlink
+    surviving into the isolated copy introduces no new absolute-path-read
+    vector beyond what already exists.
     """
     # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
     home_env = os.environ.get("HOME")
@@ -482,7 +499,13 @@ def build_isolated_home(
             to_ignore += [n for n in names if n in _HOME_COPY_STRIP_DIRS]
         return to_ignore
 
-    shutil.copytree(real_claude_dir, isolated_home / ".claude", ignore=_ignore_top_level_strip_dirs)
+    shutil.copytree(
+        real_claude_dir,
+        isolated_home / ".claude",
+        symlinks=True,
+        ignore_dangling_symlinks=True,
+        ignore=_ignore_top_level_strip_dirs,
+    )
     real_claude_json = real_home / ".claude.json"
     if real_claude_json.is_file():
         shutil.copy2(real_claude_json, isolated_home / ".claude.json")
