@@ -2,7 +2,7 @@
 name: drafting-a-skill
 description: Pipeline-only task, dispatched by executing-a-branch-plan (Step 6, agentType branch-plan-task) for a brand-new or existing SKILL.md, or by scorer-gated-skill-edits's own Step 3 for one bounded gate-loop iteration or Step 9 for its pre-ship review -- never invoked directly, never the entry point for "should this even be a skill."
 disable-model-invocation: true
-compatibility: "disable-model-invocation is a Claude-Code/Cursor-specific field the standard Agent Skills spec does not define; on a runtime without it, this skill's manual-only invocation mode must be enforced by naming convention or documentation instead. Step 6's checkers require python3 on PATH. This skill asks no live question of its own -- it runs inside an isolated, non-interactive branch-plan-task dispatch with no requester to ask -- so it carries no AskUserQuestion dependency; every metadata choice it once elicited directly is now resolved upstream, either via eliciting-a-design and the ACM's own Planned-ops quoting discipline (the executing-a-branch-plan path), or already fixed in the target skill's own existing metadata/gitapex.yaml (the scorer-gated-skill-edits Step 3 path)."
+compatibility: "disable-model-invocation is a Claude-Code/Cursor-specific field the standard Agent Skills spec does not define; on a runtime without it, this skill's manual-only invocation mode must be enforced by naming convention or documentation instead. Step 6's checkers require python3 on PATH. This skill carries no AskUserQuestion dependency: it runs inside an isolated, non-interactive branch-plan-task dispatch with no requester to ask (see Precondition)."
 ---
 
 # Drafting a Skill

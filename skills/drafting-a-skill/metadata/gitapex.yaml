@@ -317,6 +317,11 @@ spec:
     - kind: elision
       anchor: "https://github.com/tvna/gitapex/issues/1882"
       summary: "Notes migrated out of SKILL.md's body: attribution, not a live dependency -- the \"Create when / Don't create for\" list shape this skill's drafting judgment is built on follows writing-skills' own structure, credited for the shape's origin, now living in eliciting-a-design's own mechanism-fit gate. RED-GREEN-REFACTOR is a deliberately rejected import. skill-creator is named only as a rejected source for its benchmark loop, description-optimization loop, and .skill-packaging."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner flagged frontmatter's compatibility field as too long (833 chars, the longest in the repository). The AskUserQuestion-dependency clause explained its own historical mechanism (how metadata choices used to be elicited directly, now resolved upstream via eliciting-a-design/scorer-gated-skill-edits) -- creation background, not a runtime constraint. Trimmed to the bare compatibility fact plus a Precondition pointer; every genuine constraint kept."
+      outcome:
+        baseCommit: "4fa1778e09390afe2f371f9419d279e9aa18456d"
   skillDependencies:
     requires:
       - evaluating-skill-quality
