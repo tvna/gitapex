@@ -884,7 +884,7 @@ strictly.
 
   | Sub-type | Fails | Narrowness requirement |
   |---|---|---|
-  | Mixed-via-file | (b) | A single hard dependency on one non-skill file, cleanly named (a reader can tell what it is and why it lives where it does from its name and one citing sentence alone), carrying no undisclosed baggage (no second, unnamed repo-specific assumption riding along inside the same dependency) |
+  | Mixed-via-file | (b) | A single hard dependency on one non-skill file, cleanly named (a reader can tell what it is and why it lives where it does from its name and one citing sentence alone), carrying no undisclosed baggage (no second, unnamed repo-specific assumption riding along inside the same dependency), and -- per trigger 3's own fallback predicate below -- disclosing a fallback a vendoring consumer could use once that outside file does not travel with the copy; without one, this lands on trigger 3 instead regardless of how cleanly the dependency is otherwise named |
   | Mixed-via-clean-sibling | (a) | A single sibling-skill dependency clearing all three of no-fan-out, a clean interface, and uncleaned-baggage-free -- see [Sibling-skill dependency portability](#sibling-skill-dependency-portability) for the exact narrowness conditions |
   | Mixed-via-bundled-convention | (c) | The skill's only repo-specific content is confined entirely to one or more distinctly-named bundled reference files -- living inside this skill's own directory, so (b) itself stays clear -- that this skill's own `SKILL.md` explicitly instructs a vendoring consumer to replace or drop wholesale (e.g. `drafting-an-adr`'s `references/this-repo-only.md`, `auditing-agent-product-scope`'s `references/gitapex-cross-links.md`, `scanning-attack-surfaces` Mode B's own equivalent). Distinguished from a merely-illustrative bundled file, which stays Portable, by a control test: does a procedure step actually read the file to decide how to behave? If yes, this is a real condition-(c) failure; if the file is cited only as a worked example or background color no step depends on, condition (c) is unaffected |
 
@@ -985,8 +985,11 @@ clearing it does not by itself make the skill Portable. Whether that
 same file's content survives condition (c)'s sentence-level litmus test
 is a separate question, graded there: a bundled file with
 repository-specific content that a procedure step reads to decide
-behavior is Mixed-via-bundled-convention (see Mixed above) even though
-it fully clears this section's own location test.
+behavior only reaches Mixed-via-bundled-convention when it also clears
+that sub-type's own remaining narrowness above (distinctly named, and
+named by `SKILL.md` as replace-or-drop) -- otherwise Repository-scoped,
+no trigger number needed, per that same row -- even though it fully
+clears this section's own location test.
 
 - **Portable** -- every dependency file the procedure treats as
   authoritative must resolve inside the skill's own directory. One that
