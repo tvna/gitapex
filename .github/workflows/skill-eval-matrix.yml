@@ -209,7 +209,7 @@ jobs:
             # would execute the suite at its committed default model yet
             # record it under this matrix tier -- a silently mislabelled
             # result.
-            if ! python3 evals/scripts/gitapex_set_config_model.py "$suite" "$MODEL"; then
+            if ! uv run --frozen python3 evals/scripts/gitapex_set_config_model.py "$suite" "$MODEL"; then
               echo "| ${skill} | FAIL (model override) |" >> "$GITHUB_STEP_SUMMARY"
               failed=1
               continue
@@ -385,7 +385,7 @@ jobs:
             # A failed override must not fall through to the runner: that
             # would execute the suite at its committed default model yet
             # record it under this lane -- a silently mislabelled result.
-            if ! python3 evals/scripts/gitapex_set_config_model.py "$suite" "$MODEL"; then
+            if ! uv run --frozen python3 evals/scripts/gitapex_set_config_model.py "$suite" "$MODEL"; then
               echo "| ${skill} | FAIL (model override) |" >> "$GITHUB_STEP_SUMMARY"
               failed=1
               continue
