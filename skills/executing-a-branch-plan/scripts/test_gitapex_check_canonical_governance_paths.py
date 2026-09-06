@@ -50,6 +50,18 @@ def test_trusted_bots_allowlist_is_governance():
     assert "no-match: .github/trusted-bots.yml" not in result.stdout
 
 
+def test_main_ruleset_is_governance():
+    # gitapex issue #1875 (Step 8 adversarial review finding): .github/rulesets/main.json
+    # carries the commit_author_email_pattern/committer_email_pattern rules that are
+    # the second trust anchor for the independent-review-pending bot exemption
+    # (issue #1858) -- the same governance-sensitivity class as trusted-bots.yml
+    # above, per .github/CODEOWNERS's own identical rationale for this path.
+    result = run([".github/rulesets/main.json"])
+    assert result.returncode == 0
+    assert "governance: .github/rulesets/main.json" in result.stdout
+    assert "no-match: .github/rulesets/main.json" not in result.stdout
+
+
 def test_hook_script_prefix_and_skill_scripts_path():
     result = run(["hooks/check-x.sh", "skills/foo/scripts/bar.py"])
     assert result.returncode == 0
