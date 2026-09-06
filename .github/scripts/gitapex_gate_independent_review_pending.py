@@ -125,21 +125,25 @@ No change to `parse_verdict`/`check()` themselves, and every existing
 behaves exactly as before -- this is an additive branch ahead of the
 existing path, not a replacement of it.
 
-No longer stdlib-only (issue #1858): this file now also imports `yaml`
-(already a dependency of `.github/scripts/gitapex_gate_ruleset_required_checks.py`,
-used the same way here -- parsing `.github/trusted-bots.yml`) and
-`_gitapex_github_http` (issue #729's shared GitHub REST retry/pagination
-client -- explicitly exempted from this repository's own
-`.github/scripts/*.py` no-cross-file-imports convention by that module's
-own docstring; `gitapex_gate_retro_title_convention_citation.py` already
-sets this precedent). Still self-contained in the sense that matters:
-no other `.github/scripts/gitapex_*.py` gate/report file is imported.
+Issue #1858 gives this file a real third-party dependency for the first
+time: it now also imports `yaml` (already a dependency of
+`.github/scripts/gitapex_gate_ruleset_required_checks.py`, used the same
+way here -- parsing `.github/trusted-bots.yml`) and `_gitapex_github_http`
+(issue #729's shared GitHub REST retry/pagination client -- explicitly
+exempted from this repository's own `.github/scripts/*.py`
+no-cross-file-imports convention by that module's own docstring;
+`gitapex_gate_retro_title_convention_citation.py` already sets this
+precedent). Still self-contained in the sense that matters: no other
+`.github/scripts/gitapex_*.py` gate/report file is imported. Run via
+`uv run` accordingly (needed for the `yaml` import -- a bare `python3`
+invocation without it installed fails at import time, before argparse
+even runs), matching every Usage example below.
 
 Usage (existing, human-verdict path -- unchanged)::
 
-    python3 .github/scripts/gitapex_gate_independent_review_pending.py \\
+    uv run --frozen python3 .github/scripts/gitapex_gate_independent_review_pending.py \\
         --body PR_BODY.txt --head-sha <sha>
-    printf '%s' "$PR_BODY" | python3 .github/scripts/gitapex_gate_independent_review_pending.py --head-sha <sha>
+    printf '%s' "$PR_BODY" | uv run --frozen python3 .github/scripts/gitapex_gate_independent_review_pending.py --head-sha <sha>
 
 A bare pipe here masks `printf`'s own exit status in a non-`pipefail` shell
 (issue #1531) -- harmless for a literal `printf` producer, which cannot
@@ -149,7 +153,7 @@ recipe's producer is ever swapped for a command that can.
 Usage (trusted-bot exemption path; falls through to the above whenever the
 identity/email checks above do not both hold)::
 
-    GITHUB_TOKEN=... python3 .github/scripts/gitapex_gate_independent_review_pending.py \\
+    GITHUB_TOKEN=... uv run --frozen python3 .github/scripts/gitapex_gate_independent_review_pending.py \\
         --body PR_BODY.txt --head-sha <sha> \\
         --pr-author-login "dependabot[bot]" --pr-author-id 49699333 --pr-author-type Bot \\
         --owner tvna --repo gitapex
@@ -454,12 +458,21 @@ def _github_repository_part(index: int) -> str | None:
 def load_trusted_bots(path: Path) -> list[dict[str, Any]]:
     """Parse `.github/trusted-bots.yml` into a list of entry dicts.
 
-    Raises `OSError`/`yaml.YAMLError`/`ValueError` on an unreadable or
-    malformed file -- `main()`'s own bot-path wiring treats any of these
-    as "cannot confirm a bot-path candidate" and falls through to the
-    strict human-verdict path, never crashing and never silently trusting
+    Raises `ValueError` (an unreadable or non-UTF-8 file, converted at the
+    read boundary itself -- matching `gitapex_detect_changed_gate_scripts.py`'s
+    own `registered_gate_paths` pattern rather than leaving the read
+    boundary unguarded) or `yaml.YAMLError` (malformed YAML) on a bad file
+    -- `main()`'s own bot-path wiring treats any of these as "cannot
+    confirm a bot-path candidate" and falls through to the strict
+    human-verdict path, never crashing and never silently trusting
     everything or nothing."""
-    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise ValueError(f"{path} could not be read: {error}") from error
+    except UnicodeDecodeError as error:
+        raise ValueError(f"{path} is not valid UTF-8: {error}") from error
+    document = yaml.safe_load(text)
     if not isinstance(document, list):
         raise ValueError(f"{path} must contain a YAML list of entries, found {type(document).__name__}")
     return [entry for entry in document if isinstance(entry, dict)]
@@ -481,10 +494,18 @@ def is_trusted_bot(login: str, user_id: int, user_type: str, entries: list[dict[
 
 
 def load_ruleset(path: Path) -> dict[str, Any]:
-    """Parse `.github/rulesets/main.json`. Raises
-    `OSError`/`json.JSONDecodeError`/`ValueError` on an unreadable or
-    malformed file -- same fall-through contract as `load_trusted_bots`."""
-    document = json.loads(path.read_text(encoding="utf-8"))
+    """Parse `.github/rulesets/main.json`. Raises `ValueError` (an
+    unreadable or non-UTF-8 file, converted at the read boundary itself --
+    same pattern as `load_trusted_bots`) or `json.JSONDecodeError`
+    (malformed JSON) on a bad file -- same fall-through contract as
+    `load_trusted_bots`."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise ValueError(f"{path} could not be read: {error}") from error
+    except UnicodeDecodeError as error:
+        raise ValueError(f"{path} is not valid UTF-8: {error}") from error
+    document = json.loads(text)
     if not isinstance(document, dict):
         raise ValueError(f"{path} must contain a JSON object, found {type(document).__name__}")
     return document
@@ -559,7 +580,7 @@ def _email_matches_pattern(email: str, operator: Any, pattern: Any) -> bool:
     if operator == "regex":
         try:
             return re.search(pattern, email) is not None
-        except re.error:
+        except re.error:  # except-fail-open: WAIVED: a malformed regex here is a main.json config bug scoped only to the bot-exemption path (this function is reached only from a bot-identity-matched candidate) -- returning False safely falls through to the strict, pre-existing human-verdict path (evaluate_bot_path), never a silent pass; re-raising would crash this required check for every PR, bot or not, over a config bug in a file this diff does not own.
             return False
     return False
 
@@ -708,7 +729,9 @@ def _latest_run_for_context(runs: list[dict[str, Any]], context: str) -> dict[st
     if not matches:
         return None
 
-    def _sort_key(run: dict[str, Any]) -> tuple[str, int]:
+    def _sort_key(  # function-body-test-coverage: WAIVED: a private closure nested inside _latest_run_for_context, with no name accessible from outside this function to reference directly; its ordering is exercised through _latest_run_for_context's own most-recent-by-started_at test instead.
+        run: dict[str, Any],
+    ) -> tuple[str, int]:
         started_at = run.get("started_at")
         run_id = run.get("id")
         return (started_at if isinstance(started_at, str) else "", run_id if isinstance(run_id, int) else 0)
@@ -865,7 +888,7 @@ def evaluate_bot_path(
             return None
         try:
             fetched_author, fetched_committer = fetch_head_commit_emails(owner, repo, head_sha, token, opener, sleeper)
-        except GitHubApiError as error:
+        except GitHubApiError as error:  # except-fail-open: WAIVED: cannot confirm the head commit's own identity at all here -- design doc's own Revision section requires falling through to the strict human-verdict path on any inability to verify, never a silent bot-path pass and never a hard FAIL that would block every PR (bot or not) over a transient GitHub API failure.
             print(
                 f"note: PR author {pr_author_login!r} matches a trusted-bots.yml entry, but the head "
                 f"commit {head_sha} email could not be fetched ({error}) -- falling back to the "
@@ -992,37 +1015,39 @@ def main(argv: list[str] | None = None) -> int:
 
     bot_result: tuple[bool, str] | None = None
     if args.pr_author_login is not None or args.pr_author_id is not None or args.pr_author_type is not None:
+        # Both loads must succeed before the bot path is even attempted --
+        # deliberately not "load what we can and default the rest", since
+        # `ruleset` in particular backs the critical-defect fix
+        # (`head_commit_identity_matches_bot`): a corrupted/unreadable
+        # main.json must never let `evaluate_bot_path` run at all here,
+        # only ever fall through to the existing, unaffected human-verdict
+        # path below (fail closed to the strict path, not a falsy
+        # placeholder passed into the bot-path logic).
         try:
             trusted_bots = load_trusted_bots(Path(args.trusted_bots_path))
-        except (OSError, yaml.YAMLError, ValueError) as error:
-            print(
-                f"warning: could not read {args.trusted_bots_path}: {error}; falling back to the human-verdict path",
-                file=sys.stderr,
-            )
-            trusted_bots = []
-        try:
             ruleset = load_ruleset(Path(args.ruleset_path))
-        except (OSError, json.JSONDecodeError, ValueError) as error:
+        except (yaml.YAMLError, json.JSONDecodeError, ValueError) as error:
             print(
-                f"warning: could not read {args.ruleset_path}: {error}; falling back to the human-verdict path",
+                f"warning: could not load the bot-path allowlist/ruleset ({error}); the bot path is "
+                "never attempted this run -- falling back to the human-verdict path",
                 file=sys.stderr,
             )
-            ruleset = {}
-        bot_result = evaluate_bot_path(
-            pr_author_login=args.pr_author_login,
-            pr_author_id=args.pr_author_id,
-            pr_author_type=args.pr_author_type,
-            owner=args.owner,
-            repo=args.repo,
-            head_sha=args.head_sha,
-            trusted_bots=trusted_bots,
-            ruleset=ruleset,
-            token=os.environ.get("GITHUB_TOKEN", ""),
-            head_commit_author_email=args.head_commit_author_email,
-            head_commit_committer_email=args.head_commit_committer_email,
-            poll_timeout_seconds=args.poll_timeout_seconds,
-            poll_interval_seconds=args.poll_interval_seconds,
-        )
+        else:
+            bot_result = evaluate_bot_path(
+                pr_author_login=args.pr_author_login,
+                pr_author_id=args.pr_author_id,
+                pr_author_type=args.pr_author_type,
+                owner=args.owner,
+                repo=args.repo,
+                head_sha=args.head_sha,
+                trusted_bots=trusted_bots,
+                ruleset=ruleset,
+                token=os.environ.get("GITHUB_TOKEN", ""),
+                head_commit_author_email=args.head_commit_author_email,
+                head_commit_committer_email=args.head_commit_committer_email,
+                poll_timeout_seconds=args.poll_timeout_seconds,
+                poll_interval_seconds=args.poll_interval_seconds,
+            )
 
     took_bot_path = bot_result is not None
     passed, message = bot_result if bot_result is not None else check(body, args.head_sha)

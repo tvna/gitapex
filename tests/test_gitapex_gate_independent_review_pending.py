@@ -658,6 +658,16 @@ def test_required_check_contexts_empty_when_rule_absent_entirely() -> None:
     assert gate.required_check_contexts(ruleset) == []
 
 
+def test_rule_of_type_finds_the_matching_rule_by_type() -> None:
+    rule = gate._rule_of_type(_RULESET_WITH_ALL_RULE_TYPES, "required_status_checks")
+    assert rule is not None
+    assert rule["type"] == "required_status_checks"
+
+
+def test_rule_of_type_returns_none_when_no_rule_of_that_type_exists() -> None:
+    assert gate._rule_of_type({"rules": []}, "required_status_checks") is None
+
+
 # ---------------------------------------------------------------------------
 # head_commit_identity_matches_bot: the critical-defect fix itself.
 # ---------------------------------------------------------------------------
@@ -730,6 +740,63 @@ def test_fetch_head_commit_emails_raises_on_missing_commit_object() -> None:
 
     with pytest.raises(gate.GitHubApiError, match="no 'commit' object"):
         gate.fetch_head_commit_emails("o", "r", "sha", "tok", opener=opener, sleeper=lambda _s: None)
+
+
+# ---------------------------------------------------------------------------
+# _fetch_check_runs / _latest_run_for_context
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_check_runs_pages_through_multiple_pages() -> None:
+    page1 = json.dumps(
+        {"total_count": 2, "check_runs": [{"name": "pytest", "status": "completed", "conclusion": "success", "id": 1}]}
+    )
+    page2 = json.dumps(
+        {"total_count": 2, "check_runs": [{"name": "ruff", "status": "completed", "conclusion": "success", "id": 2}]}
+    )
+    calls = {"n": 0}
+
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        calls["n"] += 1
+        return _FakeResponse(200, page1 if calls["n"] == 1 else page2)
+
+    runs = gate._fetch_check_runs("o", "r", "sha", "tok", opener, lambda _s: None)
+    assert [run["name"] for run in runs] == ["pytest", "ruff"]
+    assert calls["n"] == 2
+
+
+def test_fetch_check_runs_raises_on_missing_check_runs_array() -> None:
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        return _FakeResponse(200, json.dumps({"total_count": 0}))
+
+    with pytest.raises(gate.GitHubApiError, match="no 'check_runs' array"):
+        gate._fetch_check_runs("o", "r", "sha", "tok", opener, lambda _s: None)
+
+
+def test_latest_run_for_context_picks_most_recent_by_started_at() -> None:
+    runs = [
+        {
+            "name": "pytest",
+            "status": "completed",
+            "conclusion": "failure",
+            "id": 1,
+            "started_at": "2026-01-01T00:00:00Z",
+        },
+        {
+            "name": "pytest",
+            "status": "completed",
+            "conclusion": "success",
+            "id": 2,
+            "started_at": "2026-01-01T01:00:00Z",
+        },
+    ]
+    latest = gate._latest_run_for_context(runs, "pytest")
+    assert latest is not None
+    assert latest["id"] == 2
+
+
+def test_latest_run_for_context_returns_none_when_no_run_matches() -> None:
+    assert gate._latest_run_for_context([], "pytest") is None
 
 
 # ---------------------------------------------------------------------------
@@ -1185,5 +1252,49 @@ def test_main_bot_path_falls_back_when_trusted_bots_file_missing(
     )
     assert exit_code == 0
     captured = capsys.readouterr()
-    assert "could not read" in captured.err
+    assert "could not load the bot-path allowlist/ruleset" in captured.err
+    assert "PASS: CLEAN verdict" in captured.out
+
+
+def test_main_never_calls_evaluate_bot_path_when_ruleset_load_fails(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Regression guard for the except-fail-open fix: a load failure must
+    # skip evaluate_bot_path entirely (never call it with a falsy
+    # placeholder ruleset/trusted_bots and continue), not merely default
+    # its arguments and proceed.
+    called: list[object] = []
+
+    def _must_not_be_called(**_kwargs: object) -> tuple[bool, str]:
+        called.append(1)
+        return True, "should never run"
+
+    monkeypatch.setattr(gate, "evaluate_bot_path", _must_not_be_called)
+    trusted_bots_path = tmp_path / "trusted-bots.yml"
+    trusted_bots_path.write_text(yaml.safe_dump(_TRUSTED_BOTS), encoding="utf-8")
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(_CLEAN_BODY, encoding="utf-8")
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--trusted-bots-path",
+            str(trusted_bots_path),
+            "--ruleset-path",
+            str(tmp_path / "nonexistent-main.json"),
+        ]
+    )
+    assert exit_code == 0
+    assert called == []
+    captured = capsys.readouterr()
+    assert "could not load the bot-path allowlist/ruleset" in captured.err
     assert "PASS: CLEAN verdict" in captured.out
