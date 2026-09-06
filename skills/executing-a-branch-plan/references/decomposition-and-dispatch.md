@@ -206,7 +206,8 @@ checkers), never a lighter-weight substitute.
 rather than left as an inert pointer.** `drafting-a-skill` carries
 `disable-model-invocation: true` in its own frontmatter, which blocks a
 `Skill`-tool invocation of it for any caller, not only a top-level one
-(issue `#1796`) -- so no step here ever calls it as a skill. Per
+-- confirmed live, not assumed -- so no step here ever calls it as a
+skill. Per
 `drafting-a-skill`'s own Precondition ("Who executes which Step"), the
 routed task's own work splits by Step instead:
 

@@ -50,14 +50,14 @@ adds the new call site, rather than reusing this definition silently.
    `decomposition-and-dispatch.md`'s own "Skill-file edit routing"
    section -- that section's own trigger stays `SKILL.md`-only; widening
    it to also route a `references/**`-only edit is a separate, not-yet-
-   landed change (issue `#1796`'s own Row 2), not something this entry
-   grants on its own -- `drafting-a-skill`'s own Step 3 (Cohesion
-   self-check), Step 4 (Collision/dependency check), Step 5 (Domain-gap
-   sweep), and Step 7 (review-handoff critique) dispatched here instead,
-   because `drafting-a-skill` carries `disable-model-invocation: true`,
-   which blocks a `Skill`-tool invocation of it from any caller, not only
-   a top-level one (empirically demonstrated, not assumed -- issue
-   `#1796`). The dispatch prompt embeds `drafting-a-skill`'s own Step
+   landed change tracked elsewhere, not something this entry grants on
+   its own -- `drafting-a-skill`'s own Step 3 (Cohesion self-check),
+   Step 4 (Collision/dependency check), Step 5 (Domain-gap sweep), and
+   Step 7 (review-handoff critique) dispatched here instead, because
+   `drafting-a-skill` carries `disable-model-invocation: true`, which
+   blocks a `Skill`-tool invocation of it from any caller, not only a
+   top-level one (empirically demonstrated, not assumed). The dispatch
+   prompt embeds `drafting-a-skill`'s own Step
    3/4/5/7 procedure text (or its file path) and the proposed
    `SKILL.md`/`references/` diff under review directly, in-band, since
    this dispatch has no tool of its own that could fetch either. Step 4's
