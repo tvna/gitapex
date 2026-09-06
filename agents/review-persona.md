@@ -44,6 +44,19 @@ adds the new call site, rather than reusing this definition silently.
    `skills/executing-a-branch-plan/references/events-and-review-gate.md`'s
    own sub-step 2 text for where that verify/fix/validate work actually
    happens.
+5. `merge-retrospective` Step 4b's backlog-grounded proposal review
+   (issue #1806) -- one dispatch per retrospective cycle, covering every
+   `missing-deterministic-gate` repair from that cycle together against
+   the swept `gate-proposal` backlog, never one dispatch per repair --
+   see `skills/merge-retrospective/references/backlog-grounded-proposal-review.md`'s
+   own 4b.2 for the full procedure. Returns, per repair, exactly one
+   verdict (`NEW` / `DUPLICATE-OF #N` / `ALREADY-SHIPPED <gate id>` /
+   `RECLASSIFY <reason>`), plus a batch-level `CLUSTER` grouping when
+   several repairs describe one fix. Read-only, like entry 4 above: this
+   dispatch returns verdicts only, never acting on them itself -- the
+   calling skill verifies each verdict outside the dispatch (re-fetching
+   the named issue, re-checking the `ssot.json` entry) before treating it
+   as settled.
 
 ## What this dispatch does and does not do
 
