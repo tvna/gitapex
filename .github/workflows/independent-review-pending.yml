@@ -40,6 +40,16 @@
 # regardless of which files it touches. A path-filtered trigger would
 # leave an unrelated PR's required check pending forever once this job is
 # registered in branch protection.
+#
+# Issue #1858: the final step below now also passes the PR author's
+# identity to the script, which tries a machine-checkable trusted-bot
+# merge-gate path (Dependabot today, see .github/trusted-bots.yml) BEFORE
+# falling through to the human-verdict path this header describes --
+# unchanged for every human/agent PR. See
+# docs/gitapex/specs/2026-09-06-dependabot-trusted-bot-gate-exemption-design.md
+# (in particular its own "Revision: head-commit identity check" section)
+# and gitapex_gate_independent_review_pending.py's own module docstring
+# for the full bot-path design.
 name: Independent review pending
 
 on:
@@ -48,6 +58,11 @@ on:
 
 permissions:
   contents: read
+  # Issue #1858: the bot-merge-gate path polls GitHub's Checks API
+  # (`GET /repos/{owner}/{repo}/commits/{sha}/check-runs`) for every other
+  # required status check on the head commit -- read-only; no write scope
+  # is needed for anything this workflow does.
+  checks: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -56,9 +71,17 @@ concurrency:
 jobs:
   independent-review-pending:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Issue #1858: the bot-merge-gate path polls for up to
+    # DEFAULT_POLL_TIMEOUT_SECONDS (900s = 15 min, gitapex_gate_independent_review_pending.py)
+    # before failing a still-pending required check. 20 minutes leaves
+    # headroom for checkout/setup plus the poll itself, so this job's own
+    # GitHub Actions timeout can never race the script's own timeout FAIL
+    # (a human/agent PR never reaches the polling branch at all, so this
+    # extension costs it nothing).
+    timeout-minutes: 20
     permissions:
       contents: read
+      checks: read
     steps:
       - name: Harden runner + checkout
         uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
@@ -81,11 +104,46 @@ jobs:
           set -euo pipefail
           printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr_body.txt"
 
+      # Issue #1858: PR_AUTHOR_LOGIN/_ID/_TYPE carry
+      # github.event.pull_request.user.{login,id,type} -- GitHub-supplied
+      # event-payload fields, present for every PR (human, agent, or bot
+      # alike) -- passed via env and never interpolated directly into the
+      # shell script, matching PR_BODY's own convention above, since
+      # `login` is nominally PR-author-influenced text. The script
+      # (gitapex_gate_independent_review_pending.py) only takes the
+      # bot-merge-gate path when all three match a
+      # .github/trusted-bots.yml entry AND the head commit's own
+      # author/committer email separately match main.json's email-pattern
+      # rules; any other PR falls straight through to the unchanged
+      # human-verdict path -- see that script's own module docstring and
+      # the design doc's own "Revision" section for why a PR-opener
+      # identity match alone is never sufficient. --owner/--repo are
+      # deliberately omitted: the script resolves them from
+      # $GITHUB_REPOSITORY, which every GitHub Actions job already sets.
+      #
+      # GITHUB_TOKEN authenticates the script's own GitHub API calls (head
+      # commit email fetch, required check-run polling) -- read-only,
+      # matching this job's contents:read/checks:read permissions above;
+      # a human/agent PR never reaches either call.
+      #
+      # --head-commit-author-email/--head-commit-committer-email are
+      # deliberately never passed here: they exist only as a test-only
+      # override in the script itself, and wiring attacker-influenceable
+      # input through them here would let a forged value bypass the real,
+      # GitHub-API-fetched commit identity this gate's own critical-defect
+      # fix depends on.
       - name: Check independent-review verdict is recorded against the current head
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_AUTHOR_LOGIN: ${{ github.event.pull_request.user.login }}
+          PR_AUTHOR_ID: ${{ github.event.pull_request.user.id }}
+          PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           uv run --frozen python3 .github/scripts/gitapex_gate_independent_review_pending.py \
             --body "$RUNNER_TEMP/pr_body.txt" \
-            --head-sha "$HEAD_SHA"
+            --head-sha "$HEAD_SHA" \
+            --pr-author-login "$PR_AUTHOR_LOGIN" \
+            --pr-author-id "$PR_AUTHOR_ID" \
+            --pr-author-type "$PR_AUTHOR_TYPE"
