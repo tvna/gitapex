@@ -31,11 +31,18 @@ def _copy_repo_subset(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _mutate(root: Path, rel: str, old: str, new: str) -> None:
+def _mutate(root: Path, rel: str, old: str, new: str, *, count: int = 1) -> None:
+    """Replace `old` with `new`, `count` times (all occurrences if
+    negative). `skill-writing-fundamentals.md`'s own Table of contents
+    links each locked term's heading by its exact text, so `Fault
+    attribution`/`Never both` each appear twice there (TOC entry +
+    heading) -- a single-occurrence replace would leave the term
+    genuinely present via the untouched copy, which is not the
+    corrupted-file state a "term lost" test needs to simulate."""
     path = root / rel
     text = path.read_text(encoding="utf-8")
     assert old in text, f"fixture setup: {old!r} not present in {rel}"
-    path.write_text(text.replace(old, new, 1), encoding="utf-8")
+    path.write_text(text.replace(old, new, count), encoding="utf-8")
 
 
 def _diff(rel_path: str, new_start: int, added_lines: list[str]) -> str:
@@ -97,22 +104,29 @@ def test_section_span_reaches_end_of_file_when_it_is_the_last_section(tmp_path: 
 
 
 @pytest.mark.parametrize(
-    ("rel", "old", "new", "expected_fragment"),
+    ("rel", "old", "new", "expected_fragment", "count"),
     [
         (
             G.RUBRIC_MD,
             "Fault attribution",
             "Blame assignment",
             "Contract discipline section lost the term 'Fault attribution'",
+            1,
         ),
-        (G.RUBRIC_MD, "Never both", "Pick one place", "Contract discipline section lost the term 'Never both'"),
-        (G.CONTRACT_STRUCTURE_MD, "Fault attribution", "Blame assignment", "lost the shared term 'Fault attribution'"),
-        (G.CONTRACT_STRUCTURE_MD, "Never both", "Pick one place", "lost the shared term 'Never both'"),
+        (G.RUBRIC_MD, "Never both", "Pick one place", "Contract discipline section lost the term 'Never both'", 1),
+        (
+            G.CONTRACT_STRUCTURE_MD,
+            "Fault attribution",
+            "Blame assignment",
+            "lost the shared term 'Fault attribution'",
+            -1,
+        ),
+        (G.CONTRACT_STRUCTURE_MD, "Never both", "Pick one place", "lost the shared term 'Never both'", -1),
     ],
 )
-def test_corrupted_term_fails(tmp_path: Path, rel: str, old: str, new: str, expected_fragment: str) -> None:
+def test_corrupted_term_fails(tmp_path: Path, rel: str, old: str, new: str, expected_fragment: str, count: int) -> None:
     root = _copy_repo_subset(tmp_path)
-    _mutate(root, rel, old, new)
+    _mutate(root, rel, old, new, count=count)
     problems = G.check_content(root)
     assert any(expected_fragment in p for p in problems), problems
 

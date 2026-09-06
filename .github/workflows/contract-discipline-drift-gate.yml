@@ -1,10 +1,13 @@
-# Issue #1194: drafting-a-skill/references/contract-structure.md restates
-# evaluating-skill-quality/references/rubric.md's own Contract discipline
-# section (Fault attribution, Never both) so a drafting agent shares the
-# same vocabulary the review that later grades a draft already uses. This
-# job catches the diff-awareness half of that lock: a PR that rewrites
-# the Contract discipline section's own substance without touching
-# contract-structure.md, and without an explicit
+# Issue #1194: drafting-a-skill/references/skill-writing-fundamentals.md's
+# own Contract structure section restates evaluating-skill-quality/
+# references/rubric.md's own Contract discipline section (Fault
+# attribution, Never both) so a drafting agent shares the same vocabulary
+# the review that later grades a draft already uses (issue #1882: this
+# section moved into skill-writing-fundamentals.md, merged from the former
+# contract-structure.md). This job catches the diff-awareness half of
+# that lock: a PR that rewrites the Contract discipline section's own
+# substance without touching skill-writing-fundamentals.md, and without
+# an explicit
 # `<!-- contract-discipline-ack: <reason> -->` comment acknowledging the
 # edit doesn't change either rule. The always-on content-lock half (do
 # both files still carry the shared terms at all) runs separately, as a
@@ -76,7 +79,7 @@ jobs:
           fi
           git -c core.quotePath=false diff -U0 --no-renames "$merge_base" "$HEAD_SHA" \
               -- 'skills/evaluating-skill-quality/references/rubric.md' \
-                 'skills/drafting-a-skill/references/contract-structure.md' \
+                 'skills/drafting-a-skill/references/skill-writing-fundamentals.md' \
             > /tmp/contract-discipline.diff
           uv run --frozen python3 .github/scripts/gitapex_scan_contract_discipline_drift.py \
             --diff /tmp/contract-discipline.diff
