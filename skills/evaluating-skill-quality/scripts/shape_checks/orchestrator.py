@@ -478,6 +478,26 @@ def _shape_waivers_well_formed_result(
     )
 
 
+def _shape_waivers_citation_sources(waivers_by_check: dict[str, str]) -> list[tuple[str, str]]:
+    """``spec.shapeWaivers[].reason`` free text fed into
+    ``sidecar_citation_sources`` (issue #1329, independent-review
+    finding), the same treatment ``_lifecycle_reason_citation_sources``
+    above already gives ``spec.lifecycle.experimental/deprecated.reason``
+    -- both are free-text justification fields on this sidecar, and
+    ``no-bare-issue-citation``'s own documented scope
+    (``gitapex_check_skill_shape.py``'s module docstring) already names
+    "the metadata sidecar's own ... lifecycle.experimental/deprecated.reason
+    text" as covered for exactly the vendoring/portability reason a bare
+    ``#N`` there loses its meaning once the sidecar travels with its
+    skill directory; a shapeWaivers reason is the identical shape and
+    identical rationale, so omitting it here would have been an
+    inconsistency, not a deliberate narrower scope."""
+    return [
+        (f"metadata/gitapex.yaml:spec.shapeWaivers[check={check_name}].reason", reason_text)
+        for check_name, reason_text in waivers_by_check.items()
+    ]
+
+
 def _lifecycle_reason_citation_sources(lifecycle_dict: dict[str, object]) -> list[tuple[str, str]]:
     """The ``for lifecycle_key in ("experimental", "deprecated"): ...``
     loop feeding ``sidecar_citation_sources``, extracted verbatim from

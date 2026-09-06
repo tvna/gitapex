@@ -302,10 +302,10 @@ Checks (the canonical list -- the manual fallback is to apply these):
     below. A bare #N auto-links relative to whichever repository
     currently hosts the file and silently resolves to the wrong issue
     once the skill is vendored or simply read out of context. This scan
-    also covers the metadata sidecar's own spec.references entries and
-    lifecycle.experimental/deprecated.reason text -- a bare number there
-    loses its meaning once the sidecar travels with its skill directory
-    to another repository. A full ``https://github.com/OWNER/REPO/issues/149``-style
+    also covers the metadata sidecar's own spec.references entries,
+    lifecycle.experimental/deprecated.reason text, and shapeWaivers[].reason
+    text (issue #1329) -- a bare number there loses its meaning once the
+    sidecar travels with its skill directory to another repository. A full ``https://github.com/OWNER/REPO/issues/149``-style
     URL contains no bare ``#N`` and so is never flagged by this scan --
     that is the only sanctioned way left to cite an issue from the
     sidecar. Other repo-specific content -- sibling-skill names,
@@ -652,6 +652,7 @@ from shape_checks.orchestrator import (
     _references_citation_source,
     _references_dir_checks,
     _references_well_formed_result,
+    _shape_waivers_citation_sources,
     _shape_waivers_well_formed_result,
     _sidecar_unreadable_results,
     _skill_md_read_result,
@@ -898,6 +899,7 @@ def check_shape(target: Path, *, strict_token_budget: bool = False) -> list[Chec
                 spec_is_mapping, spec_raw, schema_errors, shape_waivers_raw
             )
             results.append(shape_waivers_result)
+            sidecar_citation_sources.extend(_shape_waivers_citation_sources(shape_waivers))
             lifecycle_raw = spec.get("lifecycle") if spec_is_mapping else None
             lifecycle_dict = lifecycle_raw if isinstance(lifecycle_raw, dict) else {}
             sidecar_citation_sources.extend(_lifecycle_reason_citation_sources(lifecycle_dict))

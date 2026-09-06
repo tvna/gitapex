@@ -7697,6 +7697,42 @@ def test_shape_waivers_reason_with_embedded_escape_fails_well_formed(tmp_path):
     assert "does not match" in result.evidence
 
 
+def test_shape_waivers_reason_ending_in_trailing_newline_fails_well_formed(tmp_path):
+    # Defeat test for a second independent-review finding on this same
+    # PR: Python's re module treats a bare $ as matching immediately
+    # before a single trailing newline, not only at the true string end,
+    # so a first version of this pattern anchored with $ let a reason
+    # consisting of or ending in exactly one "\n" silently pass despite
+    # containing the excluded character. \Z (used now) has no such
+    # dispensation. This reason is otherwise valid (single non-empty
+    # line, well under the length cap) except for its trailing "\n".
+    d = _write_shape_waivers_sidecar(
+        _write_skill(tmp_path),
+        '  shapeWaivers:\n    - check: no-voodoo-constant\n      reason: "legacy constant, tracked separately\\n"\n',
+    )
+    result = _by_name(css.check_shape(d))["shape-waivers-well-formed"]
+    assert result.passed is False
+    assert "does not match" in result.evidence
+
+
+def test_shape_waivers_reason_bare_citation_fails_no_bare_issue_citation(tmp_path):
+    # Consistency guard (independent-review finding on PR #1892):
+    # spec.shapeWaivers[].reason is the same free-text-justification
+    # shape as spec.lifecycle.experimental/deprecated.reason (see
+    # test_lifecycle_reason_bare_citation_fails_no_bare_issue_citation),
+    # and a bare issue/PR-number citation there loses its meaning the
+    # same way once the sidecar travels with its skill directory to
+    # another repository -- so it must be scanned the same way.
+    d = _write_shape_waivers_sidecar(
+        _write_skill(tmp_path),
+        "  shapeWaivers:\n    - check: no-voodoo-constant\n      reason: waived, see gitapex#1329\n",
+    )
+    by = _by_name(css.check_shape(d))
+    assert by["no-bare-issue-citation"].passed is False
+    assert "spec.shapeWaivers[check=no-voodoo-constant].reason:#1329" in by["no-bare-issue-citation"].evidence
+    assert css.main([str(d)]) == 1
+
+
 def test_shape_waivers_valid_declares_and_counts(tmp_path):
     d = _write_shape_waivers_sidecar(
         _write_skill(tmp_path),
