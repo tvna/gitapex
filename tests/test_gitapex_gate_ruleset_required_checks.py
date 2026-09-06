@@ -538,6 +538,14 @@ def test_a_non_mapping_jobs_key_reaches_the_gates_own_exit_path(tmp_path: pathli
         (lambda r: r["rules"][4]["parameters"].pop("operator"), "Field required"),
         (lambda r: r["rules"][5]["parameters"].update({"negate": "not-a-bool"}), "valid boolean"),
         (lambda r: r["rules"][4]["parameters"].update({"unexpected_field": True}), "Extra inputs are not permitted"),
+        # An independent review round found this exact case: pydantic's lax
+        # bool mode silently coerces the JSON string "true" to True inside
+        # the validated model, but _find_email_pattern_violations reads the
+        # raw dict, where "true" (a str) `is True` evaluates False -- so a
+        # denylist-inverting edit disguised as a quoted string would pass
+        # both the schema layer and the policy check were negate plain
+        # bool | None. StrictBool must reject it here, at the schema layer.
+        (lambda r: r["rules"][4]["parameters"].update({"negate": "true"}), "valid boolean"),
     ],
 )
 def test_the_schema_layer_rejects_what_the_key_set_check_could_not_see(

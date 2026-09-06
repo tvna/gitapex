@@ -34,7 +34,7 @@ import sys
 from typing import Annotated, Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
@@ -45,21 +45,22 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 DEFAULT_RULESET = REPO_ROOT / ".github" / "rulesets" / "main.json"
 DEFAULT_WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 
+#: The two email-allowlist rule types issue #1840 added, checked together by
+#: `_find_email_pattern_violations` below. Defined before `REQUIRED_RULE_TYPES`
+#: so the latter can splice this tuple in rather than re-typing both literals.
+_EMAIL_PATTERN_RULE_TYPES = ("commit_author_email_pattern", "committer_email_pattern")
+
 #: Rules whose absence would leave `main` deletable or rewritable even with a
 #: pull request requirement in place, or would silently reopen the issue
-#: #1840 third-party-misattribution incident these last two exist to close.
+#: #1840 third-party-misattribution incident `_EMAIL_PATTERN_RULE_TYPES` exists
+#: to close.
 REQUIRED_RULE_TYPES = (
     "deletion",
     "non_fast_forward",
     "pull_request",
     "required_status_checks",
-    "commit_author_email_pattern",
-    "committer_email_pattern",
+    *_EMAIL_PATTERN_RULE_TYPES,
 )
-
-#: The two email-allowlist rule types issue #1840 added, checked together by
-#: `_find_email_pattern_violations` below.
-_EMAIL_PATTERN_RULE_TYPES = ("commit_author_email_pattern", "committer_email_pattern")
 
 #: GitHub's own placeholder ref for "whatever the default branch is called".
 #: Pinning the literal name instead would silently stop protecting anything if
@@ -196,12 +197,25 @@ class EmailPatternParameters(BaseModel):
     matches" -- so omitted/false already means "fail when the pattern does
     NOT match", which is exactly what an email allowlist needs with no
     `negate` field at all.
+
+    `negate` is `StrictBool`, not plain `bool`: `_find_email_pattern_violations`
+    below reads `parameters.get("negate")` off the *raw* committed dict, never
+    off this model's own validated-and-coerced instance (`find_shape_violations`
+    is handed the same raw `ruleset` `find_schema_violations` validated, not
+    the `CommittedRuleset` it built). Pydantic's default lax `bool` mode
+    silently coerces a JSON string like `"true"` to `True` inside the model
+    it returns, but leaves the raw dict's `"negate": "true"` untouched --
+    which `is True` then evaluates `False` against, so the inversion this
+    field exists to catch would pass both this schema layer and that policy
+    check. `StrictBool` closes that gap by rejecting the string outright,
+    here at the schema layer, instead of requiring every downstream reader
+    of the raw dict to also guard against it.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = None
-    negate: bool | None = None
+    negate: StrictBool | None = None
     operator: Literal["starts_with", "ends_with", "contains", "regex"]
     pattern: str = Field(min_length=1)
 
