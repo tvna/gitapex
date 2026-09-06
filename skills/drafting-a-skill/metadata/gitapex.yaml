@@ -322,6 +322,11 @@ spec:
       summary: "The repository owner flagged frontmatter's compatibility field as too long (833 chars, the longest in the repository). The AskUserQuestion-dependency clause explained its own historical mechanism (how metadata choices used to be elicited directly, now resolved upstream via eliciting-a-design/scorer-gated-skill-edits) -- creation background, not a runtime constraint. Trimmed to the bare compatibility fact plus a Precondition pointer; every genuine constraint kept."
       outcome:
         baseCommit: "4fa1778e09390afe2f371f9419d279e9aa18456d"
+    - kind: elision
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner asked the python3 and AskUserQuestion clauses be dropped from compatibility entirely, keeping only the disable-model-invocation spec-deviation fact rubric.md's own Compatibility awareness axis actually looks for. python3 stays declared structurally via metadata.executionRequirements.tools.shell (verified unaffected by gitapex_scan_execution_requirements_drift.py); no other file cross-referenced the removed clauses."
+      outcome:
+        baseCommit: "cf731068a35df8d570b76e6f1e5df2f23bd2c69e"
   skillDependencies:
     requires:
       - evaluating-skill-quality
