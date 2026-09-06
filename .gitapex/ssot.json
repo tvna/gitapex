@@ -296,6 +296,25 @@
       ]
     },
     {
+      "id": "gate-proposal-dedup-sweep",
+      "kind": "script",
+      "script": ["hooks/check-gate-proposal-dedup-sweep.sh", "hooks/gitapex_check_gate_proposal_dedup_sweep.py"],
+      "rule": "Denies mcp__github__issue_write (method create, gate-proposal label) when the body carries no single well-formed Dedup-sweep proof line generated only by skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py, or when its count differs from a live re-fetch of the open gate-proposal population; fails closed on a missing GH_TOKEN/GITHUB_TOKEN or an unfetchable count. Accepts verdict NEW or DUPLICATE-OF #N (issue #1806 row 3 requires duplicates to still file standalone). Fails closed (denies) rather than allowing the call through when jq is missing from PATH or the payload is not a single JSON object.",
+      "planes": ["pretooluse"],
+      "local_exclusion": "Grades the new issue's own body against live open-issue state on GitHub; 'currently-open gate-proposal issues' has no local/offline equivalent to check against.",
+      "trigger": "PreToolUse matcher mcp__github__issue_write (hooks/hooks.json)",
+      "policy_refs": [],
+      "cluster": ["plan-integrity", "github-operations"],
+      "tracking_issue": 1806,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "mcp-tool", "ref": "mcp__github__issue_write"},
+        {"kind": "runtime-resolved-reference", "ref": "GET /repos/{owner}/{repo}/issues?state=open&labels=gate-proposal"}
+      ]
+    },
+    {
       "id": "independent-review-pending",
       "kind": "script",
       "script": [".github/workflows/independent-review-pending.yml", ".github/scripts/gitapex_gate_independent_review_pending.py"],
@@ -1361,7 +1380,7 @@
       "id": "main-ruleset-required-checks",
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_ruleset_required_checks.py",
-      "rule": "The committed .github/rulesets/main.json must validate against a pydantic model of GitHub's own ruleset request body -- extra=forbid at every level, a type-discriminated rule union, and every pull_request parameter required rather than defaulted, so a misspelled parameter, a wrong-typed count or an unknown rule type is a finding here instead of a silently-ignored field or a 422 discovered after a live dispatch. On top of that schema it must target ~DEFAULT_BRANCH with enforcement active, grant no bypass actors, block deletion and non-fast-forward, require pull requests with code-owner review and thread resolution, and allow only the merge methods this repository uses. Every context it names as a required status check must resolve to a job that actually reports under that exact name on every pull request targeting the default branch: the workflow's pull_request trigger may carry no paths/paths-ignore filter, its branches/branches-ignore filter must admit the default branch, its types filter must include opened and synchronize, and the backing job may be neither a matrix job (which reports as 'job (value)') nor a reusable-workflow call (which reports as 'caller / inner'). A context no job can ever report stays Pending forever, blocking the merge with no in-repository fix.",
+      "rule": "The committed .github/rulesets/main.json must validate against a pydantic model of GitHub's own ruleset request body -- extra=forbid at every level, a type-discriminated rule union, and every pull_request parameter required rather than defaulted, so a misspelled parameter, a wrong-typed count or an unknown rule type is a finding here instead of a silently-ignored field or a 422 discovered after a live dispatch. On top of that schema it must target ~DEFAULT_BRANCH with enforcement active, grant no bypass actors, block deletion and non-fast-forward, require pull requests with code-owner review and thread resolution, and allow only the merge methods this repository uses. It must also carry commit_author_email_pattern and committer_email_pattern rules (issue #1840, added after a real incident where a stray local git config let commits on a legitimate pull request show up on GitHub as authored by an unrelated third-party account): both rules must be present, and neither may have its negate parameter set to true, which would silently invert the email allowlist into a denylist blocking exactly the emails this repository wants to allow. Every context it names as a required status check must resolve to a job that actually reports under that exact name on every pull request targeting the default branch: the workflow's pull_request trigger may carry no paths/paths-ignore filter, its branches/branches-ignore filter must admit the default branch, its types filter must include opened and synchronize, and the backing job may be neither a matrix job (which reports as 'job (value)') nor a reusable-workflow call (which reports as 'caller / inner'). A context no job can ever report stays Pending forever, blocking the merge with no in-repository fix.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_ruleset_required_checks.py"],
       "trigger": "tests/test_gitapex_gate_ruleset_required_checks.py inside the pytest step of .github/workflows/test.yml",

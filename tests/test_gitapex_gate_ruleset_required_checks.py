@@ -48,6 +48,14 @@ VALID: dict[str, Any] = {
                 "required_status_checks": [{"context": "always-runs"}],
             },
         },
+        {
+            "type": "commit_author_email_pattern",
+            "parameters": {"operator": "regex", "pattern": "^noreply@example\\.com$"},
+        },
+        {
+            "type": "committer_email_pattern",
+            "parameters": {"operator": "regex", "pattern": "^noreply@example\\.com$"},
+        },
     ],
 }
 
@@ -131,6 +139,15 @@ def test_a_job_level_name_overrides_the_job_id(tmp_path: pathlib.Path) -> None:
         (lambda r: r.update({"extra": 1}), "Extra inputs are not permitted"),
         (lambda r: r.pop("conditions"), "Field required"),
         (lambda r: r["rules"].pop(0), "has no 'deletion' rule"),
+        # issue #1840: the two email-allowlist rules must be as unremovable
+        # (and un-invertible) as any of the four rules above -- a future PR
+        # that quietly drops or flips one of these must fail here, not pass
+        # silently the way it did before this gate's own schema knew about
+        # either rule type at all.
+        (lambda r: r["rules"].pop(4), "has no 'commit_author_email_pattern' rule"),
+        (lambda r: r["rules"].pop(5), "has no 'committer_email_pattern' rule"),
+        (lambda r: r["rules"][4]["parameters"].update({"negate": True}), "inverts the allowlist into a denylist"),
+        (lambda r: r["rules"][5]["parameters"].update({"negate": True}), "inverts the allowlist into a denylist"),
     ],
 )
 def test_each_shape_finding_is_reported(mutate: Any, expected: str, tmp_path: pathlib.Path) -> None:
@@ -511,6 +528,24 @@ def test_a_non_mapping_jobs_key_reaches_the_gates_own_exit_path(tmp_path: pathli
         (lambda r: r.update({"target": "everything"}), "target"),
         (lambda r: r.update({"name": ""}), "name"),
         (lambda r: r["rules"][3]["parameters"]["required_status_checks"].append({"ctx": "x"}), "Extra inputs"),
+        # commit_author_email_pattern/committer_email_pattern: defeat-tests for
+        # the two rule types added by issue #1840, deliberately constructed to
+        # break the new EmailPatternParameters model rather than only exercise
+        # its happy path (evaluating-deterministic-gate-quality dimension 15).
+        (lambda r: r["rules"][4]["parameters"].update({"operator": "matches"}), "Input should be"),
+        (lambda r: r["rules"][4]["parameters"].update({"pattern": ""}), "at least 1 character"),
+        (lambda r: r["rules"][4]["parameters"].pop("pattern"), "Field required"),
+        (lambda r: r["rules"][4]["parameters"].pop("operator"), "Field required"),
+        (lambda r: r["rules"][5]["parameters"].update({"negate": "not-a-bool"}), "valid boolean"),
+        (lambda r: r["rules"][4]["parameters"].update({"unexpected_field": True}), "Extra inputs are not permitted"),
+        # An independent review round found this exact case: pydantic's lax
+        # bool mode silently coerces the JSON string "true" to True inside
+        # the validated model, but _find_email_pattern_violations reads the
+        # raw dict, where "true" (a str) `is True` evaluates False -- so a
+        # denylist-inverting edit disguised as a quoted string would pass
+        # both the schema layer and the policy check were negate plain
+        # bool | None. StrictBool must reject it here, at the schema layer.
+        (lambda r: r["rules"][4]["parameters"].update({"negate": "true"}), "valid boolean"),
     ],
 )
 def test_the_schema_layer_rejects_what_the_key_set_check_could_not_see(
@@ -520,6 +555,53 @@ def test_the_schema_layer_rejects_what_the_key_set_check_could_not_see(
     mutate(ruleset)
     findings = gate.find_schema_violations(ruleset)
     assert any(expected in finding for finding in findings), findings
+
+
+@pytest.mark.parametrize("operator", ["starts_with", "ends_with", "contains", "regex"])
+def test_email_pattern_accepts_every_documented_operator(operator: str) -> None:
+    # GitHub's own schema for commit_author_email_pattern/committer_email_pattern
+    # documents exactly these four operator values; main.json only exercises
+    # "regex" in practice, so this pins the other three against silent
+    # rejection too -- a defeat-test suite that only shows the model rejecting
+    # bad input, never confirms it accepts every value it is supposed to.
+    ruleset = json.loads(json.dumps(VALID))
+    ruleset["rules"][4]["parameters"]["operator"] = operator
+    assert gate.find_schema_violations(ruleset) == []
+
+
+def test_find_email_pattern_violations_flags_a_negated_author_rule() -> None:
+    # Direct name coverage for _find_email_pattern_violations: the schema
+    # layer alone cannot catch negate: true (it only knows `bool | None`),
+    # so this policy check is the only thing that can.
+    ruleset = json.loads(json.dumps(VALID))
+    ruleset["rules"][4]["parameters"]["negate"] = True
+    findings = gate._find_email_pattern_violations(ruleset)
+    assert any("commit_author_email_pattern" in f and "inverts the allowlist" in f for f in findings)
+
+
+def test_find_email_pattern_violations_flags_a_negated_committer_rule() -> None:
+    ruleset = json.loads(json.dumps(VALID))
+    ruleset["rules"][5]["parameters"]["negate"] = True
+    findings = gate._find_email_pattern_violations(ruleset)
+    assert any("committer_email_pattern" in f and "inverts the allowlist" in f for f in findings)
+
+
+def test_find_email_pattern_violations_is_clean_when_the_rules_are_absent() -> None:
+    # Absence is find_shape_violations' own "has no X rule" finding's job
+    # (via REQUIRED_RULE_TYPES); this function must not double-report it.
+    ruleset = json.loads(json.dumps(VALID))
+    ruleset["rules"] = ruleset["rules"][:4]
+    assert gate._find_email_pattern_violations(ruleset) == []
+
+
+def test_find_shape_violations_reports_email_pattern_inversion() -> None:
+    # Direct name coverage for find_shape_violations itself: confirms the
+    # new _find_email_pattern_violations call is actually wired into it,
+    # not only unit-tested in isolation above.
+    ruleset = json.loads(json.dumps(VALID))
+    ruleset["rules"][4]["parameters"]["negate"] = True
+    findings = gate.find_shape_violations(ruleset)
+    assert any("inverts the allowlist" in f for f in findings)
 
 
 def test_the_committed_ruleset_validates_against_the_schema() -> None:
