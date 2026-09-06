@@ -202,13 +202,69 @@ small, goes through `drafting-a-skill`'s own full Design-by-Contract
 procedure (collision check, formative-dimensions sweep, shape/drift
 checkers), never a lighter-weight substitute.
 
+**What "routes to `drafting-a-skill`" actually means, stated concretely
+rather than left as an inert pointer.** `drafting-a-skill` carries
+`disable-model-invocation: true` in its own frontmatter, which blocks a
+`Skill`-tool invocation of it for any caller, not only a top-level one
+(issue `#1796`) -- so no step here ever calls it as a skill. Per
+`drafting-a-skill`'s own Precondition ("Who executes which Step"), the
+routed task's own work splits by Step instead:
+
+- **Steps 1/2/6 (job capture, Design-by-Contract draft, formative
+  sweep + shape/drift checkers) run inside the dispatching
+  `branch-plan-task` task itself**, using that task's own write/Bash
+  access -- a file write, a bare `mkdir` for a brand-new skill
+  directory, running Step 6's own two checker scripts against the draft
+  directory. The task reads `drafting-a-skill`'s own file content
+  directly (its procedure text, or its file path) and executes those
+  Steps against it; this needs no separate dispatch, since the task
+  already holds every tool those Steps require.
+- **Steps 3/4/5/7 (Cohesion self-check, Collision/dependency check,
+  Domain-gap sweep, review-handoff critique) are read-only
+  content-reasoning passes, dispatched instead to the `review-persona`
+  subagent type via the `Agent`/`Task` tool** --
+  `agents/review-persona.md`'s own "Sanctioned call sites" section,
+  entry 5, defined for exactly this case. The dispatch prompt embeds
+  `drafting-a-skill`'s own Step 3/4/5/7 text (or its file path) plus
+  the current draft `SKILL.md`/`references/` diff, since that dispatch
+  has no tool of its own (`review-persona`'s `tools: Read, Grep, Glob`
+  allow-list) to fetch either. It returns findings only -- a named
+  split/gap finding or "none found" (Steps 3/5), each collision
+  resolved or deferred with a reason (Step 4), the review-handoff
+  critique (Step 7) -- and never itself decides fix/defer/escalate; the
+  dispatching `branch-plan-task` task does that acting, the same
+  read-only, findings-only boundary
+  `agents/review-persona.md`'s own "Sanctioned call sites" section,
+  entry 4, already states for the structurally similar Step 8
+  adversarial-review dispatch (see
+  [Step 8's two dispatches](#step-8s-two-dispatches)).
+- **Self-editing exception.** When the routed task's own target IS
+  `drafting-a-skill`'s own `SKILL.md`/`references/` files, the task
+  does not route Steps 1/2/6 back through `drafting-a-skill` -- that
+  would recurse indefinitely. It executes them directly, using
+  `drafting-a-skill`'s own current file content as its guide, and still
+  dispatches Steps 3/4/5/7 to `review-persona` exactly as above
+  (`drafting-a-skill`'s own Precondition, "Self-editing exception"
+  bullet).
+
 `scorer-gated-skill-edits` stays a separate, opt-in route: it applies
 only when the task's own Planned ops themselves state a scorer and a
 held-out split, per that skill's own Precondition gate -- never a
 fallback this step reaches for on its own, and never triggered merely
 because a scorer or split already exists for the target skill. Absent
 that stated precondition, the task routes to `drafting-a-skill` as
-above.
+above. When it does apply, that skill's own Step 3 and Step 9 use the
+identical `review-persona`-dispatch mechanism above, not a route of
+their own -- `agents/review-persona.md`'s own "Sanctioned call sites"
+section, entry 5, names both explicitly: Step 3 (one bounded gate-loop
+iteration) runs `drafting-a-skill`'s Steps 1/2/6 in its own
+write/Bash-capable context and dispatches Steps 3/4/5 to
+`review-persona` within that same iteration, deferring Step 7's own
+handoff every time; Step 9 (the pre-ship review) later enters
+`drafting-a-skill` directly at Step 7 and dispatches that Step's
+review-handoff critique to `review-persona` the same way, before itself
+dispatching `evaluating-skill-quality`/`battle-testing-a-skill`
+unconditionally.
 
 ### Per-task diff BASE (screening precondition, used at step 6)
 
