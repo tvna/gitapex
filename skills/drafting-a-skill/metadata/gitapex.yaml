@@ -291,6 +291,11 @@ spec:
       summary: "The repository owner asked whether the earlier conciseness fix (continuous prose vs. list/table principle enumeration, code-block/process-tree illustration) was reproducibly caught by a future drafting-a-skill self-refactor. It was not -- dimension 4's existing checklist bullet covers only a Step's own long workflow, not a reference section's principle enumeration. Added a bullet to dimension 4 (Structural legibility) stating the rule directly, plus matching Good/Bad entries."
       outcome:
         baseCommit: "9b0dce1d14134603239c709f2f0f5f9945a9157f"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "The repository owner corrected dimension 4's new list/table-over-prose rule: it read as scoped to a `references/` section only, but the principle applies to any markdown file under the skill folder, `SKILL.md` included. Reworded the bullet and its Good/Bad entries to name both `SKILL.md` and `references/` explicitly."
+      outcome:
+        baseCommit: "304e0e79a848bc0bfff4f65aba7d310643544bf1"
   skillDependencies:
     requires:
       - evaluating-skill-quality

@@ -202,7 +202,7 @@ Bad: a Step phrased as advice ("you might want to check...") for
 - Make branch triggers distinct and complete -- one checkable entry condition per branch (including reject/stop/escalate routes), no sibling branch sharing it, no input state left unmatched -- reusing this skill's own Step 3 cohesion enumeration as that inventory instead of re-deriving one, per this skill's own "never both" rule.
 - Give real input/output pairs over description of what good output looks like: include at least one worked example showing the procedure run end-to-end on a plausible input, not a schema in the abstract.
 - The per-Step three-failure-mode completeness walk (precondition, action, postcondition) is a separate write-time requirement, owned by this file's own Contract structure section's drafting checklist item 5 -- not restated here.
-- When a `references/` section enumerates multiple principles or rules (not a single Step's own action), give each its own bullet or table row, never continuous prose the reader has to re-parse into a list -- if a section's principles can't be told apart at a glance, that section is carrying too much for its own structure. Illustrate with a fenced code block or a process-tree diagram wherever a branch, a value, or a before/after shape is easier to read than the same thing described in words.
+- When a section in any of the skill's own markdown files (`SKILL.md` or a `references/` file alike) enumerates multiple principles or rules (not a single Step's own action), give each its own bullet or table row, never continuous prose the reader has to re-parse into a list -- if a section's principles can't be told apart at a glance, that section is carrying too much for its own structure. Illustrate with a fenced code block or a process-tree diagram wherever a branch, a value, or a before/after shape is easier to read than the same thing described in words.
 
 Good:
 - "route back to Step 1" (a number in *this* draft's own Steps, kept true by the draft's own renumbering discipline)
@@ -212,7 +212,7 @@ Good:
 - An exact frontmatter template beside a "use judgment" Worked-example template
 - A branch table with one checkable condition per branch, reusing Step 3's own cohesion findings rather than re-deriving them
 - `executing-a-branch-plan`'s own "Worked example" section, walking a 3-row ACM through wave assignment
-- A reference section's principles given as separate bulleted items, each with its own fenced-code Good/Bad pair
+- A `SKILL.md` or `references/` section's principles given as separate bulleted items, each with its own fenced-code Good/Bad pair
 
 Bad:
 - A cross-reference that drifts silently after a Step gets renumbered, or a Step whose "nothing found" case has no stated output at all
@@ -222,7 +222,7 @@ Bad:
 - A template that is either rigidly exact where judgment was needed or vague where an exact contract was needed
 - Two branches selected by the same trigger, or an input state matching none
 - A Steps list with no example, leaving a reader to construct their own first real test case
-- A reference section's principles run together into paragraphs, each rule indistinguishable from the surrounding sentences
+- A `SKILL.md` or `references/` section's principles run together into paragraphs, each rule indistinguishable from the surrounding sentences
 
 *Gate-side cross-reference: Dimension 4, Clarity and structure*
 
