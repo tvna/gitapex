@@ -61,7 +61,7 @@ adds the new call site, rather than reusing this definition silently.
    resolved or deferred with a reason, and the Step 7 review-handoff
    critique) -- this dispatch never itself decides whether a finding gets
    fixed, deferred, or escalated; that stays the dispatching caller's own
-   job, the same read-only findings-only boundary call site 4 above
+   job, the same read-only, findings-only boundary call site 4 above
    already states.
 
 ## What this dispatch does and does not do

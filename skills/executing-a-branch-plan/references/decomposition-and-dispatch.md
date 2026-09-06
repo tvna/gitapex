@@ -233,11 +233,9 @@ routed task's own work splits by Step instead:
   resolved or deferred with a reason (Step 4), the review-handoff
   critique (Step 7) -- and never itself decides fix/defer/escalate; the
   dispatching `branch-plan-task` task does that acting, the same
-  read-only, findings-only boundary
-  `agents/review-persona.md`'s own "Sanctioned call sites" section,
-  entry 4, already states for the structurally similar Step 8
-  adversarial-review dispatch (see
-  [Step 8's two dispatches](#step-8s-two-dispatches)).
+  read-only, findings-only boundary that same section's entry 4 already
+  states for the structurally similar [Step 8 adversarial-review
+  dispatch](#step-8s-two-dispatches).
 - **Self-editing exception.** When the routed task's own target IS
   `drafting-a-skill`'s own `SKILL.md`/`references/` files, the task
   does not route Steps 1/2/6 back through `drafting-a-skill` -- that
@@ -255,10 +253,9 @@ because a scorer or split already exists for the target skill. Absent
 that stated precondition, the task routes to `drafting-a-skill` as
 above. When it does apply, that skill's own Step 3 and Step 9 use the
 identical `review-persona`-dispatch mechanism above, not a route of
-their own -- `agents/review-persona.md`'s own "Sanctioned call sites"
-section, entry 5, names both explicitly: Step 3 (one bounded gate-loop
-iteration) runs `drafting-a-skill`'s Steps 1/2/6 in its own
-write/Bash-capable context and dispatches Steps 3/4/5 to
+their own -- that same entry 5 names both explicitly: Step 3 (one
+bounded gate-loop iteration) runs `drafting-a-skill`'s Steps 1/2/6 in
+its own write/Bash-capable context and dispatches Steps 3/4/5 to
 `review-persona` within that same iteration, deferring Step 7's own
 handoff every time; Step 9 (the pre-ship review) later enters
 `drafting-a-skill` directly at Step 7 and dispatches that Step's
