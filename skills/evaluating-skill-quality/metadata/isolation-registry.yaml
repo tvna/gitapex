@@ -38,8 +38,9 @@
 #
 # Migrated from the copy of adversarial-self-audit.md on this branch as of
 # 2026-09-05 (branched from origin/main before PR #1793/issue #1802's own
-# third-vector entry merged) -- that entry is not yet present here and must
-# be added by whichever future change actually merges it.
+# third-vector entry merged). That entry (leak_vector:
+# installed_plugin_sessionstart_hook, date 2026-09-04) is now present below,
+# added while resolving PR #1793's own rebase conflict against this file.
 
 entries:
   - identifying_signals:
@@ -488,3 +489,53 @@ entries:
       #1809''s own executing-a-branch-plan Step 8/drafting-a-pr-to-merge Step 8 rounds,
       then independently reproduced live by this same session using this script''s own
       real two-control run (not a synthetic test).'
+
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: 'true'
+      CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
+      claude_version: "2.1.261 (Claude Code)"
+    mechanism: >-
+      claude -p subprocess, isolated cwd only (no $HOME override this run) --
+      run while dogfooding this skill's own self-review procedure.
+    leak_vector: installed_plugin_sessionstart_hook
+    result: contaminated
+    verified_alternative: >-
+      None known yet. Whether stripping the plugin's marketplace
+      registration from an isolated $HOME copy (the same style of fix
+      already used for the home_task_list leak above) closes this gap has
+      not been tested.
+    companion_flags: []
+    methodology_pitfalls: []
+    trust_class: same-run-unreviewed
+    date: "2026-09-04"
+    notes:
+      - >-
+        Positive control (real $HOME, cwd holding a synthetic sentinel
+        CLAUDE.md outside any real repository) correctly quoted the
+        sentinel phrase. Negative control (identical cwd change, no
+        CLAUDE.md/AGENTS.md anywhere in its full ancestry, independently
+        confirmed) correctly reported none loaded for CLAUDE.md/AGENTS.md
+        specifically -- that exclusion still held -- but its own reply
+        additionally, unprompted, disclosed that its context carried a
+        SessionStart-hook-injected skill-invocation-discipline document
+        plus a full sibling-skill catalog, describing it as structured to
+        override normal judgment about when tool/skill invocation is
+        warranted.
+      - >-
+        A real dispatch of this skill's own self-review Procedure, run
+        from an isolated cwd holding only a read-only snapshot of this
+        skill's own directory (no CLAUDE.md/AGENTS.md inside it),
+        reproduced the same disclosure inside its own report and marked
+        its resulting verdict provisional as a direct consequence.
+      - >-
+        Distinct from the claude_md_agents_md exclusion (which still
+        holds), the home_task_list leak, and the
+        account_level_context_injection leak recorded elsewhere in this
+        registry.
+      - >-
+        Suspected, not confirmed, cause: the calling environment's own
+        plugin appears installed at user/$HOME scope rather than
+        per-repository scope, so its SessionStart hook fires for any
+        subprocess sharing that $HOME, independent of the subprocess's own
+        cwd.
+      - Filed as issue #1802 for a verified alternative and further investigation.

@@ -10,7 +10,6 @@ while the provisioning plugin itself stays tracked.
 
 from __future__ import annotations
 
-import os
 import pathlib
 import shutil
 import subprocess
@@ -285,23 +284,31 @@ def test_frontmatter_non_field_lines_ignored(tmp_path: pathlib.Path) -> None:
     assert (project / ".agents" / "skills" / "messy").is_symlink()
 
 
-@pytest.mark.skipif(
-    hasattr(os, "geteuid") and os.geteuid() == 0,
-    reason="root bypasses POSIX permission bits, so chmod(0o000) below cannot make the file unreadable",
-)
-def test_unreadable_skill_md_skipped(tmp_path: pathlib.Path) -> None:
+def test_unreadable_skill_md_skipped(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Raised through a monkeypatched ``read_text`` rather than a real
+    ``chmod(0o000)``: this repository's own container runs the suite as
+    uid 0, where the mode bits are bypassed and the read simply succeeds,
+    so a chmod-based fixture would assert nothing here while passing on a
+    non-root CI runner (same rationale as
+    ``test_gitapex_gate_commit_citation.py``'s own
+    ``test_main_commit_msg_an_unreadable_file_exits_two``)."""
     project = _project(tmp_path)
     _skill(project, "good-skill")
     locked = project / "skills" / "locked" / "SKILL.md"
-    _write(project / "skills" / "locked" / "SKILL.md", "---\nname: locked\n---\n")
-    locked.chmod(0o000)
-    try:
-        notes: list[str] = []
-        assert sync.sync_skills(project, False, notes) == 1
-        assert any("locked" in note for note in notes)
-        assert not (project / ".agents" / "skills" / "locked").exists()
-    finally:
-        locked.chmod(0o644)
+    _write(locked, "---\nname: locked\n---\n")
+
+    real_read_text = pathlib.Path.read_text
+
+    def _deny(self: pathlib.Path, encoding: str | None = None, errors: str | None = None) -> str:
+        if self == locked:
+            raise PermissionError(13, "Permission denied")
+        return real_read_text(self, encoding=encoding, errors=errors)
+
+    monkeypatch.setattr(pathlib.Path, "read_text", _deny)
+    notes: list[str] = []
+    assert sync.sync_skills(project, False, notes) == 1
+    assert any("locked" in note for note in notes)
+    assert not (project / ".agents" / "skills" / "locked").exists()
 
 
 def test_skills_src_missing_entirely(tmp_path: pathlib.Path) -> None:

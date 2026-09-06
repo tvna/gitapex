@@ -314,6 +314,8 @@ def build_isolated_home(base_dir: Path) -> Path:
     shutil.copytree(
         real_claude_dir,
         isolated_home / ".claude",
+        symlinks=True,
+        ignore_dangling_symlinks=True,
         ignore=_ignore_top_level_strip_dirs,
     )
     real_claude_json = real_home / ".claude.json"

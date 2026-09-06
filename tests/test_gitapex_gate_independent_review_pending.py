@@ -9,10 +9,17 @@ current head commit.
 
 from __future__ import annotations
 
+import base64
+import json
 import pathlib
+import re
+import urllib.error
+import urllib.request
+from typing import Any
 
 import gitapex_gate_independent_review_pending as gate
 import pytest
+import yaml
 from conftest import FakeStdin as _FakeStdin
 
 _SHA = "abc123def456abc123def456abc123def456abc"
@@ -468,3 +475,1312 @@ def test_malformed_heading_variant_does_not_pass(heading_line: str) -> None:
     passed, message = gate.check(body, _SHA)
     assert passed is False, f"heading line {heading_line!r} must not parse as the verdict section"
     assert "no '## Independent review verdict' section found" in message
+
+
+# ---------------------------------------------------------------------------
+# Trusted-bot exemption (issue #1858, design:
+# docs/gitapex/specs/2026-09-06-dependabot-trusted-bot-gate-exemption-design.md).
+# Everything above this point is the pre-existing 42-test suite, run
+# completely unmodified (regression guard) -- see the top-of-file assertion
+# in this PR's own commit message. Everything below is new.
+# ---------------------------------------------------------------------------
+
+_DEPENDABOT_LOGIN = "dependabot[bot]"
+_DEPENDABOT_ID = 49699333
+_DEPENDABOT_TYPE = "Bot"
+_DEPENDABOT_EMAIL = "49699333+dependabot[bot]@users.noreply.github.com"
+
+_TRUSTED_BOTS: list[dict[str, Any]] = [
+    {"login": _DEPENDABOT_LOGIN, "id": _DEPENDABOT_ID, "type": _DEPENDABOT_TYPE, "purpose": "test fixture"},
+]
+
+# A main.json-shaped fixture carrying every rule type the real file does
+# (deletion/non_fast_forward/pull_request/required_status_checks/
+# commit_author_email_pattern/committer_email_pattern) -- the ACM's own
+# "must not misread deletion/pull_request/... as check contexts" test needs
+# every other type actually present to be a real test of that, not merely
+# absent-by-omission.
+_RULESET_WITH_ALL_RULE_TYPES: dict[str, Any] = {
+    "rules": [
+        {"type": "deletion"},
+        {"type": "non_fast_forward"},
+        {"type": "pull_request", "parameters": {"required_approving_review_count": 0}},
+        {
+            "type": "required_status_checks",
+            "parameters": {
+                "required_status_checks": [
+                    {"context": "pytest"},
+                    {"context": "ruff"},
+                    {"context": "independent-review-pending"},
+                ]
+            },
+        },
+        {
+            "type": "commit_author_email_pattern",
+            "parameters": {"operator": "regex", "pattern": rf"^{re.escape(_DEPENDABOT_EMAIL)}$"},
+        },
+        {
+            "type": "committer_email_pattern",
+            "parameters": {"operator": "regex", "pattern": rf"^{re.escape(_DEPENDABOT_EMAIL)}$"},
+        },
+    ]
+}
+
+
+def _without_rule_type(ruleset: dict[str, Any], rule_type: str) -> dict[str, Any]:
+    return {"rules": [rule for rule in ruleset["rules"] if rule["type"] != rule_type]}
+
+
+class _FakeResponse:
+    """Mirrors test_gitapex_github_http.py's own `Response` fixture class --
+    just the surface `_gitapex_github_http.request_with_retry` uses."""
+
+    def __init__(self, status: int, body: str = "") -> None:
+        self.status = status
+        self._body = body.encode()
+
+    def __enter__(self) -> _FakeResponse:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return self._body
+
+    def close(self) -> None:
+        return None
+
+
+class _FakeClock:
+    """A deterministic, injectable stand-in for `time.monotonic` --
+    advances by `step` on every call, so a timeout test can force the
+    poll loop's own deadline to elapse without a real sleep."""
+
+    def __init__(self, start: float = 0.0, step: float = 1000.0) -> None:
+        self._now = start
+        self._step = step
+
+    def __call__(self) -> float:
+        value = self._now
+        self._now += self._step
+        return value
+
+
+def _check_runs_body(entries: list[dict[str, Any]]) -> str:
+    return json.dumps({"total_count": len(entries), "check_runs": entries})
+
+
+def _commit_body(author_email: str, committer_email: str) -> str:
+    return json.dumps({"commit": {"author": {"email": author_email}, "committer": {"email": committer_email}}})
+
+
+# ---------------------------------------------------------------------------
+# is_trusted_bot: positive/negative matches (ACM's own literal wording).
+# ---------------------------------------------------------------------------
+
+
+def test_is_trusted_bot_positive_match_all_three_fields_agree() -> None:
+    assert gate.is_trusted_bot(_DEPENDABOT_LOGIN, _DEPENDABOT_ID, _DEPENDABOT_TYPE, _TRUSTED_BOTS) is True
+
+
+@pytest.mark.parametrize(
+    ("login", "user_id", "user_type"),
+    [
+        pytest.param("someone-else[bot]", _DEPENDABOT_ID, _DEPENDABOT_TYPE, id="login-disagrees"),
+        pytest.param(_DEPENDABOT_LOGIN, 1, _DEPENDABOT_TYPE, id="id-disagrees"),
+        pytest.param(_DEPENDABOT_LOGIN, _DEPENDABOT_ID, "User", id="type-disagrees"),
+    ],
+)
+def test_is_trusted_bot_negative_match_when_one_field_disagrees(login: str, user_id: int, user_type: str) -> None:
+    # Defeat test (design doc's own Testing section + this issue's ACM): a
+    # forged/different login, id, or type must never be treated as a match
+    # even though the other two fields agree.
+    assert gate.is_trusted_bot(login, user_id, user_type, _TRUSTED_BOTS) is False
+
+
+def test_is_trusted_bot_false_on_empty_allowlist() -> None:
+    assert gate.is_trusted_bot(_DEPENDABOT_LOGIN, _DEPENDABOT_ID, _DEPENDABOT_TYPE, []) is False
+
+
+# ---------------------------------------------------------------------------
+# _read_utf8_or_raise: the shared read-boundary helper load_trusted_bots/
+# load_ruleset both sit on top of.
+# ---------------------------------------------------------------------------
+
+
+def test_read_utf8_or_raise_returns_file_contents(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "some.txt"
+    path.write_text("hello", encoding="utf-8")
+    assert gate._read_utf8_or_raise(path) == "hello"
+
+
+def test_read_utf8_or_raise_converts_missing_file_to_value_error(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(ValueError, match="could not be read"):
+        gate._read_utf8_or_raise(tmp_path / "nonexistent.txt")
+
+
+def test_read_utf8_or_raise_converts_undecodable_file_to_value_error(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "bad.txt"
+    path.write_bytes(b"\xff\xfe bad")
+    with pytest.raises(ValueError, match="not valid UTF-8"):
+        gate._read_utf8_or_raise(path)
+
+
+# ---------------------------------------------------------------------------
+# load_trusted_bots / load_ruleset
+# ---------------------------------------------------------------------------
+
+
+def test_load_trusted_bots_parses_real_shaped_yaml(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "trusted-bots.yml"
+    path.write_text(yaml.safe_dump(_TRUSTED_BOTS), encoding="utf-8")
+    assert gate.load_trusted_bots(path) == _TRUSTED_BOTS
+
+
+def test_load_trusted_bots_rejects_non_list_yaml(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "trusted-bots.yml"
+    path.write_text("not-a-list: true\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="must contain a YAML list"):
+        gate.load_trusted_bots(path)
+
+
+def test_load_ruleset_rejects_non_object_json(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "main.json"
+    path.write_text("[]", encoding="utf-8")
+    with pytest.raises(ValueError, match="must contain a JSON object"):
+        gate.load_ruleset(path)
+
+
+def test_parse_trusted_bots_parses_real_shaped_yaml() -> None:
+    # Direct test of the text-parsing half load_trusted_bots (local disk)
+    # and main()'s own --trust-anchor-ref branch (the GitHub Contents API,
+    # via fetch_repo_file_at_ref) both now share.
+    assert gate._parse_trusted_bots(yaml.safe_dump(_TRUSTED_BOTS), "source-label") == _TRUSTED_BOTS
+
+
+def test_parse_trusted_bots_rejects_non_list_yaml() -> None:
+    with pytest.raises(ValueError, match="must contain a YAML list"):
+        gate._parse_trusted_bots("not-a-list: true\n", "source-label")
+
+
+def test_parse_ruleset_parses_real_shaped_json() -> None:
+    assert gate._parse_ruleset(json.dumps(_RULESET_WITH_ALL_RULE_TYPES), "source-label") == _RULESET_WITH_ALL_RULE_TYPES
+
+
+def test_parse_ruleset_rejects_non_object_json() -> None:
+    with pytest.raises(ValueError, match="must contain a JSON object"):
+        gate._parse_ruleset("[]", "source-label")
+
+
+# ---------------------------------------------------------------------------
+# required_check_contexts: must read only required_status_checks, never the
+# other rule types (the PR #1843 concern this design explicitly guards
+# against), and must exclude this check's own name.
+# ---------------------------------------------------------------------------
+
+
+def test_required_check_contexts_excludes_self_and_other_rule_types() -> None:
+    contexts = gate.required_check_contexts(_RULESET_WITH_ALL_RULE_TYPES)
+    assert contexts == ["pytest", "ruff"]
+    for other_type in (
+        "deletion",
+        "non_fast_forward",
+        "pull_request",
+        "commit_author_email_pattern",
+        "committer_email_pattern",
+        "independent-review-pending",
+    ):
+        assert other_type not in contexts
+
+
+def test_required_check_contexts_empty_when_rule_absent_entirely() -> None:
+    # Defeat test (design doc's own Testing section): required_status_checks
+    # missing entirely must not be misread as "zero checks required" by
+    # accident -- this function's own contract is that its caller
+    # (poll_bot_required_checks) treats an empty result as fail-closed,
+    # never as a vacuous pass, checked below.
+    ruleset = _without_rule_type(_RULESET_WITH_ALL_RULE_TYPES, "required_status_checks")
+    assert gate.required_check_contexts(ruleset) == []
+
+
+def test_rule_of_type_finds_the_matching_rule_by_type() -> None:
+    rule = gate._rule_of_type(_RULESET_WITH_ALL_RULE_TYPES, "required_status_checks")
+    assert rule is not None
+    assert rule["type"] == "required_status_checks"
+
+
+def test_rule_of_type_returns_none_when_no_rule_of_that_type_exists() -> None:
+    assert gate._rule_of_type({"rules": []}, "required_status_checks") is None
+
+
+# ---------------------------------------------------------------------------
+# head_commit_identity_matches_bot: the critical-defect fix itself.
+# ---------------------------------------------------------------------------
+
+
+def test_head_commit_identity_matches_bot_when_both_emails_match() -> None:
+    ok, _message = gate.head_commit_identity_matches_bot(
+        _DEPENDABOT_EMAIL, _DEPENDABOT_EMAIL, _RULESET_WITH_ALL_RULE_TYPES
+    )
+    assert ok is True
+
+
+@pytest.mark.parametrize(
+    ("author_email", "committer_email", "expected_substring"),
+    [
+        pytest.param("someone@example.com", _DEPENDABOT_EMAIL, "author email", id="author-mismatch"),
+        pytest.param(_DEPENDABOT_EMAIL, "someone@example.com", "committer email", id="committer-mismatch"),
+    ],
+)
+def test_head_commit_identity_matches_bot_fails_on_email_mismatch(
+    author_email: str, committer_email: str, expected_substring: str
+) -> None:
+    ok, message = gate.head_commit_identity_matches_bot(author_email, committer_email, _RULESET_WITH_ALL_RULE_TYPES)
+    assert ok is False
+    assert expected_substring in message
+
+
+def test_head_commit_identity_matches_bot_fails_when_email_pattern_rules_absent() -> None:
+    ruleset = _without_rule_type(
+        _without_rule_type(_RULESET_WITH_ALL_RULE_TYPES, "commit_author_email_pattern"), "committer_email_pattern"
+    )
+    ok, message = gate.head_commit_identity_matches_bot(_DEPENDABOT_EMAIL, _DEPENDABOT_EMAIL, ruleset)
+    assert ok is False
+    assert "missing" in message
+
+
+def test_email_matches_pattern_supports_every_operator() -> None:
+    assert gate._email_matches_pattern("foo@bar.com", "starts_with", "foo@") is True
+    assert gate._email_matches_pattern("foo@bar.com", "ends_with", "bar.com") is True
+    assert gate._email_matches_pattern("foo@bar.com", "contains", "@bar") is True
+    assert gate._email_matches_pattern("foo@bar.com", "regex", r"^foo@") is True
+    assert gate._email_matches_pattern("foo@bar.com", "unknown-operator", "foo") is False
+
+
+def test_email_satisfies_rule_honors_negate() -> None:
+    allow_rule = {"parameters": {"operator": "contains", "pattern": "bar", "negate": False}}
+    deny_rule = {"parameters": {"operator": "contains", "pattern": "bar", "negate": True}}
+    assert gate._email_satisfies_rule("foo@bar.com", allow_rule) is True
+    assert gate._email_satisfies_rule("foo@bar.com", deny_rule) is False
+    assert gate._email_satisfies_rule("foo@baz.com", deny_rule) is True
+
+
+# ---------------------------------------------------------------------------
+# fetch_head_commit_emails
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_head_commit_emails_reads_commit_author_committer() -> None:
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        return _FakeResponse(200, _commit_body("a@example.com", "c@example.com"))
+
+    author, committer = gate.fetch_head_commit_emails("o", "r", "sha", "tok", opener=opener, sleeper=lambda _s: None)
+    assert (author, committer) == ("a@example.com", "c@example.com")
+
+
+def test_fetch_head_commit_emails_raises_on_missing_commit_object() -> None:
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        return _FakeResponse(200, json.dumps({}))
+
+    with pytest.raises(gate.GitHubApiError, match="no 'commit' object"):
+        gate.fetch_head_commit_emails("o", "r", "sha", "tok", opener=opener, sleeper=lambda _s: None)
+
+
+# ---------------------------------------------------------------------------
+# _fetch_check_runs / _latest_run_for_context
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_check_runs_pages_through_multiple_pages() -> None:
+    page1 = json.dumps(
+        {"total_count": 2, "check_runs": [{"name": "pytest", "status": "completed", "conclusion": "success", "id": 1}]}
+    )
+    page2 = json.dumps(
+        {"total_count": 2, "check_runs": [{"name": "ruff", "status": "completed", "conclusion": "success", "id": 2}]}
+    )
+    calls = {"n": 0}
+
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        calls["n"] += 1
+        return _FakeResponse(200, page1 if calls["n"] == 1 else page2)
+
+    runs = gate._fetch_check_runs("o", "r", "sha", "tok", opener, lambda _s: None)
+    assert [run["name"] for run in runs] == ["pytest", "ruff"]
+    assert calls["n"] == 2
+
+
+def test_fetch_check_runs_raises_on_missing_check_runs_array() -> None:
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        return _FakeResponse(200, json.dumps({"total_count": 0}))
+
+    with pytest.raises(gate.GitHubApiError, match="no 'check_runs' array"):
+        gate._fetch_check_runs("o", "r", "sha", "tok", opener, lambda _s: None)
+
+
+def test_latest_run_for_context_picks_most_recent_by_started_at() -> None:
+    runs = [
+        {
+            "name": "pytest",
+            "status": "completed",
+            "conclusion": "failure",
+            "id": 1,
+            "started_at": "2026-01-01T00:00:00Z",
+        },
+        {
+            "name": "pytest",
+            "status": "completed",
+            "conclusion": "success",
+            "id": 2,
+            "started_at": "2026-01-01T01:00:00Z",
+        },
+    ]
+    latest = gate._latest_run_for_context(runs, "pytest")
+    assert latest is not None
+    assert latest["id"] == 2
+
+
+def test_latest_run_for_context_returns_none_when_no_run_matches() -> None:
+    assert gate._latest_run_for_context([], "pytest") is None
+
+
+# ---------------------------------------------------------------------------
+# fetch_repo_file_at_ref: the second-revision trust-anchor-ref-pinning fix.
+# ---------------------------------------------------------------------------
+
+
+def _contents_api_body(text: str) -> str:
+    return json.dumps({"content": base64.b64encode(text.encode("utf-8")).decode("ascii"), "encoding": "base64"})
+
+
+def test_fetch_repo_file_at_ref_decodes_base64_content() -> None:
+    def opener(request: urllib.request.Request) -> _FakeResponse:
+        assert "contents/.github/trusted-bots.yml?ref=deadbeef" in request.full_url
+        return _FakeResponse(200, _contents_api_body("- login: dependabot[bot]\n"))
+
+    text = gate.fetch_repo_file_at_ref("o", "r", ".github/trusted-bots.yml", "deadbeef", "tok", opener, lambda _s: None)
+    assert text == "- login: dependabot[bot]\n"
+
+
+def test_fetch_repo_file_at_ref_raises_when_encoding_is_not_base64() -> None:
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        return _FakeResponse(200, json.dumps({"content": "irrelevant", "encoding": "none"}))
+
+    with pytest.raises(gate.GitHubApiError, match="no base64-encoded 'content' field"):
+        gate.fetch_repo_file_at_ref("o", "r", "path", "ref", "tok", opener, lambda _s: None)
+
+
+def test_fetch_repo_file_at_ref_raises_when_content_field_missing() -> None:
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        return _FakeResponse(200, json.dumps({"encoding": "base64"}))
+
+    with pytest.raises(gate.GitHubApiError, match="no base64-encoded 'content' field"):
+        gate.fetch_repo_file_at_ref("o", "r", "path", "ref", "tok", opener, lambda _s: None)
+
+
+def test_fetch_repo_file_at_ref_raises_on_undecodable_base64() -> None:
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        return _FakeResponse(200, json.dumps({"content": "not-valid-base64!!!", "encoding": "base64"}))
+
+    with pytest.raises(gate.GitHubApiError, match="could not be base64/UTF-8 decoded"):
+        gate.fetch_repo_file_at_ref("o", "r", "path", "ref", "tok", opener, lambda _s: None)
+
+
+def test_fetch_repo_file_at_ref_raises_on_unexpected_shape() -> None:
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        return _FakeResponse(200, json.dumps(["not", "an", "object"]))
+
+    with pytest.raises(gate.GitHubApiError, match="unexpected shape"):
+        gate.fetch_repo_file_at_ref("o", "r", "path", "ref", "tok", opener, lambda _s: None)
+
+
+# ---------------------------------------------------------------------------
+# poll_bot_required_checks: simulated-bot-PR tests (ACM's own literal
+# wording) plus the fail-closed-on-empty-contexts defeat test.
+# ---------------------------------------------------------------------------
+
+
+def test_poll_bot_required_checks_passes_when_all_contexts_complete_successfully() -> None:
+    body = _check_runs_body(
+        [
+            {"name": "pytest", "status": "completed", "conclusion": "success", "id": 1, "started_at": "t"},
+            {"name": "ruff", "status": "completed", "conclusion": "neutral", "id": 2, "started_at": "t"},
+            {"name": "mypy", "status": "completed", "conclusion": "skipped", "id": 3, "started_at": "t"},
+        ]
+    )
+
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        return _FakeResponse(200, body)
+
+    passed, message = gate.poll_bot_required_checks(
+        owner="o",
+        repo="r",
+        head_sha="sha",
+        contexts=["pytest", "ruff", "mypy"],
+        token="tok",
+        opener=opener,
+        sleeper=lambda _s: None,
+    )
+    assert passed is True
+    assert "sha" in message
+
+
+def test_poll_bot_required_checks_fails_immediately_on_a_failing_check() -> None:
+    body = _check_runs_body(
+        [
+            {"name": "pytest", "status": "completed", "conclusion": "success", "id": 1, "started_at": "t"},
+            {"name": "ruff", "status": "completed", "conclusion": "failure", "id": 2, "started_at": "t"},
+        ]
+    )
+
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        return _FakeResponse(200, body)
+
+    passed, message = gate.poll_bot_required_checks(
+        owner="o",
+        repo="r",
+        head_sha="sha",
+        contexts=["pytest", "ruff"],
+        token="tok",
+        opener=opener,
+        sleeper=lambda _s: None,
+    )
+    assert passed is False
+    assert "ruff" in message
+    assert "failure" in message
+
+
+def test_poll_bot_required_checks_times_out_naming_only_the_pending_contexts() -> None:
+    body = _check_runs_body(
+        [
+            {"name": "pytest", "status": "completed", "conclusion": "success", "id": 1, "started_at": "t"},
+            {"name": "slow-check", "status": "in_progress", "id": 2, "started_at": "t"},
+        ]
+    )
+
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        return _FakeResponse(200, body)
+
+    passed, message = gate.poll_bot_required_checks(
+        owner="o",
+        repo="r",
+        head_sha="sha",
+        contexts=["pytest", "slow-check"],
+        token="tok",
+        timeout_seconds=1.0,
+        opener=opener,
+        sleeper=lambda _s: None,
+        clock=_FakeClock(step=1000.0),
+    )
+    assert passed is False
+    assert "timed out" in message
+    assert "slow-check" in message
+    assert "pytest" not in message
+
+
+def test_poll_bot_required_checks_fails_closed_on_empty_contexts() -> None:
+    # Defeat test (design doc's own Testing section + this issue's ACM):
+    # required_status_checks absent entirely -- or present but naming
+    # nothing besides independent-review-pending itself -- must never be
+    # silently read as "nothing to check". No opener/network call is even
+    # reached: this is checked before anything else.
+    passed, message = gate.poll_bot_required_checks(owner="o", repo="r", head_sha="sha", contexts=[], token="tok")
+    assert passed is False
+    assert "nothing to check" in message
+
+
+def test_bot_path_fails_closed_end_to_end_when_required_status_checks_rule_is_absent() -> None:
+    # Same defeat test, chained through required_check_contexts exactly the
+    # way evaluate_bot_path itself calls it, proving the fail-closed
+    # behavior holds for the real "main.json fixture missing the rule"
+    # shape, not only for a hand-constructed empty list.
+    ruleset = _without_rule_type(_RULESET_WITH_ALL_RULE_TYPES, "required_status_checks")
+    contexts = gate.required_check_contexts(ruleset)
+    passed, message = gate.poll_bot_required_checks(owner="o", repo="r", head_sha="sha", contexts=contexts, token="tok")
+    assert passed is False
+    assert "nothing to check" in message
+
+
+def test_poll_bot_required_checks_retries_transient_api_errors_within_budget() -> None:
+    # Defeat test (design doc's own "Poll outcome" bullet + this issue's
+    # ACM): a transient GitHub API error (5xx) while polling must be
+    # retried within the same timeout budget, not treated as an immediate
+    # FAIL nor silently ignored. request_with_retry's own inner loop
+    # already retries 3 times per _fetch_check_runs call -- this drives it
+    # to exhaust all 3 (round 1), then succeeds on poll_bot_required_checks'
+    # own next outer-loop round.
+    calls = {"n": 0}
+    success_body = _check_runs_body(
+        [{"name": "pytest", "status": "completed", "conclusion": "success", "id": 1, "started_at": "t"}]
+    )
+
+    def opener(request: urllib.request.Request) -> _FakeResponse:
+        calls["n"] += 1
+        if calls["n"] <= 3:
+            raise urllib.error.HTTPError(request.full_url, 503, "unavailable", {}, _FakeResponse(503, "retry me"))  # type: ignore[arg-type]
+        return _FakeResponse(200, success_body)
+
+    passed, message = gate.poll_bot_required_checks(
+        owner="o",
+        repo="r",
+        head_sha="sha",
+        contexts=["pytest"],
+        token="tok",
+        timeout_seconds=5.0,
+        poll_interval_seconds=0,
+        opener=opener,
+        sleeper=lambda _s: None,
+    )
+    assert passed is True, message
+    assert calls["n"] == 4
+
+
+def test_poll_bot_required_checks_times_out_when_errors_persist() -> None:
+    def opener(request: urllib.request.Request) -> _FakeResponse:
+        raise urllib.error.HTTPError(request.full_url, 503, "unavailable", {}, _FakeResponse(503, "still down"))  # type: ignore[arg-type]
+
+    passed, message = gate.poll_bot_required_checks(
+        owner="o",
+        repo="r",
+        head_sha="sha",
+        contexts=["pytest"],
+        token="tok",
+        timeout_seconds=1.0,
+        opener=opener,
+        sleeper=lambda _s: None,
+        clock=_FakeClock(step=1000.0),
+    )
+    assert passed is False
+    assert "timed out" in message
+    assert "GitHub API errors persisted" in message
+    assert "pytest" in message
+
+
+def test_poll_bot_required_checks_catches_a_context_re_run_into_failure_after_already_passing() -> None:
+    # Defeat test for the second-revision fix: an earlier implementation
+    # cached a context as permanently "concluded" the first time it saw a
+    # passing conclusion, and never looked at it again for the rest of the
+    # same poll call -- so a manual re-run into a *worse* conclusion, while
+    # this same poll session was still open waiting on another context,
+    # would be silently missed. GitHub's own check-runs endpoint always
+    # returns the complete, current set for a head SHA (never a delta), so
+    # a realistic fake here returns pytest as already-passing on iteration
+    # 1 (while ruff is still pending), then, on iteration 2, a NEWER
+    # pytest run (later started_at) reporting failure alongside ruff now
+    # passing too.
+    iteration_1 = _check_runs_body(
+        [
+            {"name": "pytest", "status": "completed", "conclusion": "success", "id": 1, "started_at": "t1"},
+            {"name": "ruff", "status": "in_progress", "id": 2, "started_at": "t1"},
+        ]
+    )
+    iteration_2 = _check_runs_body(
+        [
+            {"name": "pytest", "status": "completed", "conclusion": "success", "id": 1, "started_at": "t1"},
+            {"name": "pytest", "status": "completed", "conclusion": "failure", "id": 3, "started_at": "t2"},
+            {"name": "ruff", "status": "completed", "conclusion": "success", "id": 2, "started_at": "t1"},
+        ]
+    )
+    calls = {"n": 0}
+
+    def opener(_request: urllib.request.Request) -> _FakeResponse:
+        calls["n"] += 1
+        return _FakeResponse(200, iteration_1 if calls["n"] == 1 else iteration_2)
+
+    passed, message = gate.poll_bot_required_checks(
+        owner="o",
+        repo="r",
+        head_sha="sha",
+        contexts=["pytest", "ruff"],
+        token="tok",
+        timeout_seconds=5.0,
+        poll_interval_seconds=0,
+        opener=opener,
+        sleeper=lambda _s: None,
+    )
+    assert passed is False, message
+    assert "pytest" in message
+    assert "failure" in message
+
+
+# ---------------------------------------------------------------------------
+# evaluate_bot_path: the orchestration function main() calls.
+# ---------------------------------------------------------------------------
+
+
+def test_evaluate_bot_path_returns_none_when_no_author_identity_given() -> None:
+    assert (
+        gate.evaluate_bot_path(
+            pr_author_login=None,
+            pr_author_id=None,
+            pr_author_type=None,
+            owner="o",
+            repo="r",
+            head_sha="sha",
+            trusted_bots=_TRUSTED_BOTS,
+            ruleset={},
+            token="tok",
+        )
+        is None
+    )
+
+
+def test_evaluate_bot_path_returns_none_when_identity_does_not_match() -> None:
+    assert (
+        gate.evaluate_bot_path(
+            pr_author_login="mallory",
+            pr_author_id=1,
+            pr_author_type="User",
+            owner="o",
+            repo="r",
+            head_sha="sha",
+            trusted_bots=_TRUSTED_BOTS,
+            ruleset={},
+            token="tok",
+        )
+        is None
+    )
+
+
+def test_evaluate_bot_path_returns_none_when_owner_repo_unresolved() -> None:
+    assert (
+        gate.evaluate_bot_path(
+            pr_author_login=_DEPENDABOT_LOGIN,
+            pr_author_id=_DEPENDABOT_ID,
+            pr_author_type=_DEPENDABOT_TYPE,
+            owner=None,
+            repo=None,
+            head_sha="sha",
+            trusted_bots=_TRUSTED_BOTS,
+            ruleset=_RULESET_WITH_ALL_RULE_TYPES,
+            token="tok",
+        )
+        is None
+    )
+
+
+def test_evaluate_bot_path_falls_through_on_head_commit_email_mismatch() -> None:
+    # The critical-defect fix itself (design doc's own Revision section): a
+    # bot-identity match on the PR opener alone must never be enough. Emails
+    # are given directly here (no fetch), isolating this from network
+    # concerns entirely.
+    result = gate.evaluate_bot_path(
+        pr_author_login=_DEPENDABOT_LOGIN,
+        pr_author_id=_DEPENDABOT_ID,
+        pr_author_type=_DEPENDABOT_TYPE,
+        owner="tvna",
+        repo="gitapex",
+        head_sha=_SHA,
+        trusted_bots=_TRUSTED_BOTS,
+        ruleset=_RULESET_WITH_ALL_RULE_TYPES,
+        token="tok",
+        head_commit_author_email="someone-else@example.com",
+        head_commit_committer_email=_DEPENDABOT_EMAIL,
+    )
+    assert result is None
+
+
+def test_evaluate_bot_path_falls_through_when_head_commit_email_fetch_raises_api_error(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Coverage gap flagged by Codecov (issue #1858): the `except
+    # GitHubApiError: ... return None` branch inside evaluate_bot_path
+    # (guarding the fetch_head_commit_emails call) was confirmed correct
+    # only by code reading, never exercised at runtime. The design doc's
+    # own Revision section requires falling through to the strict,
+    # pre-existing human-verdict path when the head commit's own identity
+    # cannot even be fetched -- never a silent bot-path PASS, and never a
+    # hard FAIL that would block every PR (bot or not) over a transient
+    # GitHub API failure (see this exact except clause's own
+    # except-fail-open WAIVED comment). No --head-commit-author-email/
+    # --head-commit-committer-email override is given, forcing the fetch;
+    # the injected opener makes fetch_head_commit_emails's own
+    # fetch_json_document call raise GitHubApiError (a non-5xx status,
+    # e.g. commit-not-found, so request_with_retry's own retry loop
+    # returns after exactly one attempt rather than retrying).
+    def _raising_opener(request: urllib.request.Request) -> _FakeResponse:
+        raise urllib.error.HTTPError(request.full_url, 404, "not found", {}, _FakeResponse(404, "commit not found"))  # type: ignore[arg-type]
+
+    result = gate.evaluate_bot_path(
+        pr_author_login=_DEPENDABOT_LOGIN,
+        pr_author_id=_DEPENDABOT_ID,
+        pr_author_type=_DEPENDABOT_TYPE,
+        owner="tvna",
+        repo="gitapex",
+        head_sha=_SHA,
+        trusted_bots=_TRUSTED_BOTS,
+        ruleset=_RULESET_WITH_ALL_RULE_TYPES,
+        token="tok",
+        opener=_raising_opener,
+        sleeper=lambda _s: None,
+    )
+
+    assert result is None
+    err = capsys.readouterr().err
+    assert _DEPENDABOT_LOGIN in err
+    assert "head" in err and "could not be fetched" in err
+    assert "falling back to the human-verdict path" in err
+
+
+def test_evaluate_bot_path_full_flow_passes(monkeypatch: pytest.MonkeyPatch) -> None:
+    # required_check_contexts(_RULESET_WITH_ALL_RULE_TYPES) yields
+    # ["pytest", "ruff"] (independent-review-pending excluded) -- both
+    # need a completed/success check run for this end-to-end PASS.
+    commit_body = _commit_body(_DEPENDABOT_EMAIL, _DEPENDABOT_EMAIL)
+    checks_body = _check_runs_body(
+        [
+            {"name": "pytest", "status": "completed", "conclusion": "success", "id": 1, "started_at": "t"},
+            {"name": "ruff", "status": "completed", "conclusion": "success", "id": 2, "started_at": "t"},
+        ]
+    )
+
+    def opener(request: urllib.request.Request) -> _FakeResponse:
+        if "check-runs" in request.full_url:
+            return _FakeResponse(200, checks_body)
+        return _FakeResponse(200, commit_body)
+
+    result = gate.evaluate_bot_path(
+        pr_author_login=_DEPENDABOT_LOGIN,
+        pr_author_id=_DEPENDABOT_ID,
+        pr_author_type=_DEPENDABOT_TYPE,
+        owner="tvna",
+        repo="gitapex",
+        head_sha="sha",
+        trusted_bots=_TRUSTED_BOTS,
+        ruleset=_RULESET_WITH_ALL_RULE_TYPES,
+        token="tok",
+        opener=opener,
+        sleeper=lambda _s: None,
+    )
+    assert result == (True, "all 2 required check(s) completed successfully for head sha")
+
+
+def test_evaluate_bot_path_falls_through_when_token_missing_and_no_email_override() -> None:
+    result = gate.evaluate_bot_path(
+        pr_author_login=_DEPENDABOT_LOGIN,
+        pr_author_id=_DEPENDABOT_ID,
+        pr_author_type=_DEPENDABOT_TYPE,
+        owner="tvna",
+        repo="gitapex",
+        head_sha=_SHA,
+        trusted_bots=_TRUSTED_BOTS,
+        ruleset=_RULESET_WITH_ALL_RULE_TYPES,
+        token="",
+    )
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# _github_repository_part
+# ---------------------------------------------------------------------------
+
+
+def test_github_repository_part_reads_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_REPOSITORY", "tvna/gitapex")
+    assert gate._github_repository_part(0) == "tvna"
+    assert gate._github_repository_part(1) == "gitapex"
+
+
+def test_github_repository_part_returns_none_when_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+    assert gate._github_repository_part(0) is None
+
+
+# ---------------------------------------------------------------------------
+# main(): CLI wiring for the bot path, and the fall-through/regression
+# contract with the pre-existing --body/--head-sha-only behavior.
+# ---------------------------------------------------------------------------
+
+
+def test_main_without_pr_author_args_never_calls_evaluate_bot_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    called: list[object] = []
+
+    def _must_not_be_called(**_kwargs: object) -> tuple[bool, str]:
+        called.append(1)
+        return True, "should never run"
+
+    monkeypatch.setattr(gate, "evaluate_bot_path", _must_not_be_called)
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(_CLEAN_BODY, encoding="utf-8")
+    exit_code = gate.main(["--body", str(body_file), "--head-sha", _SHA])
+    assert exit_code == 0
+    assert called == []
+    assert "PASS: CLEAN verdict" in capsys.readouterr().out
+
+
+def test_main_falls_back_to_human_verdict_when_bot_path_returns_none(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(gate, "evaluate_bot_path", lambda **_kwargs: None)
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(_CLEAN_BODY, encoding="utf-8")
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+        ]
+    )
+    assert exit_code == 0
+    assert "PASS: CLEAN verdict" in capsys.readouterr().out
+
+
+def test_main_bot_path_pass_via_full_wiring(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    trusted_bots_path = tmp_path / "trusted-bots.yml"
+    trusted_bots_path.write_text(yaml.safe_dump(_TRUSTED_BOTS), encoding="utf-8")
+    ruleset_path = tmp_path / "main.json"
+    ruleset_path.write_text(json.dumps(_RULESET_WITH_ALL_RULE_TYPES), encoding="utf-8")
+    body_file = tmp_path / "body.txt"
+    body_file.write_text("irrelevant for the bot path", encoding="utf-8")
+
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "tvna/gitapex")
+
+    captured: dict[str, object] = {}
+
+    def fake_evaluate_bot_path(**kwargs: object) -> tuple[bool, str]:
+        captured.update(kwargs)
+        return True, "all good"
+
+    monkeypatch.setattr(gate, "evaluate_bot_path", fake_evaluate_bot_path)
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--trusted-bots-path",
+            str(trusted_bots_path),
+            "--ruleset-path",
+            str(ruleset_path),
+        ]
+    )
+    assert exit_code == 0
+    assert "PASS: all good" in capsys.readouterr().out
+    assert captured["pr_author_login"] == _DEPENDABOT_LOGIN
+    assert captured["pr_author_id"] == _DEPENDABOT_ID
+    assert captured["pr_author_type"] == _DEPENDABOT_TYPE
+    assert captured["owner"] == "tvna"
+    assert captured["repo"] == "gitapex"
+    assert captured["token"] == "tok"
+    assert captured["trusted_bots"] == _TRUSTED_BOTS
+    assert captured["ruleset"] == _RULESET_WITH_ALL_RULE_TYPES
+
+
+def test_main_bot_path_pass_via_trust_anchor_ref_fetches_from_api_not_local_disk(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The second-revision fix: --trust-anchor-ref given -> both trust
+    # anchors come from fetch_repo_file_at_ref (the GitHub Contents API)
+    # at that ref, never from --trusted-bots-path/--ruleset-path (left
+    # pointing at files that do not even exist here, to prove local disk
+    # is never consulted). fetch_repo_file_at_ref's own HTTP/base64
+    # mechanics are already covered directly above; this test's own job is
+    # main()'s wiring (which path, which ref, which owner/repo/token), so
+    # it fakes that one function directly, matching this file's own
+    # established pattern for a main()-level wiring test (see
+    # test_main_bot_path_pass_via_full_wiring's own evaluate_bot_path
+    # fake).
+    body_file = tmp_path / "body.txt"
+    body_file.write_text("irrelevant for the bot path", encoding="utf-8")
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+
+    fetch_calls: list[tuple[str, str, str, str, str]] = []
+
+    def fake_fetch_repo_file_at_ref(owner: str, repo: str, path: str, ref: str, token: str) -> str:
+        fetch_calls.append((owner, repo, path, ref, token))
+        if path == ".github/trusted-bots.yml":
+            return yaml.safe_dump(_TRUSTED_BOTS)
+        return json.dumps(_RULESET_WITH_ALL_RULE_TYPES)
+
+    monkeypatch.setattr(gate, "fetch_repo_file_at_ref", fake_fetch_repo_file_at_ref)
+
+    captured: dict[str, object] = {}
+
+    def fake_evaluate_bot_path(**kwargs: object) -> tuple[bool, str]:
+        captured.update(kwargs)
+        return True, "all good"
+
+    monkeypatch.setattr(gate, "evaluate_bot_path", fake_evaluate_bot_path)
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--owner",
+            "tvna",
+            "--repo",
+            "gitapex",
+            "--trust-anchor-ref",
+            "deadbeef",
+            "--trust-anchor-base-ref",
+            "main",
+            "--repo-default-branch",
+            "main",
+            "--trusted-bots-path",
+            str(tmp_path / "nonexistent-trusted-bots.yml"),
+            "--ruleset-path",
+            str(tmp_path / "nonexistent-main.json"),
+        ]
+    )
+    assert exit_code == 0
+    assert "PASS: all good" in capsys.readouterr().out
+    assert [call[2] for call in fetch_calls] == [".github/trusted-bots.yml", ".github/rulesets/main.json"]
+    assert all(call[3] == "deadbeef" for call in fetch_calls)
+    assert all(call[0] == "tvna" and call[1] == "gitapex" and call[4] == "tok" for call in fetch_calls)
+    assert captured["trusted_bots"] == _TRUSTED_BOTS
+    assert captured["ruleset"] == _RULESET_WITH_ALL_RULE_TYPES
+
+
+def test_main_bot_path_falls_back_when_trust_anchor_ref_given_but_token_unset(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(_CLEAN_BODY, encoding="utf-8")
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--owner",
+            "tvna",
+            "--repo",
+            "gitapex",
+            "--trust-anchor-ref",
+            "deadbeef",
+            "--trust-anchor-base-ref",
+            "main",
+            "--repo-default-branch",
+            "main",
+        ]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "GITHUB_TOKEN is unset" in captured.err
+    assert "PASS: CLEAN verdict" in captured.out
+
+
+def test_main_bot_path_falls_back_when_trust_anchor_ref_given_but_owner_repo_unresolved(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.delenv("GITHUB_REPOSITORY", raising=False)
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(_CLEAN_BODY, encoding="utf-8")
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--trust-anchor-ref",
+            "deadbeef",
+            "--trust-anchor-base-ref",
+            "main",
+            "--repo-default-branch",
+            "main",
+        ]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "owner/--repo could not be resolved" in captured.err
+    assert "PASS: CLEAN verdict" in captured.out
+
+
+def test_main_bot_path_falls_back_when_trust_anchor_fetch_raises_api_error(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(_CLEAN_BODY, encoding="utf-8")
+
+    def fake_fetch_repo_file_at_ref(owner: str, repo: str, path: str, ref: str, token: str) -> str:
+        raise gate.GitHubApiError(f"GET .../{path}?ref={ref} failed: HTTP 404: not found")
+
+    monkeypatch.setattr(gate, "fetch_repo_file_at_ref", fake_fetch_repo_file_at_ref)
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--owner",
+            "tvna",
+            "--repo",
+            "gitapex",
+            "--trust-anchor-ref",
+            "deadbeef",
+            "--trust-anchor-base-ref",
+            "main",
+            "--repo-default-branch",
+            "main",
+        ]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "could not load the bot-path allowlist/ruleset" in captured.err
+    assert "PASS: CLEAN verdict" in captured.out
+
+
+def test_main_bot_path_falls_back_when_trust_anchor_ref_is_empty_string(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Second-revision review round 2's own defeat test: an
+    # explicitly-given-but-empty --trust-anchor-ref must be refused, never
+    # silently treated the same as the flag being omitted (which would
+    # silently fall back to the local-disk read this whole fix exists to
+    # stop trusting).
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(_CLEAN_BODY, encoding="utf-8")
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--owner",
+            "tvna",
+            "--repo",
+            "gitapex",
+            "--trust-anchor-ref",
+            "",
+        ]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "--trust-anchor-ref was given but is empty" in captured.err
+    assert "PASS: CLEAN verdict" in captured.out
+
+
+def test_main_bot_path_falls_back_when_trust_anchor_base_ref_or_default_branch_unresolved(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(_CLEAN_BODY, encoding="utf-8")
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--owner",
+            "tvna",
+            "--repo",
+            "gitapex",
+            "--trust-anchor-ref",
+            "deadbeef",
+            # --trust-anchor-base-ref/--repo-default-branch both omitted.
+        ]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "could not be resolved" in captured.err
+    assert "refusing to trust a ref without confirming it is this repository's own default branch" in captured.err
+    assert "PASS: CLEAN verdict" in captured.out
+
+
+def test_main_bot_path_falls_back_when_trust_anchor_base_ref_does_not_match_default_branch(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The core defeat test for the second-revision review round 2 finding:
+    # a PR retargeted to a different base branch (e.g. one carrying forged
+    # trust-anchor content) must never have its --trust-anchor-ref
+    # trusted just because *a* base-ref/default-branch pair was given --
+    # they must actually agree.
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(_CLEAN_BODY, encoding="utf-8")
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--owner",
+            "tvna",
+            "--repo",
+            "gitapex",
+            "--trust-anchor-ref",
+            "deadbeef",
+            "--trust-anchor-base-ref",
+            "attacker-controlled-branch",
+            "--repo-default-branch",
+            "main",
+        ]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "not this repository's own default branch" in captured.err
+    assert "attacker-controlled-branch" in captured.err
+    assert "PASS: CLEAN verdict" in captured.out
+
+
+def test_main_bot_path_fail_prints_bot_specific_hint_not_the_verdict_hint(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(gate, "evaluate_bot_path", lambda **_kwargs: (False, "required check 'ruff' failed"))
+    body_file = tmp_path / "body.txt"
+    body_file.write_text("irrelevant for the bot path", encoding="utf-8")
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+        ]
+    )
+    assert exit_code == 1
+    err = capsys.readouterr().err
+    assert "FAIL: required check 'ruff' failed" in err
+    assert "trusted-bot merge-gate path" in err
+    assert "Record a '##" not in err
+
+
+def test_main_bot_path_falls_back_when_trusted_bots_file_missing(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(_CLEAN_BODY, encoding="utf-8")
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--trusted-bots-path",
+            str(tmp_path / "nonexistent.yml"),
+        ]
+    )
+    assert exit_code == 0
+    captured = capsys.readouterr()
+    assert "could not load the bot-path allowlist/ruleset" in captured.err
+    assert "PASS: CLEAN verdict" in captured.out
+
+
+def test_main_never_calls_evaluate_bot_path_when_ruleset_load_fails(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Regression guard for the except-fail-open fix: a load failure must
+    # skip evaluate_bot_path entirely (never call it with a falsy
+    # placeholder ruleset/trusted_bots and continue), not merely default
+    # its arguments and proceed.
+    called: list[object] = []
+
+    def _must_not_be_called(**_kwargs: object) -> tuple[bool, str]:
+        called.append(1)
+        return True, "should never run"
+
+    monkeypatch.setattr(gate, "evaluate_bot_path", _must_not_be_called)
+    trusted_bots_path = tmp_path / "trusted-bots.yml"
+    trusted_bots_path.write_text(yaml.safe_dump(_TRUSTED_BOTS), encoding="utf-8")
+    body_file = tmp_path / "body.txt"
+    body_file.write_text(_CLEAN_BODY, encoding="utf-8")
+
+    exit_code = gate.main(
+        [
+            "--body",
+            str(body_file),
+            "--head-sha",
+            _SHA,
+            "--pr-author-login",
+            _DEPENDABOT_LOGIN,
+            "--pr-author-id",
+            str(_DEPENDABOT_ID),
+            "--pr-author-type",
+            _DEPENDABOT_TYPE,
+            "--trusted-bots-path",
+            str(trusted_bots_path),
+            "--ruleset-path",
+            str(tmp_path / "nonexistent-main.json"),
+        ]
+    )
+    assert exit_code == 0
+    assert called == []
+    captured = capsys.readouterr()
+    assert "could not load the bot-path allowlist/ruleset" in captured.err
+    assert "PASS: CLEAN verdict" in captured.out

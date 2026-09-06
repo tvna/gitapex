@@ -7,3 +7,16 @@
 # branch protection's "Require review from Code Owners" is enabled, which is
 # a GitHub Settings change outside this repo's tracked files.
 /.github/actions/harden-checkout/ @tvna
+
+# .github/trusted-bots.yml grants an identity-based exemption from the
+# independent-review-pending merge gate (issue #1858) -- an unreviewed
+# edit could silently widen who bypasses independent review.
+/.github/trusted-bots.yml @tvna
+
+# .github/rulesets/main.json's commit_author_email_pattern/
+# committer_email_pattern rules are the second trust anchor
+# head_commit_identity_matches_bot() depends on (issue #1858) -- an
+# unreviewed edit to either pattern could loosen it enough for an
+# arbitrary commit email to pass, the same class of risk trusted-bots.yml
+# above is already protected against.
+/.github/rulesets/main.json @tvna
