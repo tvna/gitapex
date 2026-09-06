@@ -62,6 +62,45 @@ def test_main_ruleset_is_governance():
     assert "no-match: .github/rulesets/main.json" not in result.stdout
 
 
+def test_trusted_bots_and_main_ruleset_near_miss_paths_are_no_match():
+    # Defeat-test (gitapex issue #1875, Step 8 adversarial review): this
+    # classifier is exact-string-only by design (module docstring), so a
+    # near-miss extension or case variant of either new entry must NOT be
+    # swept in as a false "governance" match -- pinning this documented
+    # limitation as a regression test rather than leaving it as an
+    # unverified claim in the review's own text. Confirmed separately
+    # (Step 8 review) that neither the real consuming gate
+    # (gitapex_gate_independent_review_pending.py) nor CODEOWNERS protects
+    # these near-miss paths either, so this is not a live bypass -- only
+    # the pre-filter's own documented no-case-folding/no-glob scope.
+    result = run(
+        [
+            ".github/trusted-bots.yaml",
+            ".github/Trusted-Bots.yml",
+            ".github/rulesets/Main.json",
+            ".github/rulesets/main.jsonc",
+        ]
+    )
+    assert result.returncode == 0
+    assert "no-match: .github/trusted-bots.yaml" in result.stdout
+    assert "no-match: .github/Trusted-Bots.yml" in result.stdout
+    assert "no-match: .github/rulesets/Main.json" in result.stdout
+    assert "no-match: .github/rulesets/main.jsonc" in result.stdout
+
+
+def test_main_ruleset_does_not_collide_with_hook_script_prefix():
+    # Defeat-test: .github/rulesets/main.json starts with ".github/" like
+    # .github/scripts/** (a hook-script prefix) and .github/workflows/**
+    # (a workflow prefix) -- confirm it still classifies as governance,
+    # not accidentally absorbed by either other branch of classify().
+    result = run([".github/rulesets/main.json", ".github/scripts/foo.py"])
+    assert result.returncode == 0
+    assert "governance: .github/rulesets/main.json" in result.stdout
+    assert "hook-script: .github/scripts/foo.py" in result.stdout
+    assert "workflow: .github/rulesets/main.json" not in result.stdout
+    assert "hook-script: .github/rulesets/main.json" not in result.stdout
+
+
 def test_hook_script_prefix_and_skill_scripts_path():
     result = run(["hooks/check-x.sh", "skills/foo/scripts/bar.py"])
     assert result.returncode == 0
