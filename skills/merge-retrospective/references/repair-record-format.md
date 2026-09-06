@@ -14,8 +14,8 @@ filing is confirmed.
 
 - `Classification` always spells out the exact taxonomy phrase in prose
   ("missing deterministic gate", "unclear agent instruction", or
-  "external/human decision"), matching the Classification taxonomy
-  section above verbatim -- never abbreviate or paraphrase it.
+  "external/human decision"), matching `SKILL.md`'s own Classification
+  taxonomy section verbatim -- never abbreviate or paraphrase it.
 - `Status` restates the same classification as a fixed, hyphenated
   machine-readable slug (`missing-deterministic-gate`,
   `unclear-agent-instruction`, or `external-human-decision`) in inline

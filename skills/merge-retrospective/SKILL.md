@@ -198,14 +198,16 @@ whose third repair models this category in full.
    gate: no `missing-deterministic-gate` repair is filed here without
    its Step 4b verdict on record. This filing step runs with no
    per-write human preview of its own, unlike the closing step below
-   (which does gate attended/unattended) -- deliberately, because Step
-   4b's independent verdict plus the `Dedup-sweep:` PreToolUse hook
-   (`hooks/gitapex_check_gate_proposal_dedup_sweep.py`)
-   together already supply the deterministic backing an autonomous write
-   like this needs: that hook denies any `gate-proposal` creation whose
-   body carries no fresh, live-verified backlog-sweep count, so a human
-   preview is never the only thing standing between this step and a
-   duplicate or ungrounded filing.
+   (which does gate attended/unattended) -- deliberately, because each
+   of this step's two write kinds already has its own deterministic
+   backing, not a human preview, standing between it and a duplicate or
+   ungrounded write: the retrospective issue's own create-vs-update
+   choice is Step 0's own re-verified dedup search above, and every
+   `missing-deterministic-gate` repair's own standalone gate-proposal
+   issue is separately gated by the `Dedup-sweep:` PreToolUse hook
+   (`hooks/gitapex_check_gate_proposal_dedup_sweep.py`), which denies
+   any `gate-proposal` creation whose body carries no fresh,
+   live-verified backlog-sweep count.
    - **Template and title take precedence over this skill's own
      defaults.** If the repo has an issue template (for example
      `.github/ISSUE_TEMPLATE/`, a root `ISSUE_TEMPLATE.md`, or a
