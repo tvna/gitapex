@@ -1,0 +1,28 @@
+# Trusted-bot allowlist for the `independent-review-pending` merge gate
+# (issue #1858, design: docs/gitapex/specs/2026-09-06-dependabot-trusted-bot-gate-exemption-design.md).
+#
+# `gitapex_gate_independent_review_pending.py` matches a PR's opener
+# against this list on ALL THREE fields together -- login, numeric id,
+# and type == "Bot" -- login alone is never sufficient (a same-named
+# non-bot account is a distinct GitHub user id). A bot-identity match
+# here is only the first of two checks that gate has to pass: it then
+# also re-verifies the PR's actual head commit author/committer email
+# against `.github/rulesets/main.json`'s own
+# `commit_author_email_pattern`/`committer_email_pattern` rules, so a
+# commit merely opened by a bot but not actually authored/committed by
+# it still falls through to the normal human-verdict path.
+#
+# Deliberately no `email` field here: the head-commit email check above
+# reads `main.json`'s own pattern rules directly, so this repository's
+# trusted-committer emails are declared in exactly one place, not two
+# that could drift apart.
+#
+# Fields:
+#   login   - the bot's GitHub login, e.g. "dependabot[bot]"
+#   id      - the bot's numeric, immutable GitHub user id
+#   type    - the bot's GitHub account type; "Bot" for every entry today
+#   purpose - what this bot's PRs are for, for reviewers auditing this file
+- login: "dependabot[bot]"
+  id: 49699333
+  type: "Bot"
+  purpose: "Dependency version-bump PRs (nix/github-actions/uv ecosystems, see .github/dependabot.yml)"

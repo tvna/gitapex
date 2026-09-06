@@ -238,3 +238,92 @@ def test_heading_re_is_case_insensitive(level: str) -> None:
     the two-character `'SS'`) to work around."""
     body = f"{level} {gate.CANONICAL_HEADING_TEXT.swapcase()}\n"
     assert gate._HEADING_RE.search(body) is not None
+
+
+# ---------------------------------------------------------------------------
+# _email_matches_pattern (issue #1858, closing issue #1178's own
+# detection-logic-property-coverage gap for this new string-comparison/
+# regex allowlist check -- the trusted-bot exemption's head-commit email
+# verification, see the module docstring's own "Trusted-bot exemption"
+# section).
+# ---------------------------------------------------------------------------
+
+_EMAIL_ALPHABET = st.characters(blacklist_categories=("Cc", "Cs"), blacklist_characters="\n\r")
+_EMAIL_TEXT = st.text(alphabet=_EMAIL_ALPHABET, max_size=40)
+# An empty pattern is deliberately excluded here: `_email_matches_pattern`
+# fail-closes an empty pattern to False (module docstring) while Python's
+# own `str.startswith("")`/`endswith("")`/`"" in s` are all vacuously True
+# -- a real, intentional divergence from Python's own semantics, already
+# covered by its own dedicated property (`test_empty_or_non_string_pattern_never_matches`
+# below), not a case these three "matches Python's own operator" properties
+# should also assert against.
+_NON_EMPTY_EMAIL_TEXT = _EMAIL_TEXT.filter(lambda s: s != "")
+
+
+@_PROPERTIES
+@given(prefix=_NON_EMPTY_EMAIL_TEXT, rest=_EMAIL_TEXT)
+def test_starts_with_matches_python_str_startswith(prefix: str, rest: str) -> None:
+    """`starts_with` is a thin wrapper over `str.startswith` -- checked
+    across generated prefix/rest content, not only the one hand-picked
+    example in test_gitapex_gate_independent_review_pending.py."""
+    email = prefix + rest
+    assert gate._email_matches_pattern(email, "starts_with", prefix) == email.startswith(prefix)
+
+
+@_PROPERTIES
+@given(prefix=_EMAIL_TEXT, suffix=_NON_EMPTY_EMAIL_TEXT)
+def test_ends_with_matches_python_str_endswith(prefix: str, suffix: str) -> None:
+    email = prefix + suffix
+    assert gate._email_matches_pattern(email, "ends_with", suffix) == email.endswith(suffix)
+
+
+@_PROPERTIES
+@given(before=_EMAIL_TEXT, needle=_NON_EMPTY_EMAIL_TEXT, after=_EMAIL_TEXT)
+def test_contains_matches_python_in_operator(before: str, needle: str, after: str) -> None:
+    email = before + needle + after
+    assert gate._email_matches_pattern(email, "contains", needle) == (needle in email)
+
+
+@_PROPERTIES
+@given(email=_EMAIL_TEXT)
+def test_regex_operator_matches_re_search_semantics(email: str) -> None:
+    """A fixed, always-valid pattern (not itself generated) -- this
+    property is about `_email_matches_pattern`'s own regex dispatch
+    matching `re.search`'s own semantics, not about regex-pattern
+    validity (a malformed pattern is a separate, already-covered fixed
+    example in test_gitapex_gate_independent_review_pending.py)."""
+    pattern = r"^[a-z]"
+    assert gate._email_matches_pattern(email, "regex", pattern) == (re.search(pattern, email) is not None)
+
+
+@_PROPERTIES
+@given(
+    email=_EMAIL_TEXT,
+    operator=st.text(max_size=20).filter(lambda s: s not in {"starts_with", "ends_with", "contains", "regex"}),
+    pattern=_EMAIL_TEXT.filter(lambda s: s != ""),
+)
+def test_unknown_operator_never_matches(email: str, operator: str, pattern: str) -> None:
+    """Fail-closed default (module docstring): an unrecognized operator
+    never matches, across generated operator/pattern/email content, not
+    only the single hand-picked `"unknown-operator"` example."""
+    assert gate._email_matches_pattern(email, operator, pattern) is False
+
+
+@_PROPERTIES
+@given(email=_EMAIL_TEXT, operator=st.sampled_from(("starts_with", "ends_with", "contains", "regex")))
+def test_empty_or_non_string_pattern_never_matches(email: str, operator: str) -> None:
+    assert gate._email_matches_pattern(email, operator, "") is False
+    assert gate._email_matches_pattern(email, operator, None) is False
+
+
+@_PROPERTIES
+@given(email=st.text(max_size=100), operator=st.text(max_size=20), pattern=st.text(max_size=40))
+def test_email_matches_pattern_never_raises_and_is_deterministic(email: str, operator: str, pattern: str) -> None:
+    """Robustness: arbitrary operator/pattern/email content produces a
+    result rather than an exception (this function runs inside a required
+    CI status check, where an uncaught exception is a crashed gate, not a
+    reported finding), and is deterministic."""
+    first = gate._email_matches_pattern(email, operator, pattern)
+    second = gate._email_matches_pattern(email, operator, pattern)
+    assert first == second
+    assert isinstance(first, bool)
