@@ -652,6 +652,7 @@ from shape_checks.orchestrator import (
     _references_citation_source,
     _references_dir_checks,
     _references_well_formed_result,
+    _shape_waivers_well_formed_result,
     _sidecar_unreadable_results,
     _skill_md_read_result,
 )
@@ -744,6 +745,14 @@ def check_shape(target: Path, *, strict_token_budget: bool = False) -> list[Chec
     # whenever the sidecar is absent, unreadable, or the field itself is
     # malformed/empty, matching every other declared-list default here.
     external_citations_declared: list[dict[str, object]] = []
+    # Check-name -> reason mapping from a well-formed spec.shapeWaivers
+    # (issue #1329), populated below only when the sidecar parses cleanly
+    # -- threaded into _no_voodoo_constant_checks/
+    # _script_execution_intent_checks further down. Stays {} whenever the
+    # sidecar is absent, unreadable, or the field itself is
+    # malformed/empty/undeclared, matching external_citations_declared's
+    # own default above.
+    shape_waivers: dict[str, str] = {}
     # True only when the sidecar exists but could not be read/parsed at
     # all (manifest is None below) -- the one case where
     # external-citations-well-formed/-resolve were already emitted as
@@ -884,6 +893,11 @@ def check_shape(target: Path, *, strict_token_budget: bool = False) -> list[Chec
                 spec_is_mapping, spec_raw, schema_errors, external_citations
             )
             results.append(ext_well_formed_result)
+            shape_waivers_raw = spec.get("shapeWaivers")
+            shape_waivers_result, shape_waivers = _shape_waivers_well_formed_result(
+                spec_is_mapping, spec_raw, schema_errors, shape_waivers_raw
+            )
+            results.append(shape_waivers_result)
             lifecycle_raw = spec.get("lifecycle") if spec_is_mapping else None
             lifecycle_dict = lifecycle_raw if isinstance(lifecycle_raw, dict) else {}
             sidecar_citation_sources.extend(_lifecycle_reason_citation_sources(lifecycle_dict))
@@ -987,8 +1001,8 @@ def check_shape(target: Path, *, strict_token_budget: bool = False) -> list[Chec
     # existing at all, not a real coverage hole in this line.
     results.extend(_untrusted_authority_crossover_checks(skill_md, skill_dir, body))
     results.extend(_dimension_quote_exemption_checks(skill_md, skill_dir, body))
-    results.extend(_no_voodoo_constant_checks(skill_md, skill_dir, body))
-    results.extend(_script_execution_intent_checks(skill_md, skill_dir, body))
+    results.extend(_no_voodoo_constant_checks(skill_md, skill_dir, body, shape_waivers))
+    results.extend(_script_execution_intent_checks(skill_md, skill_dir, body, shape_waivers))
     if _is_portable(body, sidecar_portability):
         declared_citation_paths = frozenset(
             path for c in external_citations_declared if isinstance(path := c.get("path"), str)

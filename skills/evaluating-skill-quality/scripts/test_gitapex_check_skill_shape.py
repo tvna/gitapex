@@ -7594,6 +7594,164 @@ def test_script_execution_intent_unmentioned_script_not_flagged(tmp_path):
     assert result.evidence == "none"
 
 
+# ---- spec.shapeWaivers (issue #1329): a per-skill, per-check waiver for
+# ---- no-voodoo-constant / script-execution-intent-stated, so a new
+# ---- bundled-script check does not force blanket repo-wide edits ----
+
+
+def _write_shape_waivers_sidecar(d, body, *, portability="Portable"):
+    (d / "metadata/gitapex.yaml").write_text(
+        "apiVersion: gitapex.io/v1alpha1\n"
+        "kind: SkillMetadata\n"
+        "metadata:\n"
+        "  name: skill\n"
+        "spec:\n"
+        f"  portability: {portability}\n"
+        "  capabilityAssumption: Broad\n"
+        f"{body}",
+        encoding="utf-8",
+    )
+    return d
+
+
+def test_shape_waivers_absent_is_well_formed(tmp_path):
+    d = _write_skill(tmp_path)
+    result = _by_name(css.check_shape(d))["shape-waivers-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "not declared (optional)"
+
+
+def test_shape_waivers_checks_absent_when_sidecar_missing(tmp_path):
+    # Same omission convention external-citations-well-formed already
+    # established (issue #1064): when metadata/gitapex.yaml is absent
+    # entirely, shape-waivers-well-formed is omitted outright too, not a
+    # false "not declared (optional)" PASS.
+    d = _write_skill(tmp_path, sidecar=False)
+    by = _by_name(css.check_shape(d))
+    assert by["metadata-file-present"].passed is False
+    assert "shape-waivers-well-formed" not in by
+
+
+def test_shape_waivers_checks_fail_when_sidecar_unreadable(tmp_path):
+    d = _write_skill(tmp_path)
+    (d / "metadata/gitapex.yaml").write_bytes(b"\xff\xfe\x00\x01invalid")
+    by = _by_name(css.check_shape(d))
+    assert by["shape-waivers-well-formed"].passed is False
+    assert css.main([str(d)]) == 1
+
+
+def test_shape_waivers_empty_list_fails_well_formed(tmp_path):
+    d = _write_shape_waivers_sidecar(_write_skill(tmp_path), "  shapeWaivers:\n")
+    result = _by_name(css.check_shape(d))["shape-waivers-well-formed"]
+    assert result.passed is False
+    assert "is not of type 'array'" in result.evidence
+
+
+def test_shape_waivers_unknown_key_fails_well_formed(tmp_path):
+    d = _write_shape_waivers_sidecar(
+        _write_skill(tmp_path),
+        "  shapeWaivers:\n    - check: no-voodoo-constant\n      reason: legacy constant, tracked separately\n      extra: foo\n",
+    )
+    result = _by_name(css.check_shape(d))["shape-waivers-well-formed"]
+    assert result.passed is False
+    assert "'extra' was unexpected" in result.evidence
+
+
+def test_shape_waivers_missing_reason_fails_well_formed(tmp_path):
+    # An empty or missing reason is a rejected shape, not a silent
+    # no-justification waiver -- the schema's own required+minLength: 1
+    # on reason is the enforcement point.
+    d = _write_shape_waivers_sidecar(_write_skill(tmp_path), "  shapeWaivers:\n    - check: no-voodoo-constant\n")
+    result = _by_name(css.check_shape(d))["shape-waivers-well-formed"]
+    assert result.passed is False
+    assert "'reason' is a required property" in result.evidence
+
+
+def test_shape_waivers_valid_declares_and_counts(tmp_path):
+    d = _write_shape_waivers_sidecar(
+        _write_skill(tmp_path),
+        "  shapeWaivers:\n"
+        "    - check: no-voodoo-constant\n"
+        "      reason: legacy constant, tracked in issue tracker separately\n",
+    )
+    result = _by_name(css.check_shape(d))["shape-waivers-well-formed"]
+    assert result.passed is True
+    assert result.evidence == "1 entry"
+
+
+def test_no_voodoo_constant_waived_passes_with_reason_and_offenders_in_evidence(tmp_path):
+    d = _write_shape_waivers_sidecar(
+        _write_skill(tmp_path),
+        "  shapeWaivers:\n"
+        "    - check: no-voodoo-constant\n"
+        "      reason: legacy constant, tracked in issue tracker separately\n",
+    )
+    (d / "SKILL.md").write_text(
+        (d / "SKILL.md").read_text(encoding="utf-8") + "\nRun `checker.py` to verify.\n", encoding="utf-8"
+    )
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("TIMEOUT_SECONDS = 30\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence.startswith("waived (legacy constant, tracked in issue tracker separately):")
+    assert "scripts/checker.py:1:TIMEOUT_SECONDS" in result.evidence
+
+
+def test_no_voodoo_constant_unwaived_by_unrelated_check_name_still_fails(tmp_path):
+    # Defeat test: a waiver naming a DIFFERENT check must not accidentally
+    # waive no-voodoo-constant.
+    d = _write_shape_waivers_sidecar(
+        _write_skill(tmp_path),
+        "  shapeWaivers:\n"
+        "    - check: script-execution-intent-stated\n"
+        "      reason: unrelated waiver, must not leak into no-voodoo-constant\n",
+    )
+    (d / "SKILL.md").write_text(
+        (d / "SKILL.md").read_text(encoding="utf-8") + "\nRun `checker.py` to verify.\n", encoding="utf-8"
+    )
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("TIMEOUT_SECONDS = 30\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is False
+    assert "scripts/checker.py:1:TIMEOUT_SECONDS" in result.evidence
+
+
+def test_no_voodoo_constant_clean_scan_ignores_irrelevant_waiver(tmp_path):
+    # A declared waiver for a check with zero offenders must not change
+    # that check's own "none" evidence -- nothing to waive.
+    d = _write_shape_waivers_sidecar(
+        _write_skill(tmp_path),
+        "  shapeWaivers:\n    - check: no-voodoo-constant\n      reason: preemptive, unused\n",
+    )
+    (d / "SKILL.md").write_text(
+        (d / "SKILL.md").read_text(encoding="utf-8") + "\nRun `checker.py` to verify.\n", encoding="utf-8"
+    )
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("TIMEOUT_SECONDS = 30  # generous margin\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["no-voodoo-constant"]
+    assert result.passed is True
+    assert result.evidence == "none"
+
+
+def test_script_execution_intent_waived_passes_with_reason_and_offenders_in_evidence(tmp_path):
+    d = _write_shape_waivers_sidecar(
+        _write_skill(tmp_path),
+        "  shapeWaivers:\n"
+        "    - check: script-execution-intent-stated\n"
+        "      reason: legacy citation, tracked in issue tracker separately\n",
+    )
+    (d / "SKILL.md").write_text(
+        (d / "SKILL.md").read_text(encoding="utf-8") + "\nThe `checker.py` script performs verification.\n",
+        encoding="utf-8",
+    )
+    (d / "scripts").mkdir()
+    (d / "scripts" / "checker.py").write_text("# stub\n", encoding="utf-8")
+    result = _by_name(css.check_shape(d))["script-execution-intent-stated"]
+    assert result.passed is True
+    assert result.evidence.startswith("waived (legacy citation, tracked in issue tracker separately):")
+    assert "checker.py" in result.evidence
+
+
 # ---- Bundled-script enumeration is RECURSIVE (adversarial-review
 # ---- regression, issue #1330) ----
 #
