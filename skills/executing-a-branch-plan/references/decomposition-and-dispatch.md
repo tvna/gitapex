@@ -194,7 +194,7 @@ Branch-Plan-wide entry point.
 Classify each task's own Planned ops, at this same decomposition step,
 for whether they create or edit any `SKILL.md` -- brand-new or already
 existing, at any size. A task in this category routes to
-`drafting-a-skill`, the same dispatch mechanism `SKILL.md`'s own Related
+`drafting-a-skill`, the same routing `SKILL.md`'s own Related
 skills section already names for a brand-new skill directory
 (`vs. drafting-a-skill` bullet) -- unchanged for that case, now unified
 to cover an existing-`SKILL.md` edit too: every `SKILL.md` edit, however
@@ -228,7 +228,9 @@ routed task's own work splits by Step instead:
   `drafting-a-skill`'s own Step 3/4/5/7 text (or its file path) plus
   the current draft `SKILL.md`/`references/` diff, since that dispatch
   has no tool of its own (`review-persona`'s `tools: Read, Grep, Glob`
-  allow-list) to fetch either. It returns findings only -- a named
+  allow-list) to fetch either; Step 4's own collision check additionally
+  needs the caller's current skill inventory embedded the same way, for
+  the same reason. It returns findings only -- a named
   split/gap finding or "none found" (Steps 3/5), each collision
   resolved or deferred with a reason (Step 4), the review-handoff
   critique (Step 7) -- and never itself decides fix/defer/escalate; the
@@ -252,10 +254,12 @@ fallback this step reaches for on its own, and never triggered merely
 because a scorer or split already exists for the target skill. Absent
 that stated precondition, the task routes to `drafting-a-skill` as
 above. When it does apply, that skill's own Step 3 and Step 9 use the
-identical `review-persona`-dispatch mechanism above, not a route of
-their own -- that same entry 5 names both explicitly: Step 3 (one
-bounded gate-loop iteration) runs `drafting-a-skill`'s Steps 1/2/6 in
-its own write/Bash-capable context and dispatches Steps 3/4/5 to
+identical `review-persona`-dispatch mechanism entry 5 names -- not a
+route of their own. How each of those two steps splits the work is
+`scorer-gated-skill-edits`'s own Step 3/Step 9 text to state, not
+restated here or claimed as entry 5's own content: Step 3 (one bounded
+gate-loop iteration) runs `drafting-a-skill`'s Steps 1/2/6 in its own
+write/Bash-capable context and dispatches Steps 3/4/5 to
 `review-persona` within that same iteration, deferring Step 7's own
 handoff every time; Step 9 (the pre-ship review) later enters
 `drafting-a-skill` directly at Step 7 and dispatches that Step's

@@ -1,6 +1,6 @@
 ---
 name: review-persona
-description: Read-only, plugin-distributed content-reasoning subagent for a fixed, enumerated set of call sites -- see this file's own "Sanctioned call sites" section for the exact, current list (reviewing-an-artifact Step 2/Step 3, screening-a-low-trust-contribution checks 2-8). Never invoke directly for anything else, and never add a new call site without updating that section first.
+description: Read-only, plugin-distributed content-reasoning subagent for a fixed, enumerated set of call sites -- see this file's own "Sanctioned call sites" section for the exact, current list (reviewing-an-artifact Step 2/Step 3, screening-a-low-trust-contribution checks 2-8, executing-a-branch-plan Step 8's adversarial code review, and Step 6/scorer-gated-skill-edits's own Step 3/9 drafting-a-skill routing). Never invoke directly for anything else, and never add a new call site without updating that section first.
 tools: Read, Grep, Glob
 ---
 
@@ -45,8 +45,13 @@ adds the new call site, rather than reusing this definition silently.
    own sub-step 2 text for where that verify/fix/validate work actually
    happens.
 5. `executing-a-branch-plan` Step 6, or `scorer-gated-skill-edits`'s own
-   Step 3/9, whenever the task under dispatch touches a `SKILL.md` or
-   `references/**` path -- `drafting-a-skill`'s own Step 3 (Cohesion
+   Step 3/9, whenever the task under dispatch is a `SKILL.md`
+   create-or-edit routed to `drafting-a-skill` per
+   `decomposition-and-dispatch.md`'s own "Skill-file edit routing"
+   section -- that section's own trigger stays `SKILL.md`-only; widening
+   it to also route a `references/**`-only edit is a separate, not-yet-
+   landed change (issue `#1796`'s own Row 2), not something this entry
+   grants on its own -- `drafting-a-skill`'s own Step 3 (Cohesion
    self-check), Step 4 (Collision/dependency check), Step 5 (Domain-gap
    sweep), and Step 7 (review-handoff critique) dispatched here instead,
    because `drafting-a-skill` carries `disable-model-invocation: true`,
@@ -55,7 +60,14 @@ adds the new call site, rather than reusing this definition silently.
    `#1796`). The dispatch prompt embeds `drafting-a-skill`'s own Step
    3/4/5/7 procedure text (or its file path) and the proposed
    `SKILL.md`/`references/` diff under review directly, in-band, since
-   this dispatch has no tool of its own that could fetch either. Findings
+   this dispatch has no tool of its own that could fetch either. Step 4's
+   own collision check additionally needs the caller's current skill
+   inventory embedded the same way, per that Step's own dispatch-prompt
+   requirement -- this dispatch's `Read, Grep, Glob` allow-list can
+   enumerate every native `skills/*/` directory on disk but has no access
+   to a separately-installed or vendored skill's own registry entry
+   outside the filesystem, the same registry-lookup gap call site 3 above
+   already discloses for a different check. Findings
    return in `drafting-a-skill`'s own Step 3/4/5/7 output shape (a named
    split/gap finding or an explicit "none found," each Step 4 collision
    resolved or deferred with a reason, and the Step 7 review-handoff

@@ -125,6 +125,9 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1809"
       summary: "One Stop-boundary citation of adversarial-self-audit.md's own removed 'No verified mechanism available' section was repointed at the new gitapex_run_verified_isolated_dispatch.py's own printed guidance for that condition. Citation-only, no functional/frontmatter change. This fell outside the linked issue's own design doc/branch plan file-ownership map (an independent Step 8 review flagged the scope-of-record gap); recorded here to close it."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1822"
+      summary: "drafting-a-skill's Skill-tool invocation was unreachable; Steps 3/9 now run its Steps 1/2/6 directly here and dispatch Steps 3/4/5(/7) to review-persona via Agent/Task. requires:[drafting-a-skill] changes character (a read dependency, not invocation) but stays correct. Same undeclared-by-necessity Agent/Task capability drafting-a-skill's own metadata discloses -- no schema category yet, out of this PR's scope."
   skillDependencies:
     requires:
       - drafting-a-skill
