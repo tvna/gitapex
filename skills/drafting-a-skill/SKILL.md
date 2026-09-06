@@ -224,4 +224,6 @@ stops, rather than silently overriding the axis or looping the review.
 
 ## Notes
 
+- **Portability: Mixed.**
+- **Capability assumption: Broad.**
 - **Install/vendoring-time integrity** (whether this `SKILL.md` and its `references/` are the untampered, intended copies) is a separate question from the runtime content trust Steps 1/7 cover -- a clean Step 6 run says nothing about it. Verify it through the calling repository's own vendoring/install process, not this skill's own output.

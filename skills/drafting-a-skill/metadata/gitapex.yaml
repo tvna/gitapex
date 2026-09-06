@@ -332,6 +332,16 @@ spec:
       summary: "The repository owner asked the python3 and AskUserQuestion clauses be dropped from compatibility entirely, keeping only the disable-model-invocation spec-deviation fact rubric.md's own Compatibility awareness axis actually looks for. python3 stays declared structurally via metadata.executionRequirements.tools.shell (verified unaffected by gitapex_scan_execution_requirements_drift.py); no other file cross-referenced the removed clauses."
       outcome:
         baseCommit: "cf731068a35df8d570b76e6f1e5df2f23bd2c69e"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "An independent evaluating-skill-quality dispatch (isolated, controls verified) returned WELL-FORMED-NOT-MATURE, dimension 6 gap-minor: skill-writing-fundamentals.md's dimension-5 section claimed gitapex-cross-links.md carries checker flags \"found nowhere else\", but SKILL.md's own Step 6 already inlines those exact commands -- a stale, false claim. Reworded to cite the file's real value: fuller gitapex-repo context (PR-body convention, metadata schema, gate registration, script-parent census)."
+      outcome:
+        baseCommit: "9379290e415075eb9e095f3a4b9c3e95056da88e"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1882"
+      summary: "Same dispatch, second dimension-6 gap-minor: rubric.md's own Notes-vs-metadata placement axis requires a bare axis declaration (\"Portability: Mixed\", \"Capability assumption: X\") stay in ## Notes as a one-line pointer, regardless of how much rationale moves to metadata -- the earlier full Notes removal (issue 1882) dropped this structural requirement along with the rationale it was entangled with. Restored both bare declarations, no rationale."
+      outcome:
+        baseCommit: "9379290e415075eb9e095f3a4b9c3e95056da88e"
   skillDependencies:
     requires:
       - evaluating-skill-quality
