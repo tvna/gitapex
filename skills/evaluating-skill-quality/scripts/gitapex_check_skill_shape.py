@@ -200,6 +200,23 @@ Checks (the canonical list -- the manual fallback is to apply these):
     GENERIC_ROLE_HEDGE_PHRASES, not a replacement -- see the Portable
     inline-code repo-path citation entry below for how a declared entry
     rescues an inline-code citation.
+  - spec.shapeWaivers (issue #1329), if present, is a non-empty list of
+    item mappings, each with a bare check name (``check``) and a
+    non-empty, control-character-free, <=500-char justification
+    (``reason``), no unrecognized key (shape-waivers-well-formed); a
+    ``check`` value naming a real CheckResult name is only schema-checked
+    for shape, never resolved against the checker's own live check-name
+    set (a typo'd or retired name is schema-valid but inert -- see the
+    schema file's own ``shapeWaiverItem`` description for the accepted
+    tradeoff). Each declared ``reason`` is also fed into the bare-issue-
+    citation scan below, the same treatment spec.lifecycle's own reason
+    fields already get. Currently consulted by exactly two checks below,
+    no-voodoo-constant and script-execution-intent-stated: a check that
+    would otherwise FAIL with real offenders instead reports PASS when
+    its own name has a declared waiver, with the reason and the would-be
+    offenders both still visible in evidence (never a silent PASS) --
+    see each of those two checks' own entries below for the exact
+    evidence shape this produces.
   - references/ files: exactly one level deep, any extension (a bundled
     JSON schema is as legitimate a dependency file as a Markdown doc).
   - any references/*.md file over 100 lines: contains a table of contents
@@ -538,7 +555,11 @@ Checks (the canonical list -- the manual fallback is to apply these):
     Silently passes with "not declared (optional)" evidence, the same
     absent-optional-content convention used throughout this docstring,
     when the skill has no ``scripts/`` directory at all or it contains no
-    qualifying non-test ``.py`` file.
+    qualifying non-test ``.py`` file. A ``spec.shapeWaivers`` entry
+    naming ``no-voodoo-constant`` (see that entry above) converts what
+    would otherwise be a FAIL with real offenders into a PASS reading
+    ``waived (<reason>): would otherwise report: <offenders>`` -- the
+    offenders and the declared reason both stay visible in evidence.
   - Script execution intent stated (script-execution-intent-stated, issue
     #1045's Acceptance Criteria Map item A): every file anywhere under
     the skill's own ``scripts/`` directory (recursively, same scope and
@@ -561,7 +582,8 @@ Checks (the canonical list -- the manual fallback is to apply these):
     this check, per its own "referenced from SKILL.md/references/"
     applicability. Silently passes with "not declared (optional)"
     evidence when the skill has no ``scripts/`` directory at all or it is
-    empty.
+    empty. Same ``spec.shapeWaivers`` interaction as no-voodoo-constant
+    above, naming ``script-execution-intent-stated`` instead.
 
 Usage:
   python3 gitapex_check_skill_shape.py <skill-dir-or-SKILL.md>
