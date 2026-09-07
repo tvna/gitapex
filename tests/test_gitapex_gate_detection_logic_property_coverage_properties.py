@@ -108,11 +108,33 @@ None of the four functions below perform filesystem or subprocess I/O, so
 unlike that module's own module-scoped ``skill_dir`` fixture, no shared
 fixture is needed here at all -- every property below builds its own
 in-memory input from scratch.
+
+Task C addendum (issue #1532, consolidated into #1572) -- filesystem-backed
+tests, unlike every property above
+--------------------------------------------------------------------------
+The four functions above perform no filesystem or subprocess I/O, so no
+shared fixture was needed at all -- see "Reproducibility" above. Appended
+below that section is Task C's own regression fixture and per-verb/
+no-regression unit-test suite for the new ``.split(``/``.rsplit(``/
+``.partition(`` trigger shape added to category (c) (see the source
+module's own docstring, "Trigger categories" section). These exercise
+``find_violations`` itself -- a filesystem-reading function this properties
+file does not otherwise cover -- against a real ``tmp_path``-backed source
+tree, fixed-example style (not Hypothesis ``@given``), mirroring
+``tests/test_gitapex_gate_detection_logic_property_coverage.py``'s own
+established fixture/assertion pattern for "a gate of this exact shape"
+(that file's own module docstring) -- including its own tmp_path-source-tree
+helpers and its own WAIVED-comment convention test. They live in THIS file,
+not that one, because Task C's own file-touch scope (see
+``docs/gitapex/plans/2026-09-07-claude-gitapex-pr-1572-j4w3ga.md``) covers
+only this properties module and its source module -- not a judgment that
+this file's established property-only shape should change going forward.
 """
 
 from __future__ import annotations
 
 import os
+import pathlib
 
 import gitapex_gate_detection_logic_property_coverage as gate
 import pytest
@@ -542,3 +564,235 @@ def test_waived_lines_finds_exactly_the_real_comment_line(before: int, after: in
 
     string_literal_source = _source_with_waiver_text_only_in_a_string_literal(reason)
     assert gate._waived_lines(string_literal_source) == set()
+
+
+# ---------------------------------------------------------------------------
+# Task C (issue #1532, consolidated into #1572): .split()/.rsplit()/
+# .partition() trigger-shape extension to category (c). Fixed-example
+# pytest tests, not Hypothesis @given properties -- see this module's own
+# docstring, "Task C addendum" section, for why these filesystem-backed
+# tests live here rather than in the sibling
+# tests/test_gitapex_gate_detection_logic_property_coverage.py file that
+# already establishes this exact fixture/assertion style.
+# ---------------------------------------------------------------------------
+
+_SPLIT_FIXTURE_PATH = "hooks/gitapex_check_split_fixture.py"
+
+# The co-located properties file the gate's own `_properties_path` computes
+# from `_SPLIT_FIXTURE_PATH`'s stem -- named once so it stays in lockstep
+# with `_SPLIT_FIXTURE_PATH`, mirroring the sibling test file's own
+# `_FIXTURE_PROPERTIES_PATH` naming.
+_SPLIT_FIXTURE_PROPERTIES_PATH = "tests/test_gitapex_check_split_fixture_properties.py"
+
+
+def _write_source(root: pathlib.Path, relative: str, source: str) -> pathlib.Path:
+    """Write `source` at `root/relative`, creating parent directories as
+    needed. Duplicates
+    tests/test_gitapex_gate_detection_logic_property_coverage.py's own
+    `_write` helper rather than importing it cross-module -- Task C's own
+    file-touch scope (this properties module and its source module only)
+    does not extend to that sibling test file."""
+    path = root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(source, encoding="utf-8")
+    return path
+
+
+def _whole_file_diff(path: str, source: str) -> str:
+    """A unified diff in which every line of `source` is an added line.
+    Duplicates the sibling test file's own identical helper -- see
+    `_write_source` above for why it is duplicated rather than imported."""
+    lines = source.split("\n")
+    body = "".join("+" + line + "\n" for line in lines)
+    return f"diff --git a/{path} b/{path}\n--- /dev/null\n+++ b/{path}\n@@ -0,0 +1,{len(lines)} @@\n" + body
+
+
+def _grade_whole_file(root: pathlib.Path, source: str, *, relative: str = _SPLIT_FIXTURE_PATH) -> list[gate.Finding]:
+    """Write `source` at `relative` under `root`, grade it as wholly added,
+    return violations. Duplicates the sibling test file's own `_grade`
+    helper; the `graded == 1` assertion is load-bearing for the identical
+    reason that file's own docstring gives: without it, a gate reading
+    nothing at all would satisfy every "must not fire" assertion below."""
+    _write_source(root, relative, source)
+    violations, _waived, graded = gate.find_violations(_whole_file_diff(relative, source), root)
+    assert graded == 1, f"{relative} was not graded at all"
+    return violations
+
+
+# --- regression fixture: PRE-FIX split_commit_messages shape ---------------
+
+# Reconstructs
+# skills/executing-a-branch-plan/scripts/gitapex_check_task_commit_provenance.py's
+# own PRE-FIX split_commit_messages shape, described verbatim in that
+# function's current (already-fixed) docstring (issue #1477's own
+# correctness review): "the prior version of split_commit_messages filtered
+# every empty string rather than stripping only the one trailing NUL." No
+# co-located properties file is written for `_SPLIT_FIXTURE_PATH` anywhere
+# in the test below, reconstructing the "no property test covering it"
+# half of the pre-fix shape too.
+_PRE_FIX_SPLIT_COMMIT_MESSAGES_SOURCE = (
+    "def split_commit_messages(raw: str) -> list[str]:\n"
+    '    return [message for message in raw.split("\\0") if message]\n'
+)
+
+# Identical shape, but the trigger line itself carries an inline waiver.
+_PRE_FIX_SPLIT_COMMIT_MESSAGES_WAIVED_SOURCE = (
+    "def split_commit_messages(raw: str) -> list[str]:\n"
+    '    return [message for message in raw.split("\\0") if message]'
+    "  # detection-logic-property-coverage: WAIVED: reviewed manually\n"
+)
+
+
+def test_pre_fix_split_commit_messages_shape_is_flagged_with_no_co_located_property_test(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Regression fixture (Task C): a function whose body calls
+    `.split("\\0")` -- Task C's own new trigger shape -- with no co-located
+    properties file covering it at all. Before Task C's own detection
+    extension, category (c) covered only `.startswith()`/`.endswith()`/an
+    `in`-literal/`frozenset()`/`set()` -- none of which this shape
+    contains -- so this exact fixture graded clean (`violations == []`)
+    even though the string-splitting call sat there uncovered, the same way
+    a `.resolve()` call already got graded right next to it (issue #1532's
+    own motivating observation). Confirmed to have teeth: run against this
+    gate before Task C's own `_STRING_SPLIT_RECEIVER_AGNOSTIC_ATTRS`
+    extension existed, this assertion failed (zero violations found) --
+    this task's own commit history carries that live RED confirmation,
+    separate from the GREEN state this test pins now."""
+    violations = _grade_whole_file(tmp_path, _PRE_FIX_SPLIT_COMMIT_MESSAGES_SOURCE)
+    assert len(violations) == 1
+    finding = violations[0]
+    assert finding.path == _SPLIT_FIXTURE_PATH
+    assert finding.line == 2
+    assert finding.rule == "string-comparison-property-gap"
+    assert "split_commit_messages" in finding.message
+
+
+def test_split_trigger_honours_the_inline_waiver_comment_convention(tmp_path: pathlib.Path) -> None:
+    """Task C's own split/rsplit/partition trigger reuses the existing
+    `# detection-logic-property-coverage: WAIVED: <reason>` waiver
+    convention unchanged -- no new waiver syntax, per Task C's own design.
+    Mirrors the sibling test file's own
+    `test_waived_case_the_trigger_line_carries_an_honoured_inline_waiver`."""
+    _write_source(tmp_path, _SPLIT_FIXTURE_PATH, _PRE_FIX_SPLIT_COMMIT_MESSAGES_WAIVED_SOURCE)
+    diff = _whole_file_diff(_SPLIT_FIXTURE_PATH, _PRE_FIX_SPLIT_COMMIT_MESSAGES_WAIVED_SOURCE)
+    violations, waived, graded = gate.find_violations(diff, tmp_path)
+    assert graded == 1
+    assert violations == []
+    assert [(finding.rule, finding.line) for finding in waived] == [("string-comparison-property-gap", 2)]
+
+
+def test_the_real_already_fixed_split_commit_messages_grades_clean() -> None:
+    """Confirms the second half of Task C's own regression-fixture proof
+    method: the REAL, already-fixed
+    skills/executing-a-branch-plan/scripts/gitapex_check_task_commit_provenance.py
+    -- which now has
+    tests/test_gitapex_check_task_commit_provenance_properties.py covering
+    `split_commit_messages` by name (that file's own
+    `test_split_commit_messages_round_trips_exactly`) -- grades clean once
+    Task C's own detection extension can see its `.split("\\0")` call at
+    all. Reads the real file straight off disk and grades it against
+    `gate.REPO_ROOT` (the actual repository root this properties module's
+    own source module resolves, not a `tmp_path` reconstruction), so this
+    is a check against live repository state, not a synthetic fixture."""
+    real_path = "skills/executing-a-branch-plan/scripts/gitapex_check_task_commit_provenance.py"
+    source = (gate.REPO_ROOT / real_path).read_text(encoding="utf-8")
+    diff = _whole_file_diff(real_path, source)
+    violations, waived, graded = gate.find_violations(diff, gate.REPO_ROOT)
+    assert graded == 1
+    assert violations == []
+    assert waived == []
+
+
+# --- unit tests: each new verb independently triggers -----------------------
+
+
+@pytest.mark.parametrize(
+    "expression",
+    ["s.split('-')", "s.rsplit('-')", "s.partition('-')"],
+)
+def test_split_rsplit_partition_each_independently_trigger_category_c(tmp_path: pathlib.Path, expression: str) -> None:
+    """Task C's own three new trigger verbs, each pinned by name -- a typo
+    in one entry of `_STRING_SPLIT_RECEIVER_AGNOSTIC_ATTRS` (e.g.
+    `"rsplit"` written `"rsplt"`, or an entry dropped outright) silently
+    turns that member off with no other test in this file noticing, the
+    same reasoning the sibling test file's own
+    `test_every_trigger_table_member_fires_under_its_own_documented_category`
+    gives for the pre-existing category (a)/(b)/(c) members."""
+    source = f"def check(s):\n    return {expression}\n"
+    violations = _grade_whole_file(tmp_path, source)
+    assert [(finding.rule, finding.line) for finding in violations] == [("string-comparison-property-gap", 2)]
+
+
+def test_split_trigger_is_receiver_agnostic_even_on_a_non_string_receiver(tmp_path: pathlib.Path) -> None:
+    """Known over-report, disclosed in the source module's own docstring
+    ("(c) also covers string-splitting" paragraph): a `.split()` call on a
+    receiver that is not a real `str` (or `bytes`) at all still triggers,
+    matching every other receiver-agnostic trigger in that file --
+    `TOKENIZER` here is a placeholder value, never a real string."""
+    source = "TOKENIZER = None\n\n\ndef check(x):\n    return TOKENIZER.split(x)\n"
+    violations = _grade_whole_file(tmp_path, source)
+    assert [(finding.rule, finding.line) for finding in violations] == [("string-comparison-property-gap", 5)]
+
+
+def test_string_comparison_gap_message_names_both_allowlist_denylist_and_splitting(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Pins Task C's own `_TRIGGER_LABEL[_STRING_COMPARISON_GAP]` update:
+    the rule id stays a single `"string-comparison-property-gap"` for both
+    trigger shapes (Task C's own simplest-option design choice, keeping the
+    existing rule id consistent rather than minting a fourth category), but
+    the shared message text must name both kinds so a `.split()` finding
+    does not read as an "allowlist/denylist check" it plainly is not."""
+    violations = _grade_whole_file(tmp_path, "def check(s):\n    return s.split('-')\n")
+    assert len(violations) == 1
+    message = violations[0].message
+    assert "split" in message
+    assert "allowlist/denylist" in message
+
+
+def test_a_covering_given_test_clears_a_split_trigger_the_same_way_as_other_categories(
+    tmp_path: pathlib.Path,
+) -> None:
+    """True negative: the existing-coverage check (shared, unmodified
+    machinery) clears a split-trigger finding exactly the way it already
+    clears every other category (a)/(b)/(c) finding, once a co-located
+    properties file imports the fixture module and has one @given-decorated
+    function whose own body calls the enclosing function by name."""
+    properties_source = (
+        "import gitapex_check_split_fixture\n"
+        "from hypothesis import given\n"
+        "from hypothesis import strategies as st\n"
+        "\n\n"
+        "@given(st.text())\n"
+        "def test_split_commit_messages_covered(x):\n"
+        "    gitapex_check_split_fixture.split_commit_messages(x)\n"
+    )
+    _write_source(tmp_path, _SPLIT_FIXTURE_PROPERTIES_PATH, properties_source)
+    violations = _grade_whole_file(tmp_path, _PRE_FIX_SPLIT_COMMIT_MESSAGES_SOURCE)
+    assert violations == []
+
+
+# --- no-regression pins: existing categories are unchanged ------------------
+
+
+@pytest.mark.parametrize(
+    ("expression", "rule"),
+    [
+        ("SOME_RE.fullmatch(x)", "regex-property-gap"),
+        ("p.resolve()", "path-resolution-property-gap"),
+        ("x.startswith('a')", "string-comparison-property-gap"),
+        ("x.endswith('a')", "string-comparison-property-gap"),
+    ],
+)
+def test_existing_trigger_categories_are_unchanged_by_the_split_extension(
+    tmp_path: pathlib.Path, expression: str, rule: str
+) -> None:
+    """No-regression pin (Task C): the pre-existing regex/path-resolution/
+    `.startswith()`/`.endswith()` trigger shapes still fire, under their
+    own original rule id, after category (c)'s split/rsplit/partition
+    extension -- Task C's own change must be additive only, never altering
+    which of these fire or under which rule."""
+    source = f"import re\n\nSOME_RE = None\np = None\n\n\ndef check(x):\n    return {expression}\n"
+    violations = _grade_whole_file(tmp_path, source)
+    assert [(finding.rule, finding.line) for finding in violations] == [(rule, 8)]
