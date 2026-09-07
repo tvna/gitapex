@@ -1717,7 +1717,7 @@
         ".github/scripts/_gitapex_base_ref.py",
         ".github/workflows/detection-logic-property-coverage-gate.yml"
       ],
-      "rule": "A regex call (a .compile() on a bare name the graded file's own imports bind to the re module, including an 'import re as <alias>' alias, or a receiver-agnostic .match()/.search()/.fullmatch()), a path-resolution call (receiver-agnostic .resolve()/.is_symlink()/.relative_to(), or os.path.realpath()/os.path.abspath() matched on the call's final two attribute segments), or a string-comparison allowlist/denylist construct (receiver-agnostic .startswith()/.endswith(), an in/not in comparison against an inline list/tuple/set literal, or a frozenset()/set() call over one), newly added by a PR diff inside skills/*/scripts/gitapex_check_*.py, .github/scripts/gitapex_gate_*.py or hooks/gitapex_check_*.py (test_*.py and conftest.py excluded) must be covered by a co-located tests/test_<source-stem>_properties.py that imports the source module and defines an @given(...) property test whose own body references the trigger's enclosing function name, or any @given test in the file for a module-level trigger. Scope is the diff, not the repository. An inline '# detection-logic-property-coverage: WAIVED: <reason>' comment waives findings on that exact line. Exits 2 rather than pass silently on a malformed diff (an unparseable @@ hunk header, a post-image path that is neither /dev/null nor b/-prefixed, or a '+++ ' post-image header outside a hunk with no '--- ' source header before it) or an in-scope file that cannot be read or parsed. See the script's own module docstring for the disclosed known misses and over-reports.",
+      "rule": "A regex call (a .compile() on a bare name the graded file's own imports bind to the re module, including an 'import re as <alias>' alias, or a receiver-agnostic .match()/.search()/.fullmatch()), a path-resolution call (receiver-agnostic .resolve()/.is_symlink()/.relative_to(), or os.path.realpath()/os.path.abspath() matched on the call's final two attribute segments), or a string-comparison allowlist/denylist check or string-splitting call (receiver-agnostic .startswith()/.endswith()/.split()/.rsplit()/.partition(), an in/not in comparison against an inline list/tuple/set literal, or a frozenset()/set() call over one), newly added by a PR diff inside skills/*/scripts/gitapex_check_*.py, .github/scripts/gitapex_gate_*.py or hooks/gitapex_check_*.py (test_*.py and conftest.py excluded) must be covered by a co-located tests/test_<source-stem>_properties.py that imports the source module and defines an @given(...) property test whose own body references the trigger's enclosing function name, or any @given test in the file for a module-level trigger. Scope is the diff, not the repository. An inline '# detection-logic-property-coverage: WAIVED: <reason>' comment waives findings on that exact line. Exits 2 rather than pass silently on a malformed diff (an unparseable @@ hunk header, a post-image path that is neither /dev/null nor b/-prefixed, or a '+++ ' post-image header outside a hunk with no '--- ' source header before it) or an in-scope file that cannot be read or parsed. See the script's own module docstring for the disclosed known misses and over-reports.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_detection_logic_property_coverage.py"],
       "local_stdin": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_run_base_diff.py", "--", "*.py"],
@@ -2084,6 +2084,50 @@
         {"kind": "file-glob", "ref": "pyproject.toml"},
         {"kind": "cross-registry-consistency", "ref": "diff-added lines in pyproject.toml's [tool.coverage.run] source directories <-> a covering test execution in tests/test_<stem>.py or tests/test_<stem>_properties.py"},
         {"kind": "workflow-event", "ref": "patch-coverage-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
+    },
+    {
+      "id": "network-exception-set-drift",
+      "kind": "script",
+      "script": [
+        ".github/scripts/gitapex_gate_network_exception_set_drift.py",
+        ".github/scripts/gitapex_run_base_diff.py",
+        ".github/scripts/_gitapex_base_ref.py",
+        ".github/workflows/network-exception-set-drift-gate.yml"
+      ],
+      "rule": "Two module-level functions in the same in-scope file that each wrap a recognized network call (a bare opener(...) call -- this repository's own callable-injection idiom for an HTTP call -- or an attribute call whose dotted callee contains urlopen, or starts with urllib.request or http.client) in the body of their own first qualifying try must declare the same exception-handler name set for it. Functions are grouped by which of the two call shapes their own try wraps; any two functions in the same group with differing handler-name sets is a finding, reported once per differing pair and anchored at the later function's own try line. Scope is the diff, not the repository: a finding is reported only when at least one of the two functions' own try/except span was touched by an added line. Functions nested in a class or in another function are not scanned, and only the first qualifying try per function is graded -- see the script's own module docstring for the full known-misses/known-over-reports disclosure. An inline '# network-exception-set-drift: WAIVED: <reason>' comment on the anchor line waives it. Exits 2 rather than pass silently on a malformed diff or an in-scope file that cannot be read or parsed.",
+      "planes": ["ci", "local"],
+      "local_invocation": [
+        "uv",
+        "run",
+        "--frozen",
+        "python3",
+        ".github/scripts/gitapex_gate_network_exception_set_drift.py"
+      ],
+      "local_stdin": [
+        "uv",
+        "run",
+        "--frozen",
+        "python3",
+        ".github/scripts/gitapex_run_base_diff.py",
+        "--",
+        "*.py"
+      ],
+      "trigger": ".github/workflows/network-exception-set-drift-gate.yml on pull_request, plus tests/test_gitapex_gate_network_exception_set_drift.py and tests/test_gitapex_gate_network_exception_set_drift_properties.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "test-integrity",
+      "tracking_issue": 1512,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".github/scripts/*.py"},
+        {"kind": "file-glob", "ref": "hooks/*.py"},
+        {"kind": "file-glob", "ref": "evals/scripts/*.py"},
+        {"kind": "file-glob", "ref": "skills/*/scripts/*.py"},
+        {"kind": "workflow-event", "ref": "network-exception-set-drift-gate.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
