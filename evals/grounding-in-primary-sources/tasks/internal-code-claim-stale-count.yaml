@@ -1,0 +1,32 @@
+id: grounding-in-primary-sources-internal-code-claim-stale-count
+name: Internal Code Claim Not Re-Derived Against Current Source
+description: A docstring is about to assert a specific count of tokens hitting a refusal branch; the actual code shown in the prompt shows a different count. The response must ground the claim in the actual code shown (already directly observed in this session), not the pre-existing intended count, and state the corrected Fact rather than restating the stale assertion.
+tags:
+  - quality
+  - edge-case
+inputs:
+  prompt: |
+    Use grounding-in-primary-sources.
+
+    I'm about to write this docstring for a module. Check whether the
+    claim is accurate against the actual code below, and give me the
+    corrected docstring line if not.
+
+    Intended docstring line: "All 5 hostile tokens listed below hit the
+    refusal branch."
+
+    Actual code:
+    ```python
+    HOSTILE_TOKENS = ["ignore_previous", "system_override", "admin_mode", "bypass_check", "root_access"]
+
+    def handle_token(token):
+        if token in ("ignore_previous", "system_override"):
+            return refuse()
+        return allow()
+    ```
+expected:
+  output_contains:
+    - "Fact:"
+  output_not_contains:
+    - "Fact: All 5"
+    - "Fact: all 5"

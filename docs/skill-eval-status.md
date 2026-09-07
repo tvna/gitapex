@@ -155,7 +155,7 @@ suites still assert on final text only).
 | `evaluating-deterministic-gate-quality` | 3 | 40 | none | no | [evals/evaluating-deterministic-gate-quality/eval-status.md](../evals/evaluating-deterministic-gate-quality/eval-status.md) |
 | `evaluating-skill-quality` | 3 | 98 | `claude-haiku-4-5-20251001`, `claude-opus-5`, `claude-sonnet-5` | yes | [evals/evaluating-skill-quality/eval-status.md](../evals/evaluating-skill-quality/eval-status.md) |
 | `executing-a-branch-plan` | 3 | 10 | none | no | [evals/executing-a-branch-plan/eval-status.md](../evals/executing-a-branch-plan/eval-status.md) |
-| `grounding-in-primary-sources` | 3 | 23 | none | no | [evals/grounding-in-primary-sources/eval-status.md](../evals/grounding-in-primary-sources/eval-status.md) |
+| `grounding-in-primary-sources` | 3 | 24 | none | no | [evals/grounding-in-primary-sources/eval-status.md](../evals/grounding-in-primary-sources/eval-status.md) |
 | `invoking-gitapex` | 3 | 5 | none | no | [evals/invoking-gitapex/eval-status.md](../evals/invoking-gitapex/eval-status.md) |
 | `merge-retrospective` | 3 | 29 | none | no | [evals/merge-retrospective/eval-status.md](../evals/merge-retrospective/eval-status.md) |
 | `outward-artifact-preflight` | 3 | 7 | none | no | [evals/outward-artifact-preflight/eval-status.md](../evals/outward-artifact-preflight/eval-status.md) |

@@ -198,6 +198,18 @@ and the full pytest suite were re-run after every edit in this round
 and stayed green; that confirms shape and mechanical correctness only.
 Refs #290, refs #295.
 
+**Issue #1890 (internal-code-claim scope extension):** `SKILL.md`'s "When
+to use"/description gained a new trigger (a durable claim about this
+repository's own code) and one new worked example, per that issue's ACM.
+`skill-audit-disclosure`'s eval-coverage sub-check requires fixture
+evidence for a changed description; added one new fixture,
+`internal-code-claim-stale-count.yaml`, covering the new trigger
+directly (a docstring about to assert a stale token/refusal-branch
+count against actual code shown in the prompt). Not yet run against any
+model (same repo-wide "no ablation mechanism" gap as every suite in this
+file) or audited by a fresh `battle-testing-a-skill`/`evaluating-skill-quality`
+trial specific to this fixture.
+
 **Issue #295 (agent-verified vs. user-attributed evidentiary tiers):**
 the dispatch-2 "S2" finding above (`normal.yaml`'s happy path rewarding
 an unverifiable user-pasted claim as equivalent to independently-fetched
