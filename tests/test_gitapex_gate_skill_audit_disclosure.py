@@ -362,6 +362,19 @@ def test_main_passes_when_eval_coverage_waived(monkeypatch, capsys):
     assert gate.main(["--needs-eval-coverage-skills", "foo"]) == 0
 
 
+def test_main_eval_coverage_emphasis_wrapped_waiver_is_diagnosed(monkeypatch, capsys):
+    """Found by the Step 8 refactor pass: unlike every other FAIL branch,
+    this one previously never called _emphasis_wrap_hint at all, so an
+    author whose only WAIVED line was emphasis-wrapped got no clue why it
+    still failed."""
+    body = _VALID_SECTION + "- eval-coverage-disclosure: **WAIVED: no routing surface touched**\n"
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
+    assert gate.main(["--needs-eval-coverage-skills", "foo"]) == 1
+    err = capsys.readouterr().err
+    assert "eval-coverage" in err
+    assert "emphasis" in err.lower()
+
+
 def test_main_reports_both_new_failures_together(monkeypatch, capsys):
     body = """\
 ## Skill audit evidence

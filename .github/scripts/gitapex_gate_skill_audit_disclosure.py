@@ -970,6 +970,16 @@ def main(argv: list[str] | None = None) -> int:
             "'## Skill audit evidence' section.",
             file=sys.stderr,
         )
+        # Issue #1571 Step 8 (candidate finding from the mandatory refactor
+        # pass): this FAIL branch previously did not call _emphasis_wrap_hint
+        # at all, unlike every other FAIL branch below -- an author whose
+        # only WAIVED line was emphasis-wrapped got no clue why it failed.
+        # This check has no verdict vocabulary of its own (only WAIVED), so
+        # the empty tuple is deliberate: _is_emphasis_wrapped_verdict falls
+        # straight through to its own WAIVED-clause branch.
+        hint = _emphasis_wrap_hint(section, _EVAL_COVERAGE_CHECK_NAME, ())
+        if hint:
+            print(hint, file=sys.stderr)
 
     for check in _PROCESS_DISCLOSURE_CHECKS:
         missing_items = process_disclosure_missing[check.name]
