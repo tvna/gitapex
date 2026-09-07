@@ -24,3 +24,5 @@ section for the Trust class rule this `trust_class` column encodes.
 | 2026-08-26 | claude_md_agents_md | claude -p, prompt passed as a single self-contained CLI argument, no permission-bypass flag. | isolated | same-run-unreviewed |
 | (unspecified) | claude_md_agents_md | claude -p, prompt passed as a single self-contained CLI argument, no permission-bypass flag. | isolated | same-run-unreviewed |
 | 2026-09-05 | account_level_context_injection | claude -p subprocess, isolated cwd + isolated $HOME (script-established baseline recipe) | contaminated | same-run-unreviewed |
+| 2026-09-04 | installed_plugin_sessionstart_hook | claude -p subprocess, isolated cwd only (no $HOME override this run) -- run while dogfooding this skill's own self-review procedure. | contaminated | same-run-unreviewed |
+| 2026-09-07 | claude_md_agents_md | claude -p subprocess, isolated cwd + isolated $HOME (script-established baseline recipe) | isolated | same-run-unreviewed |
