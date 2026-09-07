@@ -41,3 +41,9 @@ spec:
       outcome:
         baseCommit: "a9896582"
         verdict: "WELL-FORMED-NOT-MATURE before fix; both gaps fixed in place"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "A second evaluating-skill-quality pass (re-run after the correction above) found two more minor gaps, both fixed: the new worked example's step 4 used a \"Result:\" label where every other instance in this file uses the established \"Fact:\"/\"Speculation:\" vocabulary -- relabeled. SKILL.md's own Notes restated the full Repository-scoped rationale already recorded in this sidecar entry -- shortened to a pointer at this entry, full reasoning kept in exactly one place."
+      outcome:
+        baseCommit: "dad72918"
+        verdict: "WELL-FORMED-NOT-MATURE before this fix; both gaps fixed in place"

@@ -190,7 +190,7 @@ Agent-verified (good):
 3. Cited: "`some_module.py`'s `handle_token()` (read this session): of
    the 7 named tokens, only `token_a` and `token_b` reach the refusal
    branch; the other 5 fall through to the default branch."
-4. Result: the docstring states the corrected claim ("2 of the 7 tokens
+4. Fact: the docstring states the corrected claim ("2 of the 7 tokens
    below reach the refusal branch; the remaining 5 fall through to the
    default branch") instead of the originally-intended "all 7."
 
@@ -244,15 +244,10 @@ repository's own hooks/permissions directly rather than assuming
 either way; where none exists, the rule remains prompt-level, not
 deterministically enforced.
 
-Portability rationale: the core claim-verification pattern -- "fetch a
-primary source before asserting external behavior as fact" -- holds
-regardless of which repository or harness invokes it, but this file
-declares `Repository-scoped`, not `Portable`, because Procedure step 5
-and the Stop boundaries each defer to a named sibling skill's own
-enumeration (`untrusted-input-triage`'s encoded/obfuscated-forms list,
-`responding-to-a-fresh-arrival`'s quoting-safety rule) as the canonical
-version rather than restating it -- a real, binding dependency a bare
-copy of this file elsewhere would silently lose. This
+Portability rationale: declared `Repository-scoped`, not `Portable` --
+Procedure step 5 and the Stop boundaries each defer to a named sibling
+skill's own enumeration as canonical rather than restating it; see
+`metadata/gitapex.yaml`'s own decision log for the full reasoning. This
 procedure governs runtime content trust once the skill is loaded; whether
 a consuming harness's own copy of this file matches its intended
 upstream content is that harness's install/vendoring-time concern, not
