@@ -18,7 +18,12 @@ conditional extensions (WAIVED-rejection on a description change,
 eval-coverage disclosure, security-relevance, design-doc coverage) --
 each needs a git-diff-computed fact (which skill's description changed,
 which skill is security-relevant, which design docs changed) that this
-standalone module has no way to compute.
+standalone module has no way to compute. It also does not port that
+script's issue #1571 emphasis-wrap diagnostic (naming a Markdown
+`**...**`/`_..._`-wrapped verdict as the specific reason a line fails):
+that diagnostic only enriches a FAIL message's text, and this module's own
+docstring above already scopes it to the base find_missing_disclosures
+check, whose pass/fail result is unaffected either way.
 
 Issue #874 changed *where* those extensions are reachable, not what this
 module does. `.github/scripts/gitapex_compute_skill_audit_flags.py` now
@@ -71,9 +76,18 @@ def _name_prefix(name: str) -> str:
 
 
 def _line_pattern(name: str, verdicts: Iterable[str]) -> re.Pattern[str]:
+    # Issue #1571 (refs #1888, #1784): identical widening to the CI gate's own
+    # _line_pattern -- allow exactly one character from a fixed, narrow
+    # punctuation set right after the verdict token's own \b, before falling
+    # through to the original end-of-line / whitespace-plus-text
+    # alternation, so a trailing sentence period or a shared-code-span's
+    # closing backtick no longer defeats an otherwise-valid verdict. Kept
+    # byte-identical to .github/scripts/gitapex_gate_skill_audit_disclosure.py's
+    # own copy -- see that module's docstring for the full rationale -- and
+    # verified by tests/test_gitapex_check_skill_audit_disclosure_hook_sync.py.
     verdict_alt = "|".join(re.escape(v) for v in verdicts)
     return re.compile(
-        _name_prefix(name) + r"(?:(?:" + verdict_alt + r")\b(?:[ \t]+\S.*)?|" + _WAIVED_CLAUSE + r")[ \t]*$",
+        _name_prefix(name) + r"(?:(?:" + verdict_alt + r")\b[.,;:!?`]?(?:[ \t]+\S.*)?|" + _WAIVED_CLAUSE + r")[ \t]*$",
         re.IGNORECASE | re.MULTILINE,
     )
 
