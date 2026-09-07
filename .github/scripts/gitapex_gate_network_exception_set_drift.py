@@ -52,9 +52,22 @@ itself). No alias/constant resolution, no call-graph analysis: this is the
 third gate in this family to make that trade (see that file's own
 `_handler_names` docstring for why it keeps losing to the alternative).
 
-For each function with a qualifying `try`, this gate records the try's own
-exception-handler *name set* -- literal name matching only, a `Tuple`
-handler split into its component names, nothing resolved -- reusing
+For each function with a qualifying `try`, this gate records the
+*effective* exception-handler name set that actually guards the network
+call -- not merely that `try`'s own `handlers`. When the call sits inside a
+`try` NESTED inside the qualifying `try`'s own body (a chain of nested
+`try`s is walked all the way down), the recorded set is the UNION of every
+one of those `try`s' own handler names, from the outer `try` found above
+down to the innermost one directly wrapping the call -- mirroring
+`gitapex_gate_exception_handler_gaps.py`'s own `_handler_coverage`'s
+"handled set accumulates across nested try scopes" pattern (`_network_call_
+handlers` is this gate's own version of that same accumulation). Without
+it, a network call sitting in an inner `try` would be graded only against
+the outer `try`'s own handlers, silently dropping the inner `try`'s own
+handler names even though both jointly determine what is actually caught
+around the call -- issue #1512's own defect shape, one level deeper. Each
+`try`'s own per-clause name extraction is literal only -- a `Tuple` handler
+split into its component names, nothing resolved -- reusing
 `gitapex_gate_exception_handler_gaps.py`'s own `_handler_names` logic
 exactly (copied, not imported: every `.github/scripts/*.py` gate stays
 independent of every other one, the convention
@@ -87,14 +100,25 @@ this gate malformed input is doing its job.
 
 Known misses
 ------------
+* **What IS handled: a `try` NESTED inside the first qualifying `try`'s own
+  body, wrapping that SAME call.** `_network_call_handlers` unions in every
+  such nested `try`'s own handler names (see the module docstring's own
+  "Design" section) -- this is not a miss, it is the fix for issue #1512's
+  own defect shape one level deeper, and is called out here only to
+  contrast with the next bullet, which remains a real miss.
 * **Functions nested in a class, or in another function, are never
   scanned.** Only `tree.body`'s own direct `FunctionDef`/`AsyncFunctionDef`
   entries are considered. Two methods of the same class that drift exactly
   this way are invisible to this first version -- a stated scope limit, not
   an oversight, per this task's own "keep it simple" instruction.
-* **Only the first qualifying `try` per function is graded.** A function
-  with two separate `try` blocks, each wrapping a different network call
-  shape, has its second one silently ignored.
+* **Only the first qualifying `try` per function is graded -- and that
+  means the first SEPARATE, SIBLING `try` (not one nested inside another,
+  which the bullet above already covers).** A function with two separate
+  `try` blocks, each at the same nesting depth wrapping a different network
+  call shape (or the same shape a second time), has its second one silently
+  ignored: only the first `try` `_first_network_try` finds in source order
+  ever becomes a candidate, and `_first_nested_network_try` only ever
+  descends INTO the one already found, never sideways to a sibling.
 * **No cross-module comparison.** Two functions in *different* files that
   wrap the identical call shape are never compared -- by design: "the same
   module" is this gate's own stated boundary, not a limitation to widen
@@ -495,11 +519,68 @@ def _first_network_try(
 ) -> tuple[ast.Try | ast.TryStar, str] | None:
     """Return `(try_node, shape)` for the first `try` in `function_node`'s
     own body (in source order, excluding nested function/lambda bodies)
-    whose body wraps a recognized network call, or None."""
+    whose body wraps a recognized network call, or None.
+
+    `try_node` is only the OUTERMOST such `try` -- used to anchor the
+    finding's line span (see `_try_span`, which already covers every `try`
+    nested inside it) and as the starting point `_network_call_handlers`
+    walks down from. It is not, on its own, the full set of handlers that
+    actually guards the call: see that function's own docstring.
+    """
     for node in _iter_excluding_nested_defs(function_node):
         if isinstance(node, ast.Try | ast.TryStar) and (shape := _try_body_network_shape(node)) is not None:
             return node, shape
     return None
+
+
+def _first_nested_network_try(try_node: ast.Try | ast.TryStar) -> ast.Try | ast.TryStar | None:
+    """Return the first `try` -- itself included -- among `try_node`'s own
+    body's statements (in source order, excluding nested function/lambda
+    bodies) whose own body also transitively wraps a recognized network
+    call, or None if `try_node`'s call is not itself further wrapped by
+    another `try`.
+
+    Only `try_node.body` is searched, matching `_try_body_network_shape`'s
+    own "only a try body protects" convention -- a `try` sitting in
+    `try_node`'s own `except`/`else`/`finally` clause is not part of the
+    chain of `try`s actually wrapping `try_node`'s call.
+    """
+    for statement in try_node.body:
+        for node in itertools.chain([statement], _iter_excluding_nested_defs(statement)):
+            if isinstance(node, ast.Try | ast.TryStar) and _try_body_network_shape(node) is not None:
+                return node
+    return None
+
+
+def _network_call_handlers(try_node: ast.Try | ast.TryStar) -> frozenset[str]:
+    """Return the effective handler-name set that actually guards the
+    network call `try_node`'s own body wraps.
+
+    `try_node`'s own handler names are not, on their own, the answer:
+    `_first_network_try` returns the OUTERMOST `try` whose body
+    transitively contains a recognized network call, but when that call
+    sits inside a `try` NESTED inside `try_node`'s own body, that inner
+    `try`'s own handlers guard the call too -- reading only `try_node`'s
+    own `handlers` silently drops them even though both jointly determine
+    what is actually caught around the call (see the module docstring's
+    own "Design" section for the concrete false-positive/false-negative
+    pair this produces without this accumulation).
+
+    The fix is the UNION of every enclosing `try`'s own handler names, from
+    `try_node` itself down through every `try` nested inside its body that
+    ALSO wraps the same call, innermost included -- mirroring
+    `gitapex_gate_exception_handler_gaps.py`'s own `_handler_coverage`'s
+    "handled set accumulates across nested try scopes" pattern: a call
+    protected by an inner `except ValueError:` nested inside an outer
+    `except OSError:` is, from the call's own point of view, protected
+    against *either* -- an exception the inner handler does not name still
+    propagates up into the outer `try`'s own protection.
+    """
+    own = frozenset(name for handler in try_node.handlers for name in _handler_names(handler))
+    nested = _first_nested_network_try(try_node)
+    if nested is None:
+        return own
+    return own | _network_call_handlers(nested)
 
 
 class _TryCandidate(NamedTuple):
@@ -526,10 +607,8 @@ def _module_candidates(tree: ast.Module) -> list[_TryCandidate]:
         if found is None:
             continue
         try_node, shape = found
-        handlers: set[str] = set()
-        for handler in try_node.handlers:
-            handlers |= _handler_names(handler)
-        candidates.append(_TryCandidate(node.name, shape, frozenset(handlers), try_node))
+        handlers = _network_call_handlers(try_node)
+        candidates.append(_TryCandidate(node.name, shape, handlers, try_node))
     return candidates
 
 
