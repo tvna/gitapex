@@ -95,6 +95,59 @@ def test_negation_passes_action_qualified_ban():
     assert L.check_negation("adding a tenth dimension", FLAT) is None
 
 
+# ---- check_verbatim_anywhere (issue #1534) ----
+
+
+def test_verbatim_anywhere_flags_non_negated_prose():
+    # The exact #1534 shape: the phrase is ordinary, non-negated prose in
+    # the rubric (no denial cue anywhere nearby) -- check_negation misses
+    # this shape entirely since it only looks for a phrase immediately
+    # preceded by a denial cue; check_verbatim_anywhere must still catch it.
+    assert L.check_negation("hooks and permissions", FLAT) is None
+    detail = L.check_verbatim_anywhere("hooks and permissions", FLAT)
+    assert detail is not None
+    assert "hooks and permissions" in detail
+
+
+def test_verbatim_anywhere_also_flags_the_cue_adjacent_case():
+    # check_negation's own cue-adjacent finding is a special case of
+    # verbatim-anywhere presence -- if "not a tenth dimension" is in the
+    # corpus then "tenth dimension" is too. Both checks are wired
+    # independently into _lint_negative_values (alongside each other, not
+    # one replacing the other -- see the test below), so both firing here
+    # is the expected, not an over-flagging, outcome.
+    assert L.check_negation("tenth dimension", FLAT) is not None
+    assert L.check_verbatim_anywhere("tenth dimension", FLAT) is not None
+
+
+def test_verbatim_anywhere_passes_phrase_absent_from_corpus():
+    # No over-flagging beyond the accepted verbatim-anywhere bias: a phrase
+    # that does not appear anywhere in the corpus triggers neither check.
+    assert L.check_negation("deploy window every Tuesday", FLAT) is None
+    assert L.check_verbatim_anywhere("deploy window every Tuesday", FLAT) is None
+
+
+def test_negation_flags_phrase_the_rubric_denies_unchanged():
+    # (b) Regression guard: check_negation's own pre-existing cue-adjacency
+    # behavior and message are unchanged by adding check_verbatim_anywhere
+    # alongside it -- same assertion test_negation_flags_phrase_the_rubric_
+    # denies above already makes, restated here next to the new checks so
+    # the "unmodified" claim is locally verifiable.
+    detail = L.check_negation("tenth dimension", FLAT)
+    assert detail is not None
+    assert "tenth dimension" in detail
+
+
+def test_lint_negative_values_reports_both_shapes_with_distinct_kinds():
+    # Wiring check: _lint_negative_values runs check_negation and
+    # check_verbatim_anywhere side by side, not one replacing the other,
+    # and the two findings carry distinct "rule" (kind) strings so a reader
+    # can tell which shape triggered.
+    warnings = L._lint_negative_values("t.yaml", "output_not_contains", ["tenth dimension"], FLAT)
+    rules = {w.rule for w in warnings}
+    assert rules == {"negation-trap", "verbatim-anywhere"}
+
+
 # ---- check_paraphrase (issue #170 check 3) ----
 
 

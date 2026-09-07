@@ -59,6 +59,26 @@ It reads a skill's own stable text (its `rubric.md`, if it has one, and its
      echoing that phrasing would contain the banned substring and
      false-fail. (Historical: banning `"tenth dimension"` false-fails "not
      a tenth dimension".)
+  2b. Verbatim anywhere (#1534) -- broader than check 2: an
+     `output_not_contains` phrase that appears verbatim ANYWHERE in the
+     same corpus/prompt haystack check 2 reads, not only immediately after
+     a denial cue. A banned phrase can be ordinary, non-negated prose
+     elsewhere in the target skill's own stable text (a step describing
+     the normal success path in that exact wording, say), and a correct
+     response that quotes or paraphrases that legitimate prose would then
+     contain the banned substring and false-fail -- the same false-negative
+     shape check 2 closes, one level broader. Reported under its own
+     `"verbatim-anywhere"` finding kind, distinct from check 2's
+     `"negation-trap"`, so a reader can tell which shape triggered; the two
+     checks run side by side (`_lint_negative_values` calls both), so a
+     cue-adjacent phrase legitimately produces both findings at once, one
+     as a special case of the other. Unlike check 2, this one is
+     non-blocking, always on (no CLI flag), reported as a note the same way
+     checks 6/7 below are -- see `check_verbatim_anywhere`'s own docstring
+     for the real-corpus evidence (316 findings, overwhelmingly closed-enum/
+     verdict-token/redacted-example vocabulary a skill's own SKILL.md
+     legitimately cites as illustrative, not the ordinary-prose collision
+     issue #1534 describes) behind that choice.
   3. Paraphrase drift -- a multi-word `output_contains` that is not a
      substring of the corpus, yet all of whose content words appear
      together in a short corpus window: the author almost certainly meant
@@ -711,6 +731,53 @@ def check_negation(value: str, corpus_flat: str) -> str | None:
     return None
 
 
+def check_verbatim_anywhere(value: str, corpus_flat: str) -> str | None:
+    """Warn when this phrase appears verbatim ANYWHERE in the corpus, not
+    only immediately after a denial cue (contrast ``check_negation``
+    above).
+
+    Issue #1534: a banned phrase can be ordinary, non-negated prose
+    elsewhere in the skill's own stable text -- a step describing the
+    normal success path using that exact wording, say -- with no denial
+    cue anywhere near it. ``check_negation`` alone misses this shape
+    entirely, since it only looks immediately before the phrase for one of
+    ``DENIAL_CUES``; a correct response that quotes or paraphrases that
+    legitimate prose would then contain the banned substring and
+    false-fail, the same false-negative outcome as the cue-adjacent case,
+    one level broader. This check's own finding is reported under a
+    distinct kind (``"verbatim-anywhere"``, not ``check_negation``'s own
+    ``"negation-trap"``) so a reader can tell which shape triggered --
+    see ``_lint_negative_values``, which calls both checks side by side, so
+    a cue-adjacent phrase (already caught by ``check_negation``) legitimately
+    also triggers this one, as a special case of bare verbatim presence.
+
+    ``corpus_flat`` is the same whitespace-flattened, lowercased haystack
+    ``check_negation`` reads -- see that function's own docstring for what
+    a caller passes (the skill's own rubric/SKILL.md, optionally extended
+    with the fixture's own prompt text per #487).
+
+    **Non-blocking, unlike ``check_negation``.** Measured against the real
+    corpus (the same "measure before gating" discipline checks 6/7 in the
+    module docstring already document): running this check unconditionally
+    as blocking surfaced 316 findings across nearly every skill's task set,
+    almost all a fixed enum/status token, a verdict marker, or a redacted
+    example credential that the skill's own SKILL.md legitimately cites as
+    illustrative vocabulary (a documented *wrong* value to contrast against,
+    a closed-enum member, a scrubbed example secret) rather than the
+    ordinary success-path prose issue #1534 actually describes -- a scale
+    and false-positive rate this heuristic cannot distinguish from a real
+    authoring defect on its own. Reported as a finding either way (so the
+    real #1534 shape is never silently dropped), but ``blocking=False`` at
+    the call site (``_lint_negative_values``) keeps it from gating the exit
+    code or the pinned repository-wide blocking-findings test, the same
+    resolution already applied to checks 6/7 for the identical reason.
+    """
+    low = WS_RE.sub(" ", value.lower())
+    if low in corpus_flat:
+        return f'"{value}" appears verbatim in the corpus'
+    return None
+
+
 def check_paraphrase(value: str, corpus_flat: str, corpus_tokens: list[str]) -> str | None:
     """Warn when a multi-word assertion is not a corpus substring yet all
     its content words co-occur in a short corpus window -- a likely
@@ -1131,11 +1198,21 @@ def _lint_positive_values(
 
 
 def _lint_negative_values(name: str, key: str, values: list[str], negation_haystack: str) -> list[Warning_]:
-    """Check 2 (negation-trap) against one negative ("this substring must
-    NOT appear") assertion list. Shared by ``output_not_contains``/
-    ``output_not_icontains`` and their ``graders:`` equivalents
-    ``not_contains_cs``/``not_contains`` (issue #869) -- see
-    ``_lint_positive_values``.
+    """Check 2 (negation-trap) and check 2b (verbatim-anywhere, #1534)
+    against one negative ("this substring must NOT appear") assertion
+    list. Shared by ``output_not_contains``/``output_not_icontains`` and
+    their ``graders:`` equivalents ``not_contains_cs``/``not_contains``
+    (issue #869) -- see ``_lint_positive_values``.
+
+    Both checks run independently for every value -- a phrase caught by
+    ``check_negation`` (cue-adjacent) is a special case of bare verbatim
+    presence, so it also legitimately triggers ``check_verbatim_anywhere``;
+    the two findings carry distinct ``rule`` (kind) strings
+    (``"negation-trap"`` vs. ``"verbatim-anywhere"``) so a reader can tell
+    which shape triggered, rather than one check being folded into or
+    suppressed by the other. Check 2b's own finding is non-blocking -- see
+    ``check_verbatim_anywhere``'s own docstring for the real-corpus evidence
+    behind that choice.
     """
     warnings: list[Warning_] = []
     for value in values:
@@ -1143,6 +1220,18 @@ def _lint_negative_values(name: str, key: str, values: list[str], negation_hayst
         if neg:
             warnings.append(
                 Warning_(name, key, value, "negation-trap", f"banning it also rejects a correct denial -- {neg}")
+            )
+        verbatim = check_verbatim_anywhere(value, negation_haystack)
+        if verbatim:
+            warnings.append(
+                Warning_(
+                    name,
+                    key,
+                    value,
+                    "verbatim-anywhere",
+                    f"banning it also rejects legitimate non-negated prose -- {verbatim}",
+                    blocking=False,
+                )
             )
     return warnings
 
