@@ -307,7 +307,9 @@ def parse_added_lines(diff_text: str) -> dict[str, set[int]]:
     new_remaining = 0
     saw_source_header = False
 
-    def _reject_if_hunk_incomplete(boundary: str) -> None:
+    def _reject_if_hunk_incomplete(
+        boundary: str,
+    ) -> None:  # function-body-test-coverage: WAIVED: a private closure nested inside parse_added_lines, with no name accessible from outside this function to reference directly; its raise path is exercised through parse_added_lines' own over-declared-hunk-count regression tests below (test_an_over_declared_hunk_before_the_next_diff_git_header_raises_scanerror, test_an_over_declared_hunk_at_end_of_input_raises_scanerror, test_an_over_declared_hunk_length_before_a_new_hunk_header_raises_scanerror)
         if in_hunk:
             raise ScanError(
                 f"hunk header for {path!r} declared more pre-/post-image line(s) than its body "

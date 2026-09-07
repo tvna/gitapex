@@ -30,6 +30,7 @@ silenced by this very docstring.
 
 from __future__ import annotations
 
+import ast
 import pathlib
 import subprocess
 
@@ -525,6 +526,31 @@ def test_a_filenotfounderror_only_handler_leaves_open_gap_reported(tmp_path: pat
     assert "open-gap" in _rules(_grade(tmp_path, source))
 
 
+def _parse_call(expression: str) -> ast.Call:
+    """Parse `expression` (a single call expression) in `eval` mode and
+    return its top-level `ast.Call` node."""
+    tree = ast.parse(expression, mode="eval")
+    assert isinstance(tree.body, ast.Call)
+    return tree.body
+
+
+def test_file_read_kind_recognizes_read_bytes_directly() -> None:
+    """`_file_read_kind`'s own addition on top of `_text_read_kind` -- see
+    that function's own docstring -- called directly rather than only
+    through the parametrized diff-grading test above."""
+    assert gate._file_read_kind(_parse_call("p.read_bytes()")) == "read_bytes"
+
+
+def test_file_read_kind_delegates_to_text_read_kind_for_the_other_three_shapes() -> None:
+    assert gate._file_read_kind(_parse_call("p.read_text()")) == "read_text"
+    assert gate._file_read_kind(_parse_call("open('x', encoding='utf-8')")) == "open"
+    assert gate._file_read_kind(_parse_call("p.open()")) == "open"
+
+
+def test_file_read_kind_returns_none_for_a_write_mode_open() -> None:
+    assert gate._file_read_kind(_parse_call("open('x', 'w')")) is None
+
+
 @pytest.mark.parametrize("handler", ["OSError", "Exception", "BaseException"])
 def test_a_handler_naming_oserror_or_an_ancestor_clears_open_gap(tmp_path: pathlib.Path, handler: str) -> None:
     source = f"try:\n    b = p.read_bytes()\nexcept {handler}:\n    b = b''\n"
@@ -654,6 +680,24 @@ def test_the_same_gap_is_flagged_once_its_own_line_is_added(tmp_path: pathlib.Pa
         _partial_diff(".github/scripts/gate_x.py", source, [2]), tmp_path
     )
     assert _rules(violations) == ["decode-gap"]
+
+
+def test_findings_for_source_reports_a_decode_gap_directly() -> None:
+    """`find_violations`'s own per-file caller, called directly rather than
+    only through that wrapper (or the `_grade` helper above, which also
+    always goes through `find_violations`)."""
+    source = "import os\ntext = p.read_text()\nvalue = 1\n"
+    violations, waived = gate.findings_for_source(".github/scripts/gate_x.py", source, {2})
+    assert waived == []
+    assert _rules(violations) == ["decode-gap"]
+    assert violations[0].line == 2
+
+
+def test_findings_for_source_honours_an_inline_waiver_directly() -> None:
+    source = "import os\ntext = p.read_text()  # exception-handler-gap: WAIVED: reason\nvalue = 1\n"
+    violations, waived = gate.findings_for_source(".github/scripts/gate_x.py", source, {2})
+    assert violations == []
+    assert _rules(waived) == ["decode-gap"]
 
 
 def test_touching_any_line_of_a_multi_line_call_brings_it_into_scope(

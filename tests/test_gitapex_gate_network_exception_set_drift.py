@@ -362,6 +362,43 @@ def test_waiver_text_inside_a_string_literal_is_not_honoured(tmp_path: pathlib.P
     assert _rules(violations) == [gate._DRIFT_RULE]
 
 
+# --- findings_for_source / find_violations direct unit coverage ------------
+
+
+def test_findings_for_source_reports_the_drift_pair_directly() -> None:
+    """`find_violations`'s own per-file caller, called directly rather than
+    only through that wrapper: `_OPENER_DRIFT_SOURCE`'s own fetch_b `try:`
+    sits on line 10, so `added={10}` alone is enough to bring the pair into
+    scope."""
+    violations, waived = gate.findings_for_source(".github/scripts/gate_x.py", _OPENER_DRIFT_SOURCE, {10})
+    assert waived == []
+    assert [violation.rule for violation in violations] == [gate._DRIFT_RULE]
+    assert violations[0].line == 10
+
+
+def test_findings_for_source_honours_an_inline_waiver_directly() -> None:
+    source = _OPENER_DRIFT_SOURCE.replace(
+        "def fetch_b(opener, request):\n    try:\n",
+        "def fetch_b(opener, request):\n"
+        "    try:  # network-exception-set-drift: WAIVED: deliberate, ValueError is local\n",
+    )
+    violations, waived = gate.findings_for_source(".github/scripts/gate_x.py", source, {10})
+    assert violations == []
+    assert [finding.rule for finding in waived] == [gate._DRIFT_RULE]
+
+
+def test_find_violations_skips_a_file_the_diff_touches_outside_the_in_scope_paths(
+    tmp_path: pathlib.Path,
+) -> None:
+    """`in_scope` is unit-tested directly elsewhere; this pins that
+    `find_violations` itself actually consults it and skips (never reads or
+    grades) a diff-touched path outside the four checker-script directories
+    -- covering the `continue` branch `in_scope`'s own call site takes."""
+    diff = "diff --git a/src/not_scanned.py b/src/not_scanned.py\n--- /dev/null\n+++ b/src/not_scanned.py\n@@ -0,0 +1,1 @@\n+x = 1\n"
+    violations, waived, graded = gate.find_violations(diff, tmp_path)
+    assert (violations, waived, graded) == ([], [], 0)
+
+
 # --- _network_call_shape / _dotted_name unit coverage ------------------------
 
 
@@ -400,6 +437,198 @@ def test_dotted_name_returns_none_for_a_call_result_in_the_chain() -> None:
     # chain, so `_dotted_name` cannot resolve it -- and this must not be
     # misread as the bare-Name "opener" shape either.
     assert gate._network_call_shape(_parse_call("get_module().urlopen(url)")) is None
+
+
+def test_dotted_name_joins_a_multi_segment_attribute_chain() -> None:
+    """Direct coverage of `_dotted_name` itself (not only through
+    `_network_call_shape`'s own call above): a pure `Name`/`Attribute` chain
+    joins in source order, and a bare `Name` alone still resolves."""
+    tree = ast.parse("a.b.c", mode="eval")
+    assert gate._dotted_name(tree.body) == "a.b.c"
+    bare = ast.parse("a", mode="eval")
+    assert gate._dotted_name(bare.body) == "a"
+
+
+# --- _handler_names unit coverage -------------------------------------------
+
+
+def _parse_handler(source: str) -> ast.ExceptHandler:
+    """Parse a one-`try` module and return its first `except` clause."""
+    tree = ast.parse(source)
+    try_node = tree.body[0]
+    assert isinstance(try_node, ast.Try)
+    return try_node.handlers[0]
+
+
+def test_handler_names_reads_a_bare_except_as_baseexception() -> None:
+    handler = _parse_handler("try:\n    pass\nexcept:\n    pass\n")
+    assert gate._handler_names(handler) == {"BaseException"}
+
+
+def test_handler_names_reads_a_single_name_handler() -> None:
+    handler = _parse_handler("try:\n    pass\nexcept OSError:\n    pass\n")
+    assert gate._handler_names(handler) == {"OSError"}
+
+
+def test_handler_names_reads_a_tuple_handler_by_final_names() -> None:
+    handler = _parse_handler("try:\n    pass\nexcept (OSError, ValueError):\n    pass\n")
+    assert gate._handler_names(handler) == {"OSError", "ValueError"}
+
+
+def test_handler_names_reads_an_attribute_handler_by_its_final_segment() -> None:
+    handler = _parse_handler("try:\n    pass\nexcept urllib.error.URLError:\n    pass\n")
+    assert gate._handler_names(handler) == {"URLError"}
+
+
+def test_handler_names_ignores_a_tuple_element_that_is_neither_name_nor_attribute() -> None:
+    """A tuple element that is itself a call result (e.g. a factory-returned
+    exception type) is neither an `ast.Name` nor an `ast.Attribute`, so it
+    contributes nothing -- the remaining, recognizable element(s) still do."""
+    handler = _parse_handler("try:\n    pass\nexcept (some_call(), OSError):\n    pass\n")
+    assert gate._handler_names(handler) == {"OSError"}
+
+
+# --- _iter_excluding_nested_defs unit coverage ------------------------------
+
+
+def test_iter_excluding_nested_defs_skips_nested_function_and_lambda_bodies() -> None:
+    """A nested `def`/`lambda` inside the walked node's own body is its own
+    scope: neither the nested def/lambda node itself, nor anything inside
+    its body, is yielded -- only the outer function's own two `Return`
+    statements are."""
+    tree = ast.parse(
+        "def outer():\n"
+        "    return opener(request)\n"
+        "    def inner():\n"
+        "        return opener(request2)\n"
+        "    lam = lambda: opener(request3)\n"
+        "    return 1\n"
+    )
+    outer = tree.body[0]
+    nodes = list(gate._iter_excluding_nested_defs(outer))
+    assert not any(isinstance(node, ast.FunctionDef | ast.Lambda) for node in nodes)
+    assert sum(isinstance(node, ast.Return) for node in nodes) == 2
+
+
+# --- _contains_network_call_shape unit coverage -----------------------------
+
+
+def test_contains_network_call_shape_matches_the_node_itself() -> None:
+    call = _parse_call("opener(request)")
+    assert gate._contains_network_call_shape(call) == gate._OPENER_CALL
+
+
+def test_contains_network_call_shape_matches_a_descendant_call() -> None:
+    stmt = ast.parse("x = [opener(request)]").body[0]
+    assert gate._contains_network_call_shape(stmt) == gate._OPENER_CALL
+
+
+def test_contains_network_call_shape_returns_none_for_a_nested_def_passed_directly() -> None:
+    """The stated exclusion, hit when `node` itself is a nested
+    function/lambda rather than merely containing one: the network call
+    inside `inner`'s own body must never be found."""
+    inner_def = ast.parse("def inner():\n    return opener(request)\n").body[0]
+    assert gate._contains_network_call_shape(inner_def) is None
+
+
+def test_contains_network_call_shape_returns_none_when_nothing_matches() -> None:
+    stmt = ast.parse("x = 1 + 2").body[0]
+    assert gate._contains_network_call_shape(stmt) is None
+
+
+# --- _try_body_network_shape / _first_network_try unit coverage ------------
+
+
+def _parse_try(source: str) -> ast.Try:
+    """Parse a one-`try` module and return the `Try` statement itself,
+    typed precisely for mypy rather than the general `ast.stmt`
+    `Module.body[0]` carries."""
+    node = ast.parse(source).body[0]
+    assert isinstance(node, ast.Try)
+    return node
+
+
+def _parse_function(source: str) -> ast.FunctionDef:
+    """Parse a one-`def` module and return the `FunctionDef` itself, typed
+    precisely rather than as the general `ast.stmt` `Module.body[0]`
+    carries."""
+    node = ast.parse(source).body[0]
+    assert isinstance(node, ast.FunctionDef)
+    return node
+
+
+def test_try_body_network_shape_returns_the_shape_when_present() -> None:
+    try_node = _parse_try("try:\n    return opener(request)\nexcept OSError:\n    pass\n")
+    assert gate._try_body_network_shape(try_node) == gate._OPENER_CALL
+
+
+def test_try_body_network_shape_returns_none_when_absent() -> None:
+    try_node = _parse_try("try:\n    return 1\nexcept OSError:\n    pass\n")
+    assert gate._try_body_network_shape(try_node) is None
+
+
+def test_first_network_try_skips_a_non_qualifying_try_and_returns_the_next() -> None:
+    function_node = _parse_function(
+        "def f():\n"
+        "    try:\n"
+        "        return 1\n"
+        "    except ValueError:\n"
+        "        pass\n"
+        "    try:\n"
+        "        return opener(request)\n"
+        "    except OSError:\n"
+        "        pass\n"
+    )
+    found = gate._first_network_try(function_node)
+    assert found is not None
+    try_node, shape = found
+    assert shape == gate._OPENER_CALL
+    assert try_node.lineno == 6
+
+
+def test_first_network_try_returns_none_when_no_try_qualifies() -> None:
+    function_node = _parse_function("def g():\n    try:\n        return 1\n    except ValueError:\n        pass\n")
+    assert gate._first_network_try(function_node) is None
+
+
+# --- _module_candidates / _drift_pairs / _try_span unit coverage -----------
+
+
+def test_module_candidates_lists_only_functions_with_a_qualifying_try() -> None:
+    tree = ast.parse(
+        "def not_qualifying():\n"
+        "    return 1\n"
+        "\n\n"
+        "def fetch_a(opener, request):\n"
+        "    try:\n"
+        "        return opener(request)\n"
+        "    except OSError:\n"
+        "        return None\n"
+    )
+    candidates = gate._module_candidates(tree)
+    assert [candidate.function_name for candidate in candidates] == ["fetch_a"]
+    assert candidates[0].shape == gate._OPENER_CALL
+    assert candidates[0].handlers == frozenset({"OSError"})
+
+
+def test_drift_pairs_yields_only_differing_pairs_within_the_same_shape_group() -> None:
+    try_node = _parse_try("try:\n    return opener(request)\nexcept OSError:\n    pass\n")
+    a = gate._TryCandidate("a", gate._OPENER_CALL, frozenset({"OSError"}), try_node)
+    b = gate._TryCandidate("b", gate._OPENER_CALL, frozenset({"OSError", "ValueError"}), try_node)
+    c = gate._TryCandidate("c", gate._OPENER_CALL, frozenset({"OSError"}), try_node)
+
+    pairs = [(first.function_name, second.function_name) for first, second in gate._drift_pairs([a, b, c])]
+    assert pairs == [("a", "b"), ("b", "c")]
+
+    # Identical handler sets across the whole group: no drift at all.
+    assert list(gate._drift_pairs([a, c])) == []
+    # A group of one candidate can never form a pair.
+    assert list(gate._drift_pairs([a])) == []
+
+
+def test_try_span_returns_the_inclusive_header_through_handler_line_range() -> None:
+    try_node = _parse_try("try:\n    return opener(request)\nexcept OSError:\n    pass\n")
+    assert gate._try_span(try_node) == (1, 4)
 
 
 # --- scope limits: nested / non-module-level functions are not scanned -----
@@ -486,6 +715,108 @@ def test_a_malformed_diff_fails_closed() -> None:
         gate.parse_added_lines("+++ b/.github/scripts/gate_x.py\n")
 
 
+# --- diff-parsing hardening (ported from gitapex_gate_except_fail_open.py's --
+# --- own regression tests of the same name, byte-identical parse_added_lines
+# --- mechanics -- see that file's own docstring for the full rationale) -----
+
+
+def test_an_over_declared_hunk_before_the_next_diff_git_header_raises_scanerror() -> None:
+    """Exercises `_reject_if_hunk_incomplete`'s own raise (the private closure
+    nested inside `parse_added_lines`, waived by name at that closure's own
+    `def` line): a hunk declaring 2 post-image lines but only 1 real added
+    line before the next file's own `diff --git ` header."""
+    diff = (
+        "diff --git a/.github/scripts/x.py b/.github/scripts/x.py\n"
+        "--- a/x.py\n+++ b/.github/scripts/x.py\n"
+        "@@ -1,0 +1,2 @@\n+x = 1\n"
+        "diff --git a/.github/scripts/y.py b/.github/scripts/y.py\n"
+    )
+    with pytest.raises(gate.ScanError, match="declared more pre-/post-image line"):
+        gate.parse_added_lines(diff)
+
+
+def test_an_over_declared_hunk_at_end_of_input_raises_scanerror() -> None:
+    """Same closure, reached via `parse_added_lines`'s own final call at the
+    diff's own end rather than at the next `diff --git ` header."""
+    diff = "diff --git a/.github/scripts/x.py b/.github/scripts/x.py\n--- a/x.py\n+++ b/.github/scripts/x.py\n@@ -1,0 +1,2 @@\n+x = 1\n"
+    with pytest.raises(gate.ScanError, match="the diff ended"):
+        gate.parse_added_lines(diff)
+
+
+def test_an_over_declared_hunk_length_before_a_new_hunk_header_raises_scanerror() -> None:
+    """Same closure again, reached at the next hunk header (`@@ ... @@`)
+    rather than a file boundary: `@@ -0,0 +1,5 @@` declares 5 post-image
+    lines but only 2 real added lines follow before the next file's own
+    headers begin -- with no `diff --git ` separator, `new_remaining` stays
+    above zero, so the guard must catch this at the second file's own `@@`
+    line before any of its content is consumed."""
+    diff = (
+        "--- a/.github/scripts/file1.py\n"
+        "+++ b/.github/scripts/file1.py\n"
+        "@@ -0,0 +1,5 @@\n"
+        "+def f():\n"
+        "+    pass\n"
+        "--- a/.github/scripts/file2.py\n"
+        "+++ b/.github/scripts/file2.py\n"
+        "@@ -1,1 +1,2 @@\n"
+    )
+    with pytest.raises(gate.ScanError, match=r"2 post-image line\(s\) still unconsumed"):
+        gate.parse_added_lines(diff)
+
+
+def test_an_unparseable_hunk_header_raises_scanerror() -> None:
+    """A distinct raise from the closure above: `_HUNK_RE.match(line)`
+    itself fails to match a `@@ ... @@`-shaped line with no parseable
+    line-number groups."""
+    diff = "diff --git a/.github/scripts/x.py b/.github/scripts/x.py\n--- a/x.py\n+++ b/.github/scripts/x.py\n@@ nonsense @@\n+x = 1\n"
+    with pytest.raises(gate.ScanError, match="unparseable hunk header"):
+        gate.parse_added_lines(diff)
+
+
+def test_an_over_declared_hunk_that_drains_into_a_real_header_pair_raises_scanerror() -> None:
+    """The disguised-header-absorption bypass this gate's own diff parser
+    guards against: a hunk whose declared count is honestly satisfied by
+    content that itself looks like a `--- `/`+++ ` header pair, immediately
+    followed by something `@@`-/`diff --git `-shaped -- ambiguous between
+    coincidental hunk-closing content and a real file transition missing its
+    `diff --git ` separator, so this fails closed rather than guessing."""
+    diff = (
+        "--- a/.github/scripts/x.py\n"
+        "+++ b/.github/scripts/x.py\n"
+        "@@ -1,1 +1,1 @@\n"
+        "--- a/.github/scripts/y.py\n"
+        "+++ b/.github/scripts/y.py\n"
+        "@@ -1,1 +1,2 @@\n"
+    )
+    with pytest.raises(gate.ScanError, match="shaped like a new file's own post-image header"):
+        gate.parse_added_lines(diff)
+
+
+def test_a_header_shaped_pair_with_nothing_confirming_it_after_is_not_an_error() -> None:
+    """Pins the one case `_looks_like_real_header_pair` alone cannot resolve
+    (issue #1200's own already-disclosed gap, ported unchanged from
+    gitapex_gate_exception_handler_gaps.py/gitapex_gate_except_fail_open.py):
+    a hunk whose declared count is small enough to be honestly, exactly
+    satisfied by content that itself happens to look header-shaped, with
+    nothing `@@`-/`diff --git `-shaped confirming it afterward."""
+    diff = (
+        "--- a/.github/scripts/file1.py\n"
+        "+++ b/.github/scripts/file1.py\n"
+        "@@ -1,1 +1,1 @@\n"
+        "--- a/.github/scripts/file2.py\n"
+        "+++ b/.github/scripts/file2.py\n"
+    )
+    assert gate.parse_added_lines(diff) == {".github/scripts/file1.py": {1}}
+
+
+def test_an_added_line_under_a_deleted_files_hunk_is_not_recorded() -> None:
+    """A `+`-prefixed line reached while `path is None` (a deletion's own
+    hunk -- malformed input a hand-fed patch could produce, never real `git
+    diff` output) advances the counters but is not recorded anywhere."""
+    diff = "--- a/.github/scripts/gone.py\n+++ /dev/null\n@@ -0,0 +1,1 @@\n+phantom\n"
+    assert gate.parse_added_lines(diff) == {}
+
+
 # --- in_scope ---------------------------------------------------------------
 
 
@@ -518,6 +849,26 @@ def test_main_returns_one_and_explains_the_failure(tmp_path: pathlib.Path, capsy
     assert "network-exception-set-drift: WAIVED:" in stderr
 
 
+def test_main_exits_0_and_prints_honoured_waivers_to_stderr(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A clean run (no unwaived violations) that still carries an honoured
+    waiver: `main`'s own `for finding in waived: print(...)` loop must run
+    even though the exit code is 0, not only the violations-reporting branch
+    `test_main_returns_one_and_explains_the_failure` above already covers."""
+    source = _OPENER_DRIFT_SOURCE.replace(
+        "def fetch_b(opener, request):\n    try:\n",
+        "def fetch_b(opener, request):\n"
+        "    try:  # network-exception-set-drift: WAIVED: deliberate, ValueError is local\n",
+    )
+    _write(tmp_path, ".github/scripts/gate_x.py", source)
+    _write(tmp_path, "diff.txt", _whole_file_diff(".github/scripts/gate_x.py", source))
+    assert gate.main(["--root", str(tmp_path), "--diff", str(tmp_path / "diff.txt")]) == 0
+    stderr = capsys.readouterr().err
+    assert "waived inline" in stderr
+    assert gate._DRIFT_RULE in stderr
+
+
 def test_main_exits_2_on_a_root_that_does_not_exist(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     assert gate.main(["--root", str(tmp_path / "nope")]) == 2
     assert "must be an existing directory" in capsys.readouterr().err
@@ -527,6 +878,27 @@ def test_main_exits_2_on_a_root_that_is_a_file(tmp_path: pathlib.Path, capsys: p
     a_file = _write(tmp_path, "not-a-directory", "x")
     assert gate.main(["--root", str(a_file)]) == 2
     assert "must be an existing directory" in capsys.readouterr().err
+
+
+def test_root_must_exist_validator_rejects_a_nonexistent_directory(tmp_path: pathlib.Path) -> None:
+    """`_root_must_exist` itself, called directly rather than only through
+    `main`'s own CLI wrapper or pydantic's own construction path."""
+    missing = tmp_path / "nope"
+    with pytest.raises(ValueError, match="must be an existing directory"):
+        gate.GateNetworkExceptionSetDriftArgs._root_must_exist(missing)
+
+
+def test_root_must_exist_validator_passes_through_an_existing_directory(tmp_path: pathlib.Path) -> None:
+    assert gate.GateNetworkExceptionSetDriftArgs._root_must_exist(tmp_path) == tmp_path
+
+
+def test_root_must_exist_validator_fires_during_args_construction(tmp_path: pathlib.Path) -> None:
+    """The same validator, reached the way `main` actually reaches it: via
+    `GateNetworkExceptionSetDriftArgs(root=...)`'s own pydantic validation,
+    not a direct call."""
+    with pytest.raises(gate.ValidationError, match="must be an existing directory"):
+        gate.GateNetworkExceptionSetDriftArgs(root=tmp_path / "nope")
+    assert gate.GateNetworkExceptionSetDriftArgs(root=tmp_path).root == tmp_path
 
 
 def test_main_exits_2_when_the_diff_file_is_missing(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
