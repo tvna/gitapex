@@ -185,6 +185,36 @@ def main(argv):
     return _scan(raw)
 """
 
+# Reconstructed from this repository's own pre-#758-fix
+# skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py
+# (commit 493f798e): a sidecar's own YAML-to-dict parsing was delegated to
+# `yaml.safe_load`, whose enclosing handler named `OSError`,
+# `UnicodeDecodeError` and `yaml.YAMLError` but not `RecursionError`/
+# `MemoryError`, so a hostile or deeply nested `metadata/gitapex.yaml`
+# sidecar (e.g. a vendored skill) could crash `check_shape()` with a raw
+# traceback instead of the graceful manifest-parsable FAIL every other
+# malformed-sidecar case gets. `battle-testing-a-skill`'s own adversarial
+# pass found this; commit `bdf33bd8` fixed it by broadening the tuple.
+# Issue #758 (refs #1587, consolidated into #1572).
+_DEFECT_YAML_GAP = """
+import pathlib
+
+import yaml
+
+
+def check_shape(sidecar: pathlib.Path) -> list[str]:
+    results = []
+    if sidecar.is_file():
+        try:
+            manifest_raw = yaml.safe_load(sidecar.read_text(encoding="utf-8"))
+            read_error = None
+        except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+            manifest_raw = None
+            read_error = type(exc).__name__
+        results.append(str(read_error))
+    return results
+"""
+
 
 def test_defect_c_uncaught_decode_on_an_unguarded_read_is_caught(tmp_path: pathlib.Path) -> None:
     """PR #651's own shipped defect, re-measured rather than assumed. The line
@@ -228,6 +258,34 @@ def test_the_real_fixed_task_commit_provenance_file_is_clean(tmp_path: pathlib.P
     call, and must grade clean under all three rules -- confirming the fix
     that actually landed, not merely a fix this test imagines."""
     relative = "skills/executing-a-branch-plan/scripts/gitapex_check_task_commit_provenance.py"
+    source = (REPO_ROOT / relative).read_text(encoding="utf-8")
+    assert _grade(tmp_path, source, relative=relative) == []
+
+
+def test_defect_yaml_gap_oserror_decode_yaml_error_only_handler_is_caught(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Issue #758's own defect: `gitapex_check_skill_shape.py`'s pre-fix
+    handler around `yaml.safe_load(...)` named `OSError`,
+    `UnicodeDecodeError` and `yaml.YAMLError` but not `RecursionError`/
+    `MemoryError` -- both missing, so `yaml-gap` names both in its message.
+    `UnicodeDecodeError` being named means `decode-gap` does NOT also fire
+    on the nested `sidecar.read_text(...)` call, which is why exactly one
+    finding is asserted here rather than two."""
+    assert _at(_grade(tmp_path, _DEFECT_YAML_GAP)) == [("yaml-gap", 11)]
+    (finding,) = _grade(tmp_path, _DEFECT_YAML_GAP)
+    assert "RecursionError" in finding.message
+    assert "MemoryError" in finding.message
+
+
+def test_the_real_fixed_skill_shape_file_is_clean(tmp_path: pathlib.Path) -> None:
+    """Live proof over the real, already-fixed file `_DEFECT_YAML_GAP` above
+    reconstructs the pre-fix shape of: `gitapex_check_skill_shape.py`'s own
+    `yaml.safe_load(...)` call now sits inside a handler naming `OSError`,
+    `UnicodeDecodeError`, `yaml.YAMLError`, `RecursionError` and
+    `MemoryError` together (commit `bdf33bd8`), and must grade clean under
+    all four rules -- confirming the fix that actually landed."""
+    relative = "skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py"
     source = (REPO_ROOT / relative).read_text(encoding="utf-8")
     assert _grade(tmp_path, source, relative=relative) == []
 
@@ -668,6 +726,164 @@ def test_open_gap_does_not_change_decode_gap_or_json_shape_gap_findings(
     assert _at(_grade(tmp_path, _DEFECT_C, relative=".github/scripts/gate_c.py")) == [("decode-gap", 8)]
     assert _at(_grade(tmp_path, _DEFECT_E, relative=".github/scripts/gate_e.py")) == [("json-shape-gap", 14)]
     assert _at(_grade(tmp_path, _DEFECT_F, relative=".github/scripts/gate_f.py")) == [("decode-gap", 8)]
+
+
+# --- yaml-gap ---------------------------------------------------------------
+
+
+def test_a_recursionerror_only_handler_leaves_yaml_gap_reported(tmp_path: pathlib.Path) -> None:
+    """The required boundary case for the RecursionError side: naming
+    `RecursionError` alone still leaves `MemoryError` uncovered, and the
+    rule must still fire -- one side clearing must never silence the other,
+    which is exactly why the module docstring's own `yaml-gap` section runs
+    two independent `_covers()` checks rather than one merged frozenset."""
+    source = "import yaml\ntry:\n    x = yaml.safe_load(s)\nexcept RecursionError:\n    x = None\n"
+    (finding,) = _grade(tmp_path, source)
+    assert finding.rule == "yaml-gap"
+    assert "MemoryError" in finding.message
+    assert "RecursionError" not in finding.message
+
+
+def test_a_memoryerror_only_handler_leaves_yaml_gap_reported(tmp_path: pathlib.Path) -> None:
+    """The mirror-image boundary case: naming `MemoryError` alone still
+    leaves `RecursionError` uncovered."""
+    source = "import yaml\ntry:\n    x = yaml.safe_load(s)\nexcept MemoryError:\n    x = None\n"
+    (finding,) = _grade(tmp_path, source)
+    assert finding.rule == "yaml-gap"
+    assert "RecursionError" in finding.message
+    assert "MemoryError" not in finding.message
+
+
+def test_a_tuple_handler_naming_both_recursionerror_and_memoryerror_clears_yaml_gap(
+    tmp_path: pathlib.Path,
+) -> None:
+    source = "import yaml\ntry:\n    x = yaml.safe_load(s)\nexcept (RecursionError, MemoryError):\n    x = None\n"
+    assert _grade(tmp_path, source) == []
+
+
+@pytest.mark.parametrize("handler", ["Exception", "BaseException"])
+def test_a_handler_naming_exception_or_baseexception_clears_yaml_gap(tmp_path: pathlib.Path, handler: str) -> None:
+    """Defeat case: `Exception`/`BaseException` is an ancestor of both
+    `RecursionError` and `MemoryError` at once, so one handler clears both
+    sides -- confirming this rule does not over-fire on the ordinary,
+    maximally broad handler a contributor would reach for first."""
+    source = f"import yaml\ntry:\n    x = yaml.safe_load(s)\nexcept {handler}:\n    x = None\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_bare_except_clears_yaml_gap(tmp_path: pathlib.Path) -> None:
+    source = "import yaml\ntry:\n    x = yaml.safe_load(s)\nexcept:\n    x = None\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_an_outer_try_naming_both_covers_a_nested_yaml_safe_load(tmp_path: pathlib.Path) -> None:
+    """Mirrors `open-gap`'s own nested-try coverage test: `_handler_coverage`
+    accumulates handler names across every enclosing `try`, not only the
+    nearest one, and that accumulation applies to `yaml-gap` unchanged."""
+    source = (
+        "import yaml\n"
+        "try:\n"
+        "    try:\n"
+        "        x = yaml.safe_load(s)\n"
+        "    except yaml.YAMLError:\n"
+        "        raise\n"
+        "except (RecursionError, MemoryError):\n"
+        "    x = None\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_yaml_yamlerror_only_handler_still_leaves_yaml_gap_reported(tmp_path: pathlib.Path) -> None:
+    """Defeat case named directly in this rule's own acceptance criteria: a
+    handler naming only `yaml.YAMLError` -- the ordinary, correct guard
+    against a real YAML syntax error, and issue #758's own pre-fix shape --
+    covers neither `RecursionError` nor `MemoryError`, so the rule must
+    still fire rather than being satisfied by any YAML-flavoured handler."""
+    source = "import yaml\ntry:\n    x = yaml.safe_load(s)\nexcept yaml.YAMLError:\n    x = None\n"
+    assert _rules(_grade(tmp_path, source)) == ["yaml-gap"]
+
+
+def test_an_unrecognised_handler_name_does_not_grant_yaml_gap_coverage(tmp_path: pathlib.Path) -> None:
+    """Mirrors `open-gap`'s own
+    `test_an_unrecognised_handler_name_does_not_grant_open_gap_coverage`: a
+    project exception class this gate cannot classify (`except ScopeError:`)
+    is in neither `_RECURSION_COVERING` nor `_MEMORY_COVERING`, so it does
+    not clear either side, and the rule still fires -- a stated miss on
+    what the handler set *could* mean, not assumed coverage."""
+    source = "import yaml\ntry:\n    x = yaml.safe_load(s)\nexcept ScopeError:\n    x = None\n"
+    assert _rules(_grade(tmp_path, source)) == ["yaml-gap"]
+
+
+def test_an_aliased_yaml_import_is_a_stated_miss_for_yaml_gap(tmp_path: pathlib.Path) -> None:
+    """`_is_yaml_safe_load` matches the call the identical literal-name way
+    `_is_json_parse` already matches `json.loads`/`json.load` (see both
+    functions' own docstrings): only a receiver spelled exactly `yaml`.
+    `import yaml as y` followed by `y.safe_load(...)`, with no
+    `RecursionError`/`MemoryError` handler in sight, is therefore NOT
+    graded -- a documented, deliberate miss, not a silent one, the same
+    trade `_is_json_parse` already makes for an aliased `json` import."""
+    source = "import yaml as y\ntry:\n    x = y.safe_load(s)\nexcept y.YAMLError:\n    x = None\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_non_yaml_receiver_lookalike_does_not_trigger_yaml_gap(tmp_path: pathlib.Path) -> None:
+    """Defeat case named directly in this rule's own acceptance criteria:
+    `somemodule.safe_load(...)` shares the `.safe_load` attribute name but
+    its receiver is not `yaml`, so `_is_yaml_safe_load`'s own receiver-name
+    check must not fire on it regardless of how narrow the handler is --
+    confirming that check actually discriminates rather than matching on
+    the attribute name alone."""
+    source = "import somemodule\ntry:\n    x = somemodule.safe_load(s)\nexcept ValueError:\n    x = None\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_yaml_gap_finding_is_waived_by_the_same_inline_marker(tmp_path: pathlib.Path) -> None:
+    """No new waiver syntax: the existing `# exception-handler-gap: WAIVED:
+    <reason>` marker this file's own module docstring documents waives a
+    `yaml-gap` finding exactly as it already does for the other three
+    rules."""
+    source = (
+        "import yaml\n"
+        "try:\n"
+        "    x = yaml.safe_load(s)  # exception-handler-gap: WAIVED: caller retries on any exception\n"
+        "except yaml.YAMLError:\n"
+        "    x = None\n"
+    )
+    _write(tmp_path, ".github/scripts/gate_x.py", source)
+    violations, waived, _graded = gate.find_violations(_whole_file_diff(".github/scripts/gate_x.py", source), tmp_path)
+    assert violations == []
+    assert _rules(waived) == ["yaml-gap"]
+
+
+def test_yaml_gap_does_not_change_decode_gap_open_gap_or_json_shape_gap_findings(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Required regression check: adding `yaml-gap` must not alter what
+    `decode-gap`/`json-shape-gap`/`open-gap` themselves report on their own
+    existing regression fixtures -- re-run here directly, rather than
+    trusted only from the rest of this file's own suite staying green."""
+    assert _at(_grade(tmp_path, _DEFECT_C, relative=".github/scripts/gate_c.py")) == [("decode-gap", 8)]
+    assert _at(_grade(tmp_path, _DEFECT_E, relative=".github/scripts/gate_e.py")) == [("json-shape-gap", 14)]
+    assert _at(_grade(tmp_path, _DEFECT_F, relative=".github/scripts/gate_f.py")) == [("decode-gap", 8)]
+    assert _at(_grade(tmp_path, _DEFECT_OPEN_GAP, relative=".github/scripts/gate_open.py")) == [("open-gap", 10)]
+
+
+def test_is_yaml_safe_load_recognizes_the_call_directly() -> None:
+    """`_is_yaml_safe_load`'s own unit coverage, called directly rather than
+    only through the parametrized diff-grading tests above."""
+    assert gate._is_yaml_safe_load(_parse_call("yaml.safe_load(s)")) is True
+
+
+def test_is_yaml_safe_load_rejects_a_non_yaml_receiver_directly() -> None:
+    assert gate._is_yaml_safe_load(_parse_call("somemodule.safe_load(s)")) is False
+
+
+def test_is_yaml_safe_load_rejects_a_different_yaml_attribute_directly() -> None:
+    """`yaml.dump(...)`, `yaml.load(...)` and every other `yaml`-module call
+    share the same receiver but a different attribute name, and must not be
+    matched -- only `.safe_load` is."""
+    assert gate._is_yaml_safe_load(_parse_call("yaml.dump(s)")) is False
+    assert gate._is_yaml_safe_load(_parse_call("yaml.load(s)")) is False
 
 
 # --- diff scoping -------------------------------------------------------

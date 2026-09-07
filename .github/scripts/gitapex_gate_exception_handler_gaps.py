@@ -30,7 +30,7 @@ line-coverage, branch-coverage or `except`-line-coverage metric can point
 at it, and `ruff --select ALL` reports zero findings on any of the three
 defect lines. This gate is the answer measured for that class.
 
-Three rules, all computed from the AST, all stdlib:
+Four rules, all computed from the AST, all stdlib:
 
 **Rule `decode-gap`.** A call that decodes bytes to text -- `read_text(...)`,
 or `open(...)` in a text read mode, and not one carrying a substituting
@@ -92,6 +92,45 @@ buys: a project-defined `OSError` subclass
 nothing and is a stated miss, the identical name-resolution trade
 `_handler_names`'s own docstring records making three times already.
 
+**Rule `yaml-gap`.** A `yaml.safe_load(...)` call -- the identical
+attribute-call shape `_is_json_parse` already matches for
+`json.loads`/`json.load`, mirrored here for `yaml`'s own `safe_load` --
+whose enclosing handlers do not cover *both* `RecursionError`-or-ancestor
+and `MemoryError`-or-ancestor. Unlike the three rules above, each of which
+tests membership against one covering frozenset, this one runs two
+independent `_covers()` checks (`_RECURSION_COVERING`, `_MEMORY_COVERING`)
+and fires when *either* side is uncovered: a handler naming only
+`RecursionError` still leaves a `MemoryError` gap unhandled, and the
+converse holds too, so merging the two sets into one would incorrectly
+clear a handler that only ever guarded one of them. This rule's own
+regression fixture, reconstructed from
+`skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py`'s
+pre-fix (`493f798e`) except tuple -- `except (OSError, UnicodeDecodeError,
+yaml.YAMLError):`, with no `RecursionError`/`MemoryError` -- is issue
+#758's own motivating defect, found only by `battle-testing-a-skill`'s own
+adversarial pass and fixed by `bdf33bd8`: `yaml.safe_load` blocks arbitrary
+object construction but still resolves anchors/aliases, so a hostile or
+deeply nested sidecar can still exhaust stack or memory via alias
+expansion, and neither failure was named by that handler set, so it would
+have crashed with a raw traceback instead of that script's own graceful
+manifest-parsable FAIL. The call itself is matched the same literal-name
+way `_is_json_parse` matches `json.loads`/`json.load`: an attribute call
+whose receiver is a bare `ast.Name` spelled exactly `yaml`. `import yaml as
+y` followed by `y.safe_load(...)` is therefore a stated miss, the identical
+trade `_is_json_parse` already makes for `from json import loads`/
+`import json as j`, and the same name-resolution cost `_handler_names`'s
+own docstring records this file reverting three times already --
+resolving an import alias needs that same machinery, for a shape that
+occurs nowhere in the graded directories today. Same
+`# exception-handler-gap: WAIVED: <reason>` waiver convention as the other
+three rules; no new syntax. Measured the same way `decode-gap`/
+`json-shape-gap` were (this section's own sibling paragraph): graded as
+wholly added against this worktree, `yaml-gap` reports 27 pre-existing
+findings across 20 in-scope files, none of them triaged -- disclosed here
+rather than silently discovered later, and left as a one-time backlog for
+a separate change, per the same acceptance criterion issue #682 already
+set for `decode-gap`/`json-shape-gap`'s own pre-existing findings.
+
 **Scope is the diff, not the repository, and that is the load-bearing
 design decision.** Measured against merged `main` (afd18eb) the original two
 rules (`decode-gap`, `json-shape-gap`; `open-gap` postdates this
@@ -130,12 +169,18 @@ gates live under `hooks/`, and issue #680 found one of these two defects in
 `conftest.py`) are out of scope everywhere: a test that hands a gate
 malformed input is doing its job.
 
-Deliberately not graded by any of the three rules, each because the shape
+Deliberately not graded by any of the four rules, each because the shape
 does not reach a defect class this gate was measured against: a read from
 `sys.stdin`, a write-mode `open()` (that raises `UnicodeEncodeError`, a
-different failure `open-gap` was not measured against either), and a
+different failure `open-gap` was not measured against either), a
 subscript or `.items()` on an unvalidated JSON result rather than a
-`.get()`. A binary read is the one shape that split across rules rather
+`.get()`, and a `yaml.load(...)`/`yaml.load_all(...)`/`yaml.safe_load_all(...)`
+call -- `yaml-gap` grades only `safe_load`, the one spelling issue #758's
+own defect used and the only one this rule was measured against;
+`.github/scripts/gitapex_gate_eval_declared_model.py`'s own
+`yaml.load(raw, Loader=_DuplicateKeyLoader)` call is a real, currently
+in-scope instance of the wider shape this leaves ungraded, stated rather
+than silently missed. A binary read is the one shape that split across rules rather
 than staying out of scope entirely: `decode-gap` still does not grade it
 (nothing decodes, so there is no `UnicodeDecodeError` risk), but
 `open-gap` grades `.read_bytes()` on its own, different failure axis --
@@ -394,6 +439,21 @@ _OSERROR_SUBCLASS_NAMES = frozenset(
     }
 )
 
+# The `yaml-gap` rule's own covering sets. Two separate frozensets, not one
+# merged set: the rule requires the enclosing handler set to cover BOTH
+# RecursionError-or-ancestor AND MemoryError-or-ancestor (issue #758's own
+# defect -- `yaml.safe_load` blocks arbitrary object construction but still
+# resolves anchors/aliases, so a hostile or deeply nested document can
+# exhaust either stack or memory via alias expansion), so a handler naming
+# only one of the two still leaves the other's own failure mode uncovered
+# and must still be reported. `_covers(handled, _RECURSION_COVERING)` and
+# `_covers(handled, _MEMORY_COVERING)` are therefore checked independently
+# at the call site below; merging them into one frozenset would let
+# `except RecursionError:` alone incorrectly clear a MemoryError gap (and
+# the converse), since `_covers` only tests for *any* intersection.
+_RECURSION_COVERING = frozenset({"RecursionError", "Exception", "BaseException"})
+_MEMORY_COVERING = frozenset({"MemoryError", "Exception", "BaseException"})
+
 # The `errors=` policies that substitute rather than raise *on a decode*.
 # Determined by running each against `b"ok\xffbad".decode("utf-8", errors=...)`
 # rather than read off the codecs documentation: `xmlcharrefreplace` and
@@ -423,6 +483,7 @@ _HUNK_RE = re.compile(r"@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 _DECODE_GAP = "decode-gap"
 _JSON_SHAPE_GAP = "json-shape-gap"
 _OPEN_GAP = "open-gap"
+_YAML_GAP = "yaml-gap"
 
 
 class ScanError(Exception):
@@ -1001,6 +1062,31 @@ def _is_json_parse(node: ast.expr) -> bool:
     )
 
 
+def _is_yaml_safe_load(node: ast.Call) -> bool:
+    """True for a `yaml.safe_load(...)` call, for `yaml-gap`.
+
+    Mirrors `_is_json_parse`'s own exact style: an attribute call whose
+    receiver is a bare `ast.Name` literally spelled `yaml`. Nothing is
+    resolved, on purpose -- `import yaml as y` followed by `y.safe_load(...)`
+    is therefore a stated miss, the identical trade `_is_json_parse` already
+    makes for `from json import loads`/`import json as j`, and the same
+    name-resolution cost `_handler_names`'s own docstring records this file
+    reverting three times already: resolving an import alias needs that
+    same class of machinery, for a shape that occurs nowhere in the graded
+    directories today. `yaml.load(...)`/`yaml.load_all(...)`/
+    `yaml.safe_load_all(...)` are deliberately not matched either -- see the
+    module docstring's own `yaml-gap` section for why only `safe_load` was
+    measured.
+    """
+    func = node.func
+    return (
+        isinstance(func, ast.Attribute)
+        and func.attr == "safe_load"
+        and isinstance(func.value, ast.Name)
+        and func.value.id == "yaml"
+    )
+
+
 _Scope = ast.Module | ast.FunctionDef | ast.AsyncFunctionDef
 
 
@@ -1342,6 +1428,42 @@ def findings_for_source(path: str, source: str, added: set[int]) -> tuple[list[F
                     f"{kind}(...) opens or reads a file, but its enclosing try names only a narrower "
                     "OSError subclass -- add an OSError (or Exception/BaseException) handler, or "
                     "narrate why that narrower handler alone is correct",
+                ),
+                frozenset(expression | handler_lines.get(id(node), set())),
+                None,
+            )
+        )
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not _is_yaml_safe_load(node):
+            continue
+        handled = guarded.get(id(node), set())
+        recursion_covered = _covers(handled, _RECURSION_COVERING)
+        memory_covered = _covers(handled, _MEMORY_COVERING)
+        if recursion_covered and memory_covered:
+            continue
+        # Either side missing still fires -- two independent checks, not one
+        # merged frozenset, so a handler naming only RecursionError still
+        # reports the still-uncovered MemoryError side (and vice versa). See
+        # the module docstring's own `yaml-gap` section for why.
+        missing = [
+            name
+            for name, covered in (("RecursionError", recursion_covered), ("MemoryError", memory_covered))
+            if not covered
+        ]
+        expression = _span(node)
+        anchor = node.func.end_lineno if isinstance(node.func, ast.Attribute) else None
+        candidates.append(
+            _Candidate(
+                Finding(
+                    path,
+                    anchor if anchor is not None else node.lineno,
+                    _YAML_GAP,
+                    "yaml.safe_load(...) still resolves anchors/aliases, so a hostile or deeply "
+                    f"nested document can exhaust {' and '.join(missing)} via alias expansion, but its "
+                    "enclosing try does not cover that -- add the missing handler(s) (or "
+                    "Exception/BaseException), or narrate why that narrower handler set is correct",
                 ),
                 frozenset(expression | handler_lines.get(id(node), set())),
                 None,
