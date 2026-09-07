@@ -240,9 +240,10 @@ def _name_prefix(name: str) -> str:
 
 def _line_pattern(name: str, verdicts: Iterable[str]) -> re.Pattern[str]:
     # Issue #1571 (refs #1888, #1784): after the verdict token's own \b, allow
-    # exactly one character from a fixed, narrow punctuation set before
-    # falling through to the original end-of-line / whitespace-plus-text
-    # alternation. #1888's reported shape is a bare trailing sentence period
+    # EITHER exactly one character from a fixed, narrow punctuation set, OR
+    # whitespace-plus-more-text, OR nothing -- as three mutually exclusive
+    # alternatives, not the punctuation as a prefix of the trailing-text
+    # group. #1888's reported shape is a bare trailing sentence period
     # ("checker-script-adversarial-review: RAN."); #1784's is the whole
     # "name: VERDICT" text sharing one Markdown code span, so the closing
     # backtick lands directly after the verdict token. Deliberately just
@@ -250,9 +251,23 @@ def _line_pattern(name: str, verdicts: Iterable[str]) -> re.Pattern[str]:
     # punctuation does not sneak through -- and the \b itself is untouched,
     # so a longer word merely starting with a valid verdict token (e.g.
     # "RANDOM") still fails to match.
+    #
+    # The punctuation branch and the whitespace-plus-text branch MUST be
+    # alternatives, never sequential (one followed by the other): an earlier
+    # revision wrote the punctuation as an optional prefix of the trailing-
+    # text group (`\b[.,;:!?`]?(?:[ \t]+\S.*)?`), which let a verdict token
+    # be followed by ONE punctuation character AND THEN arbitrary trailing
+    # text -- e.g. a line quoting the correct disclosure shape inside one
+    # Markdown code span, followed by explanatory prose ("`name: RAN`
+    # would be the line to add if this PR touched a gate; it does not."),
+    # wrongly passed as a real disclosure. Found by an independent
+    # adversarial review of this issue's own implementation. The
+    # alternation below requires the line to END immediately after either
+    # branch (via the shared trailing `[ \t]*$`), closing that gap while
+    # still accepting both #1888's and #1784's own reported shapes.
     verdict_alt = "|".join(re.escape(v) for v in verdicts)
     return re.compile(
-        _name_prefix(name) + r"(?:(?:" + verdict_alt + r")\b[.,;:!?`]?(?:[ \t]+\S.*)?|" + _WAIVED_CLAUSE + r")[ \t]*$",
+        _name_prefix(name) + r"(?:(?:" + verdict_alt + r")\b(?:[.,;:!?`]|[ \t]+\S.*)?|" + _WAIVED_CLAUSE + r")[ \t]*$",
         re.IGNORECASE | re.MULTILINE,
     )
 
@@ -266,15 +281,22 @@ _LINE_PATTERNS = {name: _line_pattern(name, verdicts) for name, verdicts in _VER
 
 # Issue #1571: targeted diagnostic for one specific way a disclosure line can
 # fail _line_pattern -- the verdict or WAIVED clause wrapped in Markdown
-# emphasis (a leading and trailing '**' or '_'), immediately around
-# otherwise-valid text. GitHub renders `**RAN**` as bold "RAN", so a line
-# that looks correct on the rendered PR still fails this gate, since the
+# emphasis (a leading and trailing '**', '__', '_', or '*'), immediately
+# around otherwise-valid text. GitHub renders `**RAN**` and `__RAN__` as
+# bold "RAN", and `_RAN_` and `*RAN*` as italic "RAN", so a line that
+# looks correct on the rendered PR still fails this gate, since the
 # asterisks/underscores are real characters sitting between the verdict
 # token and the line's own trailing anchor -- exactly the same
 # punctuation-adjacency shape #1888/#1784 hit above, just with a marker on
-# both ends instead of one trailing character. Diagnostic-only: detecting
+# both ends instead of one trailing character. All four standard Markdown
+# emphasis delimiters are covered (found missing two of them, '*' and
+# '__', by an independent Step 8 adversarial review) -- longest-first so a
+# double-marker line is not first mis-tried against the single-character
+# form of the same character (the loop below tolerates either order since
+# a non-matching attempt merely falls through to the next marker, but
+# longest-first avoids the wasted attempt). Diagnostic-only: detecting
 # this never makes the line pass; it only tells the author why.
-_EMPHASIS_MARKERS = ("**", "_")
+_EMPHASIS_MARKERS = ("**", "__", "_", "*")
 
 
 def _name_line_remainder_re(name: str) -> re.Pattern[str]:

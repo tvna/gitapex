@@ -42,13 +42,18 @@ back to a CLI.
   fresh subagent dispatch per that skill's own Procedure, before the PR
   body is finalized. This skill's default write-path convention;
   substitute the calling repository's actual convention where it differs.
-  A disclosed verdict/waiver token must be followed by end-of-line,
-  whitespace then more text, or exactly one character from a fixed
-  punctuation set (`.` `,` `;` `:` `!` `?` or a backtick) — never more
-  than one such character, and never a longer word merely starting with
-  the token — per
+  A disclosed *verdict* token (e.g. `PASS`, `RAN`) must be followed by
+  end-of-line, whitespace then more text, or exactly one character from a
+  fixed punctuation set (`.` `,` `;` `:` `!` `?` or a backtick) — never
+  more than one such character, and never a longer word merely starting
+  with the token. A *waiver* line's own shape is unaffected by this and
+  stays `WAIVED: <non-empty reason>` — the colon and a real reason are
+  required immediately, with no punctuation-adjacency exception. Both
+  forms are enforced by
   `.github/scripts/gitapex_gate_skill_audit_disclosure.py`'s own
-  `_line_pattern`, the enforced source of truth for the exact shape.
+  `_line_pattern`, the source of truth for the exact shape — found by an
+  independent review that this bullet's first draft wrongly implied the
+  punctuation exception also applied to the waiver form.
 
 ## Escalate to a human when
 

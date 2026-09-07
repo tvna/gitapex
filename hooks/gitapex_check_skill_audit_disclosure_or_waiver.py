@@ -77,17 +77,19 @@ def _name_prefix(name: str) -> str:
 
 def _line_pattern(name: str, verdicts: Iterable[str]) -> re.Pattern[str]:
     # Issue #1571 (refs #1888, #1784): identical widening to the CI gate's own
-    # _line_pattern -- allow exactly one character from a fixed, narrow
-    # punctuation set right after the verdict token's own \b, before falling
-    # through to the original end-of-line / whitespace-plus-text
-    # alternation, so a trailing sentence period or a shared-code-span's
-    # closing backtick no longer defeats an otherwise-valid verdict. Kept
-    # byte-identical to .github/scripts/gitapex_gate_skill_audit_disclosure.py's
-    # own copy -- see that module's docstring for the full rationale -- and
+    # _line_pattern -- allow EITHER exactly one character from a fixed,
+    # narrow punctuation set right after the verdict token's own \b, OR
+    # whitespace-plus-more-text, OR nothing, as mutually exclusive
+    # alternatives (never the punctuation as a prefix of the trailing-text
+    # group, which independent review found would let a punctuation
+    # character be followed by arbitrary trailing prose). See that module's
+    # docstring for the full rationale -- kept functionally identical (not
+    # necessarily byte-identical prose) to
+    # .github/scripts/gitapex_gate_skill_audit_disclosure.py's own copy, and
     # verified by tests/test_gitapex_check_skill_audit_disclosure_hook_sync.py.
     verdict_alt = "|".join(re.escape(v) for v in verdicts)
     return re.compile(
-        _name_prefix(name) + r"(?:(?:" + verdict_alt + r")\b[.,;:!?`]?(?:[ \t]+\S.*)?|" + _WAIVED_CLAUSE + r")[ \t]*$",
+        _name_prefix(name) + r"(?:(?:" + verdict_alt + r")\b(?:[.,;:!?`]|[ \t]+\S.*)?|" + _WAIVED_CLAUSE + r")[ \t]*$",
         re.IGNORECASE | re.MULTILINE,
     )
 

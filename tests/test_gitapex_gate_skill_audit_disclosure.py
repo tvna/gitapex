@@ -626,6 +626,26 @@ def test_verdict_followed_by_two_punctuation_characters_still_rejected(trailing)
     ]
 
 
+def test_verdict_in_code_span_followed_by_explanatory_prose_still_rejected():
+    """Defeat test found by an independent Step 8 adversarial review: an
+    earlier revision of the punctuation escape placed it as an optional
+    PREFIX of the trailing-text group rather than an alternative to it,
+    which let a verdict token be followed by one punctuation character
+    (here, the closing backtick of a code span quoting the correct shape)
+    AND THEN arbitrary trailing prose -- e.g. an illustrative example
+    followed by an explanation that the disclosure was NOT actually made.
+    This must still be rejected: the punctuation branch and the
+    whitespace-plus-text branch are mutually exclusive alternatives, each
+    requiring the line to end immediately after."""
+    body = (
+        _VALID_SECTION
+        + "`checker-script-adversarial-review: RAN` would be the line to add if this PR touched a gate; it does not.\n"
+    )
+    assert gate.find_missing_checker_script_disclosure(body, ["skills/foo/scripts/bar.py"]) == [
+        "skills/foo/scripts/bar.py"
+    ]
+
+
 def test__line_pattern_directly_accepts_punctuation_and_rejects_word_extension():
     """Direct unit test of `_line_pattern` itself (issue #1571 Step 6
     function-body-test-coverage finding), rather than only exercising it
@@ -704,6 +724,20 @@ def test_emphasis_wrapped_verdict_with_underscore_marker_also_diagnosed():
     )
     hint = gate._emphasis_wrap_hint(
         gate._extract_section(body), "evaluating-skill-quality", gate._VERDICTS["evaluating-skill-quality"]
+    )
+    assert hint is not None
+    assert "emphasis" in hint.lower()
+
+
+@pytest.mark.parametrize("wrapped", ["*RAN*", "__RAN__"])
+def test_emphasis_wrapped_verdict_with_single_asterisk_and_double_underscore_also_diagnosed(wrapped):
+    """Found missing by an independent Step 8 adversarial review:
+    _EMPHASIS_MARKERS originally covered only '**' and '_', missing the
+    other two standard Markdown emphasis delimiters GitHub renders
+    identically ('*...*' as italic, matching '_..._'; '__...__' as bold,
+    matching '**...**')."""
+    hint = gate._emphasis_wrap_hint(
+        f"- checker-script-adversarial-review: {wrapped}\n", "checker-script-adversarial-review", ("RAN", "NOT-RUN")
     )
     assert hint is not None
     assert "emphasis" in hint.lower()

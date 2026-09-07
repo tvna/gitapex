@@ -84,3 +84,17 @@ def test_verdict_followed_by_two_punctuation_characters_still_rejected(trailing:
         "- evaluating-skill-quality: WELL-FORMED-AND-MATURE\n"
     )
     assert checker.find_missing_disclosures(body) == ["battle-testing-a-skill"]
+
+
+def test_verdict_in_code_span_followed_by_explanatory_prose_still_rejected() -> None:
+    """Defeat test found by an independent Step 8 adversarial review: a
+    verdict token followed by one punctuation character (a code span's
+    closing backtick) AND THEN arbitrary trailing prose must still be
+    rejected -- the punctuation branch and whitespace-plus-text branch are
+    mutually exclusive alternatives, not sequential."""
+    body = (
+        "## Skill audit evidence\n\n"
+        "`battle-testing-a-skill: PASS` would be the line to add; it does not appear here.\n"
+        "- evaluating-skill-quality: WELL-FORMED-AND-MATURE\n"
+    )
+    assert checker.find_missing_disclosures(body) == ["battle-testing-a-skill"]

@@ -769,8 +769,14 @@ def check_verbatim_anywhere(value: str, corpus_flat: str) -> str | None:
     authoring defect on its own. Reported as a finding either way (so the
     real #1534 shape is never silently dropped), but ``blocking=False`` at
     the call site (``_lint_negative_values``) keeps it from gating the exit
-    code or the pinned repository-wide blocking-findings test, the same
-    resolution already applied to checks 6/7 for the identical reason.
+    code or the pinned repository-wide blocking-findings test -- the same
+    non-blocking treatment checks 6/7 also use, for the identical
+    "too noisy to gate on unconditionally" reason. Unlike checks 6/7, this
+    check carries no CLI opt-in flag: it stays always-on (a caller cannot
+    disable it), only its exit-code weight differs -- found by an
+    independent review that an earlier revision of this docstring
+    overstated the parity as "the same resolution", which read as also
+    matching checks 6/7's own off-by-default gating.
     """
     low = WS_RE.sub(" ", value.lower())
     if low in corpus_flat:
