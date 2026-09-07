@@ -594,6 +594,16 @@ def test_verdict_followed_by_other_narrow_punctuation_is_accepted(punctuation):
     assert gate.find_missing_checker_script_disclosure(body, ["skills/foo/scripts/bar.py"]) == []
 
 
+def test_main_accepts_a_punctuation_adjacent_verdict_end_to_end(monkeypatch, capsys):
+    """End-to-end `main()` counterpart to the unit-level tests above
+    (issue #1888's own trailing-period shape): a PASS through the actual
+    CLI entry point, not only the `find_missing_*` wrapper it calls."""
+    body = _VALID_SECTION + "- checker-script-adversarial-review: RAN.\n"
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
+    assert gate.main(["--changed-checker-scripts", "skills/foo/scripts/bar.py"]) == 0
+    assert "PASS" in capsys.readouterr().out
+
+
 def test_verdict_word_extended_by_more_letters_still_rejected():
     """Defeat test for the punctuation-adjacency widening above: a longer
     word that merely starts with a valid verdict token, with no punctuation
@@ -614,6 +624,55 @@ def test_verdict_followed_by_two_punctuation_characters_still_rejected(trailing)
     assert gate.find_missing_checker_script_disclosure(body, ["skills/foo/scripts/bar.py"]) == [
         "skills/foo/scripts/bar.py"
     ]
+
+
+def test__line_pattern_directly_accepts_punctuation_and_rejects_word_extension():
+    """Direct unit test of `_line_pattern` itself (issue #1571 Step 6
+    function-body-test-coverage finding), rather than only exercising it
+    indirectly through the `find_missing_*` wrappers above."""
+    pattern = gate._line_pattern("some-check", ("RAN", "NOT-RUN"))
+    assert pattern.search("some-check: RAN.")
+    assert pattern.search("some-check: RAN")
+    assert not pattern.search("some-check: RANDOM")
+    assert not pattern.search("some-check: RAN..")
+
+
+def test__name_line_remainder_re_captures_everything_after_the_prefix():
+    """Direct unit test of `_name_line_remainder_re` (issue #1571 Step 6
+    function-body-test-coverage finding): it captures the raw remainder of
+    a line after the check's own bullet/backtick/colon prefix, regardless
+    of what that remainder actually is -- the looser second pass
+    `_is_emphasis_wrapped_verdict` inspects."""
+    remainder_re = gate._name_line_remainder_re("some-check")
+    match = remainder_re.search("- some-check: **RAN**\n")
+    assert match is not None
+    assert match.group(1) == "**RAN**"
+
+
+def test__is_emphasis_wrapped_verdict_directly_true_and_false_cases():
+    """Direct unit test of `_is_emphasis_wrapped_verdict` (issue #1571 Step
+    6 function-body-test-coverage finding), including the WAIVED-clause
+    branch (patch-coverage-gap: this branch had zero covering test
+    executions before this test, since every existing emphasis test above
+    only exercises the bare-verdict-token branch, never the WAIVED one)."""
+    verdicts = ("PASS", "FAIL")
+    assert gate._is_emphasis_wrapped_verdict("**PASS**", verdicts) is True
+    assert gate._is_emphasis_wrapped_verdict("_PASS_", verdicts) is True
+    assert gate._is_emphasis_wrapped_verdict("_WAIVED: some reason_", verdicts) is True
+    assert gate._is_emphasis_wrapped_verdict("**WAIVED: some reason**", verdicts) is True
+    assert gate._is_emphasis_wrapped_verdict("PASS", verdicts) is False
+    assert gate._is_emphasis_wrapped_verdict("**PASS", verdicts) is False
+    assert gate._is_emphasis_wrapped_verdict("**NOT-A-VERDICT**", verdicts) is False
+
+
+def test__section_has_emphasis_wrapped_verdict_directly():
+    """Direct unit test of `_section_has_emphasis_wrapped_verdict` (issue
+    #1571 Step 6 function-body-test-coverage finding), including its own
+    `section is None` short-circuit."""
+    verdicts = ("PASS", "FAIL")
+    assert gate._section_has_emphasis_wrapped_verdict(None, "some-check", verdicts) is False
+    assert gate._section_has_emphasis_wrapped_verdict("- some-check: PASS\n", "some-check", verdicts) is False
+    assert gate._section_has_emphasis_wrapped_verdict("- some-check: **PASS**\n", "some-check", verdicts) is True
 
 
 # --- Issue #1571: emphasis-wrap diagnostic (CI gate only; the hooks/ copy
