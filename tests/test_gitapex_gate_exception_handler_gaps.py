@@ -571,17 +571,34 @@ def test_a_nested_function_is_its_own_scope(tmp_path: pathlib.Path) -> None:
 
 @pytest.mark.parametrize(
     "call",
-    ["p.read_text()\n", 'open("x", encoding="utf-8")\n', "p.open()\n", "p.read_bytes()\n"],
+    ["p.read_text()\n", 'open("x", encoding="utf-8")\n', "p.open()\n"],
 )
-def test_a_filenotfounderror_only_handler_leaves_open_gap_reported(tmp_path: pathlib.Path, call: str) -> None:
-    """All four call-site shapes `open-gap` grades -- `read_text()`, `open()`,
-    `<expr>.open()` (the same three `_text_read_kind` already detects for
-    `decode-gap`) and `read_bytes()` (this rule's own addition) -- report
-    `open-gap` when the only handler names an `OSError` subclass more
-    specific than `OSError` itself. `read_bytes()` decodes nothing, so it is
-    the one call among the four `decode-gap` never reports."""
+def test_a_filenotfounderror_only_handler_co_fires_decode_gap_and_open_gap(tmp_path: pathlib.Path, call: str) -> None:
+    """The three text-decoding call-site shapes `open-gap` grades --
+    `read_text()`, `open()`, `<expr>.open()`, the same three `_text_read_kind`
+    already detects for `decode-gap` -- co-fire BOTH rules when the only
+    handler names an `OSError` subclass more specific than `OSError` itself:
+    `except FileNotFoundError:` covers neither `_DECODE_COVERING` (so
+    `decode-gap` fires, the read's own decode failure is uncaught) nor
+    `_OSERROR_COVERING` (so `open-gap` also fires, the read's own open
+    failure is uncaught too) -- two independent, real gaps in the same code,
+    not one rule redundantly restating the other. An exact-set assertion
+    pins this precisely, unlike a weak `in` check, which cannot distinguish
+    this co-firing pair from `open-gap` firing alone (see the sibling test
+    below for the one shape where that alone case actually happens)."""
     source = f"try:\n    x = {call}except FileNotFoundError:\n    x = None\n"
-    assert "open-gap" in _rules(_grade(tmp_path, source))
+    assert _rules(_grade(tmp_path, source)) == ["decode-gap", "open-gap"]
+
+
+def test_a_filenotfounderror_only_handler_on_read_bytes_fires_open_gap_alone(tmp_path: pathlib.Path) -> None:
+    """`read_bytes()` -- this rule's own addition on top of `decode-gap`'s
+    three text-read shapes -- is the one call among the four `_text_read_
+    kind` and therefore `decode-gap` never grades at all (it decodes
+    nothing, so no `UnicodeDecodeError` risk exists to report): only
+    `open-gap` fires for it, alone, unlike the three text-decoding shapes
+    above where both rules co-fire together."""
+    source = "try:\n    x = p.read_bytes()\nexcept FileNotFoundError:\n    x = None\n"
+    assert _rules(_grade(tmp_path, source)) == ["open-gap"]
 
 
 def _parse_call(expression: str) -> ast.Call:

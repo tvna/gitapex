@@ -71,7 +71,18 @@ fixture, reconstructed from
 `skills/executing-a-branch-plan/scripts/gitapex_check_task_commit_provenance.py`'s
 pre-fix `main()`, which caught `FileNotFoundError` around a
 `Path(args.messages).read_bytes()` call but not the `IsADirectoryError`/
-`PermissionError` the same call can also raise -- is reported here instead.
+`PermissionError` the same call can also raise -- is reported here instead
+(that regression fixture is a `.read_bytes()` call, where "instead" is
+literal: `decode-gap` never grades that shape at all, so `open-gap` is the
+only one of the two that fires). For any of the three TEXT-decoding shapes
+(`read_text()`, `open(..., encoding=...)`, `<expr>.open()`), the identical
+`except FileNotFoundError:`-only handler instead makes BOTH rules fire
+together -- `decode-gap` because `FileNotFoundError` is not in
+`_DECODE_COVERING`, `open-gap` because it names an `_OSERROR_SUBCLASS_NAMES`
+member but not `_OSERROR_COVERING` -- two independent, real gaps in the
+same code, not a redundancy: the decode failure and the open failure are
+both genuinely uncaught, distinct from this section's own "left uncaught by
+EITHER rule" cases below, where only one gap exists in the first place.
 Deliberately gated on the handler set actually naming a *recognised*
 `OSError` subclass (`FileNotFoundError`, `PermissionError`, ...; the full
 table is `_OSERROR_SUBCLASS_NAMES`), not merely on the read being uncovered:

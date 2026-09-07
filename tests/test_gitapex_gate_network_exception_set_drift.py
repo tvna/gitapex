@@ -287,6 +287,81 @@ def fetch_two(host):
     assert _rules(violations) == [gate._DRIFT_RULE]
 
 
+# --- nested-try handler accumulation (the fix for this file's own nested- ---
+# --- try mishandling: a network call sitting in an INNER try nested inside
+# --- an OUTER try must be graded against the UNION of both tries' own
+# --- handler names, not just the outer one's -- see `_network_call_handlers`
+# --- own docstring and the module docstring's own "Design" section) --------
+
+
+def test_a_nested_try_wrapping_the_call_is_unioned_with_the_outer_handlers_no_false_positive(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The false-positive half of the nested-try regression: `fetch_a`
+    catches `(OSError, ValueError)` in one `except` clause; `fetch_b` catches
+    the identical two names, split across an outer `try/except OSError:`
+    wrapping an inner `try/except ValueError:` around the same call. Both
+    functions effectively catch the same set -- reading only the outer
+    `try`'s own handlers (the pre-fix behaviour) would report `fetch_b` as
+    catching only `{OSError}`, a spurious drift against `fetch_a`'s
+    `{OSError, ValueError}`. Fixed: no finding."""
+    source = """
+def fetch_a(opener, request):
+    try:
+        return opener(request)
+    except (OSError, ValueError):
+        return None
+
+
+def fetch_b(opener, request):
+    try:
+        try:
+            return opener(request)
+        except ValueError:
+            return None
+    except OSError:
+        return None
+"""
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_nested_try_wrapping_the_call_reveals_real_drift_no_false_negative(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The false-negative half, and the more serious direction (issue #1512's
+    own defect class): `fetch_c` catches only `OSError` around the call, so a
+    `ValueError` from it propagates uncaught. `fetch_d` uses the identical
+    nested `try/except OSError:` wrapping `try/except ValueError:` shape as
+    the previous test, and genuinely swallows both. Reading only the outer
+    `try`'s own handlers (the pre-fix behaviour) would record both as
+    `{OSError}` and grade this pair clean, missing the real difference in
+    what each function actually catches. Fixed: the drift is caught."""
+    source = """
+def fetch_c(opener, request):
+    try:
+        return opener(request)
+    except OSError:
+        return None
+
+
+def fetch_d(opener, request):
+    try:
+        try:
+            return opener(request)
+        except ValueError:
+            return None
+    except OSError:
+        return None
+"""
+    violations = _grade(tmp_path, source)
+    assert _rules(violations) == [gate._DRIFT_RULE]
+    message = violations[0].message
+    assert "fetch_c" in message
+    assert "fetch_d" in message
+    assert "['OSError']" in message
+    assert "['OSError', 'ValueError']" in message
+
+
 # --- diff scoping -----------------------------------------------------------
 
 
@@ -589,6 +664,99 @@ def test_first_network_try_skips_a_non_qualifying_try_and_returns_the_next() -> 
 def test_first_network_try_returns_none_when_no_try_qualifies() -> None:
     function_node = _parse_function("def g():\n    try:\n        return 1\n    except ValueError:\n        pass\n")
     assert gate._first_network_try(function_node) is None
+
+
+# --- _first_nested_network_try / _network_call_handlers unit coverage ------
+# --- (the nested-try accumulation fix itself, unit-tested directly rather
+# --- than only through _module_candidates/_grade above) --------------------
+
+
+def test_first_nested_network_try_finds_a_try_that_is_itself_the_next_statement() -> None:
+    """The exact shape the bug report names: the nested `try` IS the first
+    (and only) statement in the outer `try`'s own body -- not buried inside
+    some other statement -- which `_iter_excluding_nested_defs` alone would
+    miss since it yields a node's CHILDREN, never the node itself."""
+    outer = _parse_try(
+        "try:\n"
+        "    try:\n"
+        "        return opener(request)\n"
+        "    except ValueError:\n"
+        "        return None\n"
+        "except OSError:\n"
+        "    return None\n"
+    )
+    nested = gate._first_nested_network_try(outer)
+    assert nested is not None
+    assert nested.lineno == 2
+    assert gate._handler_names(nested.handlers[0]) == {"ValueError"}
+
+
+def test_first_nested_network_try_finds_a_try_buried_inside_another_statement() -> None:
+    """The nested `try` is not itself a direct statement of the outer `try`'s
+    own body -- it sits inside an `if` -- exercising the
+    `_iter_excluding_nested_defs(statement)` descent, not just the
+    self-check `itertools.chain` adds in front of it."""
+    outer = _parse_try(
+        "try:\n"
+        "    if flag:\n"
+        "        try:\n"
+        "            return opener(request)\n"
+        "        except ValueError:\n"
+        "            return None\n"
+        "except OSError:\n"
+        "    return None\n"
+    )
+    nested = gate._first_nested_network_try(outer)
+    assert nested is not None
+    assert nested.lineno == 3
+
+
+def test_first_nested_network_try_returns_none_when_the_call_is_not_further_wrapped() -> None:
+    """The base case every recursion needs: the call sits directly in the
+    outer `try`'s own body, wrapped by no further nested `try` at all."""
+    outer = _parse_try("try:\n    return opener(request)\nexcept OSError:\n    pass\n")
+    assert gate._first_nested_network_try(outer) is None
+
+
+def test_network_call_handlers_returns_just_the_outer_handlers_when_not_nested() -> None:
+    """No nested `try` around the call: the effective set is exactly that
+    `try`'s own handlers, matching the pre-fix behaviour for this case."""
+    try_node = _parse_try("try:\n    return opener(request)\nexcept OSError:\n    pass\n")
+    assert gate._network_call_handlers(try_node) == frozenset({"OSError"})
+
+
+def test_network_call_handlers_unions_one_level_of_nesting() -> None:
+    """One inner `try` wrapping the call inside the outer one: the union of
+    both tries' own handler names -- this file's own Finding 1 fix."""
+    outer = _parse_try(
+        "try:\n"
+        "    try:\n"
+        "        return opener(request)\n"
+        "    except ValueError:\n"
+        "        return None\n"
+        "except OSError:\n"
+        "    return None\n"
+    )
+    assert gate._network_call_handlers(outer) == frozenset({"OSError", "ValueError"})
+
+
+def test_network_call_handlers_unions_two_levels_of_nesting() -> None:
+    """The recursive case, generalized past one level: three tries deep, all
+    three handler-name sets are unioned, not just the outermost or the
+    innermost pair."""
+    outer = _parse_try(
+        "try:\n"
+        "    try:\n"
+        "        try:\n"
+        "            return opener(request)\n"
+        "        except TimeoutError:\n"
+        "            return None\n"
+        "    except ValueError:\n"
+        "        return None\n"
+        "except OSError:\n"
+        "    return None\n"
+    )
+    assert gate._network_call_handlers(outer) == frozenset({"OSError", "ValueError", "TimeoutError"})
 
 
 # --- _module_candidates / _drift_pairs / _try_span unit coverage -----------
