@@ -157,6 +157,33 @@ def main(args):
     return 0
 """
 
+# Reconstructed from this repository's own pre-#1533-fix
+# skills/executing-a-branch-plan/scripts/gitapex_check_task_commit_provenance.py
+# main(): `Path(args.messages).read_bytes()` sat inside a try whose only
+# handler named `FileNotFoundError`, so `IsADirectoryError`/`PermissionError`
+# from that same read -- the identical defect class issue #1306 already found
+# and fixed for gitapex_check_branch_plan_reverified.py's own `--body` flag --
+# would have escaped as an uncaught traceback instead of this script's own
+# documented exit-2 convention. Issue #1533 (consolidated into #1572).
+_DEFECT_OPEN_GAP = """
+import sys
+from pathlib import Path
+
+
+def main(argv):
+    args = _parse_args(argv)
+    try:
+        raw = (
+            Path(args.messages).read_bytes().decode("utf-8")
+            if args.messages
+            else sys.stdin.buffer.read().decode("utf-8")
+        )
+    except FileNotFoundError:
+        print(f"error: messages file not found: {args.messages}", file=sys.stderr)
+        return 2
+    return _scan(raw)
+"""
+
 
 def test_defect_c_uncaught_decode_on_an_unguarded_read_is_caught(tmp_path: pathlib.Path) -> None:
     """PR #651's own shipped defect, re-measured rather than assumed. The line
@@ -178,6 +205,30 @@ def test_defect_f_oserror_only_handler_around_a_decoded_read_is_caught(
     this exercises the nested-try recursion the defect actually sat inside --
     a flattened paraphrase would trip the rule for an easier reason."""
     assert _at(_grade(tmp_path, _DEFECT_F)) == [("decode-gap", 8)]
+
+
+def test_defect_open_gap_filenotfounderror_only_handler_around_a_read_bytes_is_caught(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Issue #1533's own defect: `gitapex_check_task_commit_provenance.py`'s
+    pre-fix `main()` caught `FileNotFoundError` around
+    `Path(args.messages).read_bytes()` but not the broader `OSError`
+    (`IsADirectoryError`, `PermissionError`) the same call can also raise.
+    `read_bytes()` is not a `decode-gap` call site at all (it decodes
+    nothing), so only `open-gap` reports this line."""
+    assert _at(_grade(tmp_path, _DEFECT_OPEN_GAP)) == [("open-gap", 10)]
+
+
+def test_the_real_fixed_task_commit_provenance_file_is_clean(tmp_path: pathlib.Path) -> None:
+    """Live proof over the real, already-fixed file `_DEFECT_OPEN_GAP` above
+    reconstructs the pre-fix shape of, not a hand-authored approximation of
+    the repair: its own `main()` now catches `FileNotFoundError` and a
+    separate `OSError` arm around the same `Path(args.messages).read_bytes()`
+    call, and must grade clean under all three rules -- confirming the fix
+    that actually landed, not merely a fix this test imagines."""
+    relative = "skills/executing-a-branch-plan/scripts/gitapex_check_task_commit_provenance.py"
+    source = (REPO_ROOT / relative).read_text(encoding="utf-8")
+    assert _grade(tmp_path, source, relative=relative) == []
 
 
 def test_the_fixes_that_landed_for_c_e_and_f_pass(tmp_path: pathlib.Path) -> None:
@@ -454,6 +505,132 @@ def test_a_nested_function_is_its_own_scope(tmp_path: pathlib.Path) -> None:
         "    return inner\n"
     )
     assert _grade(tmp_path, source) == []
+
+
+# --- open-gap -------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "call",
+    ["p.read_text()\n", 'open("x", encoding="utf-8")\n', "p.open()\n", "p.read_bytes()\n"],
+)
+def test_a_filenotfounderror_only_handler_leaves_open_gap_reported(tmp_path: pathlib.Path, call: str) -> None:
+    """All four call-site shapes `open-gap` grades -- `read_text()`, `open()`,
+    `<expr>.open()` (the same three `_text_read_kind` already detects for
+    `decode-gap`) and `read_bytes()` (this rule's own addition) -- report
+    `open-gap` when the only handler names an `OSError` subclass more
+    specific than `OSError` itself. `read_bytes()` decodes nothing, so it is
+    the one call among the four `decode-gap` never reports."""
+    source = f"try:\n    x = {call}except FileNotFoundError:\n    x = None\n"
+    assert "open-gap" in _rules(_grade(tmp_path, source))
+
+
+@pytest.mark.parametrize("handler", ["OSError", "Exception", "BaseException"])
+def test_a_handler_naming_oserror_or_an_ancestor_clears_open_gap(tmp_path: pathlib.Path, handler: str) -> None:
+    source = f"try:\n    b = p.read_bytes()\nexcept {handler}:\n    b = b''\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_bare_except_clears_open_gap(tmp_path: pathlib.Path) -> None:
+    source = "try:\n    b = p.read_bytes()\nexcept:\n    b = b''\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_handler_naming_only_permissionerror_does_not_clear_open_gap(tmp_path: pathlib.Path) -> None:
+    """The required boundary case: `PermissionError` is a real `OSError`
+    subclass, narrower than `OSError` itself, so it gates this rule's own
+    firing condition on -- and does not clear it."""
+    source = "try:\n    b = p.read_bytes()\nexcept PermissionError:\n    b = b''\n"
+    assert _rules(_grade(tmp_path, source)) == ["open-gap"]
+
+
+def test_a_tuple_handler_with_oserror_present_clears_open_gap(tmp_path: pathlib.Path) -> None:
+    source = "try:\n    b = p.read_bytes()\nexcept (FileNotFoundError, OSError):\n    b = b''\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_tuple_handler_missing_oserror_leaves_open_gap_reported(tmp_path: pathlib.Path) -> None:
+    source = "try:\n    b = p.read_bytes()\nexcept (FileNotFoundError, ValueError):\n    b = b''\n"
+    assert _rules(_grade(tmp_path, source)) == ["open-gap"]
+
+
+def test_an_outer_try_naming_oserror_covers_a_nested_read(tmp_path: pathlib.Path) -> None:
+    """Mirrors `decode-gap`'s own nested-try coverage test: `_handler_coverage`
+    accumulates handler names across every enclosing `try`, not only the
+    nearest one, and that accumulation applies to `open-gap` unchanged."""
+    source = (
+        "try:\n"
+        "    try:\n"
+        "        b = p.read_bytes()\n"
+        "    except FileNotFoundError:\n"
+        "        raise\n"
+        "except OSError:\n"
+        "    b = b''\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+def test_an_unguarded_read_is_a_stated_miss_for_open_gap(tmp_path: pathlib.Path) -> None:
+    """Deliberate gating, not an oversight: `open-gap` fires only when the
+    enclosing handler set actually names a recognised `OSError` subclass, so
+    a completely unguarded read -- defect C's own shape, and every one of
+    `decode-gap`'s own "must fire" fixtures with no `try` at all -- is left
+    to `decode-gap` alone. Reporting it here too would double every one of
+    those fixtures' own findings for a handler that was never trying to
+    guard the open in the first place."""
+    assert _grade(tmp_path, "b = p.read_bytes()\n") == []
+
+
+def test_a_handler_naming_something_unrelated_is_a_stated_miss_for_open_gap(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The other half of the same gating decision: a handler that covers
+    `decode-gap` (`ValueError`) but says nothing about `OSError` is not
+    reported by `open-gap` either, since it never named any recognised
+    `OSError` subclass -- it was guarding the decode, not the open."""
+    source = "try:\n    text = p.read_text()\nexcept ValueError:\n    text = ''\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_an_unrecognised_handler_name_does_not_grant_open_gap_coverage(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Mirrors `decode-gap`'s own
+    `test_an_unresolvable_handler_name_does_not_grant_coverage`: a project
+    exception class this gate cannot classify (`except ScopeError:`) is
+    neither in `_OSERROR_COVERING` nor in `_OSERROR_SUBCLASS_NAMES`, so it
+    does not gate this rule on, and no finding is reported -- a stated miss,
+    not assumed coverage."""
+    source = "try:\n    b = p.read_bytes()\nexcept ScopeError:\n    b = b''\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_an_open_gap_finding_is_waived_by_the_same_inline_marker(tmp_path: pathlib.Path) -> None:
+    """No new waiver syntax: the existing `# exception-handler-gap: WAIVED:
+    <reason>` marker this file's own module docstring documents waives an
+    `open-gap` finding exactly as it already does for the other two rules."""
+    source = (
+        "try:\n"
+        "    b = p.read_bytes()  # exception-handler-gap: WAIVED: caller retries on OSError\n"
+        "except FileNotFoundError:\n"
+        "    b = b''\n"
+    )
+    _write(tmp_path, ".github/scripts/gate_x.py", source)
+    violations, waived, _graded = gate.find_violations(_whole_file_diff(".github/scripts/gate_x.py", source), tmp_path)
+    assert violations == []
+    assert _rules(waived) == ["open-gap"]
+
+
+def test_open_gap_does_not_change_decode_gap_or_json_shape_gap_findings(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Required regression check: adding `open-gap` must not alter what
+    `decode-gap`/`json-shape-gap` themselves report on their own existing
+    regression fixtures -- re-run here directly, rather than trusted only
+    from the rest of this file's own suite staying green."""
+    assert _at(_grade(tmp_path, _DEFECT_C, relative=".github/scripts/gate_c.py")) == [("decode-gap", 8)]
+    assert _at(_grade(tmp_path, _DEFECT_E, relative=".github/scripts/gate_e.py")) == [("json-shape-gap", 14)]
+    assert _at(_grade(tmp_path, _DEFECT_F, relative=".github/scripts/gate_f.py")) == [("decode-gap", 8)]
 
 
 # --- diff scoping -------------------------------------------------------
