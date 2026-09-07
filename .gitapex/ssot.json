@@ -2087,6 +2087,50 @@
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
+    },
+    {
+      "id": "network-exception-set-drift",
+      "kind": "script",
+      "script": [
+        ".github/scripts/gitapex_gate_network_exception_set_drift.py",
+        ".github/scripts/gitapex_run_base_diff.py",
+        ".github/scripts/_gitapex_base_ref.py",
+        ".github/workflows/network-exception-set-drift-gate.yml"
+      ],
+      "rule": "Two module-level functions in the same in-scope file that each wrap a recognized network call (a bare opener(...) call -- this repository's own callable-injection idiom for an HTTP call -- or an attribute call whose dotted callee contains urlopen, or starts with urllib.request or http.client) in the body of their own first qualifying try must declare the same exception-handler name set for it. Functions are grouped by which of the two call shapes their own try wraps; any two functions in the same group with differing handler-name sets is a finding, reported once per differing pair and anchored at the later function's own try line. Scope is the diff, not the repository: a finding is reported only when at least one of the two functions' own try/except span was touched by an added line. Functions nested in a class or in another function are not scanned, and only the first qualifying try per function is graded -- see the script's own module docstring for the full known-misses/known-over-reports disclosure. An inline '# network-exception-set-drift: WAIVED: <reason>' comment on the anchor line waives it. Exits 2 rather than pass silently on a malformed diff or an in-scope file that cannot be read or parsed.",
+      "planes": ["ci", "local"],
+      "local_invocation": [
+        "uv",
+        "run",
+        "--frozen",
+        "python3",
+        ".github/scripts/gitapex_gate_network_exception_set_drift.py"
+      ],
+      "local_stdin": [
+        "uv",
+        "run",
+        "--frozen",
+        "python3",
+        ".github/scripts/gitapex_run_base_diff.py",
+        "--",
+        "*.py"
+      ],
+      "trigger": ".github/workflows/network-exception-set-drift-gate.yml on pull_request, plus tests/test_gitapex_gate_network_exception_set_drift.py and tests/test_gitapex_gate_network_exception_set_drift_properties.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "test-integrity",
+      "tracking_issue": 1512,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".github/scripts/*.py"},
+        {"kind": "file-glob", "ref": "hooks/*.py"},
+        {"kind": "file-glob", "ref": "evals/scripts/*.py"},
+        {"kind": "file-glob", "ref": "skills/*/scripts/*.py"},
+        {"kind": "workflow-event", "ref": "network-exception-set-drift-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     }
   ],
   "clusters": {
