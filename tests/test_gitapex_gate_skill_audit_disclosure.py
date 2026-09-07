@@ -362,6 +362,19 @@ def test_main_passes_when_eval_coverage_waived(monkeypatch, capsys):
     assert gate.main(["--needs-eval-coverage-skills", "foo"]) == 0
 
 
+def test_main_eval_coverage_emphasis_wrapped_waiver_is_diagnosed(monkeypatch, capsys):
+    """Found by the Step 8 refactor pass: unlike every other FAIL branch,
+    this one previously never called _emphasis_wrap_hint at all, so an
+    author whose only WAIVED line was emphasis-wrapped got no clue why it
+    still failed."""
+    body = _VALID_SECTION + "- eval-coverage-disclosure: **WAIVED: no routing surface touched**\n"
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
+    assert gate.main(["--needs-eval-coverage-skills", "foo"]) == 1
+    err = capsys.readouterr().err
+    assert "eval-coverage" in err
+    assert "emphasis" in err.lower()
+
+
 def test_main_reports_both_new_failures_together(monkeypatch, capsys):
     body = """\
 ## Skill audit evidence
@@ -562,6 +575,219 @@ def test_checker_script_disclosure_unrecognized_verdict_does_not_satisfy():
     assert gate.find_missing_checker_script_disclosure(body, ["skills/foo/scripts/bar.py"]) == [
         "skills/foo/scripts/bar.py"
     ]
+
+
+# --- Issue #1571 (refs #1888, #1784): _line_pattern's punctuation-adjacency
+# widening. Both #1888 and #1784 are real reported shapes where a verdict
+# token is directly followed by exactly one character of ordinary
+# punctuation, with nothing else on the line -- a shape the pre-#1571
+# _line_pattern rejected outright, since it required end-of-line or
+# whitespace-plus-more-text immediately after the verdict's own \b.
+
+
+def test_verdict_followed_by_trailing_period_is_accepted():
+    """Issue #1888's own exact reported shape: a verdict token directly
+    followed by a sentence-ending period and nothing else."""
+    body = _VALID_SECTION + "- checker-script-adversarial-review: RAN.\n"
+    assert gate.find_missing_checker_script_disclosure(body, ["skills/foo/scripts/bar.py"]) == []
+
+
+def test_verdict_wrapped_in_one_shared_code_span_is_accepted():
+    """Issue #1784's own exact reported shape: the whole 'name: VERDICT'
+    text sharing one Markdown code span, so the closing backtick lands
+    directly after the verdict token rather than immediately after the
+    check name."""
+    body = _VALID_SECTION + "`checker-script-adversarial-review: RAN`\n"
+    assert gate.find_missing_checker_script_disclosure(body, ["skills/foo/scripts/bar.py"]) == []
+
+
+@pytest.mark.parametrize("punctuation", [",", ";", ":", "!", "?"])
+def test_verdict_followed_by_other_narrow_punctuation_is_accepted(punctuation):
+    body = _VALID_SECTION + f"- checker-script-adversarial-review: RAN{punctuation}\n"
+    assert gate.find_missing_checker_script_disclosure(body, ["skills/foo/scripts/bar.py"]) == []
+
+
+def test_main_accepts_a_punctuation_adjacent_verdict_end_to_end(monkeypatch, capsys):
+    """End-to-end `main()` counterpart to the unit-level tests above
+    (issue #1888's own trailing-period shape): a PASS through the actual
+    CLI entry point, not only the `find_missing_*` wrapper it calls."""
+    body = _VALID_SECTION + "- checker-script-adversarial-review: RAN.\n"
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
+    assert gate.main(["--changed-checker-scripts", "skills/foo/scripts/bar.py"]) == 0
+    assert "PASS" in capsys.readouterr().out
+
+
+def test_verdict_word_extended_by_more_letters_still_rejected():
+    """Defeat test for the punctuation-adjacency widening above: a longer
+    word that merely starts with a valid verdict token, with no punctuation
+    and no word boundary, must still be rejected -- the \\b requirement
+    itself must not have been weakened by the punctuation escape."""
+    body = _VALID_SECTION + "- checker-script-adversarial-review: RANDOM\n"
+    assert gate.find_missing_checker_script_disclosure(body, ["skills/foo/scripts/bar.py"]) == [
+        "skills/foo/scripts/bar.py"
+    ]
+
+
+@pytest.mark.parametrize("trailing", ["..", ".,", "!."])
+def test_verdict_followed_by_two_punctuation_characters_still_rejected(trailing):
+    """The punctuation escape accepts exactly one trailing character, not a
+    run of them -- pinning that the widening did not silently become
+    'any amount of trailing punctuation'."""
+    body = _VALID_SECTION + f"- checker-script-adversarial-review: RAN{trailing}\n"
+    assert gate.find_missing_checker_script_disclosure(body, ["skills/foo/scripts/bar.py"]) == [
+        "skills/foo/scripts/bar.py"
+    ]
+
+
+def test_verdict_in_code_span_followed_by_explanatory_prose_still_rejected():
+    """Defeat test found by an independent Step 8 adversarial review: an
+    earlier revision of the punctuation escape placed it as an optional
+    PREFIX of the trailing-text group rather than an alternative to it,
+    which let a verdict token be followed by one punctuation character
+    (here, the closing backtick of a code span quoting the correct shape)
+    AND THEN arbitrary trailing prose -- e.g. an illustrative example
+    followed by an explanation that the disclosure was NOT actually made.
+    This must still be rejected: the punctuation branch and the
+    whitespace-plus-text branch are mutually exclusive alternatives, each
+    requiring the line to end immediately after."""
+    body = (
+        _VALID_SECTION
+        + "`checker-script-adversarial-review: RAN` would be the line to add if this PR touched a gate; it does not.\n"
+    )
+    assert gate.find_missing_checker_script_disclosure(body, ["skills/foo/scripts/bar.py"]) == [
+        "skills/foo/scripts/bar.py"
+    ]
+
+
+def test__line_pattern_directly_accepts_punctuation_and_rejects_word_extension():
+    """Direct unit test of `_line_pattern` itself (issue #1571 Step 6
+    function-body-test-coverage finding), rather than only exercising it
+    indirectly through the `find_missing_*` wrappers above."""
+    pattern = gate._line_pattern("some-check", ("RAN", "NOT-RUN"))
+    assert pattern.search("some-check: RAN.")
+    assert pattern.search("some-check: RAN")
+    assert not pattern.search("some-check: RANDOM")
+    assert not pattern.search("some-check: RAN..")
+
+
+def test__name_line_remainder_re_captures_everything_after_the_prefix():
+    """Direct unit test of `_name_line_remainder_re` (issue #1571 Step 6
+    function-body-test-coverage finding): it captures the raw remainder of
+    a line after the check's own bullet/backtick/colon prefix, regardless
+    of what that remainder actually is -- the looser second pass
+    `_is_emphasis_wrapped_verdict` inspects."""
+    remainder_re = gate._name_line_remainder_re("some-check")
+    match = remainder_re.search("- some-check: **RAN**\n")
+    assert match is not None
+    assert match.group(1) == "**RAN**"
+
+
+def test__is_emphasis_wrapped_verdict_directly_true_and_false_cases():
+    """Direct unit test of `_is_emphasis_wrapped_verdict` (issue #1571 Step
+    6 function-body-test-coverage finding), including the WAIVED-clause
+    branch (patch-coverage-gap: this branch had zero covering test
+    executions before this test, since every existing emphasis test above
+    only exercises the bare-verdict-token branch, never the WAIVED one)."""
+    verdicts = ("PASS", "FAIL")
+    assert gate._is_emphasis_wrapped_verdict("**PASS**", verdicts) is True
+    assert gate._is_emphasis_wrapped_verdict("_PASS_", verdicts) is True
+    assert gate._is_emphasis_wrapped_verdict("_WAIVED: some reason_", verdicts) is True
+    assert gate._is_emphasis_wrapped_verdict("**WAIVED: some reason**", verdicts) is True
+    assert gate._is_emphasis_wrapped_verdict("PASS", verdicts) is False
+    assert gate._is_emphasis_wrapped_verdict("**PASS", verdicts) is False
+    assert gate._is_emphasis_wrapped_verdict("**NOT-A-VERDICT**", verdicts) is False
+
+
+def test__section_has_emphasis_wrapped_verdict_directly():
+    """Direct unit test of `_section_has_emphasis_wrapped_verdict` (issue
+    #1571 Step 6 function-body-test-coverage finding), including its own
+    `section is None` short-circuit."""
+    verdicts = ("PASS", "FAIL")
+    assert gate._section_has_emphasis_wrapped_verdict(None, "some-check", verdicts) is False
+    assert gate._section_has_emphasis_wrapped_verdict("- some-check: PASS\n", "some-check", verdicts) is False
+    assert gate._section_has_emphasis_wrapped_verdict("- some-check: **PASS**\n", "some-check", verdicts) is True
+
+
+# --- Issue #1571: emphasis-wrap diagnostic (CI gate only; the hooks/ copy
+# does not carry this diagnostic, see that module's own docstring) ---
+
+
+def test_emphasis_wrapped_verdict_produces_a_targeted_diagnostic():
+    """A verdict wrapped in Markdown emphasis (bold or italic) still fails
+    the gate -- this is diagnostic-only, not a new pass condition -- but
+    the FAIL output must name emphasis-wrapping as the specific cause
+    rather than leaving the author with only the generic 'no valid
+    disclosure line' message."""
+    body = _VALID_SECTION.replace(
+        "evaluating-skill-quality: WELL-FORMED-AND-MATURE",
+        "evaluating-skill-quality: **WELL-FORMED-AND-MATURE**",
+    )
+    assert gate.find_missing_disclosures(body) == ["evaluating-skill-quality"]
+    hint = gate._emphasis_wrap_hint(
+        gate._extract_section(body), "evaluating-skill-quality", gate._VERDICTS["evaluating-skill-quality"]
+    )
+    assert hint is not None
+    assert "emphasis" in hint.lower()
+
+
+def test_emphasis_wrapped_verdict_with_underscore_marker_also_diagnosed():
+    body = _VALID_SECTION.replace(
+        "evaluating-skill-quality: WELL-FORMED-AND-MATURE",
+        "evaluating-skill-quality: _WELL-FORMED-AND-MATURE_",
+    )
+    hint = gate._emphasis_wrap_hint(
+        gate._extract_section(body), "evaluating-skill-quality", gate._VERDICTS["evaluating-skill-quality"]
+    )
+    assert hint is not None
+    assert "emphasis" in hint.lower()
+
+
+@pytest.mark.parametrize("wrapped", ["*RAN*", "__RAN__"])
+def test_emphasis_wrapped_verdict_with_single_asterisk_and_double_underscore_also_diagnosed(wrapped):
+    """Found missing by an independent Step 8 adversarial review:
+    _EMPHASIS_MARKERS originally covered only '**' and '_', missing the
+    other two standard Markdown emphasis delimiters GitHub renders
+    identically ('*...*' as italic, matching '_..._'; '__...__' as bold,
+    matching '**...**')."""
+    hint = gate._emphasis_wrap_hint(
+        f"- checker-script-adversarial-review: {wrapped}\n", "checker-script-adversarial-review", ("RAN", "NOT-RUN")
+    )
+    assert hint is not None
+    assert "emphasis" in hint.lower()
+
+
+def test_main_fail_output_names_emphasis_wrapping_as_the_cause(monkeypatch, capsys):
+    body = _VALID_SECTION.replace(
+        "evaluating-skill-quality: WELL-FORMED-AND-MATURE",
+        "evaluating-skill-quality: **WELL-FORMED-AND-MATURE**",
+    )
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
+    assert gate.main(["--skill-md-changed"]) == 1
+    err = capsys.readouterr().err
+    assert "evaluating-skill-quality" in err
+    assert "emphasis" in err.lower()
+
+
+def test_non_emphasis_missing_disclosure_does_not_print_the_emphasis_hint(monkeypatch, capsys):
+    """The diagnostic must be conditional on the emphasis-wrap shape
+    actually being present -- an ordinary missing-disclosure failure must
+    not print a hint about a cause that is not there."""
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(b""))
+    assert gate.main(["--skill-md-changed"]) == 1
+    err = capsys.readouterr().err
+    assert "emphasis" not in err.lower()
+
+
+def test_checker_script_disclosure_emphasis_wrap_also_diagnosed(monkeypatch, capsys):
+    """The diagnostic is generic across checks, not hardcoded to the base
+    two audits -- pinned here against one of the process-disclosure checks
+    (checker-script-adversarial-review) too."""
+    body = _VALID_SECTION + "- checker-script-adversarial-review: **RAN**\n"
+    monkeypatch.setattr(gate.sys, "stdin", _FakeStdin(body.encode("utf-8")))
+    assert gate.main(["--changed-checker-scripts", "skills/foo/scripts/bar.py"]) == 1
+    err = capsys.readouterr().err
+    assert "checker-script-adversarial-review" in err
+    assert "emphasis" in err.lower()
 
 
 # --- Issue #565: main() integration for the checker-script check ---
