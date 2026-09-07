@@ -596,14 +596,25 @@ def test_an_outer_try_naming_oserror_covers_a_nested_read(tmp_path: pathlib.Path
     assert _grade(tmp_path, source) == []
 
 
-def test_an_unguarded_read_is_a_stated_miss_for_open_gap(tmp_path: pathlib.Path) -> None:
+def test_an_unguarded_read_text_is_left_to_decode_gap_alone(tmp_path: pathlib.Path) -> None:
     """Deliberate gating, not an oversight: `open-gap` fires only when the
     enclosing handler set actually names a recognised `OSError` subclass, so
-    a completely unguarded read -- defect C's own shape, and every one of
-    `decode-gap`'s own "must fire" fixtures with no `try` at all -- is left
-    to `decode-gap` alone. Reporting it here too would double every one of
-    those fixtures' own findings for a handler that was never trying to
-    guard the open in the first place."""
+    a completely unguarded `read_text()` -- defect C's own shape, and every
+    one of `decode-gap`'s own "must fire" fixtures with no `try` at all --
+    is not reported by `open-gap` a second time. It genuinely is caught, by
+    `decode-gap` instead: this asserts the finding is exactly one `decode-gap`
+    entry, not the `== []` an `open-gap`-only read would suggest."""
+    findings = _grade(tmp_path, "b = p.read_text()\n")
+    assert [f.rule for f in findings] == [gate._DECODE_GAP]
+
+
+def test_an_unguarded_read_bytes_is_caught_by_neither_rule(tmp_path: pathlib.Path) -> None:
+    """Unlike `read_text()` above, `.read_bytes()` is `decode-gap`'s own
+    stated non-scope (no `UnicodeDecodeError` risk), so an unguarded
+    `.read_bytes()` is not "left to decode-gap alone" -- it is a real,
+    disclosed, currently-open gap in this file's own three-rule set: neither
+    rule reports it. See the module docstring's own `open-gap` section for
+    the disclosure."""
     assert _grade(tmp_path, "b = p.read_bytes()\n") == []
 
 

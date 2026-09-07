@@ -76,12 +76,18 @@ Deliberately gated on the handler set actually naming a *recognised*
 `OSError` subclass (`FileNotFoundError`, `PermissionError`, ...; the full
 table is `_OSERROR_SUBCLASS_NAMES`), not merely on the read being uncovered:
 an unguarded read (defect C's own shape) or one guarded by something
-unrelated (`except ValueError:`) is left to `decode-gap` alone, so this rule
-adds nothing on top of any of that rule's own existing fixtures -- gating it
-the same "uncovered" way `decode-gap`/`json-shape-gap` are would instead
-report a second finding on most of their own regression suite, for a
-handler that was never trying to guard the open in the first place. The
-trade this buys: a project-defined `OSError` subclass
+unrelated (`except ValueError:`) is left uncaught by this rule, so it adds
+nothing on top of `decode-gap`/`json-shape-gap`'s own existing fixtures --
+gating it the same "uncovered" way those two rules are would instead report
+a second finding on most of their own regression suite, for a handler that
+was never trying to guard the open in the first place. For a `read_text()`/
+`open()` shape this is genuinely "left to `decode-gap` alone," since that
+rule already grades the identical uncovered-read case. It is NOT for
+`.read_bytes()`: `decode-gap` never grades that shape at all (a binary read
+raises no `UnicodeDecodeError`), so an unguarded or unrelated-handler
+`.read_bytes()` call is caught by neither rule -- a real, currently-open gap
+in this file's own three-rule set, not a redundancy avoided. The trade this
+buys: a project-defined `OSError` subclass
 (`class ConfigNotFoundError(OSError):`) this gate cannot classify clears
 nothing and is a stated miss, the identical name-resolution trade
 `_handler_names`'s own docstring records making three times already.
@@ -1317,10 +1323,12 @@ def findings_for_source(path: str, source: str, added: set[int]) -> tuple[list[F
             continue
         handled = guarded.get(id(node), set())
         # Gated on the handler set actually naming an OSError subclass, not
-        # merely on the read being uncovered -- see `_OSERROR_SUBCLASS_NAMES`'s
-        # own comment for why an unguarded read, or one guarded by something
-        # unrelated, is deliberately left to `decode-gap` alone rather than
-        # doubled up on here.
+        # merely on the read being uncovered -- see the module docstring's
+        # own `open-gap` section for why an unguarded read, or one guarded by
+        # something unrelated, is left uncaught here rather than doubled up
+        # on decode-gap's own read_text()/open() fixtures; that same section
+        # also discloses that this leaves an unguarded/unrelated-handler
+        # .read_bytes() caught by neither rule, unlike read_text()/open().
         if not _covers(handled, _OSERROR_SUBCLASS_NAMES) or _covers(handled, _OSERROR_COVERING):
             continue
         expression = _span(node)
