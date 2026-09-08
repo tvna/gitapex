@@ -3,7 +3,7 @@ kind: SkillMetadata
 metadata:
   name: drafting-issues
 spec:
-  portability: Portable
+  portability: Repository-scoped
   capabilityAssumption: Broad
   lifecycle:
     renamedFrom: drafting-an-acm-issue
@@ -11,6 +11,7 @@ spec:
     requires: []
     relatedTo:
       - planning-a-branch-from-an-issue
+      - grounding-in-primary-sources
   executionRequirements:
     tools:
       read:
@@ -21,3 +22,23 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/818"
       summary: "Declared spec.executionRequirements.tools (W3 second slice, https://github.com/tvna/gitapex/issues/307): gitapex_check_acm_present.py reads a drafted body via --body/stdin; no writes, no subprocess/shell calls."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "Step 3 now points a Fact's own durable code-claim prose at grounding-in-primary-sources's discipline -- one pointer sentence, no duplicated procedure. Added to skillDependencies.relatedTo to match."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "Per rubric.md's Sibling-skill dependency portability table: exactly one real dependency (planning-a-branch-from-an-issue's own mention stays a downstream handoff, not a real one), citing only the sibling's top-level discipline, no internal section/file path -- Mixed-via-clean-sibling. Corrected portability Portable -> Mixed."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "Pre-existing strict-token-budget FAIL (5545 tokens, before this diff) fixed by moving the Defect (issue not yet filed) section's full procedure and worked example into references/defect-not-yet-filed.md, leaving a short pointer in place; the Notes section's now-stale Portable-rationale paragraph rewritten to state Mixed and point at this sidecar's own decision entries above rather than re-deriving them."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "A second evaluating-skill-quality pass found the Mixed correction above incomplete: two pre-existing, condition-(a)-independent narrowness failures survive -- Related skills' own unhedged retired-skill tracking-issue citation (condition c), and defect-not-yet-filed.md's unfallbacked hooks/gitapex_check_acm_present_or_waiver.py dependency (condition b). Either alone routes to Repository-scoped. Corrected Mixed -> Repository-scoped; Notes rewritten."
+      outcome:
+        verdict: "WELL-FORMED-NOT-MATURE (dimension 6 gap-major, portability misclassification) before this fix; addressed in place"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "Same pass flagged no sidecar disclosure of a considered Broad-vs-Adaptive tradeoff, given the body was just trimmed to clear a strict-token-budget ceiling. Considered Adaptive; decided Broad remains correct -- the remaining body content (redaction/escaping discipline, ACM structure, dedup search) is common-path material every invocation needs, not rare-path detail; the one genuinely rare-path branch already moved to references/defect-not-yet-filed.md."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "A third, fresh evaluating-skill-quality pass independently re-derived Repository-scoped from all four rubric conditions (not just confirming the prior pass's two citations) and confirmed it correct; the rewritten Notes paragraph verified accurate and internally consistent. Same pass found scripts/test_gitapex_check_acm_present.py has an undisclosed pytest dependency (monkeypatch/capsys fixtures, no import pytest) -- pre-existing, not touched by this diff, left as a disclosed out-of-scope gap."

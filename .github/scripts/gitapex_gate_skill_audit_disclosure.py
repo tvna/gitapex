@@ -138,6 +138,34 @@ above).
   fabricated one. See `docs/superpowers/specs/2026-08-10-defeat-test-disclosure-design.md`
   for the full decision record.
 
+Issue #1571 (refs #1888, #1784): `_line_pattern`'s own verdict-token match
+previously required end-of-line or whitespace-plus-more-text immediately
+after the verdict's own `\b` word boundary, rejecting a verdict directly
+followed by ordinary punctuation with nothing else on the line -- a
+trailing sentence period (#1888: "checker-script-adversarial-review:
+RAN.") or a closing backtick from a Markdown code span wrapping the whole
+"name: VERDICT" text (#1784). Widened to accept exactly one trailing
+character from a fixed, narrow punctuation set (`.` `,` `;` `:` `!` `?`
+and a backtick) between the verdict's own `\b` and the existing
+end-of-line/whitespace-plus-text alternation -- still `\b`-gated, so a
+longer word merely starting with a valid verdict token (e.g. "RANDOM") is
+still rejected, and still exactly one character, so a run of punctuation
+does not sneak through either. The identical change also landed in
+`hooks/gitapex_check_skill_audit_disclosure_or_waiver.py`'s own copy of
+`_line_pattern`, kept byte-identical by
+`tests/test_gitapex_check_skill_audit_disclosure_hook_sync.py`.
+
+This gate also now names Markdown emphasis-wrapping (a leading and trailing
+`**` or `_` immediately around what would otherwise be a bare valid verdict
+token or WAIVED clause) as a specific diagnosed cause when it defeats
+`_line_pattern` -- diagnostic-only, since the wrap still legitimately fails
+the match: GitHub renders `**RAN**` as bold "RAN", but this gate reads the
+raw Markdown text, where the asterisks/underscores are real characters
+sitting between the verdict and the line's own trailing anchor. See
+`_section_has_emphasis_wrapped_verdict`/`_emphasis_wrap_hint`. This
+diagnostic is CI-gate-only -- the standalone `hooks/` copy does not carry
+it, see that module's own docstring.
+
 Issue #874: the same applicability facts can now be computed locally,
 before a push, via `--check-diff BASE_REF HEAD_REF --body-file PATH`. That
 mode calls `gitapex_compute_skill_audit_flags.py` -- the module the CI
@@ -211,9 +239,35 @@ def _name_prefix(name: str) -> str:
 
 
 def _line_pattern(name: str, verdicts: Iterable[str]) -> re.Pattern[str]:
+    # Issue #1571 (refs #1888, #1784): after the verdict token's own \b, allow
+    # EITHER exactly one character from a fixed, narrow punctuation set, OR
+    # whitespace-plus-more-text, OR nothing -- as three mutually exclusive
+    # alternatives, not the punctuation as a prefix of the trailing-text
+    # group. #1888's reported shape is a bare trailing sentence period
+    # ("checker-script-adversarial-review: RAN."); #1784's is the whole
+    # "name: VERDICT" text sharing one Markdown code span, so the closing
+    # backtick lands directly after the verdict token. Deliberately just
+    # one optional character, not a repeated class ([.,;:!?`]*), so a run of
+    # punctuation does not sneak through -- and the \b itself is untouched,
+    # so a longer word merely starting with a valid verdict token (e.g.
+    # "RANDOM") still fails to match.
+    #
+    # The punctuation branch and the whitespace-plus-text branch MUST be
+    # alternatives, never sequential (one followed by the other): an earlier
+    # revision wrote the punctuation as an optional prefix of the trailing-
+    # text group (`\b[.,;:!?`]?(?:[ \t]+\S.*)?`), which let a verdict token
+    # be followed by ONE punctuation character AND THEN arbitrary trailing
+    # text -- e.g. a line quoting the correct disclosure shape inside one
+    # Markdown code span, followed by explanatory prose ("`name: RAN`
+    # would be the line to add if this PR touched a gate; it does not."),
+    # wrongly passed as a real disclosure. Found by an independent
+    # adversarial review of this issue's own implementation. The
+    # alternation below requires the line to END immediately after either
+    # branch (via the shared trailing `[ \t]*$`), closing that gap while
+    # still accepting both #1888's and #1784's own reported shapes.
     verdict_alt = "|".join(re.escape(v) for v in verdicts)
     return re.compile(
-        _name_prefix(name) + r"(?:(?:" + verdict_alt + r")\b(?:[ \t]+\S.*)?|" + _WAIVED_CLAUSE + r")[ \t]*$",
+        _name_prefix(name) + r"(?:(?:" + verdict_alt + r")\b(?:[.,;:!?`]|[ \t]+\S.*)?|" + _WAIVED_CLAUSE + r")[ \t]*$",
         re.IGNORECASE | re.MULTILINE,
     )
 
@@ -224,6 +278,89 @@ def _waived_pattern(name: str) -> re.Pattern[str]:
 
 
 _LINE_PATTERNS = {name: _line_pattern(name, verdicts) for name, verdicts in _VERDICTS.items()}
+
+# Issue #1571: targeted diagnostic for one specific way a disclosure line can
+# fail _line_pattern -- the verdict or WAIVED clause wrapped in Markdown
+# emphasis (a leading and trailing '**', '__', '_', or '*'), immediately
+# around otherwise-valid text. GitHub renders `**RAN**` and `__RAN__` as
+# bold "RAN", and `_RAN_` and `*RAN*` as italic "RAN", so a line that
+# looks correct on the rendered PR still fails this gate, since the
+# asterisks/underscores are real characters sitting between the verdict
+# token and the line's own trailing anchor -- exactly the same
+# punctuation-adjacency shape #1888/#1784 hit above, just with a marker on
+# both ends instead of one trailing character. All four standard Markdown
+# emphasis delimiters are covered (found missing two of them, '*' and
+# '__', by an independent Step 8 adversarial review) -- longest-first so a
+# double-marker line is not first mis-tried against the single-character
+# form of the same character (the loop below tolerates either order since
+# a non-matching attempt merely falls through to the next marker, but
+# longest-first avoids the wasted attempt). Diagnostic-only: detecting
+# this never makes the line pass; it only tells the author why.
+_EMPHASIS_MARKERS = ("**", "__", "_", "*")
+
+
+def _name_line_remainder_re(name: str) -> re.Pattern[str]:
+    """Every line beginning with `name`'s own bullet/backtick/colon prefix,
+    capturing the rest of that line. A deliberately looser second pass over
+    the same prefix `_line_pattern` uses -- this one exists only to inspect
+    *why* a line failed the real check, never to decide pass/fail itself.
+    """
+    return re.compile(_name_prefix(name) + r"(.*)$", re.IGNORECASE | re.MULTILINE)
+
+
+def _is_emphasis_wrapped_verdict(remainder: str, verdicts: Iterable[str]) -> bool:
+    """True iff `remainder` (the text after a check's own `name:` prefix on
+    one line) is nothing but a bare verdict token or a WAIVED clause,
+    wrapped in one matching pair of emphasis markers (`**...**` or
+    `_..._`) with no other text on the line.
+    """
+    stripped = remainder.strip()
+    for marker in _EMPHASIS_MARKERS:
+        wrap_len = len(marker)
+        if len(stripped) <= 2 * wrap_len or not stripped.startswith(marker) or not stripped.endswith(marker):
+            continue
+        inner = stripped[wrap_len : len(stripped) - wrap_len]
+        if any(inner.upper() == verdict.upper() for verdict in verdicts):
+            return True
+        if re.fullmatch(_WAIVED_CLAUSE, inner, re.IGNORECASE):
+            return True
+    return False
+
+
+def _section_has_emphasis_wrapped_verdict(section: str | None, name: str, verdicts: Iterable[str]) -> bool:
+    """True iff `section` carries a line naming `name` whose own verdict or
+    WAIVED clause is emphasis-wrapped per `_is_emphasis_wrapped_verdict`
+    above. `section` is the already-extracted '## Skill audit evidence'
+    body, or None when the PR body has no such section -- matching every
+    other section-taking helper in this file.
+    """
+    if section is None:
+        return False
+    return any(
+        _is_emphasis_wrapped_verdict(match.group(1), verdicts)
+        for match in _name_line_remainder_re(name).finditer(section)
+    )
+
+
+def _emphasis_wrap_hint(section: str | None, name: str, verdicts: Iterable[str]) -> str | None:
+    """A one-line diagnostic to print alongside `name`'s own generic FAIL
+    message when `section` carries an emphasis-wrapped verdict/WAIVED
+    clause for it -- naming that as the specific cause, instead of leaving
+    an author staring at "no valid disclosure line" with no clue why a line
+    that renders correctly on GitHub still fails this gate. Returns None
+    when the shape is not present, so a caller can do `if hint:`.
+    """
+    if not _section_has_emphasis_wrapped_verdict(section, name, verdicts):
+        return None
+    return (
+        f"Note: a '{name}' line was found, but its verdict (or WAIVED "
+        "clause) looks wrapped in Markdown emphasis ('**...**' or "
+        "'_..._') -- this gate matches the raw Markdown text, where the "
+        "emphasis markers are real characters sitting between the verdict "
+        "and the line's own end, so remove them rather than only "
+        "rewording the text."
+    )
+
 
 # Issue #427 (refs #422): battle-testing-a-skill's WAIVED form is legal in
 # general but rejected when the diff modifies a changed SKILL.md's own
@@ -807,6 +944,10 @@ def main(argv: list[str] | None = None) -> int:
                 "description line in: " + ", ".join(description_changed_skills),
                 file=sys.stderr,
             )
+        for name in missing:
+            hint = _emphasis_wrap_hint(section, name, _VERDICTS[name])
+            if hint:
+                print(hint, file=sys.stderr)
 
     if disallowed_waiver_skills:
         print(
@@ -829,6 +970,16 @@ def main(argv: list[str] | None = None) -> int:
             "'## Skill audit evidence' section.",
             file=sys.stderr,
         )
+        # Issue #1571 Step 8 (candidate finding from the mandatory refactor
+        # pass): this FAIL branch previously did not call _emphasis_wrap_hint
+        # at all, unlike every other FAIL branch below -- an author whose
+        # only WAIVED line was emphasis-wrapped got no clue why it failed.
+        # This check has no verdict vocabulary of its own (only WAIVED), so
+        # the empty tuple is deliberate: _is_emphasis_wrapped_verdict falls
+        # straight through to its own WAIVED-clause branch.
+        hint = _emphasis_wrap_hint(section, _EVAL_COVERAGE_CHECK_NAME, ())
+        if hint:
+            print(hint, file=sys.stderr)
 
     for check in _PROCESS_DISCLOSURE_CHECKS:
         missing_items = process_disclosure_missing[check.name]
@@ -846,6 +997,9 @@ def main(argv: list[str] | None = None) -> int:
                 f"section{check.fail_hint}.",
                 file=sys.stderr,
             )
+            hint = _emphasis_wrap_hint(section, check.name, check.verdicts)
+            if hint:
+                print(hint, file=sys.stderr)
 
     return 1
 

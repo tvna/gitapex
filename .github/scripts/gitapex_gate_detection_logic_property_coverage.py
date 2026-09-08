@@ -143,6 +143,38 @@ to its definition elsewhere in the file is exactly the machinery
 records three separate attempts at, each reverted as more costly than it
 was worth. That lesson is taken as read here rather than relearned.
 
+**(c) also covers string-splitting.** Receiver-agnostic method calls
+``.split(...)``, ``.rsplit(...)``, ``.partition(...)`` on any receiver are
+graded under this same category and the same rule id
+(``string-comparison-property-gap``), not a fourth top-level category.
+Issue #1532 (consolidated into #1572): this gate's original three
+categories -- regex, path-resolution, string-comparison -- did not include
+any string-splitting/parsing shape, so a materially changed ``.split(...)``
+call could sit right next to an already-graded ``.resolve()`` call in the
+very same function and never be asked for a property test of its own.
+``skills/executing-a-branch-plan/scripts/gitapex_check_task_commit_provenance.py``'s
+own ``split_commit_messages`` is the motivating instance: its pre-fix body
+filtered every empty string out of a NUL-split instead of stripping only
+git's own one trailing NUL (issue #1477), a defect that lived on exactly the
+``raw.split("\0")`` call site this widened category (c) now reaches. Kept
+inside category (c) rather than given its own rule id: the receiver-agnostic
+matching mechanism, the existing-coverage check, and the waiver convention
+are all identical to ``.startswith()``/``.endswith()`` above, and a fourth
+category would not change how any of them behave -- only the message a
+contributor reads differs, via ``_TRIGGER_LABEL``'s own category-(c) entry,
+now naming both "a string-comparison allowlist/denylist check" and "a
+string-splitting call" together, so a ``.split()`` finding does not
+misleadingly read as an allowlist/denylist check it plainly is not.
+
+*Why the splitting trigger is receiver-agnostic.* Exactly the same reason
+category (a)'s ``.match(...)``/``.search(...)``/``.fullmatch(...)`` half is
+(see "Why the regex trigger is receiver-agnostic" above): a receiver that is
+not a real ``str`` (or ``bytes``) at all -- a hand-rolled tokenizer class
+exposing its own unrelated ``.split()`` method, a mock or test double --
+still triggers, by design, matching every other receiver-agnostic trigger in
+this file. This is a disclosed over-report, not a bug; see "Known
+over-reports" below.
+
 Scope/function attribution
 ---------------------------
 For each in-scope file, the *whole* file's AST is walked once (not
@@ -227,6 +259,14 @@ report at all, listed so a reader is never surprised by one later.
   touches no regex at all. Widening the verb set is a measurement to run
   and triage first, exactly as this gate's own ``_IN_SCOPE_RE`` paragraph
   says about widening to ``gitapex_scan_*.py``.
+* **Only three splitting verbs are graded.** ``split``/``rsplit``/
+  ``partition``, and nothing else -- ``.rpartition(...)`` and
+  ``.splitlines(...)`` both split a string the same way but are not
+  triggers, in either the receiver-agnostic spelling this gate uses or any
+  other. Issue #1532's own Planned ops named exactly these three verbs;
+  widening further is the same kind of measure-first trade the regex-verb
+  bullet above already describes for ``re.sub``/``re.split``/``re.findall``/
+  ``re.finditer``, not an oversight.
 * **A member imported out of its module is not graded.**
   ``from re import compile`` then a bare ``compile(...)``, or
   ``from os.path import realpath`` then a bare ``realpath(...)``, reaches
@@ -291,6 +331,10 @@ receiver-agnostic trigger rather than a bug to fix quietly:
   is an inline literal, whether or not the resulting collection is ever used
   in a membership comparison -- building a set for iteration alone, not an
   allowlist/denylist check, still triggers category (c).
+* ``.split(...)``/``.rsplit(...)``/``.partition(...)`` on a receiver that is
+  not a real ``str`` (or ``bytes``) -- a hand-rolled parser class exposing
+  its own unrelated ``.split()`` method, a mock or test double -- is reported
+  the same way, for the same reason given under trigger (a) above.
 
 Authoring guidance for shell-command-detection regexes
 --------------------------------------------------------
@@ -448,6 +492,27 @@ _OS_PATH_ATTRS = frozenset({"realpath", "abspath"})
 _STRING_COMPARISON_RECEIVER_AGNOSTIC_ATTRS = frozenset({"startswith", "endswith"})
 _COLLECTION_LITERAL_CALL_NAMES = frozenset({"frozenset", "set"})
 
+# Category (c) also covers string-splitting/parsing calls (issue #1532,
+# consolidated into #1572): split/rsplit/partition are receiver-agnostic on
+# any object, the same treatment startswith/endswith already get above. Kept
+# as a separate constant, not merged into
+# `_STRING_COMPARISON_RECEIVER_AGNOSTIC_ATTRS` above, so each set's own name
+# still documents what it grades; `_string_comparison_call_trigger` below
+# checks membership in either. See the module docstring's own "(c) also
+# covers string-splitting" paragraph for why this stays inside category (c)
+# -- one rule id, `string-comparison-property-gap` -- rather than becoming a
+# fourth top-level category.
+_STRING_SPLIT_RECEIVER_AGNOSTIC_ATTRS = frozenset({"split", "rsplit", "partition"})
+
+# Computed once at import time, not per-call inside `_string_comparison_call_
+# trigger` (invoked once per `ast.Call` node in every scanned file) -- a
+# plain union of the two sets above, kept as its own named constant so the
+# trigger check below is a single membership test rather than a set union on
+# every call.
+_STRING_COMPARISON_AND_SPLIT_RECEIVER_AGNOSTIC_ATTRS = (
+    _STRING_COMPARISON_RECEIVER_AGNOSTIC_ATTRS | _STRING_SPLIT_RECEIVER_AGNOSTIC_ATTRS
+)
+
 _REGEX_GAP = "regex-property-gap"
 _PATH_RESOLUTION_GAP = "path-resolution-property-gap"
 _STRING_COMPARISON_GAP = "string-comparison-property-gap"
@@ -456,8 +521,8 @@ _TRIGGER_LABEL: dict[str, str] = {
     _REGEX_GAP: "a regex compile/match/search/fullmatch call",
     _PATH_RESOLUTION_GAP: "a path-resolution call (.resolve()/.is_symlink()/.relative_to()/"
     "os.path.realpath()/os.path.abspath())",
-    _STRING_COMPARISON_GAP: "a string-comparison allowlist/denylist check (.startswith()/"
-    ".endswith()/an `in`-literal comparison/frozenset()/set())",
+    _STRING_COMPARISON_GAP: "a string-comparison allowlist/denylist check or a string-splitting call "
+    "(.startswith()/.endswith()/an `in`-literal comparison/frozenset()/set()/.split()/.rsplit()/.partition())",
 }
 
 # `# detection-logic-property-coverage: WAIVED: <reason>` -- a reason is
@@ -850,11 +915,12 @@ def _path_resolution_trigger(node: ast.Call) -> bool:
 
 def _string_comparison_call_trigger(node: ast.Call) -> bool:
     """Category (c), the call-shaped half: receiver-agnostic `.startswith()`/
-    `.endswith()`, or `frozenset(...)`/`set(...)` called with a single inline
-    collection-literal argument."""
+    `.endswith()`/`.split()`/`.rsplit()`/`.partition()`, or
+    `frozenset(...)`/`set(...)` called with a single inline collection-literal
+    argument."""
     func = node.func
     if isinstance(func, ast.Attribute):
-        return func.attr in _STRING_COMPARISON_RECEIVER_AGNOSTIC_ATTRS
+        return func.attr in _STRING_COMPARISON_AND_SPLIT_RECEIVER_AGNOSTIC_ATTRS
     if isinstance(func, ast.Name):
         return (
             func.id in _COLLECTION_LITERAL_CALL_NAMES

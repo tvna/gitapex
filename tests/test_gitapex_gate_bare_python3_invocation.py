@@ -98,6 +98,43 @@ def test_bare_python3_invocation_is_flagged(tmp_path: pathlib.Path) -> None:
     assert line == "python3 .github/scripts/gitapex_gate_foo.py"
 
 
+def test_bare_invocation_outside_github_scripts_is_flagged(tmp_path: pathlib.Path) -> None:
+    """Issue #1050: the scan is path-independent, not enumerated to
+    `.github/scripts/` -- a bare invocation of an `evals/scripts/*.py`
+    script (the real gap this issue found live, `skill-eval-matrix.yml`'s
+    own `gitapex_set_config_model.py` call sites) must be flagged the
+    same way a `.github/scripts/*.py` one already is."""
+    workflows_dir = _write(
+        tmp_path,
+        "bare.yml",
+        "jobs:\n"
+        "  a:\n"
+        "    steps:\n"
+        "      - name: run\n"
+        "        run: |\n"
+        "          python3 evals/scripts/gitapex_set_config_model.py suite model\n",
+    )
+    findings = gate.find_bare_invocations(workflows_dir)
+    assert len(findings) == 1
+    assert "gitapex_set_config_model.py" in findings[0][2]
+
+
+def test_bare_invocation_of_a_third_arbitrary_path_is_flagged(tmp_path: pathlib.Path) -> None:
+    """Issue #1050: proves the rule generalizes past two hardcoded
+    literals (`.github/scripts/`, `evals/scripts/`) rather than merely
+    widening to a second enumerated directory -- an arbitrary third path
+    (mirroring `skills/scorer-gated-skill-edits/scripts/*.py`'s own real,
+    already-`uv run`-wrapped call site) must also be flagged when bare."""
+    workflows_dir = _write(
+        tmp_path,
+        "bare.yml",
+        "jobs:\n  a:\n    steps:\n      - name: run\n        run: |\n          python3 some/other/path/x.py\n",
+    )
+    findings = gate.find_bare_invocations(workflows_dir)
+    assert len(findings) == 1
+    assert "some/other/path/x.py" in findings[0][2]
+
+
 def test_piped_invocation_is_flagged(tmp_path: pathlib.Path) -> None:
     workflows_dir = _write(
         tmp_path,
@@ -406,6 +443,26 @@ def test_main_returns_one_and_prints_findings_on_bare_invocation(
     out = capsys.readouterr().out
     assert "bare.yml" in out
     assert "x.py" in out
+
+
+def test_main_flags_a_bare_invocation_outside_github_scripts(
+    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Issue #1050: main()'s own CLI-level output must stay path-independent
+    too, not just find_bare_invocations() -- a bare invocation of a script
+    outside `.github/scripts/` (e.g. `evals/scripts/*.py`) fails the same
+    way, and the printed message no longer names `.github/scripts/*.py`
+    specifically."""
+    workflows_dir = _write(
+        tmp_path,
+        "bare.yml",
+        "jobs:\n  a:\n    steps:\n      - name: run\n        run: python3 evals/scripts/x.py\n",
+    )
+    monkeypatch.setattr("sys.argv", ["prog", str(workflows_dir)])
+    assert gate.main() == 1
+    out = capsys.readouterr().out
+    assert "Bare `python3 <path>.py` invocations" in out
+    assert "evals/scripts/x.py" in out
 
 
 # --- hooks/*.sh shell-variable-indirected invocations (WARNING tier,

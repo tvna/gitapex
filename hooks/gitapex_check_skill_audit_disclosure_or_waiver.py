@@ -18,7 +18,12 @@ conditional extensions (WAIVED-rejection on a description change,
 eval-coverage disclosure, security-relevance, design-doc coverage) --
 each needs a git-diff-computed fact (which skill's description changed,
 which skill is security-relevant, which design docs changed) that this
-standalone module has no way to compute.
+standalone module has no way to compute. It also does not port that
+script's issue #1571 emphasis-wrap diagnostic (naming a Markdown
+`**...**`/`_..._`-wrapped verdict as the specific reason a line fails):
+that diagnostic only enriches a FAIL message's text, and this module's own
+docstring above already scopes it to the base find_missing_disclosures
+check, whose pass/fail result is unaffected either way.
 
 Issue #874 changed *where* those extensions are reachable, not what this
 module does. `.github/scripts/gitapex_compute_skill_audit_flags.py` now
@@ -71,9 +76,20 @@ def _name_prefix(name: str) -> str:
 
 
 def _line_pattern(name: str, verdicts: Iterable[str]) -> re.Pattern[str]:
+    # Issue #1571 (refs #1888, #1784): identical widening to the CI gate's own
+    # _line_pattern -- allow EITHER exactly one character from a fixed,
+    # narrow punctuation set right after the verdict token's own \b, OR
+    # whitespace-plus-more-text, OR nothing, as mutually exclusive
+    # alternatives (never the punctuation as a prefix of the trailing-text
+    # group, which independent review found would let a punctuation
+    # character be followed by arbitrary trailing prose). See that module's
+    # docstring for the full rationale -- kept functionally identical (not
+    # necessarily byte-identical prose) to
+    # .github/scripts/gitapex_gate_skill_audit_disclosure.py's own copy, and
+    # verified by tests/test_gitapex_check_skill_audit_disclosure_hook_sync.py.
     verdict_alt = "|".join(re.escape(v) for v in verdicts)
     return re.compile(
-        _name_prefix(name) + r"(?:(?:" + verdict_alt + r")\b(?:[ \t]+\S.*)?|" + _WAIVED_CLAUSE + r")[ \t]*$",
+        _name_prefix(name) + r"(?:(?:" + verdict_alt + r")\b(?:[.,;:!?`]|[ \t]+\S.*)?|" + _WAIVED_CLAUSE + r")[ \t]*$",
         re.IGNORECASE | re.MULTILINE,
     )
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""CI gate: a decoded read, or a `.get()` on a `json.loads` result, added by
-this diff must handle the failure it can actually raise.
+"""CI gate: a decoded read, a file-open/read call, or a `.get()` on a
+`json.loads` result, added by this diff must handle the failure it can
+actually raise.
 
 Issue #682 (refs #665, #673, #674, #680). Five separate times this
 repository has shipped the same defect into one of its own gates: a script
@@ -29,7 +30,7 @@ line-coverage, branch-coverage or `except`-line-coverage metric can point
 at it, and `ruff --select ALL` reports zero findings on any of the three
 defect lines. This gate is the answer measured for that class.
 
-Two rules, both computed from the AST, both stdlib:
+Four rules, all computed from the AST, all stdlib:
 
 **Rule `decode-gap`.** A call that decodes bytes to text -- `read_text(...)`,
 or `open(...)` in a text read mode, and not one carrying a substituting
@@ -56,10 +57,96 @@ gate's own failure message prescribes and which it used to reject. A name
 assigned both a parse and something else anywhere in the scope is dropped
 rather than tainted -- order-blind on purpose, see below.
 
+**Rule `open-gap`.** A file-open/read call -- `read_text(...)`/`read_bytes()`,
+or `open(...)`/`<expr>.open(...)` in a read mode -- the identical call-site
+shapes `decode-gap` already grades via `_text_read_kind`, extended by
+`read_bytes()` (see `_file_read_kind`): a binary read decodes nothing, so it
+is rightly out of `decode-gap`'s own scope, but the `open()` it performs
+still fails identically to a text read's own. Complementary to `decode-gap`
+by design, not merely by reusing its detector: an `except OSError:`-only
+handler is issue #682's own defect F, still correctly reported by
+`decode-gap` (`OSError` does not cover a decode failure), and a
+`except FileNotFoundError:`-only handler -- this rule's own regression
+fixture, reconstructed from
+`skills/executing-a-branch-plan/scripts/gitapex_check_task_commit_provenance.py`'s
+pre-fix `main()`, which caught `FileNotFoundError` around a
+`Path(args.messages).read_bytes()` call but not the `IsADirectoryError`/
+`PermissionError` the same call can also raise -- is reported here instead
+(that regression fixture is a `.read_bytes()` call, where "instead" is
+literal: `decode-gap` never grades that shape at all, so `open-gap` is the
+only one of the two that fires). For any of the three TEXT-decoding shapes
+(`read_text()`, `open(..., encoding=...)`, `<expr>.open()`), the identical
+`except FileNotFoundError:`-only handler instead makes BOTH rules fire
+together -- `decode-gap` because `FileNotFoundError` is not in
+`_DECODE_COVERING`, `open-gap` because it names an `_OSERROR_SUBCLASS_NAMES`
+member but not `_OSERROR_COVERING` -- two independent, real gaps in the
+same code, not a redundancy: the decode failure and the open failure are
+both genuinely uncaught, distinct from this section's own "left uncaught by
+EITHER rule" cases below, where only one gap exists in the first place.
+Deliberately gated on the handler set actually naming a *recognised*
+`OSError` subclass (`FileNotFoundError`, `PermissionError`, ...; the full
+table is `_OSERROR_SUBCLASS_NAMES`), not merely on the read being uncovered:
+an unguarded read (defect C's own shape) or one guarded by something
+unrelated (`except ValueError:`) is left uncaught by this rule, so it adds
+nothing on top of `decode-gap`/`json-shape-gap`'s own existing fixtures --
+gating it the same "uncovered" way those two rules are would instead report
+a second finding on most of their own regression suite, for a handler that
+was never trying to guard the open in the first place. For a `read_text()`/
+`open()` shape this is genuinely "left to `decode-gap` alone," since that
+rule already grades the identical uncovered-read case. It is NOT for
+`.read_bytes()`: `decode-gap` never grades that shape at all (a binary read
+raises no `UnicodeDecodeError`), so an unguarded or unrelated-handler
+`.read_bytes()` call is caught by neither rule -- a real, currently-open gap
+in this file's own three-rule set, not a redundancy avoided. The trade this
+buys: a project-defined `OSError` subclass
+(`class ConfigNotFoundError(OSError):`) this gate cannot classify clears
+nothing and is a stated miss, the identical name-resolution trade
+`_handler_names`'s own docstring records making three times already.
+
+**Rule `yaml-gap`.** A `yaml.safe_load(...)` call -- the identical
+attribute-call shape `_is_json_parse` already matches for
+`json.loads`/`json.load`, mirrored here for `yaml`'s own `safe_load` --
+whose enclosing handlers do not cover *both* `RecursionError`-or-ancestor
+and `MemoryError`-or-ancestor. Unlike the three rules above, each of which
+tests membership against one covering frozenset, this one runs two
+independent `_covers()` checks (`_RECURSION_COVERING`, `_MEMORY_COVERING`)
+and fires when *either* side is uncovered: a handler naming only
+`RecursionError` still leaves a `MemoryError` gap unhandled, and the
+converse holds too, so merging the two sets into one would incorrectly
+clear a handler that only ever guarded one of them. This rule's own
+regression fixture, reconstructed from
+`skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py`'s
+pre-fix (`493f798e`) except tuple -- `except (OSError, UnicodeDecodeError,
+yaml.YAMLError):`, with no `RecursionError`/`MemoryError` -- is issue
+#758's own motivating defect, found only by `battle-testing-a-skill`'s own
+adversarial pass and fixed by `bdf33bd8`: `yaml.safe_load` blocks arbitrary
+object construction but still resolves anchors/aliases, so a hostile or
+deeply nested sidecar can still exhaust stack or memory via alias
+expansion, and neither failure was named by that handler set, so it would
+have crashed with a raw traceback instead of that script's own graceful
+manifest-parsable FAIL. The call itself is matched the same literal-name
+way `_is_json_parse` matches `json.loads`/`json.load`: an attribute call
+whose receiver is a bare `ast.Name` spelled exactly `yaml`. `import yaml as
+y` followed by `y.safe_load(...)` is therefore a stated miss, the identical
+trade `_is_json_parse` already makes for `from json import loads`/
+`import json as j`, and the same name-resolution cost `_handler_names`'s
+own docstring records this file reverting three times already --
+resolving an import alias needs that same machinery, for a shape that
+occurs nowhere in the graded directories today. Same
+`# exception-handler-gap: WAIVED: <reason>` waiver convention as the other
+three rules; no new syntax. Measured the same way `decode-gap`/
+`json-shape-gap` were (this section's own sibling paragraph): graded as
+wholly added against this worktree, `yaml-gap` reports 27 pre-existing
+findings across 20 in-scope files, none of them triaged -- disclosed here
+rather than silently discovered later, and left as a one-time backlog for
+a separate change, per the same acceptance criterion issue #682 already
+set for `decode-gap`/`json-shape-gap`'s own pre-existing findings.
+
 **Scope is the diff, not the repository, and that is the load-bearing
-design decision.** Measured against merged `main` (afd18eb) these two rules
-report 39 findings across the 46 in-scope files it then had, none of them
-triaged. The six that issue #680 *had* triaged and reproduced by execution
+design decision.** Measured against merged `main` (afd18eb) the original two
+rules (`decode-gap`, `json-shape-gap`; `open-gap` postdates this
+measurement) report 39 findings across the 46 in-scope files it then had,
+none of them triaged. The six that issue #680 *had* triaged and reproduced by execution
 are no longer among them: PR #696 repaired those, and running these rules
 over the six files it touched now reports zero, which is an independent
 confirmation of that repair rather than a claim inherited from it. Issue #682's own
@@ -93,12 +180,27 @@ gates live under `hooks/`, and issue #680 found one of these two defects in
 `conftest.py`) are out of scope everywhere: a test that hands a gate
 malformed input is doing its job.
 
-Deliberately not graded, each because the shape does not reach the defect
-class this gate was measured against: a read from `sys.stdin`, a write-mode
-`open()` (that raises `UnicodeEncodeError`, a different failure), a binary
-read, and a subscript or `.items()` on an unvalidated JSON result rather
-than a `.get()`. Widening any of them is a measurement, not a guess -- run
-the rule repo-wide and triage the delta first, the same way this one was.
+Deliberately not graded by any of the four rules, each because the shape
+does not reach a defect class this gate was measured against: a read from
+`sys.stdin`, a write-mode `open()` (that raises `UnicodeEncodeError`, a
+different failure `open-gap` was not measured against either), a
+subscript or `.items()` on an unvalidated JSON result rather than a
+`.get()`, and a `yaml.load(...)`/`yaml.load_all(...)`/`yaml.safe_load_all(...)`
+call -- `yaml-gap` grades only `safe_load`, the one spelling issue #758's
+own defect used and the only one this rule was measured against;
+`.github/scripts/gitapex_gate_eval_declared_model.py`'s own
+`yaml.load(raw, Loader=_DuplicateKeyLoader)` call is a real, currently
+in-scope instance of the wider shape this leaves ungraded, stated rather
+than silently missed. A binary read is the one shape that split across rules rather
+than staying out of scope entirely: `decode-gap` still does not grade it
+(nothing decodes, so there is no `UnicodeDecodeError` risk), but
+`open-gap` grades `.read_bytes()` on its own, different failure axis --
+`open(..., "rb")`/`<expr>.open("rb")` stay out of `open-gap`'s scope too,
+the same mode-filtering `_text_read_kind` already applies, since widening
+to every mode `open()` accepts (including a write) is a measurement this
+rule has not made. Widening any of the shapes above is a measurement, not a
+guess -- run the rule repo-wide and triage the delta first, the same way
+this one was.
 
 **Known misses, each one a decision that was made and then measured, not an
 oversight.** Three of them are places where a more capable rule was built,
@@ -300,6 +402,69 @@ _DECODE_COVERING = frozenset({"UnicodeDecodeError", "UnicodeError", "ValueError"
 # is the exact remediation this gate's own failure message prescribes.
 _JSON_COVERING = frozenset({"AttributeError", "Exception", "BaseException"})
 
+# The `open-gap` rule's own covering set. Deliberately disjoint from
+# `_DECODE_COVERING`: an `except OSError:`-only handler is issue #682's own
+# defect F, which `decode-gap` still correctly reports (OSError is not an
+# ancestor of UnicodeDecodeError), and the converse holds here -- a handler
+# naming only `UnicodeDecodeError`/`ValueError` does not catch the read
+# itself failing to open. The two rules grade two independent failure modes
+# of the same call; a handler covering one leaves the other's own finding in
+# place.
+_OSERROR_COVERING = frozenset({"OSError", "Exception", "BaseException"})
+
+# Every direct or indirect subclass of `OSError` in the standard library's
+# builtin exception hierarchy (verified live: `[n for n in dir(builtins) if
+# issubclass(getattr(builtins, n), OSError) and getattr(builtins, n) is not
+# OSError]`), `OSError` itself excluded. `open-gap` fires only when the
+# enclosing handler set names at least one of these -- not merely when the
+# read is unguarded, or guarded by something unrelated (`except ValueError:`,
+# no `try` at all). That gating is deliberate, not incidental: issue #682's
+# own defect shape, and this rule's own name, are both about a handler that
+# named the *wrong, narrower* member of this family, not about an absent
+# handler in general -- decode-gap already reports the fully-unguarded case
+# for every text read, and gating this rule the same way would report a
+# second finding on every one of decode-gap's own existing fixtures for a
+# handler (`ValueError`, `UnicodeDecodeError`, ...) that was never trying to
+# guard the open in the first place. A project-defined `OSError` subclass
+# this gate cannot classify (`class ConfigNotFoundError(OSError):`) is a
+# stated miss for the same reason `_handler_names` names its own: resolving
+# an unknown handler's base class needs the class-hierarchy resolution this
+# file has reverted three times already (see that function's docstring).
+_OSERROR_SUBCLASS_NAMES = frozenset(
+    {
+        "BlockingIOError",
+        "BrokenPipeError",
+        "ChildProcessError",
+        "ConnectionAbortedError",
+        "ConnectionError",
+        "ConnectionRefusedError",
+        "ConnectionResetError",
+        "FileExistsError",
+        "FileNotFoundError",
+        "InterruptedError",
+        "IsADirectoryError",
+        "NotADirectoryError",
+        "PermissionError",
+        "ProcessLookupError",
+        "TimeoutError",
+    }
+)
+
+# The `yaml-gap` rule's own covering sets. Two separate frozensets, not one
+# merged set: the rule requires the enclosing handler set to cover BOTH
+# RecursionError-or-ancestor AND MemoryError-or-ancestor (issue #758's own
+# defect -- `yaml.safe_load` blocks arbitrary object construction but still
+# resolves anchors/aliases, so a hostile or deeply nested document can
+# exhaust either stack or memory via alias expansion), so a handler naming
+# only one of the two still leaves the other's own failure mode uncovered
+# and must still be reported. `_covers(handled, _RECURSION_COVERING)` and
+# `_covers(handled, _MEMORY_COVERING)` are therefore checked independently
+# at the call site below; merging them into one frozenset would let
+# `except RecursionError:` alone incorrectly clear a MemoryError gap (and
+# the converse), since `_covers` only tests for *any* intersection.
+_RECURSION_COVERING = frozenset({"RecursionError", "Exception", "BaseException"})
+_MEMORY_COVERING = frozenset({"MemoryError", "Exception", "BaseException"})
+
 # The `errors=` policies that substitute rather than raise *on a decode*.
 # Determined by running each against `b"ok\xffbad".decode("utf-8", errors=...)`
 # rather than read off the codecs documentation: `xmlcharrefreplace` and
@@ -328,6 +493,8 @@ _HUNK_RE = re.compile(r"@@ -\d+(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 
 _DECODE_GAP = "decode-gap"
 _JSON_SHAPE_GAP = "json-shape-gap"
+_OPEN_GAP = "open-gap"
+_YAML_GAP = "yaml-gap"
 
 
 class ScanError(Exception):
@@ -866,6 +1033,33 @@ def _text_read_kind(node: ast.Call) -> str | None:
     return None
 
 
+def _file_read_kind(node: ast.Call) -> str | None:
+    """Return the file-open/read shape `node` performs, for `open-gap`, or
+    None.
+
+    Delegates to `_text_read_kind` for every shape that already grades --
+    `read_text(...)`, bare `open(...)`, and `<expr>.open(...)` -- and adds
+    exactly one more: `<expr>.read_bytes()`. That one addition is deliberate,
+    not an oversight in `_text_read_kind` itself: a binary read raises no
+    `UnicodeDecodeError`, so `_text_read_kind` is right to leave it out of
+    `decode-gap`'s own scope, but the underlying `open()` a `read_bytes()`
+    call performs fails on a missing file identically to a text read's own --
+    and `Path(...).read_bytes()` is this rule's own regression fixture,
+    reconstructed from `gitapex_check_task_commit_provenance.py`'s pre-fix
+    `main()`. `_text_read_kind`'s own mode filtering (`_mode_is_text_read`
+    ruling out a write or binary `open()` mode) is inherited unchanged here:
+    `open-gap` grades the same *read* shapes `decode-gap` does, on top of
+    `read_bytes()`, not every mode `open()` accepts -- a write can also raise
+    `OSError`, but widening to it is a measurement this rule has not made,
+    the same discipline this file's own module docstring already applies to
+    `decode-gap`'s own deliberately-not-graded shapes.
+    """
+    func = node.func
+    if isinstance(func, ast.Attribute) and func.attr == "read_bytes":
+        return "read_bytes"
+    return _text_read_kind(node)
+
+
 def _is_json_parse(node: ast.expr) -> bool:
     """True for a `json.loads(...)` / `json.load(...)` call."""
     if not isinstance(node, ast.Call):
@@ -876,6 +1070,31 @@ def _is_json_parse(node: ast.expr) -> bool:
         and func.attr in _JSON_PARSERS
         and isinstance(func.value, ast.Name)
         and func.value.id == "json"
+    )
+
+
+def _is_yaml_safe_load(node: ast.Call) -> bool:
+    """True for a `yaml.safe_load(...)` call, for `yaml-gap`.
+
+    Mirrors `_is_json_parse`'s own exact style: an attribute call whose
+    receiver is a bare `ast.Name` literally spelled `yaml`. Nothing is
+    resolved, on purpose -- `import yaml as y` followed by `y.safe_load(...)`
+    is therefore a stated miss, the identical trade `_is_json_parse` already
+    makes for `from json import loads`/`import json as j`, and the same
+    name-resolution cost `_handler_names`'s own docstring records this file
+    reverting three times already: resolving an import alias needs that
+    same class of machinery, for a shape that occurs nowhere in the graded
+    directories today. `yaml.load(...)`/`yaml.load_all(...)`/
+    `yaml.safe_load_all(...)` are deliberately not matched either -- see the
+    module docstring's own `yaml-gap` section for why only `safe_load` was
+    measured.
+    """
+    func = node.func
+    return (
+        isinstance(func, ast.Attribute)
+        and func.attr == "safe_load"
+        and isinstance(func.value, ast.Name)
+        and func.value.id == "yaml"
     )
 
 
@@ -1191,6 +1410,74 @@ def findings_for_source(path: str, source: str, added: set[int]) -> tuple[list[F
                 # function, and building one set per gap made a file of 800
                 # gaps take 2.1 seconds where a bisect takes milliseconds.
                 (min(gap.trigger_from, end), end),
+            )
+        )
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        kind = _file_read_kind(node)
+        if kind is None:
+            continue
+        handled = guarded.get(id(node), set())
+        # Gated on the handler set actually naming an OSError subclass, not
+        # merely on the read being uncovered -- see the module docstring's
+        # own `open-gap` section for why an unguarded read, or one guarded by
+        # something unrelated, is left uncaught here rather than doubled up
+        # on decode-gap's own read_text()/open() fixtures; that same section
+        # also discloses that this leaves an unguarded/unrelated-handler
+        # .read_bytes() caught by neither rule, unlike read_text()/open().
+        if not _covers(handled, _OSERROR_SUBCLASS_NAMES) or _covers(handled, _OSERROR_COVERING):
+            continue
+        expression = _span(node)
+        anchor = node.func.end_lineno if isinstance(node.func, ast.Attribute) else None
+        candidates.append(
+            _Candidate(
+                Finding(
+                    path,
+                    anchor if anchor is not None else node.lineno,
+                    _OPEN_GAP,
+                    f"{kind}(...) opens or reads a file, but its enclosing try names only a narrower "
+                    "OSError subclass -- add an OSError (or Exception/BaseException) handler, or "
+                    "narrate why that narrower handler alone is correct",
+                ),
+                frozenset(expression | handler_lines.get(id(node), set())),
+                None,
+            )
+        )
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not _is_yaml_safe_load(node):
+            continue
+        handled = guarded.get(id(node), set())
+        recursion_covered = _covers(handled, _RECURSION_COVERING)
+        memory_covered = _covers(handled, _MEMORY_COVERING)
+        if recursion_covered and memory_covered:
+            continue
+        # Either side missing still fires -- two independent checks, not one
+        # merged frozenset, so a handler naming only RecursionError still
+        # reports the still-uncovered MemoryError side (and vice versa). See
+        # the module docstring's own `yaml-gap` section for why.
+        missing = [
+            name
+            for name, covered in (("RecursionError", recursion_covered), ("MemoryError", memory_covered))
+            if not covered
+        ]
+        expression = _span(node)
+        anchor = node.func.end_lineno if isinstance(node.func, ast.Attribute) else None
+        candidates.append(
+            _Candidate(
+                Finding(
+                    path,
+                    anchor if anchor is not None else node.lineno,
+                    _YAML_GAP,
+                    "yaml.safe_load(...) still resolves anchors/aliases, so a hostile or deeply "
+                    f"nested document can exhaust {' and '.join(missing)} via alias expansion, but its "
+                    "enclosing try does not cover that -- add the missing handler(s) (or "
+                    "Exception/BaseException), or narrate why that narrower handler set is correct",
+                ),
+                frozenset(expression | handler_lines.get(id(node), set())),
+                None,
             )
         )
 
