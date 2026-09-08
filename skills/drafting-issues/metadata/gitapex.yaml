@@ -3,7 +3,7 @@ kind: SkillMetadata
 metadata:
   name: drafting-issues
 spec:
-  portability: Portable
+  portability: Mixed
   capabilityAssumption: Broad
   lifecycle:
     renamedFrom: drafting-an-acm-issue
@@ -11,6 +11,7 @@ spec:
     requires: []
     relatedTo:
       - planning-a-branch-from-an-issue
+      - grounding-in-primary-sources
   executionRequirements:
     tools:
       read:
@@ -21,3 +22,12 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/818"
       summary: "Declared spec.executionRequirements.tools (W3 second slice, https://github.com/tvna/gitapex/issues/307): gitapex_check_acm_present.py reads a drafted body via --body/stdin; no writes, no subprocess/shell calls."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "Step 3 now points a Fact's own durable code-claim prose at grounding-in-primary-sources's discipline -- one pointer sentence, no duplicated procedure. Added to skillDependencies.relatedTo to match."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "Per rubric.md's Sibling-skill dependency portability table: exactly one real dependency (planning-a-branch-from-an-issue's own mention stays a downstream handoff, not a real one), citing only the sibling's top-level discipline, no internal section/file path -- Mixed-via-clean-sibling. Corrected portability Portable -> Mixed."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "Pre-existing strict-token-budget FAIL (5545 tokens, before this diff) fixed by moving the Defect (issue not yet filed) section's full procedure and worked example into references/defect-not-yet-filed.md, leaving a short pointer in place; the Notes section's now-stale Portable-rationale paragraph rewritten to state Mixed and point at this sidecar's own decision entries above rather than re-deriving them."

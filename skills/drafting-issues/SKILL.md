@@ -72,7 +72,11 @@ pre-verified (Step 9 states the full rule; it is not repeated here).
    Markdown/HTML control sequence here too -- Facts and Requested
    outcome cite the requester's words into the same outward-facing
    issue body an ACM cell does, so the same control sequence can break
-   rendering or forge a line here just as easily.
+   rendering or forge a line here just as easily. A durable, universal-
+   sounding claim about this repository's own code (a count, "every",
+   "the only cause") follows `grounding-in-primary-sources`'s discipline
+   -- ground it in the actual code before drafting it as Fact rather
+   than the requester's own unverified say-so.
 4. Build the Acceptance Criteria Map: one row per criterion --
    criterion (the requester's own words) -> interpretation -> planned
    ops -> proof method -> residual risk. See
@@ -177,45 +181,11 @@ pre-verified (Step 9 states the full rule; it is not repeated here).
 Scoped only to the no-issue-yet case (for example, a linkless CI
 failure with no issue tracking it yet): the input is a raw defect
 signal, not a stated fix, so this path substitutes a reproduction
-record for the Acceptance Criteria Map machinery Steps 3-8 build. An
-ordinary fix whose facts are already known still classifies as fix
-(Step 2) and goes through the full ACM flow; do not route it here just
-because it also happens to describe a defect.
-
-1. Attempt live reproduction against the real code path -- never a
-   proxy, never inferred behavior -- the same discipline
-   `planning-a-branch-from-an-issue`'s own bare-defect-report path
-   (and the retired `fixing-a-reported-issue` skill before it) applies
-   to an existing issue, applied here before one exists.
-2. Draft the issue body as reproduction-attempt notes (what was tried,
-   and what was or was not observed) followed by an
-   `ACM: not-applicable (defect): <reason>` waiver line -- the same
-   waiver vocabulary `hooks/gitapex_check_acm_present_or_waiver.py`'s
-   `_ACM_WAIVER_RE` already accepts, whose `category` group matches
-   `defect` (do not modify that regex or its matching logic; this
-   skill only ever produces text meant to satisfy it). Apply the same
-   Step 3 redaction and Step 4 escape-or-neutralize treatment to any
-   requester-supplied text quoted into this body.
-3. Skip Steps 3-8's Facts/Requested-outcome/ACM/Constraints/Non-goals/
-   Dedup/`gitapex_check_acm_present.py` machinery entirely -- it does
-   not apply to this type, and `gitapex_check_acm_present.py` would
-   fail a body that (by design) carries no ACM table. Continue at Step
-   9 to create the issue through the same validated template-aware
-   creation path every other type uses.
-4. State this in the drafted output as the `Classification: defect (issue not yet filed)` line; the `Next Move` line names
-   `planning-a-branch-from-an-issue`'s own bare-defect-report path as
-   the next skill -- it re-attempts live reproduction against the
-   issue this step just anchored and, on success, builds the real
-   Acceptance Criteria Map this path deliberately did not.
-
-Worked example: a scheduled nightly workflow fails with no issue
-tracking it. Attempting the same steps that failed in CI does not
-reproduce the failure locally. Draft the body as reproduction-attempt
-notes -- "ran the nightly job's own steps locally against main; the
-reported timeout did not reproduce" -- plus `ACM: not-applicable (defect): unreproducible CI failure, recorded for investigation.`
-Classification: `defect (issue not yet filed)`. Next Move: hand off to
-`planning-a-branch-from-an-issue`'s bare-defect-report path once
-someone can reproduce it or new evidence narrows the failure.
+record for the Acceptance Criteria Map machinery Steps 3-8 build,
+skipping that machinery entirely and continuing at Step 9. See
+`references/defect-not-yet-filed.md` for the full four-step procedure,
+the `ACM: not-applicable (defect): <reason>` waiver line's exact
+vocabulary, and a worked example.
 
 ## Output
 
@@ -338,20 +308,16 @@ not re-derived from scratch each time.
 
 ## Notes
 
-Portability: this skill's Steps/Output are general and repo-agnostic;
-Step 9's tool name and the "connector over CLI" preference are the one
-git-hosting-specific detail, and even that degrades to whatever
-issue-creation path the calling repository actually has. Step 6's own
-tool name (a semantic issue-search call) and Updating an existing ACM
-issue's own read/update tool names are the same kind of
-git-hosting-specific detail, degrading the same way. Step 9's
-issue-template read is a conditional input-source check, not a control
-dependency on any specific repository's template file existing --
-degrading to the generic Output pattern is the explicit fallback when
-none is found. Step 1's optional parent tracking-issue number and
-Step 9's sub-issue-linking call are the same kind of
-git-hosting-specific detail, degrading to the plain cross-reference
-line when no equivalent connector exists.
+Portability: Mixed -- Step 3's one clean dependency on
+`grounding-in-primary-sources` is this skill's only real sibling-skill
+dependency (see `metadata/gitapex.yaml`'s own decision entry for the
+full Mixed-via-clean-sibling reasoning). Everything else stays general
+and repo-agnostic, each git-hosting-specific detail (Step 9's
+issue-creation tool name, Step 6's semantic-search tool name, Updating
+an existing ACM issue's read/update tool names, Step 1/9's optional
+parent-linking call, Step 9's issue-template read) degrading to
+whatever the calling repository actually has, per each Step's own
+stated fallback.
 
 Install/vendoring-time integrity (whether this SKILL.md and its
 bundled `scripts/gitapex_check_acm_present.py` are themselves the untampered,
