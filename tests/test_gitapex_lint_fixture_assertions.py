@@ -95,6 +95,59 @@ def test_negation_passes_action_qualified_ban():
     assert L.check_negation("adding a tenth dimension", FLAT) is None
 
 
+# ---- check_verbatim_anywhere (issue #1534) ----
+
+
+def test_verbatim_anywhere_flags_non_negated_prose():
+    # The exact #1534 shape: the phrase is ordinary, non-negated prose in
+    # the rubric (no denial cue anywhere nearby) -- check_negation misses
+    # this shape entirely since it only looks for a phrase immediately
+    # preceded by a denial cue; check_verbatim_anywhere must still catch it.
+    assert L.check_negation("hooks and permissions", FLAT) is None
+    detail = L.check_verbatim_anywhere("hooks and permissions", FLAT)
+    assert detail is not None
+    assert "hooks and permissions" in detail
+
+
+def test_verbatim_anywhere_also_flags_the_cue_adjacent_case():
+    # check_negation's own cue-adjacent finding is a special case of
+    # verbatim-anywhere presence -- if "not a tenth dimension" is in the
+    # corpus then "tenth dimension" is too. Both checks are wired
+    # independently into _lint_negative_values (alongside each other, not
+    # one replacing the other -- see the test below), so both firing here
+    # is the expected, not an over-flagging, outcome.
+    assert L.check_negation("tenth dimension", FLAT) is not None
+    assert L.check_verbatim_anywhere("tenth dimension", FLAT) is not None
+
+
+def test_verbatim_anywhere_passes_phrase_absent_from_corpus():
+    # No over-flagging beyond the accepted verbatim-anywhere bias: a phrase
+    # that does not appear anywhere in the corpus triggers neither check.
+    assert L.check_negation("deploy window every Tuesday", FLAT) is None
+    assert L.check_verbatim_anywhere("deploy window every Tuesday", FLAT) is None
+
+
+def test_negation_flags_phrase_the_rubric_denies_unchanged():
+    # (b) Regression guard: check_negation's own pre-existing cue-adjacency
+    # behavior and message are unchanged by adding check_verbatim_anywhere
+    # alongside it -- same assertion test_negation_flags_phrase_the_rubric_
+    # denies above already makes, restated here next to the new checks so
+    # the "unmodified" claim is locally verifiable.
+    detail = L.check_negation("tenth dimension", FLAT)
+    assert detail is not None
+    assert "tenth dimension" in detail
+
+
+def test_lint_negative_values_reports_both_shapes_with_distinct_kinds():
+    # Wiring check: _lint_negative_values runs check_negation and
+    # check_verbatim_anywhere side by side, not one replacing the other,
+    # and the two findings carry distinct "rule" (kind) strings so a reader
+    # can tell which shape triggered.
+    warnings = L._lint_negative_values("t.yaml", "output_not_contains", ["tenth dimension"], FLAT)
+    rules = {w.rule for w in warnings}
+    assert rules == {"negation-trap", "verbatim-anywhere"}
+
+
 # ---- check_paraphrase (issue #170 check 3) ----
 
 
@@ -307,12 +360,31 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     # test_disclosed_residual_count_matches_the_pinned_set below); it cannot
     # hold English prose to it, so the prose no longer carries a count to drift.
     #
-    # pinned-residual-count: 3
+    # pinned-residual-count: 4
     #
     # Still pinned. One bullet per cause, not per finding -- a single bullet
     # can cover more than one skill sharing that cause, so bullet count and
     # residual count are deliberately not held to each other:
     #
+    #   - merge-retrospective/gate-proposal-resumed-run-partial-filing-retry.yaml
+    #     [paraphrase-drift] 'already filed': a linter false positive. The
+    #     corpus-side near-match this run detects (SKILL.md's Step 1 dedup
+    #     bullet, "skipping every repair that already carries a `Filed as:`
+    #     line") is an *agent-facing* procedural instruction about which
+    #     repairs to retry on a resumed run, not response-facing wording the
+    #     fixture asks the model's own output to echo. The fixture's
+    #     assertion instead validates that the model recognizes repair 1
+    #     (issue #501) as already resolved rather than re-filing it -- a
+    #     fact the prompt itself establishes ("Repair 1's filing was already
+    #     confirmed in the interrupted session"), not a corpus paraphrase.
+    #     check_paraphrase has no way to distinguish an agent-facing
+    #     procedural bullet from response-facing wording; both are just
+    #     corpus text to it. Newly surfaced when SKILL.md's Step 5
+    #     "Exactly one match" bullet (issue #1806's own Step 4b work)
+    #     replaced its prior wording, which happened to quote this
+    #     fixture's assertion verbatim ("already filed (an earlier or
+    #     resumed run)") and so cleared check_paraphrase's own exact-quote
+    #     short-circuit before that rewrite.
     #   - scorer-gated-skill-edits/ship-without-transfer-check.yaml
     #     [case-sensitivity]: the pre-existing #858 residual, already pinned
     #     above by test_repository_case_sensitivity_findings_match_the_known_
@@ -365,6 +437,11 @@ def test_repository_wide_fixtures_have_no_unreviewed_blocking_findings():
     warnings = L.lint_all_skills(evals_root, skills_root, skill_names=names)
     blocking = {(w.task, w.rule, w.value) for w in warnings if w.blocking}
     assert blocking == {
+        (
+            "merge-retrospective/gate-proposal-resumed-run-partial-filing-retry.yaml",
+            "paraphrase-drift",
+            "already filed",
+        ),
         ("scorer-gated-skill-edits/ship-without-transfer-check.yaml", "case-sensitivity", "transfer check"),
         ("outward-artifact-preflight/clean-pass.yaml", "paraphrase-drift", "agreed convention"),
         ("scorer-gated-skill-edits", "adversarial-coverage", "(tasks directory)"),

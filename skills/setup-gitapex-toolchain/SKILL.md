@@ -27,7 +27,14 @@ checksum or signed-release mechanism for the skill files themselves.
 ## When this runs
 
 Automatically, via `.claude/hooks/session-start.sh`, only when
-`$CLAUDE_CODE_REMOTE=true` (a Claude Code web session). Persistent
+`$CLAUDE_CODE_REMOTE=true` (a Claude Code web session). OpenCode
+sessions are provisioned the OpenCode-native way instead, via
+`.opencode/plugins/gitapex-session.js` (https://github.com/tvna/gitapex/issues/1812): its
+`session.created` handler runs this same
+`gitapex_provision_class_b.py` plus `hooks/gitapex_sync_opencode.py`
+(which mirrors this checkout's own skills/agents into OpenCode
+discovery paths), and its `shell.env` handler puts the provisioned
+binaries on PATH. Persistent
 surfaces (local CLI, CI) continue to use `nix develop .` and are not
 expected to invoke this script (nothing in the script itself enforces
 this -- it is a documented convention, not a technical restriction).

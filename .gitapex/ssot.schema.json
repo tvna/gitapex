@@ -35,7 +35,7 @@
     },
     "policy_sources": {
       "type": "array",
-      "description": "Files that at least one gate reads as authoritative data via policy_refs[] -- not every config-shaped file in the repo, only ones a real gate actually consumes.",
+      "description": "Files that at least one gate reads as authoritative data via policy_refs[] -- not every config-shaped file in the repo, only ones a real gate actually consumes. One exception (issue #1890): a markdown-format entry is read directly by an agent following a skill's own procedure, never by a gate script, so it carries no policy_refs consumer at all -- see the format field's own description.",
       "items": { "$ref": "#/$defs/policySource" }
     },
     "gates": {
@@ -66,8 +66,8 @@
           "description": "Repo-root-relative path. May be a glob (e.g. skills/*/metadata/gitapex.yaml) when every matched file shares one schema/authority."
         },
         "format": {
-          "enum": ["toml", "json", "yaml", "rego"],
-          "description": "Serialization language only -- descriptive, not a dispatch switch (that's gates[].kind)."
+          "enum": ["toml", "json", "yaml", "rego", "markdown"],
+          "description": "Serialization language only -- descriptive, not a dispatch switch (that's gates[].kind). markdown (added issue #1890) names a prose policy_sources entry consumed directly by an agent following a skill's own procedure, never parsed by a gate script -- the other four formats stay machine-parsed."
         },
         "authority": {
           "type": "string",

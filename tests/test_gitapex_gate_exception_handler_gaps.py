@@ -30,6 +30,7 @@ silenced by this very docstring.
 
 from __future__ import annotations
 
+import ast
 import pathlib
 import subprocess
 
@@ -157,6 +158,63 @@ def main(args):
     return 0
 """
 
+# Reconstructed from this repository's own pre-#1533-fix
+# skills/executing-a-branch-plan/scripts/gitapex_check_task_commit_provenance.py
+# main(): `Path(args.messages).read_bytes()` sat inside a try whose only
+# handler named `FileNotFoundError`, so `IsADirectoryError`/`PermissionError`
+# from that same read -- the identical defect class issue #1306 already found
+# and fixed for gitapex_check_branch_plan_reverified.py's own `--body` flag --
+# would have escaped as an uncaught traceback instead of this script's own
+# documented exit-2 convention. Issue #1533 (consolidated into #1572).
+_DEFECT_OPEN_GAP = """
+import sys
+from pathlib import Path
+
+
+def main(argv):
+    args = _parse_args(argv)
+    try:
+        raw = (
+            Path(args.messages).read_bytes().decode("utf-8")
+            if args.messages
+            else sys.stdin.buffer.read().decode("utf-8")
+        )
+    except FileNotFoundError:
+        print(f"error: messages file not found: {args.messages}", file=sys.stderr)
+        return 2
+    return _scan(raw)
+"""
+
+# Reconstructed from this repository's own pre-#758-fix
+# skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py
+# (commit 493f798e): a sidecar's own YAML-to-dict parsing was delegated to
+# `yaml.safe_load`, whose enclosing handler named `OSError`,
+# `UnicodeDecodeError` and `yaml.YAMLError` but not `RecursionError`/
+# `MemoryError`, so a hostile or deeply nested `metadata/gitapex.yaml`
+# sidecar (e.g. a vendored skill) could crash `check_shape()` with a raw
+# traceback instead of the graceful manifest-parsable FAIL every other
+# malformed-sidecar case gets. `battle-testing-a-skill`'s own adversarial
+# pass found this; commit `bdf33bd8` fixed it by broadening the tuple.
+# Issue #758 (refs #1587, consolidated into #1572).
+_DEFECT_YAML_GAP = """
+import pathlib
+
+import yaml
+
+
+def check_shape(sidecar: pathlib.Path) -> list[str]:
+    results = []
+    if sidecar.is_file():
+        try:
+            manifest_raw = yaml.safe_load(sidecar.read_text(encoding="utf-8"))
+            read_error = None
+        except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+            manifest_raw = None
+            read_error = type(exc).__name__
+        results.append(str(read_error))
+    return results
+"""
+
 
 def test_defect_c_uncaught_decode_on_an_unguarded_read_is_caught(tmp_path: pathlib.Path) -> None:
     """PR #651's own shipped defect, re-measured rather than assumed. The line
@@ -178,6 +236,58 @@ def test_defect_f_oserror_only_handler_around_a_decoded_read_is_caught(
     this exercises the nested-try recursion the defect actually sat inside --
     a flattened paraphrase would trip the rule for an easier reason."""
     assert _at(_grade(tmp_path, _DEFECT_F)) == [("decode-gap", 8)]
+
+
+def test_defect_open_gap_filenotfounderror_only_handler_around_a_read_bytes_is_caught(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Issue #1533's own defect: `gitapex_check_task_commit_provenance.py`'s
+    pre-fix `main()` caught `FileNotFoundError` around
+    `Path(args.messages).read_bytes()` but not the broader `OSError`
+    (`IsADirectoryError`, `PermissionError`) the same call can also raise.
+    `read_bytes()` is not a `decode-gap` call site at all (it decodes
+    nothing), so only `open-gap` reports this line."""
+    assert _at(_grade(tmp_path, _DEFECT_OPEN_GAP)) == [("open-gap", 10)]
+
+
+def test_the_real_fixed_task_commit_provenance_file_is_clean(tmp_path: pathlib.Path) -> None:
+    """Live proof over the real, already-fixed file `_DEFECT_OPEN_GAP` above
+    reconstructs the pre-fix shape of, not a hand-authored approximation of
+    the repair: its own `main()` now catches `FileNotFoundError` and a
+    separate `OSError` arm around the same `Path(args.messages).read_bytes()`
+    call, and must grade clean under all three rules -- confirming the fix
+    that actually landed, not merely a fix this test imagines."""
+    relative = "skills/executing-a-branch-plan/scripts/gitapex_check_task_commit_provenance.py"
+    source = (REPO_ROOT / relative).read_text(encoding="utf-8")
+    assert _grade(tmp_path, source, relative=relative) == []
+
+
+def test_defect_yaml_gap_oserror_decode_yaml_error_only_handler_is_caught(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Issue #758's own defect: `gitapex_check_skill_shape.py`'s pre-fix
+    handler around `yaml.safe_load(...)` named `OSError`,
+    `UnicodeDecodeError` and `yaml.YAMLError` but not `RecursionError`/
+    `MemoryError` -- both missing, so `yaml-gap` names both in its message.
+    `UnicodeDecodeError` being named means `decode-gap` does NOT also fire
+    on the nested `sidecar.read_text(...)` call, which is why exactly one
+    finding is asserted here rather than two."""
+    assert _at(_grade(tmp_path, _DEFECT_YAML_GAP)) == [("yaml-gap", 11)]
+    (finding,) = _grade(tmp_path, _DEFECT_YAML_GAP)
+    assert "RecursionError" in finding.message
+    assert "MemoryError" in finding.message
+
+
+def test_the_real_fixed_skill_shape_file_is_clean(tmp_path: pathlib.Path) -> None:
+    """Live proof over the real, already-fixed file `_DEFECT_YAML_GAP` above
+    reconstructs the pre-fix shape of: `gitapex_check_skill_shape.py`'s own
+    `yaml.safe_load(...)` call now sits inside a handler naming `OSError`,
+    `UnicodeDecodeError`, `yaml.YAMLError`, `RecursionError` and
+    `MemoryError` together (commit `bdf33bd8`), and must grade clean under
+    all four rules -- confirming the fix that actually landed."""
+    relative = "skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py"
+    source = (REPO_ROOT / relative).read_text(encoding="utf-8")
+    assert _grade(tmp_path, source, relative=relative) == []
 
 
 def test_the_fixes_that_landed_for_c_e_and_f_pass(tmp_path: pathlib.Path) -> None:
@@ -456,6 +566,343 @@ def test_a_nested_function_is_its_own_scope(tmp_path: pathlib.Path) -> None:
     assert _grade(tmp_path, source) == []
 
 
+# --- open-gap -------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "call",
+    ["p.read_text()\n", 'open("x", encoding="utf-8")\n', "p.open()\n"],
+)
+def test_a_filenotfounderror_only_handler_co_fires_decode_gap_and_open_gap(tmp_path: pathlib.Path, call: str) -> None:
+    """The three text-decoding call-site shapes `open-gap` grades --
+    `read_text()`, `open()`, `<expr>.open()`, the same three `_text_read_kind`
+    already detects for `decode-gap` -- co-fire BOTH rules when the only
+    handler names an `OSError` subclass more specific than `OSError` itself:
+    `except FileNotFoundError:` covers neither `_DECODE_COVERING` (so
+    `decode-gap` fires, the read's own decode failure is uncaught) nor
+    `_OSERROR_COVERING` (so `open-gap` also fires, the read's own open
+    failure is uncaught too) -- two independent, real gaps in the same code,
+    not one rule redundantly restating the other. An exact-set assertion
+    pins this precisely, unlike a weak `in` check, which cannot distinguish
+    this co-firing pair from `open-gap` firing alone (see the sibling test
+    below for the one shape where that alone case actually happens)."""
+    source = f"try:\n    x = {call}except FileNotFoundError:\n    x = None\n"
+    assert _rules(_grade(tmp_path, source)) == ["decode-gap", "open-gap"]
+
+
+def test_a_filenotfounderror_only_handler_on_read_bytes_fires_open_gap_alone(tmp_path: pathlib.Path) -> None:
+    """`read_bytes()` -- this rule's own addition on top of `decode-gap`'s
+    three text-read shapes -- is the one call among the four `_text_read_
+    kind` and therefore `decode-gap` never grades at all (it decodes
+    nothing, so no `UnicodeDecodeError` risk exists to report): only
+    `open-gap` fires for it, alone, unlike the three text-decoding shapes
+    above where both rules co-fire together."""
+    source = "try:\n    x = p.read_bytes()\nexcept FileNotFoundError:\n    x = None\n"
+    assert _rules(_grade(tmp_path, source)) == ["open-gap"]
+
+
+def _parse_call(expression: str) -> ast.Call:
+    """Parse `expression` (a single call expression) in `eval` mode and
+    return its top-level `ast.Call` node."""
+    tree = ast.parse(expression, mode="eval")
+    assert isinstance(tree.body, ast.Call)
+    return tree.body
+
+
+def test_file_read_kind_recognizes_read_bytes_directly() -> None:
+    """`_file_read_kind`'s own addition on top of `_text_read_kind` -- see
+    that function's own docstring -- called directly rather than only
+    through the parametrized diff-grading test above."""
+    assert gate._file_read_kind(_parse_call("p.read_bytes()")) == "read_bytes"
+
+
+def test_file_read_kind_delegates_to_text_read_kind_for_the_other_three_shapes() -> None:
+    assert gate._file_read_kind(_parse_call("p.read_text()")) == "read_text"
+    assert gate._file_read_kind(_parse_call("open('x', encoding='utf-8')")) == "open"
+    assert gate._file_read_kind(_parse_call("p.open()")) == "open"
+
+
+def test_file_read_kind_returns_none_for_a_write_mode_open() -> None:
+    assert gate._file_read_kind(_parse_call("open('x', 'w')")) is None
+
+
+@pytest.mark.parametrize("handler", ["OSError", "Exception", "BaseException"])
+def test_a_handler_naming_oserror_or_an_ancestor_clears_open_gap(tmp_path: pathlib.Path, handler: str) -> None:
+    source = f"try:\n    b = p.read_bytes()\nexcept {handler}:\n    b = b''\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_bare_except_clears_open_gap(tmp_path: pathlib.Path) -> None:
+    source = "try:\n    b = p.read_bytes()\nexcept:\n    b = b''\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_handler_naming_only_permissionerror_does_not_clear_open_gap(tmp_path: pathlib.Path) -> None:
+    """The required boundary case: `PermissionError` is a real `OSError`
+    subclass, narrower than `OSError` itself, so it gates this rule's own
+    firing condition on -- and does not clear it."""
+    source = "try:\n    b = p.read_bytes()\nexcept PermissionError:\n    b = b''\n"
+    assert _rules(_grade(tmp_path, source)) == ["open-gap"]
+
+
+def test_a_tuple_handler_with_oserror_present_clears_open_gap(tmp_path: pathlib.Path) -> None:
+    source = "try:\n    b = p.read_bytes()\nexcept (FileNotFoundError, OSError):\n    b = b''\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_tuple_handler_missing_oserror_leaves_open_gap_reported(tmp_path: pathlib.Path) -> None:
+    source = "try:\n    b = p.read_bytes()\nexcept (FileNotFoundError, ValueError):\n    b = b''\n"
+    assert _rules(_grade(tmp_path, source)) == ["open-gap"]
+
+
+def test_an_outer_try_naming_oserror_covers_a_nested_read(tmp_path: pathlib.Path) -> None:
+    """Mirrors `decode-gap`'s own nested-try coverage test: `_handler_coverage`
+    accumulates handler names across every enclosing `try`, not only the
+    nearest one, and that accumulation applies to `open-gap` unchanged."""
+    source = (
+        "try:\n"
+        "    try:\n"
+        "        b = p.read_bytes()\n"
+        "    except FileNotFoundError:\n"
+        "        raise\n"
+        "except OSError:\n"
+        "    b = b''\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+def test_an_unguarded_read_text_is_left_to_decode_gap_alone(tmp_path: pathlib.Path) -> None:
+    """Deliberate gating, not an oversight: `open-gap` fires only when the
+    enclosing handler set actually names a recognised `OSError` subclass, so
+    a completely unguarded `read_text()` -- defect C's own shape, and every
+    one of `decode-gap`'s own "must fire" fixtures with no `try` at all --
+    is not reported by `open-gap` a second time. It genuinely is caught, by
+    `decode-gap` instead: this asserts the finding is exactly one `decode-gap`
+    entry, not the `== []` an `open-gap`-only read would suggest."""
+    findings = _grade(tmp_path, "b = p.read_text()\n")
+    assert [f.rule for f in findings] == [gate._DECODE_GAP]
+
+
+def test_an_unguarded_read_bytes_is_caught_by_neither_rule(tmp_path: pathlib.Path) -> None:
+    """Unlike `read_text()` above, `.read_bytes()` is `decode-gap`'s own
+    stated non-scope (no `UnicodeDecodeError` risk), so an unguarded
+    `.read_bytes()` is not "left to decode-gap alone" -- it is a real,
+    disclosed, currently-open gap in this file's own three-rule set: neither
+    rule reports it. See the module docstring's own `open-gap` section for
+    the disclosure."""
+    assert _grade(tmp_path, "b = p.read_bytes()\n") == []
+
+
+def test_a_handler_naming_something_unrelated_is_a_stated_miss_for_open_gap(
+    tmp_path: pathlib.Path,
+) -> None:
+    """The other half of the same gating decision: a handler that covers
+    `decode-gap` (`ValueError`) but says nothing about `OSError` is not
+    reported by `open-gap` either, since it never named any recognised
+    `OSError` subclass -- it was guarding the decode, not the open."""
+    source = "try:\n    text = p.read_text()\nexcept ValueError:\n    text = ''\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_an_unrecognised_handler_name_does_not_grant_open_gap_coverage(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Mirrors `decode-gap`'s own
+    `test_an_unresolvable_handler_name_does_not_grant_coverage`: a project
+    exception class this gate cannot classify (`except ScopeError:`) is
+    neither in `_OSERROR_COVERING` nor in `_OSERROR_SUBCLASS_NAMES`, so it
+    does not gate this rule on, and no finding is reported -- a stated miss,
+    not assumed coverage."""
+    source = "try:\n    b = p.read_bytes()\nexcept ScopeError:\n    b = b''\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_an_open_gap_finding_is_waived_by_the_same_inline_marker(tmp_path: pathlib.Path) -> None:
+    """No new waiver syntax: the existing `# exception-handler-gap: WAIVED:
+    <reason>` marker this file's own module docstring documents waives an
+    `open-gap` finding exactly as it already does for the other two rules."""
+    source = (
+        "try:\n"
+        "    b = p.read_bytes()  # exception-handler-gap: WAIVED: caller retries on OSError\n"
+        "except FileNotFoundError:\n"
+        "    b = b''\n"
+    )
+    _write(tmp_path, ".github/scripts/gate_x.py", source)
+    violations, waived, _graded = gate.find_violations(_whole_file_diff(".github/scripts/gate_x.py", source), tmp_path)
+    assert violations == []
+    assert _rules(waived) == ["open-gap"]
+
+
+def test_open_gap_does_not_change_decode_gap_or_json_shape_gap_findings(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Required regression check: adding `open-gap` must not alter what
+    `decode-gap`/`json-shape-gap` themselves report on their own existing
+    regression fixtures -- re-run here directly, rather than trusted only
+    from the rest of this file's own suite staying green."""
+    assert _at(_grade(tmp_path, _DEFECT_C, relative=".github/scripts/gate_c.py")) == [("decode-gap", 8)]
+    assert _at(_grade(tmp_path, _DEFECT_E, relative=".github/scripts/gate_e.py")) == [("json-shape-gap", 14)]
+    assert _at(_grade(tmp_path, _DEFECT_F, relative=".github/scripts/gate_f.py")) == [("decode-gap", 8)]
+
+
+# --- yaml-gap ---------------------------------------------------------------
+
+
+def test_a_recursionerror_only_handler_leaves_yaml_gap_reported(tmp_path: pathlib.Path) -> None:
+    """The required boundary case for the RecursionError side: naming
+    `RecursionError` alone still leaves `MemoryError` uncovered, and the
+    rule must still fire -- one side clearing must never silence the other,
+    which is exactly why the module docstring's own `yaml-gap` section runs
+    two independent `_covers()` checks rather than one merged frozenset."""
+    source = "import yaml\ntry:\n    x = yaml.safe_load(s)\nexcept RecursionError:\n    x = None\n"
+    (finding,) = _grade(tmp_path, source)
+    assert finding.rule == "yaml-gap"
+    assert "MemoryError" in finding.message
+    assert "RecursionError" not in finding.message
+
+
+def test_a_memoryerror_only_handler_leaves_yaml_gap_reported(tmp_path: pathlib.Path) -> None:
+    """The mirror-image boundary case: naming `MemoryError` alone still
+    leaves `RecursionError` uncovered."""
+    source = "import yaml\ntry:\n    x = yaml.safe_load(s)\nexcept MemoryError:\n    x = None\n"
+    (finding,) = _grade(tmp_path, source)
+    assert finding.rule == "yaml-gap"
+    assert "RecursionError" in finding.message
+    assert "MemoryError" not in finding.message
+
+
+def test_a_tuple_handler_naming_both_recursionerror_and_memoryerror_clears_yaml_gap(
+    tmp_path: pathlib.Path,
+) -> None:
+    source = "import yaml\ntry:\n    x = yaml.safe_load(s)\nexcept (RecursionError, MemoryError):\n    x = None\n"
+    assert _grade(tmp_path, source) == []
+
+
+@pytest.mark.parametrize("handler", ["Exception", "BaseException"])
+def test_a_handler_naming_exception_or_baseexception_clears_yaml_gap(tmp_path: pathlib.Path, handler: str) -> None:
+    """Defeat case: `Exception`/`BaseException` is an ancestor of both
+    `RecursionError` and `MemoryError` at once, so one handler clears both
+    sides -- confirming this rule does not over-fire on the ordinary,
+    maximally broad handler a contributor would reach for first."""
+    source = f"import yaml\ntry:\n    x = yaml.safe_load(s)\nexcept {handler}:\n    x = None\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_bare_except_clears_yaml_gap(tmp_path: pathlib.Path) -> None:
+    source = "import yaml\ntry:\n    x = yaml.safe_load(s)\nexcept:\n    x = None\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_an_outer_try_naming_both_covers_a_nested_yaml_safe_load(tmp_path: pathlib.Path) -> None:
+    """Mirrors `open-gap`'s own nested-try coverage test: `_handler_coverage`
+    accumulates handler names across every enclosing `try`, not only the
+    nearest one, and that accumulation applies to `yaml-gap` unchanged."""
+    source = (
+        "import yaml\n"
+        "try:\n"
+        "    try:\n"
+        "        x = yaml.safe_load(s)\n"
+        "    except yaml.YAMLError:\n"
+        "        raise\n"
+        "except (RecursionError, MemoryError):\n"
+        "    x = None\n"
+    )
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_yaml_yamlerror_only_handler_still_leaves_yaml_gap_reported(tmp_path: pathlib.Path) -> None:
+    """Defeat case named directly in this rule's own acceptance criteria: a
+    handler naming only `yaml.YAMLError` -- the ordinary, correct guard
+    against a real YAML syntax error, and issue #758's own pre-fix shape --
+    covers neither `RecursionError` nor `MemoryError`, so the rule must
+    still fire rather than being satisfied by any YAML-flavoured handler."""
+    source = "import yaml\ntry:\n    x = yaml.safe_load(s)\nexcept yaml.YAMLError:\n    x = None\n"
+    assert _rules(_grade(tmp_path, source)) == ["yaml-gap"]
+
+
+def test_an_unrecognised_handler_name_does_not_grant_yaml_gap_coverage(tmp_path: pathlib.Path) -> None:
+    """Mirrors `open-gap`'s own
+    `test_an_unrecognised_handler_name_does_not_grant_open_gap_coverage`: a
+    project exception class this gate cannot classify (`except ScopeError:`)
+    is in neither `_RECURSION_COVERING` nor `_MEMORY_COVERING`, so it does
+    not clear either side, and the rule still fires -- a stated miss on
+    what the handler set *could* mean, not assumed coverage."""
+    source = "import yaml\ntry:\n    x = yaml.safe_load(s)\nexcept ScopeError:\n    x = None\n"
+    assert _rules(_grade(tmp_path, source)) == ["yaml-gap"]
+
+
+def test_an_aliased_yaml_import_is_a_stated_miss_for_yaml_gap(tmp_path: pathlib.Path) -> None:
+    """`_is_yaml_safe_load` matches the call the identical literal-name way
+    `_is_json_parse` already matches `json.loads`/`json.load` (see both
+    functions' own docstrings): only a receiver spelled exactly `yaml`.
+    `import yaml as y` followed by `y.safe_load(...)`, with no
+    `RecursionError`/`MemoryError` handler in sight, is therefore NOT
+    graded -- a documented, deliberate miss, not a silent one, the same
+    trade `_is_json_parse` already makes for an aliased `json` import."""
+    source = "import yaml as y\ntry:\n    x = y.safe_load(s)\nexcept y.YAMLError:\n    x = None\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_non_yaml_receiver_lookalike_does_not_trigger_yaml_gap(tmp_path: pathlib.Path) -> None:
+    """Defeat case named directly in this rule's own acceptance criteria:
+    `somemodule.safe_load(...)` shares the `.safe_load` attribute name but
+    its receiver is not `yaml`, so `_is_yaml_safe_load`'s own receiver-name
+    check must not fire on it regardless of how narrow the handler is --
+    confirming that check actually discriminates rather than matching on
+    the attribute name alone."""
+    source = "import somemodule\ntry:\n    x = somemodule.safe_load(s)\nexcept ValueError:\n    x = None\n"
+    assert _grade(tmp_path, source) == []
+
+
+def test_a_yaml_gap_finding_is_waived_by_the_same_inline_marker(tmp_path: pathlib.Path) -> None:
+    """No new waiver syntax: the existing `# exception-handler-gap: WAIVED:
+    <reason>` marker this file's own module docstring documents waives a
+    `yaml-gap` finding exactly as it already does for the other three
+    rules."""
+    source = (
+        "import yaml\n"
+        "try:\n"
+        "    x = yaml.safe_load(s)  # exception-handler-gap: WAIVED: caller retries on any exception\n"
+        "except yaml.YAMLError:\n"
+        "    x = None\n"
+    )
+    _write(tmp_path, ".github/scripts/gate_x.py", source)
+    violations, waived, _graded = gate.find_violations(_whole_file_diff(".github/scripts/gate_x.py", source), tmp_path)
+    assert violations == []
+    assert _rules(waived) == ["yaml-gap"]
+
+
+def test_yaml_gap_does_not_change_decode_gap_open_gap_or_json_shape_gap_findings(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Required regression check: adding `yaml-gap` must not alter what
+    `decode-gap`/`json-shape-gap`/`open-gap` themselves report on their own
+    existing regression fixtures -- re-run here directly, rather than
+    trusted only from the rest of this file's own suite staying green."""
+    assert _at(_grade(tmp_path, _DEFECT_C, relative=".github/scripts/gate_c.py")) == [("decode-gap", 8)]
+    assert _at(_grade(tmp_path, _DEFECT_E, relative=".github/scripts/gate_e.py")) == [("json-shape-gap", 14)]
+    assert _at(_grade(tmp_path, _DEFECT_F, relative=".github/scripts/gate_f.py")) == [("decode-gap", 8)]
+    assert _at(_grade(tmp_path, _DEFECT_OPEN_GAP, relative=".github/scripts/gate_open.py")) == [("open-gap", 10)]
+
+
+def test_is_yaml_safe_load_recognizes_the_call_directly() -> None:
+    """`_is_yaml_safe_load`'s own unit coverage, called directly rather than
+    only through the parametrized diff-grading tests above."""
+    assert gate._is_yaml_safe_load(_parse_call("yaml.safe_load(s)")) is True
+
+
+def test_is_yaml_safe_load_rejects_a_non_yaml_receiver_directly() -> None:
+    assert gate._is_yaml_safe_load(_parse_call("somemodule.safe_load(s)")) is False
+
+
+def test_is_yaml_safe_load_rejects_a_different_yaml_attribute_directly() -> None:
+    """`yaml.dump(...)`, `yaml.load(...)` and every other `yaml`-module call
+    share the same receiver but a different attribute name, and must not be
+    matched -- only `.safe_load` is."""
+    assert gate._is_yaml_safe_load(_parse_call("yaml.dump(s)")) is False
+    assert gate._is_yaml_safe_load(_parse_call("yaml.load(s)")) is False
+
+
 # --- diff scoping -------------------------------------------------------
 
 
@@ -477,6 +924,24 @@ def test_the_same_gap_is_flagged_once_its_own_line_is_added(tmp_path: pathlib.Pa
         _partial_diff(".github/scripts/gate_x.py", source, [2]), tmp_path
     )
     assert _rules(violations) == ["decode-gap"]
+
+
+def test_findings_for_source_reports_a_decode_gap_directly() -> None:
+    """`find_violations`'s own per-file caller, called directly rather than
+    only through that wrapper (or the `_grade` helper above, which also
+    always goes through `find_violations`)."""
+    source = "import os\ntext = p.read_text()\nvalue = 1\n"
+    violations, waived = gate.findings_for_source(".github/scripts/gate_x.py", source, {2})
+    assert waived == []
+    assert _rules(violations) == ["decode-gap"]
+    assert violations[0].line == 2
+
+
+def test_findings_for_source_honours_an_inline_waiver_directly() -> None:
+    source = "import os\ntext = p.read_text()  # exception-handler-gap: WAIVED: reason\nvalue = 1\n"
+    violations, waived = gate.findings_for_source(".github/scripts/gate_x.py", source, {2})
+    assert violations == []
+    assert _rules(waived) == ["decode-gap"]
 
 
 def test_touching_any_line_of_a_multi_line_call_brings_it_into_scope(

@@ -15,6 +15,7 @@ below.
 
 from __future__ import annotations
 
+import ast
 import pathlib
 
 import gitapex_gate_detection_logic_property_coverage as gate
@@ -1089,6 +1090,40 @@ def test_calls_and_comparisons_matching_no_trigger_category_produce_no_finding(
     )
     violations = _grade(tmp_path, source)
     assert violations == []
+
+
+# --- _string_comparison_call_trigger direct unit coverage ------------------
+
+
+def _parse_call(expression: str) -> ast.Call:
+    """Parse `expression` (a single call expression) in `eval` mode and
+    return its top-level `ast.Call` node."""
+    tree = ast.parse(expression, mode="eval")
+    assert isinstance(tree.body, ast.Call)
+    return tree.body
+
+
+def test_string_comparison_call_trigger_recognizes_receiver_agnostic_attrs() -> None:
+    """The `.startswith()`/`.endswith()`/`.split()`/`.rsplit()`/`.partition()`
+    half of category (c)'s call-shaped trigger, called directly rather than
+    only through the full diff-grading pipeline."""
+    for expression in ("x.startswith('a')", "x.endswith('a')", "x.split(',')", "x.rsplit(',')", "x.partition(',')"):
+        assert gate._string_comparison_call_trigger(_parse_call(expression)) is True, expression
+
+
+def test_string_comparison_call_trigger_recognizes_an_inline_collection_literal_factory() -> None:
+    """The `frozenset(...)`/`set(...)` half: a single inline `List`/`Tuple`/
+    `Set` argument triggers, but a bare-name argument (not an inline
+    literal) does not -- the same "known miss" the module docstring
+    discloses for a name reference to a previously-defined collection."""
+    assert gate._string_comparison_call_trigger(_parse_call("frozenset(['a', 'b'])")) is True
+    assert gate._string_comparison_call_trigger(_parse_call("set(('a', 'b'))")) is True
+    assert gate._string_comparison_call_trigger(_parse_call("frozenset(x)")) is False
+
+
+def test_string_comparison_call_trigger_rejects_unrelated_calls() -> None:
+    for expression in ("print(x)", "loader.parse()", "requests.get(url)"):
+        assert gate._string_comparison_call_trigger(_parse_call(expression)) is False, expression
 
 
 def test_module_level_trigger_with_no_properties_file_reports_module_scope(

@@ -286,26 +286,43 @@ def _voodoo_constant_offenders(scripts: list[Path], skill_dir: Path) -> list[str
     return offenders
 
 
-def _no_voodoo_constant_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> list[CheckResult]:
+def _waived_or_offenders_result(
+    name: str, rule: str, offenders: list[str], shape_waivers: dict[str, str] | None
+) -> CheckResult:
+    """Shared PASS/FAIL/waived decision for a bundled-script check that
+    honors ``spec.shapeWaivers`` (issue #1329): a declared waiver for
+    ``name`` converts an otherwise-FAILing offender list into a PASS, but
+    the waiver's own reason and the would-be offenders are both still
+    surfaced in evidence -- never a silent PASS that hides what triggered
+    it. A check with zero offenders is unaffected by a waiver either way
+    (nothing to waive), matching every other bundled-script check's own
+    "none" evidence for a clean scan.
+    """
+    if not offenders:
+        return CheckResult(name, True, rule, "none")
+    reason = (shape_waivers or {}).get(name)
+    if reason is not None:
+        return CheckResult(name, True, rule, f"waived ({reason}): would otherwise report: {', '.join(offenders)}")
+    return CheckResult(name, False, rule, "found: " + ", ".join(offenders))
+
+
+def _no_voodoo_constant_checks(
+    skill_md: Path, skill_dir: Path, body: list[str], shape_waivers: dict[str, str] | None = None
+) -> list[CheckResult]:
     """The check_shape() entry point for _voodoo_constant_offenders,
     issue #1045's Acceptance Criteria Map item A. Runs unconditionally, at
     every portability level -- unlike the Portable-gated checks above, an
     uncommented configuration constant is a defect regardless of a skill's
-    declared portability.
+    declared portability. ``shape_waivers`` (issue #1329) is an optional
+    check-name -> reason mapping from ``spec.shapeWaivers``; see
+    ``_waived_or_offenders_result``.
     """
     rule = "every bundled script's module-level ALL-CAPS constant assignment has an adjacent justifying comment (no voodoo constants)"
     scripts = _bundled_python_scripts(skill_dir)
     if not scripts:
         return [CheckResult("no-voodoo-constant", True, rule, "not declared (optional)")]
     offenders = sorted(_voodoo_constant_offenders(scripts, skill_dir))
-    return [
-        CheckResult(
-            "no-voodoo-constant",
-            not offenders,
-            rule,
-            "none" if not offenders else "found: " + ", ".join(offenders),
-        ),
-    ]
+    return [_waived_or_offenders_result("no-voodoo-constant", rule, offenders, shape_waivers)]
 
 
 def _bundled_scripts(skill_dir: Path) -> list[Path]:
@@ -426,23 +443,20 @@ def _script_execution_intent_offenders(
     return offenders
 
 
-def _script_execution_intent_checks(skill_md: Path, skill_dir: Path, body: list[str]) -> list[CheckResult]:
+def _script_execution_intent_checks(
+    skill_md: Path, skill_dir: Path, body: list[str], shape_waivers: dict[str, str] | None = None
+) -> list[CheckResult]:
     """The check_shape() entry point for _script_execution_intent_offenders,
     issue #1045's Acceptance Criteria Map item A. Runs unconditionally, at
     every portability level -- like _no_voodoo_constant_checks above, this
     is about a skill's own bundled scripts, orthogonal to the portability
-    axis.
+    axis. ``shape_waivers`` (issue #1329) is an optional check-name ->
+    reason mapping from ``spec.shapeWaivers``; see
+    ``_waived_or_offenders_result``.
     """
     rule = "a bundled script referenced from SKILL.md/references/ states explicit execution intent ('Run `X`' or 'See `X` for ...')"
     scripts = _bundled_scripts(skill_dir)
     if not scripts:
         return [CheckResult("script-execution-intent-stated", True, rule, "not declared (optional)")]
     offenders = _script_execution_intent_offenders(skill_md, skill_dir, body, scripts)
-    return [
-        CheckResult(
-            "script-execution-intent-stated",
-            not offenders,
-            rule,
-            "none" if not offenders else "found: " + ", ".join(offenders),
-        ),
-    ]
+    return [_waived_or_offenders_result("script-execution-intent-stated", rule, offenders, shape_waivers)]

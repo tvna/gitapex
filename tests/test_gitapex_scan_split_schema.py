@@ -221,12 +221,13 @@ def test_discover_split_json_files_sorted(tmp_path: pathlib.Path) -> None:
     assert [f.parent.name for f in files] == ["alpha", "mu", "zeta"]
 
 
-def test_discover_split_json_files_finds_the_real_five() -> None:
-    # Live fact established during T1-T6: 5 skills carry a real split.json
-    # today (battle-testing-a-skill, scorer-gated-skill-edits,
-    # merge-retrospective, explaining-the-work, evaluating-skill-quality).
+def test_discover_split_json_files_finds_the_real_four() -> None:
+    # Live fact established during T1-T6 (5 skills then); explaining-the-work
+    # was retired per issue #1808, leaving 4 skills that carry a real
+    # split.json today (battle-testing-a-skill, scorer-gated-skill-edits,
+    # merge-retrospective, evaluating-skill-quality).
     files = scanner.discover_split_json_files()
-    assert len(files) == 5
+    assert len(files) == 4
 
 
 # ---- end-to-end: find_drift ----
@@ -275,9 +276,11 @@ def test_a_malformed_sixth_split_json_file_is_caught(tmp_path: pathlib.Path) -> 
     """Branch-plan T11 regression requirement: a malformed extra split.json
     fixture (a 6th file, violating the schema) must fail the gate -- not
     just the 5 real, valid ones passing. Five real-shaped valid split.json
-    files (mirroring this repository's own 5 today) plus one malformed 6th
-    (missing the schema's sole required key, "assignment") must report a
-    finding attributed to the 6th skill only, proving the gate actually
+    files (this repository's own 4 real skills today plus one synthetic
+    placeholder, "widget-polisher", standing in for the 5th slot this
+    fixture set has always tested at) plus one malformed 6th (missing the
+    schema's sole required key, "assignment") must report a finding
+    attributed to the 6th skill only, proving the gate actually
     distinguishes valid from invalid rather than passing vacuously on a
     quorum."""
     evals_dir = tmp_path / "evals"
@@ -285,7 +288,7 @@ def test_a_malformed_sixth_split_json_file_is_caught(tmp_path: pathlib.Path) -> 
         "battle-testing-a-skill",
         "scorer-gated-skill-edits",
         "merge-retrospective",
-        "explaining-the-work",
+        "widget-polisher",
         "evaluating-skill-quality",
     ]
     for skill in valid_skills:

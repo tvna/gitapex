@@ -27,6 +27,10 @@ import re
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 SKILL_PATH = REPO_ROOT / "skills" / "merge-retrospective" / "SKILL.md"
+# The Worked example moved out of SKILL.md into its own reference file
+# (issue #1806, Dimension 2 body-size disclosure): this drift gate now
+# reads it there instead, unchanged in every other respect.
+WORKED_EXAMPLE_PATH = REPO_ROOT / "skills" / "merge-retrospective" / "references" / "worked-example.md"
 
 _TAXONOMY_PHRASE_TO_SLUG = {
     "missing deterministic gate": "missing-deterministic-gate",
@@ -47,9 +51,8 @@ def _skill_text() -> str:
 
 
 def _worked_example_issue_body() -> str:
-    text = _skill_text()
-    anchor = text.index("## Worked example")
-    fence_start = text.index("```\nTitle:", anchor)
+    text = WORKED_EXAMPLE_PATH.read_text(encoding="utf-8")
+    fence_start = text.index("```\nTitle:")
     fence_end = text.index("\n```", fence_start)
     return text[fence_start + len("```\n") : fence_end]
 
@@ -72,8 +75,8 @@ def test_worked_example_has_exactly_three_repairs():
     repairs = _REPAIR_ENTRY_RE.findall(_repairs_section(_worked_example_issue_body()))
     assert len(repairs) == 3, (
         f"expected 3 repair entries in the Worked example's Repairs section, "
-        f"found {len(repairs)} -- {SKILL_PATH} may have drifted from its own "
-        "documented three-taxonomy-category example."
+        f"found {len(repairs)} -- {WORKED_EXAMPLE_PATH} may have drifted from "
+        "its own documented three-taxonomy-category example."
     )
 
 

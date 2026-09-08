@@ -1,6 +1,6 @@
 ---
 name: review-persona
-description: Read-only, plugin-distributed content-reasoning subagent for a fixed, enumerated set of call sites -- see this file's own "Sanctioned call sites" section for the exact, current list (reviewing-an-artifact Step 2/Step 3, screening-a-low-trust-contribution checks 2-8). Never invoke directly for anything else, and never add a new call site without updating that section first.
+description: Read-only, plugin-distributed content-reasoning subagent for a fixed, enumerated set of call sites -- see this file's own "Sanctioned call sites" section below for the exact, current list (not re-enumerated here, the same drift this section's own entry 1 already avoids for a different list). Never invoke directly for anything else, and never add a new call site without updating that section first.
 tools: Read, Grep, Glob
 ---
 
@@ -44,6 +44,42 @@ adds the new call site, rather than reusing this definition silently.
    `skills/executing-a-branch-plan/references/events-and-review-gate.md`'s
    own sub-step 2 text for where that verify/fix/validate work actually
    happens.
+5. `executing-a-branch-plan` Step 6, or `scorer-gated-skill-edits`'s own
+   Step 3/9, whenever the task under dispatch is a `SKILL.md`
+   create-or-edit routed to `drafting-a-skill` per
+   `skills/executing-a-branch-plan/references/decomposition-and-dispatch.md`'s
+   own "Skill-file edit routing" section -- that section's own trigger
+   stays `SKILL.md`-only; widening
+   it to also route a `references/**`-only edit is a separate, not-yet-
+   landed change tracked elsewhere, not something this entry grants on
+   its own. Dispatches `drafting-a-skill`'s own Step 3 (Cohesion
+   self-check), Step 4 (Collision/dependency check), Step 5 (Domain-gap
+   sweep), and Step 7 (review-handoff critique) -- that same "Skill-file
+   edit routing" section states the full mechanism (why `drafting-a-skill`
+   is never invoked as a skill, what the dispatch prompt embeds, and the
+   returned output shape), not restated here. Step 4's own collision
+   check additionally needs the caller's current skill inventory embedded
+   the same way -- this dispatch's `Read, Grep, Glob` allow-list can
+   enumerate every native `skills/*/` directory on disk but has no access
+   to a separately-installed or vendored skill's own registry entry
+   outside the filesystem, the same registry-lookup gap call site 3 above
+   already discloses for a different check. Read-only, like entry 4
+   above: this dispatch never itself decides whether a finding gets
+   fixed, deferred, or escalated; that stays the dispatching caller's own
+   job.
+6. `merge-retrospective` Step 4b's backlog-grounded proposal review
+   (issue #1806) -- one dispatch per retrospective cycle, covering every
+   `missing-deterministic-gate` repair from that cycle together against
+   the swept `gate-proposal` backlog, never one dispatch per repair --
+   see `skills/merge-retrospective/references/backlog-grounded-proposal-review.md`'s
+   own 4b.2 for the full procedure. Returns, per repair, exactly one
+   verdict (`NEW` / `DUPLICATE-OF #N` / `ALREADY-SHIPPED <gate id>` /
+   `RECLASSIFY <reason>`), plus a batch-level `CLUSTER` grouping when
+   several repairs describe one fix. Read-only, like entry 4 above: this
+   dispatch returns verdicts only, never acting on them itself -- the
+   calling skill verifies each verdict outside the dispatch (re-fetching
+   the named issue, re-checking the `ssot.json` entry) before treating it
+   as settled.
 
 ## What this dispatch does and does not do
 

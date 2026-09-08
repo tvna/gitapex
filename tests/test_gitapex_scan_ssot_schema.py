@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import json
 import pathlib
+import typing
 
 import gitapex_scan_ssot_schema as drift
 import pytest
@@ -966,3 +967,20 @@ def test_tracking_issue_rejects_a_non_integer_list_item(tmp_path):
     instance_path = _write_instance(tmp_path, instance)
     findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
     assert any("schema:" in f and "tracking_issue" in f for f in findings)
+
+
+def test_policy_source_format_literal_matches_schema_enum():
+    # A prior change extended .gitapex/ssot.schema.json's own
+    # policySource.format enum without also updating this module's own
+    # hand-rolled PolicySource.format Literal -- a second, independent
+    # source of truth for the same value set that jsonschema validation
+    # alone cannot catch drifting apart, since _parse_registry runs only
+    # after schema validation already passed. That divergence made
+    # _parse_registry silently return None for any real instance using
+    # the new value, surfaced only as a collateral pytest failure in an
+    # unrelated module. This pins both sides against each other so a
+    # future one-sided edit fails here instead.
+    schema = json.loads(drift.SCHEMA_PATH.read_text(encoding="utf-8"))
+    schema_enum = set(schema["$defs"]["policySource"]["properties"]["format"]["enum"])
+    literal_values = set(typing.get_args(drift.PolicySource.model_fields["format"].annotation))
+    assert literal_values == schema_enum

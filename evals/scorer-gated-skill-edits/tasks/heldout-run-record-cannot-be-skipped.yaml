@@ -20,7 +20,7 @@ inputs:
 expected:
   exercises:
     - 'step 7'
-    - 'Never close a gate run without writing its run record, and never write one with a field left blank, guessed, or silently omitted. A field that cannot be filled honestly is a disclosed gap in `known_gaps`, stated in the record; it is never an absent key. The record and its own score files are the only things this skill writes: not a prior run''s record, not a fixture, and not the skill under test. `drafting-a-skill` is the one skill that performs the actual edit -- this skill dispatches it (step 3) to author each candidate patch and never edits the skill under test itself, on the strength of its own gate result or otherwise.'
+    - 'Never close a gate run without writing its run record, and never write one with a field left blank, guessed, or silently omitted. A field that cannot be filled honestly is a disclosed gap in `known_gaps`, stated in the record; it is never an absent key. The record and its own score files are the only things this skill decides the content of under a mechanism of its own -- not a prior run''s record, not a fixture, and not the skill under test''s own edit content. What changes in the skill under test, and why, stays `drafting-a-skill`''s own contract (its Steps 1/2/6) even though step 3 below runs that contract directly, in this skill''s own write/Bash-capable context, per `drafting-a-skill`''s own Precondition ("Who executes which Step") -- never a second, independent editing mechanism this skill invents on the strength of its own gate result or otherwise.'
   output_contains:
     - "Run record"
     - "commit"

@@ -200,6 +200,23 @@ Checks (the canonical list -- the manual fallback is to apply these):
     GENERIC_ROLE_HEDGE_PHRASES, not a replacement -- see the Portable
     inline-code repo-path citation entry below for how a declared entry
     rescues an inline-code citation.
+  - spec.shapeWaivers (issue #1329), if present, is a non-empty list of
+    item mappings, each with a bare check name (``check``) and a
+    non-empty, control-character-free, <=500-char justification
+    (``reason``), no unrecognized key (shape-waivers-well-formed); a
+    ``check`` value naming a real CheckResult name is only schema-checked
+    for shape, never resolved against the checker's own live check-name
+    set (a typo'd or retired name is schema-valid but inert -- see the
+    schema file's own ``shapeWaiverItem`` description for the accepted
+    tradeoff). Each declared ``reason`` is also fed into the bare-issue-
+    citation scan below, the same treatment spec.lifecycle's own reason
+    fields already get. Currently consulted by exactly two checks below,
+    no-voodoo-constant and script-execution-intent-stated: a check that
+    would otherwise FAIL with real offenders instead reports PASS when
+    its own name has a declared waiver, with the reason and the would-be
+    offenders both still visible in evidence (never a silent PASS) --
+    see each of those two checks' own entries below for the exact
+    evidence shape this produces.
   - references/ files: exactly one level deep, any extension (a bundled
     JSON schema is as legitimate a dependency file as a Markdown doc).
   - any references/*.md file over 100 lines: contains a table of contents
@@ -302,10 +319,10 @@ Checks (the canonical list -- the manual fallback is to apply these):
     below. A bare #N auto-links relative to whichever repository
     currently hosts the file and silently resolves to the wrong issue
     once the skill is vendored or simply read out of context. This scan
-    also covers the metadata sidecar's own spec.references entries and
-    lifecycle.experimental/deprecated.reason text -- a bare number there
-    loses its meaning once the sidecar travels with its skill directory
-    to another repository. A full ``https://github.com/OWNER/REPO/issues/149``-style
+    also covers the metadata sidecar's own spec.references entries,
+    lifecycle.experimental/deprecated.reason text, and shapeWaivers[].reason
+    text (issue #1329) -- a bare number there loses its meaning once the
+    sidecar travels with its skill directory to another repository. A full ``https://github.com/OWNER/REPO/issues/149``-style
     URL contains no bare ``#N`` and so is never flagged by this scan --
     that is the only sanctioned way left to cite an issue from the
     sidecar. Other repo-specific content -- sibling-skill names,
@@ -538,7 +555,11 @@ Checks (the canonical list -- the manual fallback is to apply these):
     Silently passes with "not declared (optional)" evidence, the same
     absent-optional-content convention used throughout this docstring,
     when the skill has no ``scripts/`` directory at all or it contains no
-    qualifying non-test ``.py`` file.
+    qualifying non-test ``.py`` file. A ``spec.shapeWaivers`` entry
+    naming ``no-voodoo-constant`` (see that entry above) converts what
+    would otherwise be a FAIL with real offenders into a PASS reading
+    ``waived (<reason>): would otherwise report: <offenders>`` -- the
+    offenders and the declared reason both stay visible in evidence.
   - Script execution intent stated (script-execution-intent-stated, issue
     #1045's Acceptance Criteria Map item A): every file anywhere under
     the skill's own ``scripts/`` directory (recursively, same scope and
@@ -561,7 +582,8 @@ Checks (the canonical list -- the manual fallback is to apply these):
     this check, per its own "referenced from SKILL.md/references/"
     applicability. Silently passes with "not declared (optional)"
     evidence when the skill has no ``scripts/`` directory at all or it is
-    empty.
+    empty. Same ``spec.shapeWaivers`` interaction as no-voodoo-constant
+    above, naming ``script-execution-intent-stated`` instead.
 
 Usage:
   python3 gitapex_check_skill_shape.py <skill-dir-or-SKILL.md>
@@ -652,6 +674,8 @@ from shape_checks.orchestrator import (
     _references_citation_source,
     _references_dir_checks,
     _references_well_formed_result,
+    _shape_waivers_citation_sources,
+    _shape_waivers_well_formed_result,
     _sidecar_unreadable_results,
     _skill_md_read_result,
 )
@@ -744,6 +768,14 @@ def check_shape(target: Path, *, strict_token_budget: bool = False) -> list[Chec
     # whenever the sidecar is absent, unreadable, or the field itself is
     # malformed/empty, matching every other declared-list default here.
     external_citations_declared: list[dict[str, object]] = []
+    # Check-name -> reason mapping from a well-formed spec.shapeWaivers
+    # (issue #1329), populated below only when the sidecar parses cleanly
+    # -- threaded into _no_voodoo_constant_checks/
+    # _script_execution_intent_checks further down. Stays {} whenever the
+    # sidecar is absent, unreadable, or the field itself is
+    # malformed/empty/undeclared, matching external_citations_declared's
+    # own default above.
+    shape_waivers: dict[str, str] = {}
     # True only when the sidecar exists but could not be read/parsed at
     # all (manifest is None below) -- the one case where
     # external-citations-well-formed/-resolve were already emitted as
@@ -884,6 +916,12 @@ def check_shape(target: Path, *, strict_token_budget: bool = False) -> list[Chec
                 spec_is_mapping, spec_raw, schema_errors, external_citations
             )
             results.append(ext_well_formed_result)
+            shape_waivers_raw = spec.get("shapeWaivers")
+            shape_waivers_result, shape_waivers = _shape_waivers_well_formed_result(
+                spec_is_mapping, spec_raw, schema_errors, shape_waivers_raw
+            )
+            results.append(shape_waivers_result)
+            sidecar_citation_sources.extend(_shape_waivers_citation_sources(shape_waivers))
             lifecycle_raw = spec.get("lifecycle") if spec_is_mapping else None
             lifecycle_dict = lifecycle_raw if isinstance(lifecycle_raw, dict) else {}
             sidecar_citation_sources.extend(_lifecycle_reason_citation_sources(lifecycle_dict))
@@ -987,8 +1025,8 @@ def check_shape(target: Path, *, strict_token_budget: bool = False) -> list[Chec
     # existing at all, not a real coverage hole in this line.
     results.extend(_untrusted_authority_crossover_checks(skill_md, skill_dir, body))
     results.extend(_dimension_quote_exemption_checks(skill_md, skill_dir, body))
-    results.extend(_no_voodoo_constant_checks(skill_md, skill_dir, body))
-    results.extend(_script_execution_intent_checks(skill_md, skill_dir, body))
+    results.extend(_no_voodoo_constant_checks(skill_md, skill_dir, body, shape_waivers))
+    results.extend(_script_execution_intent_checks(skill_md, skill_dir, body, shape_waivers))
     if _is_portable(body, sidecar_portability):
         declared_citation_paths = frozenset(
             path for c in external_citations_declared if isinstance(path := c.get("path"), str)

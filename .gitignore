@@ -31,6 +31,18 @@ apm_modules/
 # never deleted or mutated by an apm install re-run in the same file.
 /.claude/apm-hooks.json
 
+# OpenCode self-install (issue #1812): /.agents/skills/ holds symlinks into
+# skills/ (the live working tree, OpenCode-visible per opencode.ai/docs/skills)
+# and /.opencode/agents/ holds generated copies of agents/*.md -- both
+# reproducible via hooks/gitapex_sync_opencode.py, so not committed. The
+# mechanism itself (.opencode/plugins/) stays tracked.
+# The `/.opencode/*` glob (not a bare `/.opencode/` dir-match) mirrors the
+# /.claude/hooks/* rationale above: it must not prune the parent directory,
+# or the negation for the committed plugin below would never be evaluated.
+/.agents/skills/
+/.opencode/*
+!/.opencode/plugins/
+
 # Transient git worktrees created by Agent-tool `isolation: worktree` dispatches
 # (one per parallel task); reproducible on demand, never meant to be committed.
 /.claude/worktrees/

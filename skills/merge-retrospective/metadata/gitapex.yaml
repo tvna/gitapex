@@ -7,7 +7,8 @@ spec:
   capabilityAssumption: Broad
   skillDependencies:
     requires: []
-    relatedTo: []
+    relatedTo:
+      - grounding-in-primary-sources
   executionRequirements:
     tools:
       read: []
@@ -27,3 +28,42 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/1406"
       summary: "Supersedes the entries above on tools.read only (append-only; portability left as-is, a future re-decision). Step 1 is now 'Nothing to sweep': no more gitapex_check_retro_gate_resolved.py or .gitapex/ssot.json (now unreferenced by SKILL.md; its removal is separate follow-on work). read corrected [files] -> []; shell stays [subprocess], now justified by Step 5's gitapex_file_gate_proposal.py call instead."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "Repair record format section now points a repair entry's own prose (a durable claim about this repository's own code) at grounding-in-primary-sources's discipline -- one pointer sentence, no duplicated procedure. Added to skillDependencies.relatedTo to match."
+      outcome:
+        baseCommit: "f6f816f2"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "Second maintenance pass, same PR: strict-token-budget FAIL (6303 tokens) fixed via references/gate-proposal-filing-mechanics.md plus two tightened passages, landing at 4929. evaluating-skill-quality's first pass (WELL-FORMED-NOT-MATURE) found no compatibility frontmatter field for a real, prose-only GitHub-MCP-server dependency -- added one, trimmed the now-redundant opening paragraph to recover budget."
+      outcome:
+        baseCommit: "f6f816f2"
+        verdict: "WELL-FORMED-NOT-MATURE before this fix; addressed in place"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "Same second pass: battle-testing-a-skill's first run (FAIL) found dimension 9 (input validation) -- Step 2 had no guard distinguishing a failed/partial history read from a clean zero-repair merge; added a retry-once-then-report guard. The pre-existing execution-requirements-drift findings and dimension 7's orphaned script were confirmed pre-existing on origin/main, already tracked (drift-checker bug: https://github.com/tvna/gitapex/issues/1948), and left as-is."
+      outcome:
+        baseCommit: "f6f816f2"
+        verdict: "battle-testing FAIL before this fix; addressed in place"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "Dimension 2 flagged no sidecar disclosure of a considered Broad-vs-Adaptive tradeoff despite the body sitting near its token-budget ceiling. Considered Adaptive; decided Broad remains correct -- the remaining body content is uniformly common-path material every invocation needs, not rare-path detail; four reference files already carry everything genuinely rare-path. No further split identified."
+      outcome:
+        baseCommit: "f6f816f2"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "battle-testing-a-skill's dimension 15 found no fixture staged an escalating, multi-turn injection campaign, only single-line attempts. Added evals/merge-retrospective class 12 (injection-escalation-multi-turn-train.yaml / injection-escalation-obfuscated-restraint-test.yaml), widening the held-out split 11:7:5 -> 12:7:6; split.json/split.md/eval-status.md updated together and all three coverage/lint scripts re-run clean."
+      outcome:
+        baseCommit: "f6f816f2"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "Third pass, fresh re-dispatch: dimensions 9/15 confirmed fixed on independent re-verification. battle-testing-a-skill's dimension 12 found no Install/vendoring-time integrity paragraph despite this skill shipping with the installed plugin (per docs/repository-layout.md) -- added a Notes section with the same boilerplate drafting-issues/drafting-an-adr/etc. use, trimming two passages to recover budget."
+      outcome:
+        baseCommit: "f6f816f2"
+        verdict: "battle-testing FAIL (dimension 12) before this fix; addressed in place"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "Same third pass: evaluating-skill-quality's own re-review found the compatibility frontmatter field (and Prerequisite paragraph) named Steps 0/2/5 but omitted Step 4b (backlog sweep reads) and Step 7 (verification re-fetches), both also GitHub-MCP-server-dependent. Both corrected to name all five steps."
+      outcome:
+        baseCommit: "f6f816f2"
+        verdict: "PROPOSE_COMPATIBILITY finding before this fix; addressed in place"

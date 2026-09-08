@@ -1,6 +1,6 @@
 ---
 name: grounding-in-primary-sources
-description: Use before asserting how an external tool, library, API, platform, or service behaves -- a version number, a feature's support status, a deprecation, a default, a field's exact semantics, a rate limit, or a comparable factual claim. Requires independently fetching or verifying a primary source (the tool's own docs, its changelog, or the observed live state) before the claim is stated as Fact rather than answered from memory or from someone else's unverified say-so; an unreachable or unverifiable primary source demotes the claim to Speculation instead.
+description: Use before asserting how an external tool, library, API, platform, or service behaves, or a durable claim about this repository's own code (a docstring, comment, PR body, or README asserting something about the current code) -- a version number, a feature's support status, a deprecation, a default, a field's exact semantics, a rate limit, or a comparable factual claim. Requires independently fetching or verifying a primary source (the tool's own docs, its changelog, the observed live state, or the actual code the claim describes) before the claim is stated as Fact rather than answered from memory or from someone else's unverified say-so; an unreachable or unverifiable primary source demotes the claim to Speculation instead.
 ---
 
 # Grounding in Primary Sources
@@ -19,6 +19,14 @@ description: Use before asserting how an external tool, library, API, platform, 
   that assumes a specific external behavior is still a claim; it needs
   the same grounding, surfaced (in the reply or a code comment) rather
   than silently baked in.
+- About to write a durable, universal-sounding claim about this
+  repository's own code into a docstring, comment, PR body, README, or
+  similar lasting artifact -- "all N do X," "the only cause is Y," a
+  specific count, "more strict than before" -- that was not re-derived
+  against the current code before being written. The claim's subject is
+  this repository's own source, not an external tool, but the same
+  identify/verify/cite/downgrade discipline applies: read the actual
+  code the claim describes before stating it as `Fact:`.
 
 ## When NOT to use
 
@@ -167,6 +175,31 @@ whether 0.34.0 supports `thinking` is unverified -- the changelog could
 not be fetched in this session; confirm via `pip show anthropic` and the
 release notes before relying on this."
 
+Second worked example, an internal-code claim rather than an external
+tool's: task is writing a module's docstring, which is about to assert
+"all 7 hostile tokens named below hit the refusal branch."
+
+Agent-verified (good):
+
+1. Claim identified: whether each of the 7 hostile tokens the docstring
+   is about to name actually reaches the refusal branch in this same
+   module's `handle_token()` function.
+2. Primary source consulted: the module's own current source, read
+   directly in this session -- not the docstring being written, which is
+   the claim itself, not evidence for it.
+3. Cited: "`some_module.py`'s `handle_token()` (read this session): of
+   the 7 named tokens, only `token_a` and `token_b` reach the refusal
+   branch; the other 5 fall through to the default branch."
+4. Fact: the docstring states the corrected claim ("2 of the 7 tokens
+   below reach the refusal branch; the remaining 5 fall through to the
+   default branch") instead of the originally-intended "all 7."
+
+Memory-only (bad, what this skill exists to stop on an internal claim
+too): writing "all 7 hostile tokens hit the refusal branch" into the
+docstring because that was the intent when the branch was added, without
+re-reading `handle_token()` to confirm the intent still matches the
+current code.
+
 ## Stop boundaries
 
 The Procedure and When NOT to use sections above already state the core
@@ -211,10 +244,10 @@ repository's own hooks/permissions directly rather than assuming
 either way; where none exists, the rule remains prompt-level, not
 deterministically enforced.
 
-Portability rationale: a self-contained claim-verification procedure that
-depends on no particular repository's tooling or instruction files --
-"fetch a primary source before asserting external behavior as fact"
-holds regardless of which repository or harness invokes it. This
+Portability rationale: declared `Repository-scoped`, not `Portable` --
+Procedure step 5 and the Stop boundaries each defer to a named sibling
+skill's own enumeration as canonical rather than restating it; see
+`metadata/gitapex.yaml`'s own decision log for the full reasoning. This
 procedure governs runtime content trust once the skill is loaded; whether
 a consuming harness's own copy of this file matches its intended
 upstream content is that harness's install/vendoring-time concern, not

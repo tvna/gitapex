@@ -1,6 +1,6 @@
 {
   "meta": {
-    "schema_version": "1.5.0",
+    "schema_version": "1.6.0",
     "tracking_issue": 123,
     "status": "active",
     "phase": "phase-0"
@@ -76,7 +76,13 @@
       "id": "eval-model-allowlist",
       "path": ".gitapex/eval-model-allowlist.yaml",
       "format": "yaml",
-      "authority": "The reviewed approved_models/retired_models mappings gitapex_gate_eval_declared_model.py grades every committed model identifier against (issue #925). A model id may be committed only if it appears under approved_models, each row carrying the evidence a human weighed when approving it; retired_models exists purely to turn the most likely failure into a specific message. Externalized from the gate script's own hardcoded dict literals (issue #1013) -- pointing this entry directly at the script's module-level constants instead was considered and rejected: policy_sources[].format's enum (toml/json/yaml/rego) has no way to name a Python source file's own constants"
+      "authority": "The reviewed approved_models/retired_models mappings gitapex_gate_eval_declared_model.py grades every committed model identifier against (issue #925). A model id may be committed only if it appears under approved_models, each row carrying the evidence a human weighed when approving it; retired_models exists purely to turn the most likely failure into a specific message. Externalized from the gate script's own hardcoded dict literals (issue #1013) -- pointing this entry directly at the script's module-level constants instead was considered and rejected: policy_sources[].format's enum (toml/json/yaml/rego/markdown) has no way to name a Python source file's own constants"
+    },
+    {
+      "id": "grounding-in-primary-sources-skill",
+      "path": "skills/grounding-in-primary-sources/SKILL.md",
+      "format": "markdown",
+      "authority": "The authoring-time discipline for grounding a durable claim (a version number, a feature's support status, a specific count, \"always\"/\"never\"/\"the only cause\") in a primary source before stating it as Fact rather than Speculation -- for an external tool/library/API/platform claim, and (since issue #1890) for a durable claim about this repository's own code. No gate script consumes this entry: it is read directly by an agent following merge-retrospective's Repair record format section or drafting-issues's own Facts step (issue #1890), which each point here rather than duplicating the procedure. The first policy_sources entry with no consuming gate at all -- format's markdown value (added this same change) exists for exactly this case, a prose policy an agent reads rather than a script parses."
     }
   ],
   "gates": [
@@ -114,7 +120,7 @@
       "rule": "After mcp__github__create_pull_request / update_pull_request / issue_write succeeds, re-fetches the body GitHub actually stored via the issues endpoint and re-runs skills/outward-artifact-preflight/scripts/gitapex_scan_provenance.py plus an ASCII-only scan against it; reports a hit, or any inability to verify, on both in-session channels (decision/reason to the agent, systemMessage to the operator) and never posts publicly. Detective only -- PostToolUse cannot block a write that already succeeded. Since issue #1327, also compares the submitted tool_input body against this same already-fetched, already-unsanitized stored body and reports a distinct CONTENT_LOSS verdict when the stored body is missing content the submission had (beyond an append-only addition or CRLF/trailing-whitespace normalization) -- closing the gap where the two prior checks (provenance/ASCII) never verified 'is my submission still intact', which #1088/#1302/#1313 each misdiagnosed as this hook's own raw fetch being wrong when the actual cause was a since-corrected instruction to re-verify via the GitHub MCP server's own sanitizing read tools instead of this hook's raw channel.",
       "planes": ["posttooluse"],
       "local_exclusion": "PostToolUse-only: grades the body GitHub actually stored, re-fetched through the issues API after a write already succeeded. There is nothing to grade before the write, and no working-tree equivalent of a server-stored body.",
-      "trigger": "PostToolUse matcher mcp__github__create_pull_request|mcp__github__update_pull_request|mcp__github__issue_write (hooks/hooks.json)",
+      "trigger": "PostToolUse matcher mcp__github__create_pull_request|mcp__plugin_github_github__create_pull_request|mcp__github__update_pull_request|mcp__plugin_github_github__update_pull_request|mcp__github__issue_write|mcp__plugin_github_github__issue_write (hooks/hooks.json)",
       "policy_refs": [],
       "cluster": ["outward-hygiene", "github-operations"],
       "tracking_issue": 878,
@@ -293,6 +299,25 @@
       "target": [
         {"kind": "mcp-tool", "ref": "mcp__github__create_pull_request"},
         {"kind": "runtime-resolved-reference", "ref": "GET /repos/{owner}/{repo}/pulls?state=open"}
+      ]
+    },
+    {
+      "id": "gate-proposal-dedup-sweep",
+      "kind": "script",
+      "script": ["hooks/check-gate-proposal-dedup-sweep.sh", "hooks/gitapex_check_gate_proposal_dedup_sweep.py"],
+      "rule": "Denies mcp__github__issue_write (method create, gate-proposal label) when the body carries no single well-formed Dedup-sweep proof line generated only by skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py, or when its count differs from a live re-fetch of the open gate-proposal population; fails closed on a missing GH_TOKEN/GITHUB_TOKEN or an unfetchable count. Accepts verdict NEW or DUPLICATE-OF #N (issue #1806 row 3 requires duplicates to still file standalone). Fails closed (denies) rather than allowing the call through when jq is missing from PATH or the payload is not a single JSON object.",
+      "planes": ["pretooluse"],
+      "local_exclusion": "Grades the new issue's own body against live open-issue state on GitHub; 'currently-open gate-proposal issues' has no local/offline equivalent to check against.",
+      "trigger": "PreToolUse matcher mcp__github__issue_write (hooks/hooks.json)",
+      "policy_refs": [],
+      "cluster": ["plan-integrity", "github-operations"],
+      "tracking_issue": 1806,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "mcp-tool", "ref": "mcp__github__issue_write"},
+        {"kind": "runtime-resolved-reference", "ref": "GET /repos/{owner}/{repo}/issues?state=open&labels=gate-proposal"}
       ]
     },
     {
@@ -1361,7 +1386,7 @@
       "id": "main-ruleset-required-checks",
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_ruleset_required_checks.py",
-      "rule": "The committed .github/rulesets/main.json must validate against a pydantic model of GitHub's own ruleset request body -- extra=forbid at every level, a type-discriminated rule union, and every pull_request parameter required rather than defaulted, so a misspelled parameter, a wrong-typed count or an unknown rule type is a finding here instead of a silently-ignored field or a 422 discovered after a live dispatch. On top of that schema it must target ~DEFAULT_BRANCH with enforcement active, grant no bypass actors, block deletion and non-fast-forward, require pull requests with code-owner review and thread resolution, and allow only the merge methods this repository uses. Every context it names as a required status check must resolve to a job that actually reports under that exact name on every pull request targeting the default branch: the workflow's pull_request trigger may carry no paths/paths-ignore filter, its branches/branches-ignore filter must admit the default branch, its types filter must include opened and synchronize, and the backing job may be neither a matrix job (which reports as 'job (value)') nor a reusable-workflow call (which reports as 'caller / inner'). A context no job can ever report stays Pending forever, blocking the merge with no in-repository fix.",
+      "rule": "The committed .github/rulesets/main.json must validate against a pydantic model of GitHub's own ruleset request body -- extra=forbid at every level, a type-discriminated rule union, and every pull_request parameter required rather than defaulted, so a misspelled parameter, a wrong-typed count or an unknown rule type is a finding here instead of a silently-ignored field or a 422 discovered after a live dispatch. On top of that schema it must target ~DEFAULT_BRANCH with enforcement active, grant no bypass actors, block deletion and non-fast-forward, require pull requests with code-owner review and thread resolution, and allow only the merge methods this repository uses. It must also carry commit_author_email_pattern and committer_email_pattern rules (issue #1840, added after a real incident where a stray local git config let commits on a legitimate pull request show up on GitHub as authored by an unrelated third-party account): both rules must be present, and neither may have its negate parameter set to true, which would silently invert the email allowlist into a denylist blocking exactly the emails this repository wants to allow. Every context it names as a required status check must resolve to a job that actually reports under that exact name on every pull request targeting the default branch: the workflow's pull_request trigger may carry no paths/paths-ignore filter, its branches/branches-ignore filter must admit the default branch, its types filter must include opened and synchronize, and the backing job may be neither a matrix job (which reports as 'job (value)') nor a reusable-workflow call (which reports as 'caller / inner'). A context no job can ever report stays Pending forever, blocking the merge with no in-repository fix.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_ruleset_required_checks.py"],
       "trigger": "tests/test_gitapex_gate_ruleset_required_checks.py inside the pytest step of .github/workflows/test.yml",
@@ -1454,10 +1479,10 @@
         ".github/scripts/gitapex_scan_contract_discipline_drift.py",
         ".github/workflows/contract-discipline-drift-gate.yml"
       ],
-      "rule": "drafting-a-skill's own references/contract-structure.md restates evaluating-skill-quality/references/rubric.md's Contract discipline section (its Fault-attribution and Never-both rules) and must not silently diverge from it: both files must keep the literal terms 'Fault attribution' and 'Never both', contract-structure.md must keep citing the Contract discipline section by name, and a PR diff that edits rubric.md inside the Contract-discipline section's own line span must also touch contract-structure.md or carry a '<!-- contract-discipline-ack: <reason> -->' comment in the diff. A missing or unreadable file, a missing/duplicated/empty Contract-discipline heading, or an unparseable diff fails closed rather than passing.",
+      "rule": "drafting-a-skill's own references/skill-writing-fundamentals.md (its Contract structure section) restates evaluating-skill-quality/references/rubric.md's Contract discipline section (its Fault-attribution and Never-both rules) and must not silently diverge from it: both files must keep the literal terms 'Fault attribution' and 'Never both', skill-writing-fundamentals.md must keep citing the Contract discipline section by name, and a PR diff that edits rubric.md inside the Contract-discipline section's own line span must also touch skill-writing-fundamentals.md or carry a '<!-- contract-discipline-ack: <reason> -->' comment in the diff. A missing or unreadable file, a missing/duplicated/empty Contract-discipline heading, or an unparseable diff fails closed rather than passing.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_contract_discipline_drift.py", "--diff", "-"],
-      "local_stdin": ["git", "-c", "core.quotePath=false", "diff", "-U0", "--no-renames", "--merge-base", "origin/main", "HEAD", "--", "skills/evaluating-skill-quality/references/rubric.md", "skills/drafting-a-skill/references/contract-structure.md"],
+      "local_stdin": ["git", "-c", "core.quotePath=false", "diff", "-U0", "--no-renames", "--merge-base", "origin/main", "HEAD", "--", "skills/evaluating-skill-quality/references/rubric.md", "skills/drafting-a-skill/references/skill-writing-fundamentals.md"],
       "trigger": ".github/workflows/contract-discipline-drift-gate.yml on pull_request (diff-awareness half), plus tests/test_gitapex_scan_contract_discipline_drift.py inside the pytest step of .github/workflows/test.yml (always-on content-lock half)",
       "policy_refs": [],
       "cluster": "self-governance",
@@ -1467,8 +1492,8 @@
       "bypass_review_status": "not-yet-reviewed",
       "target": [
         {"kind": "file-glob", "ref": "skills/evaluating-skill-quality/references/rubric.md"},
-        {"kind": "file-glob", "ref": "skills/drafting-a-skill/references/contract-structure.md"},
-        {"kind": "cross-registry-consistency", "ref": "rubric.md '## Contract discipline' section (Fault attribution, Never both) <-> drafting-a-skill/references/contract-structure.md's own restatement of the same two rules"},
+        {"kind": "file-glob", "ref": "skills/drafting-a-skill/references/skill-writing-fundamentals.md"},
+        {"kind": "cross-registry-consistency", "ref": "rubric.md '## Contract discipline' section (Fault attribution, Never both) <-> drafting-a-skill/references/skill-writing-fundamentals.md's own Contract structure section restatement of the same two rules"},
         {"kind": "workflow-event", "ref": "contract-discipline-drift-gate.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:push"}
@@ -1543,7 +1568,7 @@
       "id": "bare-python3-invocation",
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_bare_python3_invocation.py",
-      "rule": "Every .github/scripts/*.py invocation in any .github/workflows/*.yml or *.yaml run: step must go through uv run; a bare python3 .github/scripts/*.py invocation fails. Parses each workflow's YAML and scans only run: step text (not arbitrary comment lines elsewhere in the file). Exits 1, never a silent pass, when the workflow directory is missing, no workflow files are found, a file cannot be decoded, or a file's YAML does not parse to the expected jobs: {...: {steps: [...]}} shape. Also scans every hooks/*.sh file for a shell variable assigned a .github/scripts/*.py path and later invoked as a bare python3 \"$var\" (issue #1446, Item 2) -- this second scan is WARNING-tier (report-only, printed but never flips the exit code), matching the ImportError-fallback degrade path it exists to surface rather than a live break; a hooks/*.py-targeting variable is never flagged, since those are deliberately stdlib-only and bare-invoked by design.",
+      "rule": "Every python3 <path>.py invocation in any .github/workflows/*.yml or *.yaml run: step must go through uv run -- any script path, any directory, not an enumerated .github/scripts/-only allowlist (issue #1050 widened this, since evals/scripts/*.py and skills/scorer-gated-skill-edits/scripts/*.py both entered real production use before a directory-by-directory widening could keep up). Parses each workflow's YAML and scans only run: step text (not arbitrary comment lines elsewhere in the file). Exits 1, never a silent pass, when the workflow directory is missing, no workflow files are found, a file cannot be decoded, or a file's YAML does not parse to the expected jobs: {...: {steps: [...]}} shape. Also scans every hooks/*.sh file for a shell variable assigned a .github/scripts/*.py path, or a hooks/*.py path registered under a gate declaring a non-empty preconditions.requires_python_packages, and later invoked as a bare python3 \"$var\" -- HARD-FAIL tier (issue #1697; originally WARNING-tier under issue #1446 Item 2), deliberately kept .github/scripts/-only rather than following the workflow-scan widening above (issue #1050's own Non-goals); an unregistered hooks/*.py-targeting variable is never flagged, since those are deliberately stdlib-only and bare-invoked by design.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_bare_python3_invocation.py"],
       "trigger": ".github/workflows/bare-python3-invocation-gate.yml on pull_request/workflow_dispatch, plus tests/test_gitapex_gate_bare_python3_invocation.py and tests/test_gitapex_gate_bare_python3_invocation_properties.py inside the pytest step of .github/workflows/test.yml",
@@ -1557,7 +1582,7 @@
         {"kind": "file-glob", "ref": ".github/workflows/*.yml"},
         {"kind": "file-glob", "ref": ".github/workflows/*.yaml"},
         {"kind": "file-glob", "ref": "hooks/*.sh"},
-        {"kind": "bash-pattern", "ref": "python3 .github/scripts/*.py"},
+        {"kind": "bash-pattern", "ref": "python3 <path>.py"},
         {"kind": "workflow-event", "ref": "bare-python3-invocation-gate.yml:pull_request"},
         {"kind": "workflow-event", "ref": "bare-python3-invocation-gate.yml:workflow_dispatch"},
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
@@ -1698,7 +1723,7 @@
         ".github/scripts/_gitapex_base_ref.py",
         ".github/workflows/detection-logic-property-coverage-gate.yml"
       ],
-      "rule": "A regex call (a .compile() on a bare name the graded file's own imports bind to the re module, including an 'import re as <alias>' alias, or a receiver-agnostic .match()/.search()/.fullmatch()), a path-resolution call (receiver-agnostic .resolve()/.is_symlink()/.relative_to(), or os.path.realpath()/os.path.abspath() matched on the call's final two attribute segments), or a string-comparison allowlist/denylist construct (receiver-agnostic .startswith()/.endswith(), an in/not in comparison against an inline list/tuple/set literal, or a frozenset()/set() call over one), newly added by a PR diff inside skills/*/scripts/gitapex_check_*.py, .github/scripts/gitapex_gate_*.py or hooks/gitapex_check_*.py (test_*.py and conftest.py excluded) must be covered by a co-located tests/test_<source-stem>_properties.py that imports the source module and defines an @given(...) property test whose own body references the trigger's enclosing function name, or any @given test in the file for a module-level trigger. Scope is the diff, not the repository. An inline '# detection-logic-property-coverage: WAIVED: <reason>' comment waives findings on that exact line. Exits 2 rather than pass silently on a malformed diff (an unparseable @@ hunk header, a post-image path that is neither /dev/null nor b/-prefixed, or a '+++ ' post-image header outside a hunk with no '--- ' source header before it) or an in-scope file that cannot be read or parsed. See the script's own module docstring for the disclosed known misses and over-reports.",
+      "rule": "A regex call (a .compile() on a bare name the graded file's own imports bind to the re module, including an 'import re as <alias>' alias, or a receiver-agnostic .match()/.search()/.fullmatch()), a path-resolution call (receiver-agnostic .resolve()/.is_symlink()/.relative_to(), or os.path.realpath()/os.path.abspath() matched on the call's final two attribute segments), or a string-comparison allowlist/denylist check or string-splitting call (receiver-agnostic .startswith()/.endswith()/.split()/.rsplit()/.partition(), an in/not in comparison against an inline list/tuple/set literal, or a frozenset()/set() call over one), newly added by a PR diff inside skills/*/scripts/gitapex_check_*.py, .github/scripts/gitapex_gate_*.py or hooks/gitapex_check_*.py (test_*.py and conftest.py excluded) must be covered by a co-located tests/test_<source-stem>_properties.py that imports the source module and defines an @given(...) property test whose own body references the trigger's enclosing function name, or any @given test in the file for a module-level trigger. Scope is the diff, not the repository. An inline '# detection-logic-property-coverage: WAIVED: <reason>' comment waives findings on that exact line. Exits 2 rather than pass silently on a malformed diff (an unparseable @@ hunk header, a post-image path that is neither /dev/null nor b/-prefixed, or a '+++ ' post-image header outside a hunk with no '--- ' source header before it) or an in-scope file that cannot be read or parsed. See the script's own module docstring for the disclosed known misses and over-reports.",
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_detection_logic_property_coverage.py"],
       "local_stdin": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_run_base_diff.py", "--", "*.py"],
@@ -1817,7 +1842,7 @@
       "rule": "Writer half of the marker-file state machine backing the review-thread-resolution + mergeable_state-verification obligation (CLAUDE.md section 3). No jq dependency -- payload-shape validation and tool_name dispatch happen entirely in python; the .sh wrapper invokes python3 unconditionally, failing open with a systemMessage only if python3 or the tracker script itself is unavailable. On a Bash call classified as a git push (reusing hooks/gitapex_check_bash_safety.py's own is_git_push classifier) resets a session-scoped state file to a fresh pending cycle (target_pr cleared); on mcp__github__pull_request_read, establishes/switches target_pr from that call's own owner/repo/pullNumber -- a call naming a PR that is not the SAME PR as the one currently tracked (per _same_pr, which tolerates owner/repo being present on one call and absent on another for the identical pull number -- a third independent-review round found plain string equality treated that as a switch) resets open_review_threads/resolve_calls/mergeable_checked, rather than being ignored, closing a permanent-lockout gap a second independent-review round found and reproduced -- and records the unresolved-thread count (method get_review_comments) or that mergeable_state was observed (method get), both read directly from that call's own tool_response (unwrapped from the MCP content envelope) rather than a fresh API call; on mcp__github__resolve_review_thread increments a resolve-call counter, but only once target_pr is already established and the call's own tool_response does not report an error. State writes are TOCTOU-safe (tempfile.mkstemp's own O_CREAT|O_EXCL, not a predictable PID-based name). A residual gap remains disclosed, not fixed: target_pr is a heuristic (whichever PR was most recently read), never verified against the branch the git push actually targeted, and the state file itself is writable by the same agent this gate targets (a property this repository's entire hooks-as-deterministic-gate architecture already shares, not specific to this gate). Always exits 0 -- PostToolUse cannot block an already-executed tool call.",
       "planes": ["posttooluse"],
       "local_exclusion": "PostToolUse-only: tracks a Claude Code tool-call's own JSON payload and tool_response arriving on stdin, which has no working-tree equivalent to reconstruct.",
-      "trigger": "PostToolUse matcher Bash|mcp__github__resolve_review_thread|mcp__github__pull_request_read (hooks/hooks.json)",
+      "trigger": "PostToolUse matcher Bash|mcp__(github|plugin_github_github)__resolve_review_thread|mcp__(github|plugin_github_github)__pull_request_read (hooks/hooks.json)",
       "policy_refs": [],
       "cluster": "github-operations",
       "tracking_issue": 1209,
@@ -2020,6 +2045,95 @@
         {"kind": "file-glob", "ref": "hooks/*.py"},
         {"kind": "cross-registry-consistency", "ref": "new fail-open except clauses in .github/scripts/*.py or hooks/*.py <-> a re-raise or an inline except-fail-open WAIVED disclosure"},
         {"kind": "workflow-event", "ref": "except-fail-open-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
+    },
+    {
+      "id": "patch-coverage",
+      "kind": "script",
+      "script": [
+        ".github/scripts/gitapex_gate_patch_coverage.py",
+        ".github/scripts/gitapex_run_base_diff.py",
+        ".github/scripts/_gitapex_base_ref.py",
+        ".github/workflows/patch-coverage-gate.yml"
+      ],
+      "rule": "A diff-added line inside a .py file whose immediate parent directory is one of pyproject.toml's own [tool.coverage.run] source directories (test_*.py/conftest.py excluded) must be exercised by a test -- a local, pre-push equivalent of Codecov's own patch-coverage check. For each in-scope file the diff adds lines to, resolves that file's own tests/test_<stem>.py / tests/test_<stem>_properties.py, runs only their union via a scoped pytest (never the full suite), and compares each diff-added line against that run's own coverage JSON report: a line inside executed_lines|missing_lines but not executed_lines is a violation; a file with no corresponding test file at all is graded uncovered outright (the brand-new-file 0% floor, satisfied automatically). A --coverage-json override lets a CI caller reuse an already-generated report instead of re-running tests. An inline '# patch-coverage: WAIVED: <reason>' comment (anywhere in the file for a missing-test-file finding, on the specific line for a per-line finding) waives it. Exits 2 rather than pass silently on a malformed diff, a failed scoped pytest run, a malformed coverage report, or a file with an existing test file but no matching coverage-report entry. Statement-level executed/missing comparison cannot detect a partially-taken branch -- a disclosed, unsolved residual risk carried over from issue #1555's own 'unreachable branch' finding.",
+      "planes": ["ci", "local"],
+      "local_invocation": [
+        "uv",
+        "run",
+        "--frozen",
+        "python3",
+        ".github/scripts/gitapex_gate_patch_coverage.py"
+      ],
+      "local_stdin": [
+        "uv",
+        "run",
+        "--frozen",
+        "python3",
+        ".github/scripts/gitapex_run_base_diff.py",
+        "--",
+        "*.py"
+      ],
+      "trigger": ".github/workflows/patch-coverage-gate.yml on pull_request, plus tests/test_gitapex_gate_patch_coverage.py and tests/test_gitapex_gate_patch_coverage_properties.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": ["pyproject-coverage"],
+      "cluster": "test-integrity",
+      "tracking_issue": 1568,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".github/scripts/*.py"},
+        {"kind": "file-glob", "ref": "skills/*/scripts/*.py"},
+        {"kind": "file-glob", "ref": "evals/scripts/*.py"},
+        {"kind": "file-glob", "ref": "pyproject.toml"},
+        {"kind": "cross-registry-consistency", "ref": "diff-added lines in pyproject.toml's [tool.coverage.run] source directories <-> a covering test execution in tests/test_<stem>.py or tests/test_<stem>_properties.py"},
+        {"kind": "workflow-event", "ref": "patch-coverage-gate.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
+    },
+    {
+      "id": "network-exception-set-drift",
+      "kind": "script",
+      "script": [
+        ".github/scripts/gitapex_gate_network_exception_set_drift.py",
+        ".github/scripts/gitapex_run_base_diff.py",
+        ".github/scripts/_gitapex_base_ref.py",
+        ".github/workflows/network-exception-set-drift-gate.yml"
+      ],
+      "rule": "Two module-level functions in the same in-scope file that each wrap a recognized network call (a bare opener(...) call -- this repository's own callable-injection idiom for an HTTP call -- or an attribute call whose dotted callee contains urlopen, or starts with urllib.request or http.client) in the body of their own first qualifying try must declare the same exception-handler name set for it. Functions are grouped by which of the two call shapes their own try wraps; any two functions in the same group with differing handler-name sets is a finding, reported once per differing pair and anchored at the later function's own try line. Scope is the diff, not the repository: a finding is reported only when at least one of the two functions' own try/except span was touched by an added line. Functions nested in a class or in another function are not scanned, and only the first qualifying try per function is graded -- see the script's own module docstring for the full known-misses/known-over-reports disclosure. An inline '# network-exception-set-drift: WAIVED: <reason>' comment on the anchor line waives it. Exits 2 rather than pass silently on a malformed diff or an in-scope file that cannot be read or parsed.",
+      "planes": ["ci", "local"],
+      "local_invocation": [
+        "uv",
+        "run",
+        "--frozen",
+        "python3",
+        ".github/scripts/gitapex_gate_network_exception_set_drift.py"
+      ],
+      "local_stdin": [
+        "uv",
+        "run",
+        "--frozen",
+        "python3",
+        ".github/scripts/gitapex_run_base_diff.py",
+        "--",
+        "*.py"
+      ],
+      "trigger": ".github/workflows/network-exception-set-drift-gate.yml on pull_request, plus tests/test_gitapex_gate_network_exception_set_drift.py and tests/test_gitapex_gate_network_exception_set_drift_properties.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "test-integrity",
+      "tracking_issue": 1512,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".github/scripts/*.py"},
+        {"kind": "file-glob", "ref": "hooks/*.py"},
+        {"kind": "file-glob", "ref": "evals/scripts/*.py"},
+        {"kind": "file-glob", "ref": "skills/*/scripts/*.py"},
+        {"kind": "workflow-event", "ref": "network-exception-set-drift-gate.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:push"}
       ]

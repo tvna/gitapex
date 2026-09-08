@@ -1,6 +1,6 @@
 #!/bin/bash
-# PostToolUse hook (matcher: Bash|mcp__github__resolve_review_thread|
-# mcp__github__pull_request_read): state-writer half of the marker-file
+# PostToolUse hook (matcher: Bash|mcp__(github|plugin_github_github)__resolve_review_thread|
+# mcp__(github|plugin_github_github)__pull_request_read): state-writer half of the marker-file
 # state machine backing issue #1209's review-thread-resolution +
 # mergeable_state-verification obligation (CLAUDE.md section 3).
 #
