@@ -206,8 +206,9 @@ checkers), never a lighter-weight substitute.
 rather than left as an inert pointer.** `drafting-a-skill` carries
 `disable-model-invocation: true` in its own frontmatter, which blocks a
 `Skill`-tool invocation of it for any caller, not only a top-level one
--- confirmed live, not assumed -- so no step here ever calls it as a
-skill. Per
+-- see `drafting-a-skill`'s own Precondition and decision log for the
+live confirmation, not re-derived here -- so no step here ever calls it
+as a skill. Per
 `drafting-a-skill`'s own Precondition ("Who executes which Step"), the
 routed task's own work splits by Step instead:
 
@@ -256,9 +257,10 @@ because a scorer or split already exists for the target skill. Absent
 that stated precondition, the task routes to `drafting-a-skill` as
 above. When it does apply, that skill's own Step 3 and Step 9 use the
 identical `review-persona`-dispatch mechanism entry 5 names -- not a
-route of their own. How each of those two steps splits the work is
-`scorer-gated-skill-edits`'s own Step 3/Step 9 text to state, not
-restated here or claimed as entry 5's own content: Step 3 (one bounded
+route of their own. `scorer-gated-skill-edits`'s own Step 3/Step 9 text
+stays the canonical source for how each of those two steps splits the
+work, summarized here for orientation only, not superseded by this
+summary or claimed as entry 5's own content: Step 3 (one bounded
 gate-loop iteration) runs `drafting-a-skill`'s Steps 1/2/6 in its own
 write/Bash-capable context and dispatches Steps 3/4/5 to
 `review-persona` within that same iteration, deferring Step 7's own

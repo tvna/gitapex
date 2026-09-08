@@ -47,8 +47,9 @@ adds the new call site, rather than reusing this definition silently.
 5. `executing-a-branch-plan` Step 6, or `scorer-gated-skill-edits`'s own
    Step 3/9, whenever the task under dispatch is a `SKILL.md`
    create-or-edit routed to `drafting-a-skill` per
-   `decomposition-and-dispatch.md`'s own "Skill-file edit routing"
-   section -- that section's own trigger stays `SKILL.md`-only; widening
+   `skills/executing-a-branch-plan/references/decomposition-and-dispatch.md`'s
+   own "Skill-file edit routing" section -- that section's own trigger
+   stays `SKILL.md`-only; widening
    it to also route a `references/**`-only edit is a separate, not-yet-
    landed change tracked elsewhere, not something this entry grants on
    its own -- `drafting-a-skill`'s own Step 3 (Cohesion self-check),
@@ -56,7 +57,8 @@ adds the new call site, rather than reusing this definition silently.
    Step 7 (review-handoff critique) dispatched here instead, because
    `drafting-a-skill` carries `disable-model-invocation: true`, which
    blocks a `Skill`-tool invocation of it from any caller, not only a
-   top-level one (empirically demonstrated, not assumed). The dispatch
+   top-level one -- see `drafting-a-skill`'s own Precondition and decision
+   log for the live confirmation, not re-derived here. The dispatch
    prompt embeds `drafting-a-skill`'s own Step
    3/4/5/7 procedure text (or its file path) and the proposed
    `SKILL.md`/`references/` diff under review directly, in-band, since

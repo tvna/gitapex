@@ -27,14 +27,17 @@ accumulated diff instead (no per-task Red-Green there -- see
 own sub-step 1). Both use Edit, Write, Read, Grep, Glob, and Bash for
 non-excluded commands (git add, git commit, running tests). At Step 6's
 own call site, this agent type also dispatches Agent/Task for one fixed,
-narrow purpose: whenever the task's own target is a `SKILL.md`/`references/`
-edit, `drafting-a-skill`'s own Precondition ("Who executes which Step")
+narrow purpose: whenever the task's own target is a `SKILL.md` edit,
+`drafting-a-skill`'s own Precondition ("Who executes which Step")
 has it running that skill's Steps 1/2/6 directly (as above) while
 dispatching Steps 3/4/5/7 to the `review-persona` subagent type via
 `Agent`/`Task` (`agents/review-persona.md`'s own Sanctioned call site 5)
--- the only onward dispatch either call site makes, never a
-general-purpose fan-out. Never attempt a GitHub write, the gh CLI, git
-push, or a package-manager install -- those are main-thread-only per
+-- the only onward dispatch this call site makes, never a
+general-purpose fan-out; Step 8's own call site makes none, its two
+passes dispatched independently from the calling
+`executing-a-branch-plan` thread instead. Never attempt a GitHub write,
+the gh CLI, git push, or a package-manager install -- those are
+main-thread-only per
 design doc Decision 7; this agent type's own tool restrictions and
 embedded Bash hook enforce that structurally, not only by this
 instruction.

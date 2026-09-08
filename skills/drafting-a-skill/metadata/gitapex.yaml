@@ -271,6 +271,11 @@ spec:
       summary: "this skill's dispatch contexts were unreachable via the Skill tool (disable-model-invocation: true). Fixed: review-persona (Agent/Task, never Skill) is now the working mechanism for Steps 3/4/5/7. Adds a subagent-dispatch capability executionRequirements.tools cannot express -- schema recognizes only read/write/shell, no such category yet; a schema change is out of this PR's scope, disclosed rather than left undeclared."
       outcome:
         baseCommit: "8ad7ab1f2a0cbaf80ae89517486c4875dad1bb6d"
+    - kind: corroboration
+      anchor: "https://github.com/tvna/gitapex/issues/1822"
+      summary: "Confirmed live, not assumed: a dispatch attempting this skill via the `Skill` tool was rejected ('reserved for explicit user invocation'), and Claude Code's own documentation confirms `disable-model-invocation: true` blocks the `Skill` tool from any model-initiated context, not only a dispatched subagent's own -- what this file's own 'confirmed live' citations point to."
+      outcome:
+        baseCommit: "32edca0434bc21fb8626819195f91010687b2d5c"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1882"
       summary: "Merged formative-quality-dimensions.md, contract-structure.md, guidance-form-and-sdo.md, and mechanism-fit-and-cohesion.md into skill-writing-fundamentals.md: each had an on-demand trigger stated only as a subjective judgment ('when the floor isn't enough'), never a checkable precondition -- effectively always-invoked despite the label. Row 5 now states that test. gitapex-cross-links.md relabeled required, content unchanged; decision-log-discipline.md untouched (checkable trigger)."
