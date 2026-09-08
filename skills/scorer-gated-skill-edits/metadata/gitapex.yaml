@@ -3,7 +3,7 @@ kind: SkillMetadata
 metadata:
   name: scorer-gated-skill-edits
 spec:
-  portability: Mixed
+  portability: Repository-scoped
   capabilityAssumption: Broad
   references:
     - kind: decision
@@ -125,6 +125,16 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1809"
       summary: "One Stop-boundary citation of adversarial-self-audit.md's own removed 'No verified mechanism available' section was repointed at the new gitapex_run_verified_isolated_dispatch.py's own printed guidance for that condition. Citation-only, no functional/frontmatter change. This fell outside the linked issue's own design doc/branch plan file-ownership map (an independent Step 8 review flagged the scope-of-record gap); recorded here to close it."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1822"
+      summary: "drafting-a-skill's Skill-tool invocation was unreachable; Steps 3/9 now run its Steps 1/2/6 directly here and dispatch Steps 3/4/5(/7) to review-persona via Agent/Task. requires:[drafting-a-skill] changes character (a read dependency, not invocation) but stays correct. Same undeclared-by-necessity Agent/Task capability drafting-a-skill's own metadata discloses -- no schema category yet, out of this PR's scope."
+      outcome:
+        baseCommit: "e6852bad1b332a65d08156e3074d4bcc9ee17b9a"
+    - kind: correction
+      anchor: "method:evaluating-skill-quality"
+      summary: "An isolated dispatch found the declared Mixed level fails the rubric's clean-interface narrowness test for a single sibling dependency: Steps 3/9 cite drafting-a-skill's own internal step numbers (Steps 1/2/6, Steps 3/4/5, Step 7), not only its top-level contract. Corrected to Repository-scoped; the runner-file dependency alone, with its disclosed vendoring fallback, would have stayed Mixed-via-file."
+      outcome:
+        baseCommit: "87b1e9b5c212873d0f6a76e9e240443d83e5620e"
   skillDependencies:
     requires:
       - drafting-a-skill

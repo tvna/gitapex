@@ -206,3 +206,23 @@ scope to fix. `eval-gate` is not a required status check
 (`.github/rulesets/main.json`), so this does not block this PR, but it
 does mean no suite in this repository -- this one included -- has
 actually been graded live by that gate while issue #1304 stands.
+
+**Issue #1822 (battle-testing-a-skill dimension 13, memory-poisoning
+re-synced twice):** two independent, isolated `battle-testing-a-skill`
+dispatches found the Precondition's/Stop boundary's "confirmed live, not
+assumed" and "whatever channel carries it" wording under-specified
+against a claim sourced from persisted memory or a cached session rather
+than the current dispatch. Both rounds' fixes were content-only
+(no new branch, no new fixture): first, `no-direct-invocation.yaml`'s
+verbatim `exercises` quote was re-synced to the Stop boundary's corrected
+wording; then, once that same "confirmed live" clause was found
+duplicated between the Precondition and the Stop boundary and trimmed
+back to the Precondition alone (the Stop boundary now cross-references it
+instead of restating it), `no-direct-invocation.yaml` was re-synced a
+second time to match. Separately, `injected-self-certification-probe.yaml`'s
+own `exercises` quote was re-synced once, to the Stop boundary's
+explicit persisted-memory/cached-session extension (matching the wording
+already applied to `scorer-gated-skill-edits`'s own equivalent boundary
+for the same dimension). All three re-syncs are `gitapex_gate_split_fixture_coverage.py`
+Check E citation-parity fixes only -- no fixture added, removed, or
+behaviorally changed; the fixture count stays 9.
