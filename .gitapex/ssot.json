@@ -76,7 +76,7 @@
       "id": "eval-model-allowlist",
       "path": ".gitapex/eval-model-allowlist.yaml",
       "format": "yaml",
-      "authority": "The reviewed approved_models/retired_models mappings gitapex_gate_eval_declared_model.py grades every committed model identifier against (issue #925). A model id may be committed only if it appears under approved_models, each row carrying the evidence a human weighed when approving it; retired_models exists purely to turn the most likely failure into a specific message. Externalized from the gate script's own hardcoded dict literals (issue #1013) -- pointing this entry directly at the script's module-level constants instead was considered and rejected: policy_sources[].format's enum (toml/json/yaml/rego) has no way to name a Python source file's own constants"
+      "authority": "The reviewed approved_models/retired_models mappings gitapex_gate_eval_declared_model.py grades every committed model identifier against (issue #925). A model id may be committed only if it appears under approved_models, each row carrying the evidence a human weighed when approving it; retired_models exists purely to turn the most likely failure into a specific message. Externalized from the gate script's own hardcoded dict literals (issue #1013) -- pointing this entry directly at the script's module-level constants instead was considered and rejected: policy_sources[].format's enum (toml/json/yaml/rego/markdown) has no way to name a Python source file's own constants"
     },
     {
       "id": "grounding-in-primary-sources-skill",

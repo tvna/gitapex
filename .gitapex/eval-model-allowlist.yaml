@@ -8,10 +8,10 @@
 # the smaller alternative the issue's own Acceptance Criteria Map also
 # named (a policy_sources entry pointing directly at the script's module-
 # level constants): .gitapex/ssot.schema.json's policy_sources[].format
-# enum is `["toml", "json", "yaml", "rego"]` only, with no way to name a
-# Python source file's own constants as a serialization format, so that
-# smaller branch is not representable in the current schema. This file is
-# the schema-compliant realization of the same row.
+# enum is `["toml", "json", "yaml", "rego", "markdown"]` only, with no way
+# to name a Python source file's own constants as a serialization format,
+# so that smaller branch is not representable in the current schema. This
+# file is the schema-compliant realization of the same row.
 #
 # A model id may be committed to this repository only if it appears under
 # approved_models, and it appears there only with the evidence a human

@@ -35,7 +35,7 @@
     },
     "policy_sources": {
       "type": "array",
-      "description": "Files that at least one gate reads as authoritative data via policy_refs[] -- not every config-shaped file in the repo, only ones a real gate actually consumes.",
+      "description": "Files that at least one gate reads as authoritative data via policy_refs[] -- not every config-shaped file in the repo, only ones a real gate actually consumes. One exception (issue #1890): a markdown-format entry is read directly by an agent following a skill's own procedure, never by a gate script, so it carries no policy_refs consumer at all -- see the format field's own description.",
       "items": { "$ref": "#/$defs/policySource" }
     },
     "gates": {
