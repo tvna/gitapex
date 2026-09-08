@@ -6,12 +6,11 @@ description: Use when the user -- or the current workflow itself, mid-task -- ne
 # Drafting Issues
 
 Turns an unstructured change request into a new GitHub issue whose body
-already carries an Acceptance Criteria Map (ACM). When the calling
-repository has a sibling skill that builds and validates the same ACM
-shape from an existing issue (for example, planning-a-branch-from-an-issue in this
-repository), producing the map here can save that skill from
-constructing one from scratch -- but the map is always a draft, never
-pre-verified (Step 9 states the full rule; it is not repeated here).
+already carries an Acceptance Criteria Map (ACM). When the calling repo
+has a sibling skill validating the same ACM shape from an existing issue
+(e.g. planning-a-branch-from-an-issue here), this map can save that
+skill rebuilding one from scratch -- always a draft, never pre-verified
+(Step 9 states the full rule).
 
 ## Steps
 
@@ -308,14 +307,15 @@ not re-derived from scratch each time.
 
 ## Notes
 
-Portability: Mixed -- Step 3's one clean dependency on
-`grounding-in-primary-sources` is this skill's only real sibling-skill
-dependency (see `metadata/gitapex.yaml`'s own decision entry for the
-full Mixed-via-clean-sibling reasoning). Everything else stays general
-and repo-agnostic, each git-hosting-specific detail (Step 9's
-issue-creation tool name, Step 6's semantic-search tool name, Updating
-an existing ACM issue's read/update tool names, Step 1/9's optional
-parent-linking call, Step 9's issue-template read) degrading to
+Portability: Repository-scoped -- besides Step 3's own clean
+`grounding-in-primary-sources` dependency, two pre-existing items place
+this skill past Mixed's own narrowness bar: Related skills' own retired-
+skill tracking-issue citation is an unhedged origin-repo fact, not
+isolated to a disclosed file, and `references/defect-not-yet-filed.md`'s
+own waiver-vocabulary citation is a hard, unfallbacked dependency on
+`hooks/gitapex_check_acm_present_or_waiver.py` outside this skill's own
+directory (see `metadata/gitapex.yaml`'s decision entries for the full
+reasoning). Each git-hosting-specific tool-name detail still degrades to
 whatever the calling repository actually has, per each Step's own
 stated fallback.
 
