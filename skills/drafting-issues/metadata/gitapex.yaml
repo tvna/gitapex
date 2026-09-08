@@ -35,7 +35,10 @@ spec:
       anchor: "https://github.com/tvna/gitapex/issues/1890"
       summary: "A second evaluating-skill-quality pass found the Mixed correction above incomplete: two pre-existing, condition-(a)-independent narrowness failures survive -- Related skills' own unhedged retired-skill tracking-issue citation (condition c), and defect-not-yet-filed.md's unfallbacked hooks/gitapex_check_acm_present_or_waiver.py dependency (condition b). Either alone routes to Repository-scoped. Corrected Mixed -> Repository-scoped; Notes rewritten."
       outcome:
-        verdict: "NOT-WELL-FORMED (dimension 6 gap-major) before this fix; addressed in place"
+        verdict: "WELL-FORMED-NOT-MATURE (dimension 6 gap-major, portability misclassification) before this fix; addressed in place"
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1890"
       summary: "Same pass flagged no sidecar disclosure of a considered Broad-vs-Adaptive tradeoff, given the body was just trimmed to clear a strict-token-budget ceiling. Considered Adaptive; decided Broad remains correct -- the remaining body content (redaction/escaping discipline, ACM structure, dedup search) is common-path material every invocation needs, not rare-path detail; the one genuinely rare-path branch already moved to references/defect-not-yet-filed.md."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "A third, fresh evaluating-skill-quality pass independently re-derived Repository-scoped from all four rubric conditions (not just confirming the prior pass's two citations) and confirmed it correct; the rewritten Notes paragraph verified accurate and internally consistent. Same pass found scripts/test_gitapex_check_acm_present.py has an undisclosed pytest dependency (monkeypatch/capsys fixtures, no import pytest) -- pre-existing, not touched by this diff, left as a disclosed out-of-scope gap."
