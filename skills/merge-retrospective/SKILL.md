@@ -1,37 +1,31 @@
 ---
 name: merge-retrospective
 description: Use when a pull request has just merged, before closing the turn -- enumerates every repair between PR open and merge, classifies each as a missing deterministic gate, an unclear agent instruction, or an external/human decision that cannot be automated, files each missing-deterministic-gate repair as its own standalone gate-proposal issue, and records the outcome in a retrospective issue before closing it.
+compatibility: "Depends on a connected GitHub MCP server (mcp__github__* tools) for Steps 0, 2, 4b, 5, and 7; falls back to the repo's own REST API wrapper where absent (see Prerequisite)."
 ---
 
 # Merge Retrospective
 
-This is a self-contained procedure; it depends on a connected GitHub MCP
-server for Step 0's dedup search, Step 2's history reconstruction, and
-Step 5's issue-filing calls, plus a local, network-free helper script
-(`skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py`) that
-Step 5 invokes once per `missing-deterministic-gate` repair to compute
-that repair's deterministic title, `Dedup-sweep:` proof line, Acceptance
-Criteria Map body, and label.
+This is a self-contained procedure -- see Prerequisite below for its
+GitHub MCP server and helper-script dependencies (also summarized in the
+frontmatter `compatibility` field above).
 
-A merged PR is not the end of the cycle. Before closing the turn, look
-back at everything that had to be repaired between opening the PR and
-merging it, and turn that history into a durable improvement instead of
-letting it evaporate -- each cycle should leave the repository's harness
-measurably better than the last.
+A merged PR is not the end of the cycle -- look back at everything
+repaired between open and merge, and turn that history into a durable
+harness improvement instead of letting it evaporate.
 
-This skill is self-contained: the taxonomy and procedure below do not
-require the calling repository to have a CLAUDE.md, an AGENTS.md, or any
-particular instruction file, and do not assume one has this exact
-chapter/section structure. Where a repo does have its own instruction
-file, point proposed gates and instruction fixes at that file (whatever
-it is called) and follow its existing conventions (posting style,
-issue/PR templates, etc.) -- this skill does not impose its own.
+This skill's taxonomy and procedure need no calling-repository
+CLAUDE.md/AGENTS.md or matching chapter structure. Where one exists,
+point proposed gates and instruction fixes at it and follow its own
+conventions (posting style, issue/PR templates) rather than this
+skill's generic defaults.
 
-**Prerequisite:** Step 0, Step 2, and Step 5 below assume a connected
+**Prerequisite:** Steps 0, 2, 4b, 5, and 7 below assume a connected
 GitHub MCP server (`mcp__github__*` tools). Where the environment lacks
 one, fall back to the repo's own approved read-only REST API wrapper for
-Step 0's dedup search and Step 2's history reconstruction, and to
-whatever write path the repo already uses for filing issues in Step 5.
+Step 0's dedup search, Step 2's history reconstruction, and Step 4b/7's
+own reads, and to whatever write path the repo already uses for filing
+issues in Step 5.
 See `gitapex_file_gate_proposal.py` for what Step 5's own bundled helper
 needs: local shell access only (`uv run` or equivalent) and no network
 calls of its own -- every actual GitHub write in this skill stays a
@@ -85,7 +79,10 @@ rules (injection containment for untrusted quoted text, each field's own
 omission rule, and label handling). An `external-human-decision` entry
 uses the same shape as the other two categories, just with no
 `Proposed gate` or `Filed as:` line -- see `references/worked-example.md`,
-whose third repair models this category in full.
+whose third repair models this category in full. A repair entry's own
+prose stating a durable claim about this repository's own code (a
+count, "every", "the only cause") follows `grounding-in-primary-sources`'s
+discipline -- ground it in the actual code before writing it.
 
 ## Procedure
 
@@ -138,17 +135,13 @@ whose third repair models this category in full.
      - **No match** -> nothing to dedup against; continue into Step 1 below,
        and when Step 5 files, proceed to `create` per its remaining bullets,
        same as a repository with no stub-opening CI script at all.
-       Residual risk, named rather than left implicit: two fully
-       concurrent runs against the same PR can both observe "No match"
-       here and both proceed to create their own retrospective issue --
-       GitHub's REST issue-creation endpoint has no atomic
-       create-if-absent primitive this skill can rely on to close that
-       window. This is the same class of race 4b.3 already discloses for
-       a DUPLICATE-OF gate-proposal filing; unlike that path, a duplicate
-       retrospective issue has no dedicated close-as-duplicate step of
-       its own today, so a human noticing two retrospective issues for
-       one PR is this residual's own real backstop, not a case this step
-       resolves on its own.
+       Residual risk: two fully concurrent runs can both observe "No
+       match" and each create their own retrospective issue -- GitHub's
+       issue-creation endpoint has no atomic create-if-absent primitive.
+       Same race class 4b.3 discloses for a DUPLICATE-OF gate-proposal
+       filing; unlike that path, a duplicate retrospective issue has no
+       dedicated close-as-duplicate step, so a human noticing two issues
+       for one PR is this residual's own backstop.
 1. **Nothing to sweep.** A routine cycle has no carry-forward check to run
    here: every `missing-deterministic-gate` finding is filed as its own
    standalone issue the moment Step 5 classifies and confirms it, so there
@@ -165,7 +158,10 @@ whose third repair models this category in full.
    for the rest of the cycle; nothing about it is written anywhere until
    Step 5. Use `mcp__github__pull_request_read` (`get_commits`,
    `get_reviews`, `get_review_comments`, `get_check_runs`) to reconstruct
-   the history. A repair is any of:
+   the history. A subcall that errors, times out, or returns a visibly
+   truncated result is not a clean read -- retry once; a second failure
+   blocks Step 5's zero-repair fast-close (never silently read as "no
+   repairs found") and gets reported instead. A repair is any of:
    - a CI run that failed and was fixed by a subsequent push
    - a review comment that led to a follow-up commit
    - a force-push made to correct a mistake (not just to rebase cleanly)
@@ -245,92 +241,20 @@ whose third repair models this category in full.
      a standalone issue or a script call -- they stay recorded inline
      exactly as here, unchanged.
     - **File each `missing-deterministic-gate` repair as its own
-      standalone issue.** In index order, call
+      standalone issue**, via
       `skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py`
-      (pure, network-free -- see Prerequisite) with that repair's index,
-      one-line label, Classification rationale, Proposed gate text, any
-      residual risk already noted in this repair's own prose (or none),
-      this retrospective issue's own number, and the Step 4b sweep's
-      open-issue count, timestamp, and verdict for this repair, to get
-      back a deterministic title, an Acceptance Criteria Map body with
-      the generator-made `Dedup-sweep:` line (never hand-typed), and
-      the `gate-proposal` label constant -- the script itself never
-      calls `issue_write` or `issue_read`. Then, as direct
-      `mcp__github__*` tool calls:
-      - Search for an issue with that **exact** title, never substring.
-      - **No match:** create it with the script's own title, body, and
-        label (regenerating the sweep line per create -- reusing one
-        filing's line self-denies as stale), then re-fetch to confirm
-        it exists before recording anything as filed.
-      - **Exactly one match:** confirm its body still carries an
-        Acceptance Criteria Map first; a title match without one
-        fails closed and escalates instead of recording filed.
-     - **More than one match:** fail closed and escalate -- the same
-       discipline as Step 0's own ambiguous-stub-match handling above.
-       Never guess which one is authoritative, and never file a third.
-      Once a filing is confirmed (created-and-verified, or already
-      existed), record `Filed as: #<issue number>` immediately alongside
-      that repair's own `Status: missing-deterministic-gate` line in this
-      retrospective issue's body -- add it there; never remove or replace
-      the `Status:` line itself. `issue_write` has no native append
-      primitive: this "add" is always a whole-body rewrite, so re-fetch
-      this retrospective issue's own current body immediately before
-      this write and merge only this repair's own `Filed as:` line into
-      it, never reusing an earlier read -- a concurrent run recording a
-      different repair's own `Filed as:` line in the same body window
-      would otherwise be silently overwritten by a write built from a
-      stale copy. A DUPLICATE-OF #N filing closes
-      immediately after its create (`state_reason: duplicate`,
-      referencing #N); the 4b.3 umbrella append stays best-effort,
-      never the record itself.
-   - **A failed or unconfirmed filing blocks that repair's line, not the
-     rest of the cycle -- and blocks closing.** If the script cannot
-     compute a value for a repair (a required classification field is
-     missing), if the create call itself fails, or if a write cannot be
-     confirmed by re-fetch (treat an unconfirmed write as a failure, the
-     same as an outright one) -- skip only that repair's `Filed as:`
-     line and continue with the rest. Never close the retrospective issue
-     while any `missing-deterministic-gate` repair from this cycle still
-     lacks a confirmed `Filed as:` line. A later, resumed run retries only
-     the repairs still missing one -- but a `Filed as: #<N>` line already
-      present in this retrospective issue's own body is itself untrusted
-      state, not proof: the body is externally editable between runs (a
-      careless edit, or a hostile one), so re-fetch issue `#<N>` and
-      confirm it still exists with the `gate-proposal` label and this
-      repair's exact title before skipping it, under the same re-fetch
-      discipline this step already requires. A re-fetch that cannot
-      complete at all (a network/API error) is not the same finding as a
-      completed re-fetch that comes back mismatched or absent, but is
-      handled identically -- named separately here only so a reader does
-      not assume otherwise: neither one proves the filing is real, so
-      both fall through to the same re-file path below rather than one
-      silently trusting an inconclusive check. A `Filed as:`
-     line that does not re-verify this way is treated exactly like an
-     unconfirmed write: proceed to (re-)file that repair through the
-     exact-title search and create-or-match flow above, as if the line
-     were absent, rather than trusting its mere presence. The exact-title
-     search above is the backstop against a duplicate either way.
-   - **Close once every `missing-deterministic-gate` repair from this
-     cycle carries a confirmed `Filed as:` line** (zero such repairs is
-     the trivial case). This follows the same attended/unattended rule
-     the fast-close path already used below, now extended to every close
-     this step performs, not only the zero-repair case: when an operator
-     is present to respond, preview the exact drafted body -- the repair
-     list, every filed-issue number, or the zero-repair paragraph -- and
-     wait for an explicit go-ahead before calling close. When running
-     fully unattended with no operator able to respond, file everything
-     above but leave the retrospective issue open for a human to close
-     after review; never let a fully unattended context both draft the
-     "everything is filed" conclusion and act on it with nobody
-     positioned to catch a wrong call.
+      plus a direct `mcp__github__*` exact-title search/create-or-match
+      flow, then record `Filed as: #<issue number>` alongside that
+      repair's own `Status:` line -- see
+      `references/gate-proposal-filing-mechanics.md` for the full
+      mechanics (the script call, the no-match/one-match/more-than-one-
+      match branches, and the re-fetch-before-write discipline), the
+      failed-or-unconfirmed-filing resume rule, and the close condition.
    - **Zero-repair fast-close.** When Step 2 finds no repairs at all,
      file a single-paragraph issue body instead of the full shape above
-     -- state the PR number, that zero repairs occurred, and the fixed
-     line `Retrospective status: zero-repair-fast-close` verbatim on its
-     own line -- then apply the same attended/unattended close rule just
-     above. The issue still carries `retrospective` (and any secondary
-     lifecycle label); only its Repairs content and its lifecycle are
-     collapsed to one line and one close call.
+     -- see `references/zero-repair-fast-close.md` for the exact body --
+     then apply the same attended/unattended close rule
+     `references/gate-proposal-filing-mechanics.md` states.
 6. **Cross-link**: reference the merged PR number in the retrospective
    issue body (e.g. "Refs #<merged PR number>").
 7. **Verify the filed issue.** After `issue_write` returns, confirm the
@@ -338,19 +262,15 @@ whose third repair models this category in full.
    title-policy gate the repo enforces (no rejection or auto-edit), and
    that the PR cross-link from Step 6 resolves to the correct PR. A
    silent write failure or a title-policy rejection is not "filed." When
-   a close call was actually issued for this cycle's retrospective issue
-   -- whether the zero-repair fast-close path or the full Repairs path
-   applied, per Step 5's own now-unified attended/unattended rule; an
-   operator confirmed it either way, not the unattended case, which
-   intentionally leaves the issue open with no close call to verify --
-   also confirm the close call itself actually took effect (re-fetch the
-   issue's state, not just its existence) -- a filed-but-still-open issue
-   after a confirmed close is a silent failure of the close half of the
-   operation, not a completed close. If the re-fetch still shows it open,
-   retry the close call once; if it is still open after that retry, stop
-   treating the cycle as closed, report the stuck-open issue number, and
-   leave it for a human to close rather than silently retrying
-   indefinitely or pretending the close succeeded.
+   a close call was actually issued -- either close path, per Step 5's
+   unified attended/unattended rule; only the attended case issues one,
+   the unattended case leaves the issue open with nothing to verify --
+   confirm the close itself took effect (re-fetch state, not just
+   existence): a filed-but-still-open issue after a confirmed close is a
+   silent close failure, not a completed one. If still open, retry the
+   close once; if still open after that, stop treating the cycle as
+   closed, report the stuck-open issue number, and leave it for a human
+   rather than retrying indefinitely or pretending it succeeded.
 
 ## Stop boundary
 
@@ -393,3 +313,12 @@ once confirmed -- see `references/zero-repair-fast-close.md` for the
 exact body. It still carries the `retrospective` label (and any
 secondary lifecycle label) with the same title convention; only its
 Repairs section and lifecycle collapse to one line and one close call.
+
+## Notes
+
+Install/vendoring-time integrity (whether this SKILL.md, its bundled
+`scripts/gitapex_file_gate_proposal.py`, and `references/*.md` are the
+untampered, intended copies) is separate from the runtime content trust
+`references/repair-record-format.md`'s injection-containment rules
+cover -- a shape-checker PASS says nothing about it. Verify it through
+the calling repository's own vendoring/install process.

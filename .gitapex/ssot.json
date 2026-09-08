@@ -1,6 +1,6 @@
 {
   "meta": {
-    "schema_version": "1.5.0",
+    "schema_version": "1.6.0",
     "tracking_issue": 123,
     "status": "active",
     "phase": "phase-0"
@@ -76,7 +76,13 @@
       "id": "eval-model-allowlist",
       "path": ".gitapex/eval-model-allowlist.yaml",
       "format": "yaml",
-      "authority": "The reviewed approved_models/retired_models mappings gitapex_gate_eval_declared_model.py grades every committed model identifier against (issue #925). A model id may be committed only if it appears under approved_models, each row carrying the evidence a human weighed when approving it; retired_models exists purely to turn the most likely failure into a specific message. Externalized from the gate script's own hardcoded dict literals (issue #1013) -- pointing this entry directly at the script's module-level constants instead was considered and rejected: policy_sources[].format's enum (toml/json/yaml/rego) has no way to name a Python source file's own constants"
+      "authority": "The reviewed approved_models/retired_models mappings gitapex_gate_eval_declared_model.py grades every committed model identifier against (issue #925). A model id may be committed only if it appears under approved_models, each row carrying the evidence a human weighed when approving it; retired_models exists purely to turn the most likely failure into a specific message. Externalized from the gate script's own hardcoded dict literals (issue #1013) -- pointing this entry directly at the script's module-level constants instead was considered and rejected: policy_sources[].format's enum (toml/json/yaml/rego/markdown) has no way to name a Python source file's own constants"
+    },
+    {
+      "id": "grounding-in-primary-sources-skill",
+      "path": "skills/grounding-in-primary-sources/SKILL.md",
+      "format": "markdown",
+      "authority": "The authoring-time discipline for grounding a durable claim (a version number, a feature's support status, a specific count, \"always\"/\"never\"/\"the only cause\") in a primary source before stating it as Fact rather than Speculation -- for an external tool/library/API/platform claim, and (since issue #1890) for a durable claim about this repository's own code. No gate script consumes this entry: it is read directly by an agent following merge-retrospective's Repair record format section or drafting-issues's own Facts step (issue #1890), which each point here rather than duplicating the procedure. The first policy_sources entry with no consuming gate at all -- format's markdown value (added this same change) exists for exactly this case, a prose policy an agent reads rather than a script parses."
     }
   ],
   "gates": [

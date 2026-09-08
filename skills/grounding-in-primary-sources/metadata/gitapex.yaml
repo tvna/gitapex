@@ -3,7 +3,7 @@ kind: SkillMetadata
 metadata:
   name: grounding-in-primary-sources
 spec:
-  portability: Portable
+  portability: Repository-scoped
   capabilityAssumption: Broad
   skillDependencies:
     requires: []
@@ -30,3 +30,20 @@ spec:
     - kind: correction
       anchor: "https://github.com/tvna/gitapex/issues/845"
       summary: "Supersedes the deferral above (append-only, not deleted): spec.executionRequirements.network now exists. Declared mode: unrestricted, not allowlist -- this skill fetches whichever external tool's own docs a claim needs, an arbitrary set no fixed domain list could honestly state. Argued against the parent issue's invariants 6/9: tools.write is already [] and Stop boundaries require fetched content stay untrusted, so unrestricted fetch has no effective local write path to exploit."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "Extended \"When to use\" to explicitly cover a durable, universal-sounding claim about this repository's own code (a docstring/comment/PR-body/README assertion never re-derived against current code), plus one worked example demonstrating it. The existing Procedure (identify, verify, cite, downgrade) is reused verbatim -- no rewrite -- since the same discipline already applies unchanged to this newly-named claim class."
+      outcome:
+        baseCommit: "a9896582"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "evaluating-skill-quality's Step 7 review found two gaps, both fixed: (1) description was not extended alongside the new bullet, so it wouldn't discover the new trigger -- fixed. (2) portability declared Portable, but Procedure step 5/Stop boundaries defer to untrusted-input-triage/responding-to-a-fresh-arrival as canonical -- a pre-existing, not diff-introduced dependency; corrected to Repository-scoped."
+      outcome:
+        baseCommit: "a9896582"
+        verdict: "WELL-FORMED-NOT-MATURE before fix; both gaps fixed in place"
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1890"
+      summary: "A second evaluating-skill-quality pass (re-run after the correction above) found two more minor gaps, both fixed: the new worked example's step 4 used a \"Result:\" label where every other instance in this file uses the established \"Fact:\"/\"Speculation:\" vocabulary -- relabeled. SKILL.md's own Notes restated the full Repository-scoped rationale already recorded in this sidecar entry -- shortened to a pointer at this entry, full reasoning kept in exactly one place."
+      outcome:
+        baseCommit: "dad72918"
+        verdict: "WELL-FORMED-NOT-MATURE before this fix; both gaps fixed in place"
