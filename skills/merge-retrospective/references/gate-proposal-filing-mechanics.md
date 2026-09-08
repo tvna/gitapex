@@ -2,9 +2,7 @@
 
 Step 5's own detail for filing each `missing-deterministic-gate` repair
 as its own standalone issue, plus the failure/resume and close-condition
-rules that govern it. Moved out of `SKILL.md`'s own body per dimension 5
-(progressive disclosure) -- read this when actually executing Step 5,
-not needed to understand the skill's overall shape.
+rules that govern it.
 
 ## Filing each missing-deterministic-gate repair as its own standalone issue
 

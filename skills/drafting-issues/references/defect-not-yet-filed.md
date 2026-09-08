@@ -2,9 +2,6 @@
 
 `SKILL.md`'s own seventh classification type (Step 2): the full scope
 and procedure for a raw defect signal with no issue tracking it yet.
-Moved out of `SKILL.md`'s own body per dimension 5 (progressive
-disclosure) -- read this when Step 2 actually classifies a request as
-this type, not needed to understand the skill's overall shape.
 
 Scoped only to the no-issue-yet case (for example, a linkless CI
 failure with no issue tracking it yet): the input is a raw defect
