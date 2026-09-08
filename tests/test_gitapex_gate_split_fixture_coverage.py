@@ -1776,7 +1776,7 @@ def test_real_split_json_partition_declarations_are_pinned_exactly():
     assert declared == {
         "battle-testing-a-skill": None,
         "evaluating-skill-quality": (35, 44, 18),
-        "merge-retrospective": (11, 7, 5),
+        "merge-retrospective": (12, 7, 6),
         "scorer-gated-skill-edits": None,
     }
 

@@ -102,7 +102,7 @@ class PolicySource(BaseModel):
 
     id: str
     path: str
-    format: Literal["toml", "json", "yaml", "rego"]
+    format: Literal["toml", "json", "yaml", "rego", "markdown"]
     authority: str
 
 
