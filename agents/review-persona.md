@@ -52,31 +52,21 @@ adds the new call site, rather than reusing this definition silently.
    stays `SKILL.md`-only; widening
    it to also route a `references/**`-only edit is a separate, not-yet-
    landed change tracked elsewhere, not something this entry grants on
-   its own -- `drafting-a-skill`'s own Step 3 (Cohesion self-check),
-   Step 4 (Collision/dependency check), Step 5 (Domain-gap sweep), and
-   Step 7 (review-handoff critique) dispatched here instead, because
-   `drafting-a-skill` carries `disable-model-invocation: true`, which
-   blocks a `Skill`-tool invocation of it from any caller, not only a
-   top-level one -- see `drafting-a-skill`'s own Precondition and decision
-   log for the live confirmation, not re-derived here. The dispatch
-   prompt embeds `drafting-a-skill`'s own Step
-   3/4/5/7 procedure text (or its file path) and the proposed
-   `SKILL.md`/`references/` diff under review directly, in-band, since
-   this dispatch has no tool of its own that could fetch either. Step 4's
-   own collision check additionally needs the caller's current skill
-   inventory embedded the same way, per that Step's own dispatch-prompt
-   requirement -- this dispatch's `Read, Grep, Glob` allow-list can
+   its own. Dispatches `drafting-a-skill`'s own Step 3 (Cohesion
+   self-check), Step 4 (Collision/dependency check), Step 5 (Domain-gap
+   sweep), and Step 7 (review-handoff critique) -- that same "Skill-file
+   edit routing" section states the full mechanism (why `drafting-a-skill`
+   is never invoked as a skill, what the dispatch prompt embeds, and the
+   returned output shape), not restated here. Step 4's own collision
+   check additionally needs the caller's current skill inventory embedded
+   the same way -- this dispatch's `Read, Grep, Glob` allow-list can
    enumerate every native `skills/*/` directory on disk but has no access
    to a separately-installed or vendored skill's own registry entry
    outside the filesystem, the same registry-lookup gap call site 3 above
-   already discloses for a different check. Findings
-   return in `drafting-a-skill`'s own Step 3/4/5/7 output shape (a named
-   split/gap finding or an explicit "none found," each Step 4 collision
-   resolved or deferred with a reason, and the Step 7 review-handoff
-   critique) -- this dispatch never itself decides whether a finding gets
+   already discloses for a different check. Read-only, like entry 4
+   above: this dispatch never itself decides whether a finding gets
    fixed, deferred, or escalated; that stays the dispatching caller's own
-   job, the same read-only, findings-only boundary call site 4 above
-   already states.
+   job.
 6. `merge-retrospective` Step 4b's backlog-grounded proposal review
    (issue #1806) -- one dispatch per retrospective cycle, covering every
    `missing-deterministic-gate` repair from that cycle together against

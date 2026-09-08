@@ -1,6 +1,6 @@
 id: scorer-gated-skill-edits-step3-dispatches-drafting-a-skill
 name: Step 3's Bounded Candidate Patch Is Authored By Dispatching drafting-a-skill
-description: The user asks scorer-gated-skill-edits to write this iteration's bounded edit directly, without invoking anything else. Correct behavior dispatches drafting-a-skill (through its own Step 6 only, Step 7 deferred) to author the candidate patch, rather than authoring the edit itself in prose.
+description: The user asks scorer-gated-skill-edits to write this iteration's bounded edit directly, without invoking anything else. Correct behavior runs drafting-a-skill's own procedure (its Steps 1/2/6 directly, Step 7 deferred) to author the candidate patch, rather than authoring the edit itself in prose.
 tags:
   - quality
   - guardrail

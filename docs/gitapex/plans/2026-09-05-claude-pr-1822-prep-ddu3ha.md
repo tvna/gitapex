@@ -12,6 +12,8 @@ Base: main
 | `scorer-gated-skill-edits`'s own Step 3/Step 9 dispatch language matches the corrected mechanism | Apply the identical text fix to `skills/scorer-gated-skill-edits/SKILL.md`'s Step 3 ("authored by dispatching `drafting-a-skill`") and Step 9's pre-ship dispatch language | Edit `skills/scorer-gated-skill-edits/SKILL.md` Steps 3 and 9 | Read-through confirms internal consistency with `drafting-a-skill`'s corrected Precondition; no live `scorer-gated-skill-edits` trial run required for this issue | `scorer-gated-skill-edits` is a more complex caller (its own worktree-isolation Precondition); this row updates dispatch-mechanism prose only, not an end-to-end live trial of that skill |
 | `executing-a-branch-plan`'s own routing reference names a concrete, working mechanism instead of an inert pointer | Update `decomposition-and-dispatch.md`'s "Skill-file edit routing" section to state the `review-persona`-dispatch mechanism concretely | Edit `skills/executing-a-branch-plan/references/decomposition-and-dispatch.md` | Re-run the #1794/#1795-style case (a `SKILL.md`-touching task) through the updated reference text; confirm it now names a mechanism that actually works, closing the gap issue #1796's stop-and-replan comment identified | None identified beyond rows 1-2's own |
 
+Amendment (Step 8 fix round, after this plan's own tasks landed): rows 1 and this table's Task 1 both stated the trigger scope as a `SKILL.md`/`references/**`-touching task. The shipped `agents/review-persona.md` entry 5 narrowed this to `SKILL.md`-only, with the `references/**` widening explicitly deferred as a separate, not-yet-landed change -- see that file's own Sanctioned call site 5 for the actual shipped scope and its own disclosure of the narrowing.
+
 ## Task Decomposition
 
 Four tasks, four distinct files -- no file-ownership conflicts. Interface
@@ -143,12 +145,14 @@ Wave: 3 (co-assignable with Task 3 -- no file or interface edge between
 them).
 Irreversibility: none (a documentation edit, reversible by further edit).
 
-## Waves
+## Wave assignment
 
-- Wave 1: {Task 1}
-- Wave 2: {Task 2} (depends on Task 1)
-- Wave 3: {Task 3, Task 4} (Task 3 depends on Task 2; Task 4 depends on
-  Task 1 only; no edge between Task 3 and Task 4)
+- **Wave 1:** Task 1 -- first task in the interface-dependency chain, no
+  edge to compute against any sibling task.
+- **Wave 2:** Task 2 -- depends on Task 1 (names the mechanism Task 1
+  establishes).
+- **Wave 3:** Task 3, Task 4 (parallel; Task 3 depends on Task 2, Task 4
+  depends on Task 1 only, no edge between Task 3 and Task 4).
 
 ## Execution mode
 

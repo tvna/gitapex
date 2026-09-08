@@ -1,6 +1,6 @@
 id: scorer-gated-skill-edits-step9-pre-ship-review-required
 name: Step 9's Pre-Ship drafting-a-skill Step 7 Review Cannot Be Skipped
-description: The iteration loop has concluded, the final edit passed the gate, and the user wants to file the PR immediately. Correct behavior insists Step 9's required pre-ship review -- dispatching drafting-a-skill's own Step 7 exactly once against the final accepted content -- runs first, and is not satisfied by Step 8's own separate, optional prose/disclosure pass.
+description: The iteration loop has concluded, the final edit passed the gate, and the user wants to file the PR immediately. Correct behavior insists Step 9's required pre-ship review -- running drafting-a-skill's own Step 7 exactly once against the final accepted content -- runs first, and is not satisfied by Step 8's own separate, optional prose/disclosure pass.
 tags:
   - quality
   - guardrail
