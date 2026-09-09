@@ -2,7 +2,7 @@
 ``.github/scripts/gitapex_gate_plans_traceability.py`` (issue #1796), closing
 issue #1178's own ``detection-logic-property-coverage`` gap for this new
 module's regex compiles (`_ISSUE_URL_RE`, `_SOURCE_ACM_ROWS_RE`,
-`_FENCED_CODE_BLOCK_RE`, `_PLAN_FILE_SHAPE_RE`, `_EXCLUDED_STATUS_RE`), its
+`_FENCE_LINE_RE`, `_PLAN_FILE_SHAPE_RE`, `_EXCLUDED_STATUS_RE`), its
 module-level `REPO_ROOT` path resolution, and the string-comparison/split/
 regex call sites inside `find_missing_traceability`, `_parse_name_status_line`,
 `_added_or_modified` and `_diff_plan_files`.
@@ -71,8 +71,8 @@ def _init_repo(root: pathlib.Path) -> None:
 # ==========================================================================
 # `find_missing_traceability` -- model-based (issue-url / source-acm-rows
 # citation presence), exercising `_ISSUE_URL_RE` and `_SOURCE_ACM_ROWS_RE`
-# (the module-level regex compiles at lines 69/73) via the `.search(...)`
-# call inside `find_missing_traceability` itself (line 133).
+# (the module-level regex compiles at lines 91/95) via the `.search(...)`
+# call inside `find_missing_traceability` itself (line 175).
 # ==========================================================================
 
 # ASCII-only, matching `_ISSUE_URL_RE`'s own `[A-Za-z0-9_.-]+` character
@@ -146,7 +146,7 @@ def test_find_missing_traceability_ignores_citations_inside_a_fenced_code_block(
     combination, a citation that appears only inside a fenced code block
     never counts as genuine -- both labels are always reported missing,
     regardless of what the fenced-out citation content actually says.
-    Exercises `_FENCED_CODE_BLOCK_RE` (module level, line 79) together with
+    Exercises `_FENCE_LINE_RE` (module level, line 107) together with
     the two citation regexes on the same generated content."""
     fenced = (
         "# Sample plan\n\n"
@@ -158,12 +158,54 @@ def test_find_missing_traceability_ignores_citations_inside_a_fenced_code_block(
     assert set(gate.find_missing_traceability(fenced)) == {"issue-url", "source-acm-rows"}
 
 
+# `_TOKEN_ALPHABET` carries no backtick, so any line drawn from it can
+# never itself be a fence-open line -- safe filler for the "before"/
+# "inner"/"after" line groups below without a separate filter.
+_FENCE_SAFE_LINE = st.text(alphabet=_TOKEN_ALPHABET, max_size=15)
+
+
+@_PROPERTIES
+@given(
+    before=st.lists(_FENCE_SAFE_LINE, max_size=3),
+    inner=st.lists(_FENCE_SAFE_LINE, max_size=3),
+    after=st.lists(_FENCE_SAFE_LINE, max_size=3),
+)
+def test_strip_fenced_code_blocks_removes_exactly_a_balanced_bare_fence_pair(
+    before: list[str], inner: list[str], after: list[str]
+) -> None:
+    """**Model-based:** calls `_strip_fenced_code_blocks` directly by
+    name (module level, line 144), not only indirectly through
+    `find_missing_traceability` -- exercising its own line-by-line
+    `.split("\\n")` and `_FENCE_LINE_RE.match(line)` toggle. For ANY
+    generated before/inner/after line groups (none of which can itself be
+    a fence-open line, since `_TOKEN_ALPHABET` carries no backtick),
+    wrapping `inner` between a balanced bare ` ``` ` pair and stripping
+    leaves exactly `before` followed by `after`, `inner` gone entirely --
+    live-verified across the empty-list edge case for each group, not
+    only a populated one."""
+    lines = [*before, "```", *inner, "```", *after]
+    text = "\n".join(lines)
+    expected = "\n".join([*before, *after])
+    assert gate._strip_fenced_code_blocks(text) == expected
+
+
 # ==========================================================================
 # `_parse_name_status_line` -- model-based, exercising its own
-# `line.split("\t")` (line 166) and `status.startswith("R")` (line 171).
+# `line.split("\t")` (line 209) and `status.startswith("R")` (line 214).
 # ==========================================================================
 
-_PATH_ALPHABET = st.characters(blacklist_categories=("Cc", "Cs", "Cf"), blacklist_characters="\t\n\r")
+# "Zl"/"Zp" (U+2028 LINE SEPARATOR, U+2029 PARAGRAPH SEPARATOR) are
+# blacklisted alongside the control/format categories: Python's own
+# `str.splitlines()` -- the independent oracle
+# `test_added_or_modified_keeps_exactly_the_non_blank_non_excluded_lines`
+# below uses to compute its expected line list -- splits on both, but
+# `_added_or_modified` (the module under test) only splits on `\n` (after
+# normalizing `\r\n`/`\r`); without this exclusion Hypothesis can generate
+# a path containing one of the two and desync the oracle from the real
+# behavior, matching the precedent
+# `tests/test_gitapex_check_acm_present_properties.py`'s own
+# `_HANGUL_FILLER` exclusion sets for an analogous reason.
+_PATH_ALPHABET = st.characters(blacklist_categories=("Cc", "Cs", "Cf", "Zl", "Zp"), blacklist_characters="\t\n\r")
 _PATH_TEXT = st.text(alphabet=_PATH_ALPHABET, min_size=1, max_size=20).filter(lambda s: s.strip() != "")
 _NON_RENAME_STATUS = st.sampled_from(("A", "M", "T", "D", "C100"))
 _RENAME_STATUS = st.sampled_from(("R087", "R100", "R042"))
@@ -212,8 +254,8 @@ def test_parse_name_status_line_rename_without_destination_always_raises(status:
 
 # ==========================================================================
 # `_added_or_modified` -- model-based, exercising its own CRLF/CR
-# normalization + split (line 183) and `line.strip()`/`_EXCLUDED_STATUS_RE.
-# match(...)` filter (line 184).
+# normalization + split (line 226) and `line.strip()`/`_EXCLUDED_STATUS_RE.
+# match(...)` filter (line 227).
 # ==========================================================================
 
 _KEEP_STATUSES = ("A", "M", "T", "C100", "R087")
@@ -254,7 +296,7 @@ def test_added_or_modified_keeps_exactly_the_non_blank_non_excluded_lines(entrie
 # ==========================================================================
 # `_diff_plan_files` -- model-based, over a real git repository per
 # example. Exercises its own `_PLAN_FILE_SHAPE_RE.fullmatch(...)` call
-# (line 201).
+# (line 244).
 # ==========================================================================
 
 # ASCII-only, matching `_PLAN_FILE_SHAPE_RE`'s own `[A-Za-z0-9._-]+`
@@ -268,7 +310,19 @@ _PLAN_NAME = st.text(alphabet=_PLAN_NAME_ALPHABET, min_size=1, max_size=12).filt
 
 
 @_GIT_PROPERTIES
-@given(names=st.lists(_PLAN_NAME, min_size=1, max_size=4, unique=True))
+@given(
+    names=st.lists(_PLAN_NAME, min_size=1, max_size=4, unique=True).filter(
+        # `unique=True` only guarantees exact-string uniqueness; two
+        # generated names differing only by case (e.g. "A" and "a") are
+        # still distinct strings but collide as the same file on a
+        # case-insensitive filesystem (e.g. a contributor's macOS
+        # checkout), even though CI itself (ubuntu-latest) is unaffected.
+        # Filtering out any example with such a collision keeps this
+        # property reliable on every contributor's own machine, not only
+        # in CI.
+        lambda names: len({n.lower() for n in names}) == len(names)
+    )
+)
 def test_diff_plan_files_returns_exactly_the_added_well_formed_paths(
     names: list[str], scratch_root: pathlib.Path
 ) -> None:

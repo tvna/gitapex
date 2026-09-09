@@ -165,10 +165,17 @@ _SKILL_NAME_RE = re.compile(r"[A-Za-z0-9_-]+")
 # Issue #1796: unlike the design-doc/checker-script shapes above, a
 # reference file's own depth under `references/` is unconstrained (a skill
 # may nest its references in subdirectories), so this shape deliberately
-# does not enforce single-level-only the way `_DESIGN_DOC_SHAPE_RE` does --
-# there is no "unsupported shape" case here to hard-fail loudly on, only
-# the skill-directory-name validation `_skill_name` already applies to
-# every other signal's captured group.
+# does not enforce single-level-only the way `_DESIGN_DOC_SHAPE_RE` does.
+# There IS still an "unsupported shape" case `_collect_paths`'s own
+# `shape_re.fullmatch(...)` check (below) hard-fails loudly on, via
+# `FlagComputationError`: `([^/]+)` cannot span a `/`, so a *nested skill
+# directory* path -- `skills/<name>/<subdir>/references/<file>`, e.g.
+# `skills/foo/subdir/references/notes.md` -- fails to fullmatch here even
+# though the workflow's own `skills/**/references/**` trigger (which does
+# span `/`) could in principle select such a path. Confirmed unreachable
+# in THIS repository today only because every native skill directory here
+# is flat (`skills/<name>/`, no nesting) -- not because the shape itself
+# can never mismatch.
 _REFERENCE_PATH_RE = re.compile(r"skills/([^/]+)/references/.+")
 
 _SKILL_MD_PATHSPECS = ("skills/*/SKILL.md",)

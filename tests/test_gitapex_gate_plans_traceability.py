@@ -149,6 +149,43 @@ def test_defeat_mid_sentence_quoted_reference_is_not_counted_as_genuine() -> Non
     assert gate.find_missing_traceability(content) == ["source-acm-rows"]
 
 
+def test_defeat_odd_fence_pairing_does_not_swallow_a_real_citation_before_a_later_closed_block() -> None:
+    """Regression test for the single-regex fence-pairing bug
+    `_strip_fenced_code_blocks`'s line-by-line rewrite fixes.
+
+    The earlier single-regex approach paired the *first* opening fence it
+    found with the *next bare-only* closing line, skipping past any fence
+    line that carried a trailing language tag (its own closing pattern
+    required bare backticks, nothing after them). A decoy fence closed
+    with a language-tagged line (e.g. accidentally typed "```makefile"
+    instead of a bare "```") was therefore never recognized as closed --
+    the regex's non-greedy match kept consuming forward until it found
+    the *next* bare-only fence line, which here belongs to a completely
+    separate, later, well-formed fenced example -- silently stripping
+    every real citation line sandwiched in between and producing a false
+    CI failure on a genuinely well-formed file. Live-verified against the
+    previous implementation before this test was written, not assumed:
+    the previous single-regex version reports both citations missing for
+    this exact content; the current line-by-line version reports
+    neither."""
+    content = (
+        "# Branch Plan: sample\n\n"
+        "```\n"
+        "(decoy, closed with a language-tagged fence instead of a bare one)\n"
+        "```makefile\n"
+        "\n"
+        "Issue: https://github.com/tvna/gitapex/issues/1796\n"
+        "\n"
+        'Source ACM row: row 1 ("Sample criterion").\n'
+        "\n"
+        "## Example\n\n"
+        "```python\n"
+        "some_example_code()\n"
+        "```\n"
+    )
+    assert gate.find_missing_traceability(content) == []
+
+
 def test_defeat_fenced_code_block_issue_url_is_not_counted_as_genuine() -> None:
     content = (
         WELL_FORMED.replace("Issue: https://github.com/tvna/gitapex/issues/1796\n", "")

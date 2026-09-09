@@ -13,12 +13,15 @@ states for its two audit checks ("checks that disclosure was made, not
 that the audits actually passed").
 
 **Scoped to diff-touched files only, never the whole corpus.** Confirmed
-live before this gate shipped: of the 20 pre-existing files under
-`docs/gitapex/plans/`, 5 had no `Issue: <url>` line at all (one used a
-bare `Issue: #1879` instead of a full URL) and 11 had no `Source ACM
-rows?:` citation. A gate that scanned every file under `docs/gitapex/
-plans/` unconditionally would fail CI on every unrelated PR that never
-touches that directory. `--check-diff BASE_REF HEAD_REF` computes exactly
+live before this gate shipped, against the pre-existing corpus under
+`docs/gitapex/plans/` at that time (a specific file count is deliberately
+not restated here -- the corpus keeps growing with every new plans file,
+and a hardcoded number would drift stale on the very next addition): 5
+files had no `Issue: <url>` line at all (one used a bare `Issue: #1879`
+instead of a full URL) and 11 had no `Source ACM rows?:` citation. A gate
+that scanned every file under `docs/gitapex/plans/` unconditionally would
+fail CI on every unrelated PR that never touches that directory.
+`--check-diff BASE_REF HEAD_REF` computes exactly
 which files this diff adds or modifies (a three-dot/merge-base diff,
 `D`/`R100` excluded -- a deletion or byte-identical rename has no new
 content to check) and grades only those, mirroring
@@ -42,6 +45,25 @@ mid-sentence (not at the start of a line) is already excluded by the two
 patterns' own line-anchored `^` match and needs no separate handling; see
 `tests/test_gitapex_gate_plans_traceability.py`'s defeat tests for both
 shapes, live-verified rather than assumed.
+
+`_strip_fenced_code_blocks` walks the file line by line and toggles an
+"inside a fenced block" flag on every line matching `_FENCE_LINE_RE`
+(optional leading whitespace, three backticks, with or without a
+trailing language tag), stripping lines only while that flag is set --
+each fence line is paired with whichever fence line comes next,
+sequentially, so pairing can never mis-associate a fence with one far
+past its actual partner regardless of how many fence lines the file
+contains. An odd (unbalanced) total fence count leaves the flag set at
+EOF, so everything from that last, unmatched fence line to the end of
+the file reads as inside the block -- the correct interpretation of an
+unterminated fence, not a special case. (An earlier single-regex version
+of this function paired the first opening fence it found with the next
+*bare* closing-only line, skipping past any fence line that carried a
+language tag; that let its match span much further than intended and
+silently strip real citation lines sandwiched between an
+info-string-closed fence and an unrelated, later, properly-closed block
+-- see `tests/test_gitapex_gate_plans_traceability.py`'s own regression
+test for the live-verified failure case this rewrite closes.)
 
 Usage::
 
@@ -72,11 +94,17 @@ _ISSUE_URL_RE = re.compile(
 )
 _SOURCE_ACM_ROWS_RE = re.compile(r"^[ \t]*Source ACM rows?:", re.MULTILINE)
 
-# Non-greedy + DOTALL so a fence closes at the *next* ``` line rather than
-# consuming to the end of the file if a closing fence is missing (a
-# malformed file then simply keeps its last, unterminated block
-# unstripped -- still graded, never silently dropped).
-_FENCED_CODE_BLOCK_RE = re.compile(r"^[ \t]*```.*?^[ \t]*```[ \t]*$\n?", re.MULTILINE | re.DOTALL)
+# A fence-open line: optional leading whitespace, three backticks, with
+# or without a trailing language tag (e.g. "```python"). Matched against
+# each line independently by `_strip_fenced_code_blocks` below, which
+# toggles an "inside a fenced block" flag on every line this matches --
+# not a single fence-pairing regex, since pairing the *first* opening
+# fence with the *next bare-only* closing line (an earlier version's
+# approach) mis-pairs whenever an intended close carries a language tag,
+# letting the match span past it into a later, unrelated block and
+# silently strip real content sitting in between. See this module's own
+# docstring ("Fenced-code-block stripping") for the full explanation.
+_FENCE_LINE_RE = re.compile(r"^[ \t]*```")
 
 # label -> pattern, the single source of truth `find_missing_traceability`
 # grades against. Two entries stay a plain tuple rather than a registry
@@ -116,8 +144,23 @@ def _normalize(text: str | None) -> str:
 def _strip_fenced_code_blocks(text: str) -> str:
     """Remove every ` ``` `-fenced block from `text` before either
     citation pattern is searched for -- see this module's own docstring
-    for why."""
-    return _FENCED_CODE_BLOCK_RE.sub("", text)
+    for why, and for why this is a line-by-line toggle rather than a
+    single fence-pairing regex.
+
+    An odd (unbalanced) total fence count leaves `inside` set at EOF --
+    every line from the last, unmatched fence line onward is then
+    dropped, matching an unterminated fence's own correct interpretation
+    (everything after it reads as still inside the block), never a
+    silent no-op on a malformed file."""
+    inside = False
+    kept: list[str] = []
+    for line in text.split("\n"):
+        if _FENCE_LINE_RE.match(line):
+            inside = not inside
+            continue
+        if not inside:
+            kept.append(line)
+    return "\n".join(kept)
 
 
 def find_missing_traceability(content: str | None) -> list[str]:

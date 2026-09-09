@@ -70,11 +70,13 @@ Source ACM row: row 6 ("`docs/gitapex/plans/` task lists are traceable to their 
 Quoted Planned ops:
 > Register a `docs/gitapex/plans/*.md` target entry in `.gitapex/ssot.json` (mirroring the `docs/gitapex/specs/*.md` entry issue #1700 already added); add a minimal shape gate checking a plans file names its source Issue URL and each task cites `Source ACM rows` -- existence-only, matching skill-audit-disclosure's disclosure-not-soundness precedent.
 
-Files: `.gitapex/ssot.json`, new `.github/scripts/gitapex_gate_plans_file_shape.py`, new `.github/workflows/plans-file-shape-gate.yml`, plus regression tests.
+Files: `.gitapex/ssot.json`, new `.github/scripts/gitapex_gate_plans_traceability.py`, new `.github/workflows/plans-traceability-gate.yml`, plus regression tests. (Drifted from what shipped: this row originally named `gitapex_gate_plans_file_shape.py` / `plans-file-shape-gate.yml` -- the actual delivered script and workflow are named above; corrected post-hoc rather than left to mislead a reader comparing this plan against the real repository.)
 
 Delegates to: none (new checker script, not a `SKILL.md`).
 
 Irreversible: no.
+
+**Delivery note.** This file's own Task 4 (row 6) is what this repository's history actually completed, in the row-6 resumption round -- see `docs/gitapex/plans/2026-09-09-claude-gitapex-merge-pipeline-control-fsus87-row6.md` for that round's own task list. Tasks 1-3 above (rows 1/2/3/5, the `drafting-a-skill`-delegated ones) were NOT delivered by that resumption round and remain open as of this correction -- issue #1796's own rows 2/3/5 track them. A reader landing on this file alone should not assume Tasks 1-3 shipped merely because Task 4 did.
 
 ## Row 4 ("No harness-specific machinery required")
 
