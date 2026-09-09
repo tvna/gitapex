@@ -2137,6 +2137,25 @@
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
+    },
+    {
+      "id": "plans-traceability",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_gate_plans_traceability.py",
+      "rule": "A docs/gitapex/plans/*.md file this diff adds or modifies must contain a top-level 'Issue: https://github.com/<owner>/<repo>/issues/<N>' line and at least one 'Source ACM row:'/'Source ACM rows:' citation -- existence-only, matching skill-audit-disclosure's disclosure-not-soundness precedent (issue #1796, ACM row 6; mirrors the docs/gitapex/specs/*.md target issue #1700 already added to design-doc-pattern-dryrun). Scope is the diff, not the repository: --check-diff BASE_REF HEAD_REF computes exactly which docs/gitapex/plans/*.md files this diff adds or modifies (D/R100 excluded) and grades only those. Confirmed live before this gate shipped: of the 20 pre-existing files under docs/gitapex/plans/, 5 had no Issue URL line and 11 had no Source ACM rows citation, so an unscoped whole-corpus scan would fail CI on every unrelated PR. Fails closed (exits 1) on a blank ref, an unparseable diff, an unsupported (e.g. nested) docs/gitapex/plans/*.md filename shape, or non-UTF-8 file content -- never a silent pass. A citation quoted only inside a fenced code block is stripped before matching, so it does not count as genuine.",
+      "planes": ["ci"],
+      "local_exclusion": "Takes diff-derived BASE_REF/HEAD_REF as required arguments -- a shape gitapex_gate_local_preflight.py's own fixed-argv-only local_invocation contract has no provider for, the same disclosed class of gap design-doc-pattern-dryrun and retro-title-convention-citation already carry.",
+      "trigger": ".github/workflows/plans-traceability-gate.yml on pull_request",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": [1796, 1700],
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "docs/gitapex/plans/*.md"},
+        {"kind": "workflow-event", "ref": "plans-traceability-gate.yml:pull_request"}
+      ]
     }
   ],
   "clusters": {
