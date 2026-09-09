@@ -122,6 +122,69 @@ def test_every_registered_check_has_a_published_output_key(check):
     )
 
 
+# Issue #1796: the same four forward-direction drift gates above, restated
+# for `extra_cli_flag`/`extra_cli_dest` -- the second, optional source only
+# `drafting-a-skill-invocation-disclosure` sets. Filtered to rows that set
+# it (today, exactly one) rather than hardcoding that row's own name, so a
+# future second two-source row is covered with no edit here either.
+_EXTRA_FLAG_CHECKS = [c for c in gate._PROCESS_DISCLOSURE_CHECKS if c.extra_cli_flag]
+
+
+@pytest.mark.parametrize("check", _EXTRA_FLAG_CHECKS, ids=lambda c: c.name)
+def test_every_registered_checks_extra_flag_is_passed_on_the_command_line(check, check_step):
+    """Same fail-open as the primary-flag test above, for the second source:
+    without this, extra_cli_flag defaults to '' and that source can never
+    fire in CI even though the primary one does."""
+    assert check.extra_cli_flag in check_step["run"], (
+        f"{check.name} declares extra_cli_flag={check.extra_cli_flag!r} but it "
+        "is never passed to the gate script, so its second source can never "
+        "fire in CI"
+    )
+
+
+@pytest.mark.parametrize("check", _EXTRA_FLAG_CHECKS, ids=lambda c: c.name)
+def test_every_registered_checks_extra_flag_reads_a_step_output_through_env(check, check_step):
+    """The extra flag's value must arrive via `env:` indirection too, never
+    interpolated straight into the `run:` block (dimensions.md dimension 5)."""
+    env = check_step.get("env", {})
+    referenced = [name for name, value in env.items() if "steps.diff.outputs" in str(value)]
+    assert referenced, "the check step reads no diff-step output at all"
+    run = check_step["run"]
+    flag_index = run.index(check.extra_cli_flag) + len(check.extra_cli_flag)
+    argument = run[flag_index : flag_index + 60]
+    assert any(f'"${name}"' in argument for name in referenced), (
+        f"{check.extra_cli_flag}'s argument is not an env-var expansion: {argument!r}"
+    )
+
+
+@pytest.mark.parametrize("check", _EXTRA_FLAG_CHECKS, ids=lambda c: c.name)
+def test_every_registered_checks_extra_flag_has_a_published_output_key(check):
+    """The diff step must publish an output key for every row's own extra
+    source too, same reason as the primary-flag version above."""
+    key = check.extra_cli_flag.lstrip("-")
+    assert key in flags_module.OUTPUT_KEYS, (
+        f"'{key}' is {check.name}'s extra_cli_flag but "
+        "gitapex_compute_skill_audit_flags publishes no such output key, so "
+        "that source would read an empty string and never fire"
+    )
+
+
+@pytest.mark.parametrize("check", _EXTRA_FLAG_CHECKS, ids=lambda c: c.name)
+def test_every_registered_checks_extra_dest_is_filled_by_the_local_check_diff_mode(check):
+    """`--check-diff` must fill extra_cli_dest from a matching SkillAuditFlags
+    field too, same reason as `test_every_registered_check_is_filled_by_the_local_check_diff_mode`
+    below covers cli_dest."""
+    assert check.extra_cli_dest in gate._LIST_FLAG_DESTS, (
+        f"{check.name}'s extra_cli_dest {check.extra_cli_dest!r} is not in "
+        "_LIST_FLAG_DESTS, so --check-diff would never fill it"
+    )
+    assert hasattr(flags_module.SkillAuditFlags(applicable=False), check.extra_cli_dest), (
+        f"gitapex_compute_skill_audit_flags.SkillAuditFlags publishes no "
+        f"'{check.extra_cli_dest}' field, so --check-diff cannot fill {check.name}'s "
+        "second source"
+    )
+
+
 def test_the_diff_step_publishes_its_keys_through_the_single_serializer():
     """Guards the test above: it is only a real gate while the workflow gets
     its `$GITHUB_OUTPUT` content from `as_output_pairs`. A step that went
@@ -144,7 +207,7 @@ def test_no_published_output_key_is_consumed_by_nothing():
     the workflow keeps publishing it, the grader reads nothing, and every
     forward assertion stays green.
 
-    All four exclusions are named rather than wildcarded, and each is
+    All four named exclusions are named rather than wildcarded, and each is
     excluded for its own reason -- an unexplained exclusion in a
     reverse-direction drift gate is the exact failure mode it guards
     against. `applicable` gates whether the job's check step runs at all
@@ -155,10 +218,17 @@ def test_no_published_output_key_is_consumed_by_nothing():
     `_PROCESS_DISCLOSURE_CHECKS` row, because their rules (rejecting a
     WAIVED verdict, requiring a waiver with no PASS/FAIL form) do not fit
     that table's uniform verdict-vocabulary shape. So none of the four has,
-    or should have, a row -- and any *fifth* unconsumed key is the drift
-    this asserts against.
+    or should have, a row -- and any otherwise-unaccounted-for key is the
+    drift this asserts against.
+
+    Issue #1796 adds a fifth, generic (not hardcoded to one row's own name)
+    term: every row's own `extra_cli_flag`, where set, is consumed exactly
+    as much as its primary `cli_flag` -- `drafting-a-skill-invocation-disclosure`
+    is the only row that sets one today, but a future second two-source row
+    is covered here with no edit.
     """
     consumed = {check.cli_flag.lstrip("-") for check in gate._PROCESS_DISCLOSURE_CHECKS}
+    consumed |= {check.extra_cli_flag.lstrip("-") for check in gate._PROCESS_DISCLOSURE_CHECKS if check.extra_cli_flag}
     consumed |= {"applicable", "skill-md-changed"}
     consumed |= {"description-changed-skills", "needs-eval-coverage-skills"}
     orphaned = sorted(set(flags_module.OUTPUT_KEYS) - consumed)

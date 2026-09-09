@@ -81,7 +81,14 @@ _SECURITY_SKILL_MD = _PLAIN_SKILL_MD.replace(
 )
 
 _BASE_EVIDENCE = (
-    "## Skill audit evidence\n\n- battle-testing-a-skill: PASS\n- evaluating-skill-quality: WELL-FORMED-AND-MATURE\n"
+    "## Skill audit evidence\n\n"
+    "- battle-testing-a-skill: PASS\n"
+    "- evaluating-skill-quality: WELL-FORMED-AND-MATURE\n"
+    # Issue #1796: every fixture below that seeds a SKILL.md change now also
+    # owes this disclosure; carried on the shared base fixture rather than
+    # patched into each PASS-path test individually, since it applies to
+    # every one of them uniformly.
+    "- drafting-a-skill-invocation-disclosure: RAN\n"
 )
 
 

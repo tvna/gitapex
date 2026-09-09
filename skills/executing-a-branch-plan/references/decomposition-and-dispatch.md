@@ -99,6 +99,16 @@ numbered Step). Each task line cites the
 ACM row(s) it satisfies, so the row-to-task mapping stays traceable in
 both directions.
 
+`.github/scripts/gitapex_gate_plans_traceability.py` enforces this shape
+mechanically on every diff-touched `docs/gitapex/plans/*.md` file, so the
+citations above are not free-form: the file must carry a line of the
+exact form `Issue: https://github.com/<owner>/<repo>/issues/<N>` -- a
+bare `#N` reference does not satisfy this gate, even though GitHub itself
+auto-links it -- and each task's row citation must use the literal,
+case-sensitive prefix `Source ACM row:` or `Source ACM rows:` (singular
+or plural, followed by a colon), not an equivalent paraphrase such as
+"Satisfies ACM row 2".
+
 ### Verbatim-quotation discipline
 
 The task-list writer quotes each ACM row's own Planned-ops text into
