@@ -1,0 +1,48 @@
+name: Plans traceability gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "docs/gitapex/plans/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plans-traceability:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          fetch-depth: '0'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # Issue #1796 (ACM row 6): the diff-scoping itself lives inside the
+      # gate script (--check-diff BASE_REF HEAD_REF), not duplicated here
+      # as a second copy of the D/R100-filtering, pathspec-matching logic
+      # gitapex_compute_skill_audit_flags.py already owns for the sibling
+      # skill-audit gate -- one place, not a parallel, independently
+      # drifting copy. The script itself is fail-closed (exits 1, never a
+      # silent pass) on a blank ref, an unparseable diff, or an
+      # unsupported docs/gitapex/plans/*.md filename shape.
+      - name: Check docs/gitapex/plans/ traceability
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          uv run --frozen python3 .github/scripts/gitapex_gate_plans_traceability.py \
+            --check-diff "$BASE_SHA" "$HEAD_SHA"
