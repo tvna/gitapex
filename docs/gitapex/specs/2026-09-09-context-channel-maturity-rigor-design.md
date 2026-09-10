@@ -465,7 +465,7 @@ other deliverables; it cannot be a follow-up issue.
 |---|---|---|
 | Axes | Common five only | Common five (unchanged) plus channel-specific axes |
 | Thresholds | Zero | AGENTS.md quotes primary sources; subagent values declared as own convention |
-| Deterministic gate | Zero (the shape checker is `SKILL.md`-scoped; none of the 85 gates applies) | Channel shape gate, index drift gate, three tool-boundary checks |
+| Deterministic gate | Zero (the shape checker is `SKILL.md`-scoped; no gate declared in `.gitapex/ssot.json` applies) | Channel shape gate, index drift gate, three tool-boundary checks |
 | Measurement | Zero (13 fixtures never executed) | Baseline taken |
 | AGENTS.md | 91 lines / 6 sections | 50 lines or fewer (target 40), non-derivable content only |
 
@@ -600,7 +600,9 @@ The OpenCode tool-boundary gap on `branch-plan-task` (D6.4) is **in scope**
   precedent for threshold constants).
 - `.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py` (the fixture
   cost rule).
-- `.gitapex/ssot.json` (the 85 gate declarations).
+- `.gitapex/ssot.json` (the gate declarations; a count is deliberately not
+  restated -- the registry grows, and the claim that matters is that none of its
+  entries grades these channels' shape or size).
 - `.gitapex/runtime-compatibility-matrix.json` (the `pluginSubagentLimitations`
   and `toolSemantics` classifications).
 
@@ -614,8 +616,8 @@ by the requester outside the repository.
 This exposes a real contradiction in the repository's own instructions, and
 closing it is part of issue #1963's scope: AGENTS.md section 6 requires
 "operator-facing output (chat responses ... and plan artifacts)" to be written in
-the active contributor's native language, while all 196 Markdown files under
-`docs/` are in English and `post-write-provenance-recheck` enforces ASCII-only
+the active contributor's native language, while every Markdown file under
+`docs/` is in English and `post-write-provenance-recheck` enforces ASCII-only
 bodies on `mcp__github__issue_write`. The intended reading -- operator-facing
 communication in the contributor's language, repository artifacts in English --
 is not what section 6 currently says.
