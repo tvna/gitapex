@@ -20,7 +20,7 @@ import pathlib
 import sys
 import tempfile
 
-from hypothesis import given, settings
+from hypothesis import example, given, settings
 from hypothesis import strategies as st
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -36,6 +36,29 @@ _VALUE = st.text(
     alphabet=st.characters(blacklist_categories=("Cc", "Cs"), blacklist_characters="\n\r:"),
     max_size=30,
 )
+
+
+# `load_sync_module` requires the fixture module to expose BOTH
+# `AGENT_PERMISSION_SPECS` and `_render_agent_copy`, and raises otherwise.
+# An earlier revision of the exit-code property below wrote only the first,
+# so `main` returned 2 for EVERY generated example and the assertion
+# degenerated to "the generated denial set is never exactly {'*mcp*'}" --
+# vacuous, and latently failing on the day `from_regex` first drew that
+# one-element list, which its own alphabet permits. This stub renders the
+# same shape `_SYNC_TEMPLATE` renders in the fixed-example file.
+_RENDER_STUB = """
+
+def _render_agent_copy(source_text, source_rel, permission):
+    out = ["---", "description: d", "mode: subagent"]
+    if permission is not None:
+        out.append("permission:")
+        for key, value in permission.items():
+            out.append("  " + key + ": " + value)
+    out.append("---")
+    out.append("")
+    out.append("body")
+    return "\\n".join(out)
+"""
 
 
 @_PROPERTIES
@@ -133,6 +156,12 @@ def test_repo_root_resolution_cannot_be_walked_out_of_by_accident(parts: list[st
 
 @_PROPERTIES
 @given(denials=st.lists(_PERMISSION_KEY, min_size=0, max_size=4, unique=True))
+# Pins the ONLY denial set for which this property asserts exit 0. Without
+# it the property is satisfiable by a gate that never returns 0 at all --
+# which is exactly what it was, before the fixture module started exposing
+# `_render_agent_copy`. `from_regex` can draw this list but, under
+# `derandomize=True`, does not.
+@example(denials=["*mcp*"])
 def test_main_exit_code_matches_the_verdict(denials: list[str]) -> None:
     """Covers ``main``'s own comparison over the evaluated rows: the exit
     code is 0 exactly when the mapping matches the expectation table, for
@@ -142,6 +171,12 @@ def test_main_exit_code_matches_the_verdict(denials: list[str]) -> None:
     hypothesis re-runs the body many times per test, while a
     function-scoped fixture is created once for the whole test, so
     successive examples would otherwise write over each other's files.
+
+    Only ``branch-plan-task.md`` is written. ``review-persona.md``, the
+    table's other row, is deliberately absent: the gate emits no row at
+    all for a source file that is not in the tree, so its absence cannot
+    move the exit code and the property stays scoped to the one row the
+    generated denial set actually varies.
     """
     expected = set(gate.EXPECTED_BOUNDARIES["branch-plan-task.md"][2])
     with tempfile.TemporaryDirectory() as raw_dir:
@@ -154,6 +189,7 @@ def test_main_exit_code_matches_the_verdict(denials: list[str]) -> None:
         (root / "hooks").mkdir()
         mapping = ", ".join(f'"{key}": "deny"' for key in denials)
         (root / "hooks" / "gitapex_sync_opencode.py").write_text(
-            f'AGENT_PERMISSION_SPECS = (("branch-plan-task.md", {{{mapping}}}),)\n', encoding="utf-8"
+            f'AGENT_PERMISSION_SPECS = (("branch-plan-task.md", {{{mapping}}}),)\n' + _RENDER_STUB,
+            encoding="utf-8",
         )
         assert (gate.main(["--repo-root", str(root)]) == 0) is (set(denials) == expected)

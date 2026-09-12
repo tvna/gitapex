@@ -235,7 +235,8 @@ def evaluate(repo_root: Path) -> list[tuple[str, str, bool, str]]:
 
     for source in sources:
         name = source.name
-        fields = frontmatter_fields(read_checked(source))
+        source_text = read_checked(source)
+        fields = frontmatter_fields(source_text)
         declared = [key for key in BOUNDARY_KEYS if key in fields]
         rows.append(
             (
@@ -283,7 +284,7 @@ def evaluate(repo_root: Path) -> list[tuple[str, str, bool, str]]:
         # committed, so a change to the generator's own output shape (a
         # renamed key, a different indent) fails here.
         try:
-            rendered = render(read_checked(source), f"{AGENTS_SRC_DIR}/{name}", permission)
+            rendered = render(source_text, f"{AGENTS_SRC_DIR}/{name}", permission)
         except Exception as error:  # the generator raises on malformed input
             problems.append(f"the sync generator refused this source: {error!r}")
         else:

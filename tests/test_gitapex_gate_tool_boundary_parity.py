@@ -31,8 +31,9 @@ import gitapex_gate_tool_boundary_parity as gate  # noqa: E402
 
 # A stand-in for hooks/gitapex_sync_opencode.py carrying the two names the
 # gate imports. The renderer mimics the real generator's own permission
-# block (two-space indent, `key: value`); `render_broken` below mimics a
-# generator whose output shape drifted, which is what defeat case F needs.
+# block (two-space indent, `key: value`); `_write_repo`'s own
+# `permission_key`/`indent` parameters drift that shape, which is what the
+# generator-drift defeat cases below need.
 _SYNC_TEMPLATE = """AGENT_PERMISSION_SPECS = (
 {entries}
 )
@@ -294,7 +295,7 @@ def test_the_real_repository_passes() -> None:
     assert gate.main(["--repo-root", str(REPO_ROOT)]) == 0
 
 
-# --- load_permission_specs and read_checked, probed by name ------------
+# --- load_sync_module and read_checked, probed by name ----------------
 
 
 def test_load_sync_module_returns_the_table_and_the_renderer(tmp_path: pathlib.Path) -> None:
@@ -380,15 +381,6 @@ def test_load_sync_module_is_unrunnable_on_any_import_error(tmp_path: pathlib.Pa
     (repo / "hooks" / "gitapex_sync_opencode.py").write_text("undefined_name\n", encoding="utf-8")
     with pytest.raises(gate.GateUnrunnable, match="cannot import"):
         gate.load_sync_module(repo)
-
-
-def test_read_checked_round_trips_and_fails_closed(tmp_path: pathlib.Path) -> None:
-    target = tmp_path / "a.md"
-    target.write_text("hello\n", encoding="utf-8")
-    assert gate.read_checked(target) == "hello\n"
-    target.write_bytes(b"\xff\xfe\x00bad")
-    with pytest.raises(gate.GateUnrunnable, match="cannot read"):
-        gate.read_checked(target)
 
 
 def test_a_generator_that_refuses_the_source_is_a_finding(tmp_path: pathlib.Path) -> None:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One consolidated local pre-push / pre-PR-open gate runner (issue #876).
 
-This repository enforces 49 registered deterministic gates. Before this
+This repository enforces 51 registered deterministic gates. Before this
 script existed, roughly half of them had a perfectly good working-tree-only
 invocation and yet ran *only* as separate CI jobs, so an agent preparing a
 PR discovered gaps one CI job at a time on an already-open PR -- push, wait,

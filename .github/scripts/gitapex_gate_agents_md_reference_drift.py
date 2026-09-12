@@ -62,7 +62,22 @@ _CODE_SPAN_RE = re.compile(r"`([^`\n]+)`")
 # lowercase alphanumerics and hyphens, with at least one interior hyphen.
 # A token without a hyphen (`catch`) is prose, not a reference.
 _IDENTIFIER_RE = re.compile(r"\A[a-z0-9]+(?:-[a-z0-9]+)+\Z")
-_FENCE_MARKERS = ("```", "~~~")
+# A Markdown fence opener is a run of 3+ backticks or 3+ tildes with 0-3
+# leading spaces; CommonMark closes it only on a later line whose own
+# fence run is the SAME character and AT LEAST AS LONG, and carries no
+# info string. Matching just the first three characters -- which an
+# earlier revision of this gate did -- breaks nesting in BOTH
+# directions: an inner 3-backtick fence ends a 4-backtick outer one, so
+# sample text leaks back out and is flagged as a real reference (false
+# FAIL); and the outer fence's own closing line then re-opens the
+# tracker, swallowing the prose after it so a genuinely dangling
+# reference goes unseen (fail-open, the direction that matters for a
+# drift gate). Same rule, same reason, as
+# `.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py` and
+# `.github/scripts/gitapex_gate_no_raw_gh_cli_in_docs.py`, each of which
+# carries its own copy: a `.github/scripts/` gate stays self-contained.
+_FENCE_OPEN_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
+_FENCE_CLOSE_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})[ \t]*$")
 
 
 class GateUnrunnable(Exception):
@@ -73,22 +88,29 @@ def strip_fences(text: str) -> str:
     """Drop fenced code blocks, keeping every other line.
 
     A command or snippet inside a fence is an example, not a reference
-    AGENTS.md is making, so scanning it would flag sample text. Same
-    technique, same reason, as
-    `skills/executing-a-branch-plan/scripts/gitapex_check_branch_plan_reverified.py`'s
-    own `_strip_fences`.
+    AGENTS.md is making, so scanning it would flag sample text. Fence
+    pairing follows CommonMark's own run-length rule -- see
+    `_FENCE_OPEN_RE`'s own comment for why the simpler prefix match this
+    gate first used is wrong in both directions. An unclosed fence runs
+    to the end of the document, as CommonMark specifies, so its content
+    stays dropped rather than leaking back in.
     """
     kept: list[str] = []
-    fence: str | None = None
+    fence_char = ""
+    fence_len = 0
     for line in text.split("\n"):
-        stripped = line.lstrip()
-        if fence is None:
-            if stripped.startswith(_FENCE_MARKERS):
-                fence = stripped[:3]
+        if fence_len == 0:
+            opener = _FENCE_OPEN_RE.match(line)
+            if opener:
+                fence_char = opener.group(1)[0]
+                fence_len = len(opener.group(1))
                 continue
             kept.append(line)
-        elif stripped.startswith(fence):
-            fence = None
+            continue
+        closer = _FENCE_CLOSE_RE.match(line)
+        if closer and closer.group(1)[0] == fence_char and len(closer.group(1)) >= fence_len:
+            fence_char = ""
+            fence_len = 0
     return "\n".join(kept)
 
 

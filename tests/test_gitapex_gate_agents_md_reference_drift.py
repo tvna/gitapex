@@ -208,3 +208,54 @@ def test_strip_fences_keeps_prose_and_drops_block_content() -> None:
     a reference the file is making."""
     assert gate.strip_fences("a\n```\nb\n```\nc\n") == "a\nc\n"
     assert gate.strip_fences("a\nb\n") == "a\nb\n"
+
+
+def test_a_nested_fence_does_not_end_its_outer_block() -> None:
+    """DEFEAT CASE: a 4-backtick fence nesting a 3-backtick example. An
+    earlier revision matched only the first three characters, so the inner
+    fence closed the outer one -- leaking `ghost-a` back out as a real
+    reference (false FAIL), and then re-opening the tracker on the outer
+    fence's own closing line so `tail-skill` was swallowed instead. Both
+    directions are asserted here, because the swallowing one is the
+    fail-open half: a genuinely dangling reference would go unseen."""
+    text = (
+        "prose mentions `real-skill` here.\n"
+        "````\n"
+        "example block:\n"
+        "```\n"
+        "`ghost-a`\n"
+        "```\n"
+        "`ghost-b`\n"
+        "````\n"
+        "after the block, `tail-skill`.\n"
+    )
+    assert gate.referenced_identifiers(text) == ["real-skill", "tail-skill"]
+
+
+def test_a_backtick_run_does_not_close_a_tilde_fence() -> None:
+    """Not a defeat case for the run-length bug -- this one passed before
+    the fix too, and is recorded as passing-both-ways rather than dressed
+    up as red-then-green. It guards the OTHER half of CommonMark's pairing
+    rule, which the run-length fix could regress: a fence closes only on
+    its own marker character, so a backtick run inside a tilde fence is
+    block content and the tilde line after it is the real close. Comparing
+    lengths without comparing characters would end the block early."""
+    text = "`outer-skill`\n~~~\n```\n`hidden-skill`\n~~~\n`trailing-skill`\n"
+    assert gate.referenced_identifiers(text) == ["outer-skill", "trailing-skill"]
+
+
+def test_a_closing_fence_carrying_an_info_string_does_not_close() -> None:
+    """DEFEAT CASE: ```` ```python ```` opens a block, it never closes one.
+    Treating it as a close would end the block early and grade the
+    remaining sample lines as real references."""
+    text = "`before-skill`\n```\n```python\n`still-inside-skill`\n```\n`after-skill`\n"
+    assert gate.referenced_identifiers(text) == ["before-skill", "after-skill"]
+
+
+def test_a_four_space_indented_run_is_not_a_fence_opener() -> None:
+    """DEFEAT CASE: 4+ leading spaces make an indented code block, not a
+    fence. Accepting it as an opener would swallow every following line to
+    the end of the document, hiding real references behind one indented
+    sample line."""
+    text = "`head-skill`\n    ```\n`still-prose-skill`\n"
+    assert gate.referenced_identifiers(text) == ["head-skill", "still-prose-skill"]

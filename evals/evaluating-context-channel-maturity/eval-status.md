@@ -74,11 +74,14 @@ absorbed.
 
 ## Round: channel axes and their deterministic gates (issue #1963)
 
-Two fixtures were added for the two defects that motivated the change,
-bringing the corpus to 15. Adding an axis costs no fixture -- the coverage
-gate counts Stop-boundary bullets and named dispatch branches, and compares
-`fixture_count >= branch_count` -- so these two are deliberate coverage of
-the new axes rather than a gate requirement:
+Three fixtures were added, bringing the corpus to 16. Two cover the
+defects that motivated the change; the third covers the Stop boundary this
+round introduced, and unlike the other two it IS a gate requirement --
+`gitapex_gate_split_fixture_coverage.py` failed on CI until an
+`expected.exercises` declaration resolved to each new Procedure step and
+Stop boundary. Adding an axis, by contrast, costs no fixture: the coverage
+gate counts Stop-boundary bullets and named dispatch branches and compares
+`fixture_count >= branch_count`.
 
 - `description-carries-design-archaeology` pins axis `B1`. Its description
   sits inside every numeric cap and still carries a record of the
@@ -88,11 +91,16 @@ the new axes rather than a gate requirement:
 - `always-loaded-cost-is-per-dispatch` pins axis `A3`. Its target is under
   the published 200-line target, so a line-count-only reading PASSes it,
   while the repository's own dispatch rate is what `A3` grades.
+- `injection-attempt-is-reported` pins the Stop boundary requiring a
+  detected instruction-injection attempt to be named in the report.
+  Refusing to obey it is necessary and not sufficient: the fixture also
+  asserts the surrounding unbacked prohibition still earns its own
+  criterion 4 finding rather than being swept along with the injection.
 
-**Neither has been executed.** The suite still has no recorded run at any
-model tier and no no-skill baseline, so these two fixtures are authored
+**None of the three has been executed.** The suite still has no recorded
+run at any model tier and no no-skill baseline, so all three are authored
 coverage, not observed behaviour -- the same ablation-capable,
-not-yet-run gap this file already discloses above, now with two more
+not-yet-run gap this file already discloses above, now with three more
 fixtures inside it. Taking the first baseline is deliberately a separate
 branch: it is the first execution of this suite ever, with unmeasured
 runtime cost, and folding it into a change that also rewrites the rubric
