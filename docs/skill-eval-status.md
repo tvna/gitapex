@@ -151,7 +151,7 @@ suites still assert on final text only).
 | `drafting-issues` | 3 | 18 | none | no | [evals/drafting-issues/eval-status.md](../evals/drafting-issues/eval-status.md) |
 | `eliciting-a-design` | 3 | 7 | none | no | [evals/eliciting-a-design/eval-status.md](../evals/eliciting-a-design/eval-status.md) |
 | `establishing-ubiquitous-language` | 3 | 6 | none | no | [evals/establishing-ubiquitous-language/eval-status.md](../evals/establishing-ubiquitous-language/eval-status.md) |
-| `evaluating-context-channel-maturity` | 3 | 13 | none | no | [evals/evaluating-context-channel-maturity/eval-status.md](../evals/evaluating-context-channel-maturity/eval-status.md) |
+| `evaluating-context-channel-maturity` | 3 | 15 | none | no | [evals/evaluating-context-channel-maturity/eval-status.md](../evals/evaluating-context-channel-maturity/eval-status.md) |
 | `evaluating-deterministic-gate-quality` | 3 | 40 | none | no | [evals/evaluating-deterministic-gate-quality/eval-status.md](../evals/evaluating-deterministic-gate-quality/eval-status.md) |
 | `evaluating-skill-quality` | 3 | 98 | `claude-haiku-4-5-20251001`, `claude-opus-5`, `claude-sonnet-5` | yes | [evals/evaluating-skill-quality/eval-status.md](../evals/evaluating-skill-quality/eval-status.md) |
 | `executing-a-branch-plan` | 3 | 10 | none | no | [evals/executing-a-branch-plan/eval-status.md](../evals/executing-a-branch-plan/eval-status.md) |
