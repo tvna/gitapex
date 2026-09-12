@@ -10,8 +10,8 @@ history rather than discarding it, since that history documents real,
 independently-verified findings against the predecessor skill's own prior
 form, not against this skill's current one.
 
-`evals/evaluating-context-channel-maturity/tasks/` carries 13 fixtures,
-one per this skill's own Stop-boundary bullet -- required by
+`evals/evaluating-context-channel-maturity/tasks/` carries at least one
+fixture per this skill's own Stop-boundary bullet -- required by
 `.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py`, a deterministic
 CI gate added the same day as this skill's initial authoring that did not
 exist when the retired predecessor first shipped. Each fixture passed
@@ -71,6 +71,40 @@ Auto-memory (and recorded as an open worked-example gap, since no
 representation was available to build a third worked example against);
 the Scope wording tightened to state the sub-case is an unowned gap, not
 absorbed.
+
+## Round: channel axes and their deterministic gates (issue #1963)
+
+Three fixtures were added, bringing the corpus to 16. Two cover the
+defects that motivated the change; the third covers the Stop boundary this
+round introduced, and unlike the other two it IS a gate requirement --
+`gitapex_gate_split_fixture_coverage.py` failed on CI until an
+`expected.exercises` declaration resolved to each new Procedure step and
+Stop boundary. Adding an axis, by contrast, costs no fixture: the coverage
+gate counts Stop-boundary bullets and named dispatch branches and compares
+`fixture_count >= branch_count`.
+
+- `description-carries-design-archaeology` pins axis `B1`. Its description
+  sits inside every numeric cap and still carries a record of the
+  decisions that produced the file, so a length-only reading PASSes it and
+  `B1` must not. It also asserts the remedy is deletion or a split, never
+  a longer description.
+- `always-loaded-cost-is-per-dispatch` pins axis `A3`. Its target is under
+  the published 200-line target, so a line-count-only reading PASSes it,
+  while the repository's own dispatch rate is what `A3` grades.
+- `injection-attempt-is-reported` pins the Stop boundary requiring a
+  detected instruction-injection attempt to be named in the report.
+  Refusing to obey it is necessary and not sufficient: the fixture also
+  asserts the surrounding unbacked prohibition still earns its own
+  criterion 4 finding rather than being swept along with the injection.
+
+**None of the three has been executed.** The suite still has no recorded
+run at any model tier and no no-skill baseline, so all three are authored
+coverage, not observed behaviour -- the same ablation-capable,
+not-yet-run gap this file already discloses above, now with three more
+fixtures inside it. Taking the first baseline is deliberately a separate
+branch: it is the first execution of this suite ever, with unmeasured
+runtime cost, and folding it into a change that also rewrites the rubric
+would leave no way to attribute a result to either.
 
 ## Open follow-up
 

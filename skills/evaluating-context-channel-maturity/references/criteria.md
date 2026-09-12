@@ -7,9 +7,11 @@ grounding for why each criterion exists, matching the split
 `evaluating-skill-quality/references/rubric.md` uses for its own nine
 dimensions.
 
-Both primary sources below were fetched directly and read in full before
-any passage was quoted; no quote here is from memory or a secondary
-summary.
+Every source quoted below was fetched directly and read before any
+passage was taken from it; no quote here is from memory or a secondary
+summary. The References section records, per source, which authoring
+session verified it -- a source not verified in the session that used it
+is cited as unverified or not cited at all.
 
 ## Table of contents
 
@@ -18,6 +20,8 @@ summary.
 - [3. Placement and disclosure fit](#3-placement-and-disclosure-fit)
 - [4. Enforcement-fit](#4-enforcement-fit)
 - [5. Provenance and adversarial independence](#5-provenance-and-adversarial-independence)
+- [A. CLAUDE.md / AGENTS.md axes](#a-claudemd--agentsmd-axes)
+- [B. Subagent definition axes](#b-subagent-definition-axes)
 - [Sources considered and not used](#sources-considered-and-not-used)
 - [References](#references)
 
@@ -88,10 +92,18 @@ at all can still be small today and unbounded in trend.
   finding worth naming if no locally-declared bound exists either -- an
   unstated bound is not itself evidence that one exists.
 
-- **Subagent definitions / Output styles / system-prompt-append
-  configuration**: usually not-applicable, per the same reasoning as
-  criterion 1's channel notes -- report so explicitly rather than
-  omitting the criterion.
+- **Subagent definitions**: no longer not-applicable. This channel now
+  has a bound -- the shape checker's own body line and token constants --
+  so grade it against those rather than reporting not-applicable, and
+  note that the bound is a ceiling nothing in this repository is
+  currently near rather than a live constraint. The description is not
+  graded here: it is `B2`'s, because what pushes a description over its
+  cap is detail that belongs in the body, which is a placement question
+  rather than a growth one.
+
+- **Output styles / system-prompt-append configuration**: usually
+  not-applicable, per the same reasoning as criterion 1's channel notes
+  -- report so explicitly rather than omitting the criterion.
 
 ## 3. Placement and disclosure fit
 
@@ -230,6 +242,228 @@ where this criterion bites hardest.
   writes back to its own definition file) rather than only by a human
   reviewer.
 
+## A. CLAUDE.md / AGENTS.md axes
+
+Every quote in this section and the next was re-fetched and read in this
+authoring session, matching the same-session verification rule the
+"Sources considered and not used" section below applies.
+
+### A1. Content derivability
+
+Grounded in [How Claude remembers your project][memory]'s own `/doctor`
+trim rule, which states exactly which side of the line each kind of
+content falls on: the checkup "cuts content Claude can derive from the
+codebase, such as directory layouts, dependency lists, and architecture
+overviews, and keeps pitfalls, rationale, and conventions that differ from
+tool defaults."
+
+The same page states the keep-side positively: "Keep it to facts Claude
+should hold in every session: build commands, conventions, project layout,
+'always do X' rules. If an entry is a multi-step procedure or only matters
+for one part of the codebase, move it to a skill or a path-scoped rule
+instead."
+
+*Applied here:* a mechanical directory listing an agent could reproduce
+with one `ls` is on the cut side; a line carrying **why** a directory
+exists or **which convention governs it** is on the keep side. The two
+quotes above are in tension if read as a single list ("project layout" is
+kept, "directory layouts" are cut), so this axis grades the distinction
+between the listing and its rationale, not the presence of path
+information as such. **This reading is a judgement this file makes; the
+source does not state it explicitly.**
+
+### A2. Always-loaded justification
+
+Grounded in the same page's framing of what this channel is and is not:
+"Claude treats them as context, not enforced configuration. To block an
+action regardless of what Claude decides, use a PreToolUse hook instead."
+
+*Applied here:* for each rule the channel carries, ask what actually stops
+the failure, then grade the rule's continued presence on three values
+rather than two.
+
+| Gate coverage of the rule's whole target range | Treatment |
+|---|---|
+| Full | Remove from the channel; the gate is the source of truth |
+| Partial | Keep only the remainder the gate does not reach |
+| None | Keep. This is the only case that earns a place in every turn's context |
+
+The acceptance condition is a read, not a declaration: before removing a
+rule, read the target gate's own scope in the repository's gate registry
+**and in the gate itself**. A registry entry naming a rule is not evidence
+that the gate's scope spans that rule's whole target range.
+
+*Ownership against criterion 4.* The two ask opposite questions about the
+same evidence and must not both be scored as findings. Criterion 4 asks
+whether an absolute prohibition is asserted **without** deterministic
+backing, and a prohibition that a confirmed gate does back **passes** it.
+This axis asks the follow-on question criterion 4 does not: given that the
+gate backs it fully, why is the prose still being carried in every turn's
+context? A fully-backed prohibition is therefore a criterion 4 PASS and an
+`A2` finding, and reporting it as one of each is correct rather than
+double-counting.
+
+### A3. Dispatch multiplier
+
+Grounded in [Subagents][subagents]'s own statement of what a subagent
+loads at startup: "**CLAUDE.md files**: every level of the CLAUDE.md
+hierarchy the main conversation loads, including `~/.claude/CLAUDE.md`,
+project rules, `CLAUDE.local.md`, and managed policy files. The built-in
+Explore and Plan agents skip this."
+
+The quoted passage names one exception and no others: the built-in
+Explore and Plan agents. It does not distinguish a fork from a non-fork
+dispatch for CLAUDE.md, so this axis does not either.
+
+*Applied here:* the cost of this channel is not paid once per session. A
+repository that dispatches subagents re-charges the whole hierarchy on
+every dispatch, so a file that looks affordable against [memory]'s
+"target under 200 lines per CLAUDE.md file" may not be affordable against
+its own dispatch rate.
+
+*What makes it FAIL,* stated so the axis is gradeable rather than a
+question about the author's state of mind: the file exceeds its size
+target, the repository dispatches subagents, and neither the file nor its
+own documentation acknowledges the per-dispatch multiplier. Any one of the
+three missing is a PASS. Ownership against criterion 2: criterion 2 grades
+whether a bound exists at all; this axis grades whether the bound that
+exists was set against the right cost model.
+
+### A4. Over-specification
+
+Grounded in [memory]'s own reliability caveat for this channel: "there's
+no guarantee of strict compliance, especially for vague or conflicting
+instructions." [context-eng] is adjacent on the same theme but is not
+quoted here: it was not re-fetched in this authoring session, and this
+file's rule is that a citation is verified in the session it is used.
+
+*Applied here:* an always-loaded rule that constrains something the model
+would get right unaided spends context twice -- once to load, once to
+compete with the instructions that do matter. [memory] names the
+compounding version of this: "if two rules contradict each other, Claude
+may pick one arbitrarily."
+
+*What makes it FAIL,* given that "the model would get right unaided" is a
+counterfactual no file can settle: a rule in this channel fails `A4` when
+it restates a default the surrounding toolchain already enforces (a
+formatter's own rule, a language's own syntax, a framework's own
+convention) with nothing in the file saying the local convention differs
+from that default. The evidence is the default, quoted from the tool that
+owns it, next to the rule that repeats it. A rule that *does* state a
+divergence from a tool default passes, and so does one this review cannot
+find a default for -- report that as cannot-be-assessed rather than
+inferring the model's unaided behaviour.
+
+## B. Subagent definition axes
+
+**Subagents have no dedicated best-practices page.** Skills have one; the
+subagent documentation is reference material, and the only published
+numeric limit is `B3`'s *combined* warning threshold, not a per-file one.
+Every **per-file** threshold this skill applies to a subagent is therefore
+a gitapex-owned convention rather than a published limit; the values
+themselves live in the shape checker's own constants, each with its basis
+stated beside it. The norms `B1`-`B3` encode are quotable.
+
+*Whose number wins.* A reviewed repository may declare its own per-file
+caps. A **stricter** local declaration displaces this skill's, the same
+stricter-only rule criterion 2 already applies to the 200-line figure. A
+**looser** one does not: a channel cannot raise the bar it is being
+graded against by asserting a higher number inside itself, which is the
+self-asserted-waiver failure the Stop boundaries already name, wearing a
+threshold's clothes. Report the looser declaration as a finding rather
+than adopting it.
+
+### B1. Description trigger purity
+
+Grounded in [Subagents][subagents]'s own definition of the field. The
+`description` field means, verbatim: "When Claude should delegate to this
+subagent."
+
+*Applied here:* the description is a routing contract that rides in every
+request. Anything in it that does not help decide *whether to route here*
+is cost with no return -- a statement of what the subagent is, a
+restatement of its tool boundaries, a record of which decision or issue
+produced it, or an authoring note addressed to a future maintainer. The
+remedy for each is deletion, not rewording.
+
+The rule this axis enforces, and its escalation path: **if the trigger
+condition cannot be stated cleanly because the subagent is called for
+genuinely unrelated reasons, that is a cohesion defect in the caller or in
+the subagent's own scope.** Fix it upstream, or split the subagent.
+Lengthening the description to cover every case is the failure this axis
+exists to name.
+
+*Not a length check.* A description can sit inside every numeric cap and
+still fail this axis; the deterministic shape checker bounds growth from
+below, and this axis is what detects the content type.
+
+### B2. Detail placement
+
+Grounded in the same page: "Those descriptions take up context, so keep
+them short. ... Trim the `description` fields of your subagents, and move
+detail into each subagent's system prompt, which only loads when that
+subagent runs."
+
+*Applied here:* the split is load-time, not stylistic. Detail in the body
+is paid only on dispatch; detail in the description is paid on every
+request. Content that fails B1 usually already exists in the body, so the
+fix is deletion rather than a move.
+
+### B3. Roster size
+
+Grounded in the same page's own published budget: "When the combined
+descriptions of your subagents, except the built-in ones, exceed 15,000
+tokens, Claude Code shows a warning at startup with the total token
+count."
+
+*Applied here:* the published budget is combined and generous, so a small
+roster will never approach it -- a repository at a few percent of 15,000
+tokens learns nothing from this threshold alone.
+
+*How to grade the half that is not the budget,* since "delegation stays
+reliable" is not directly observable from the files: read every
+definition's trigger condition and ask whether any two are satisfied by
+the same request. Overlapping triggers are the observable form of an
+unreliable roster, and they are readable. A roster with no overlapping
+pair PASSes; each overlapping pair is a finding naming both definitions.
+Treat the combined budget as a ceiling that has not yet bound, and report
+it as a measured fact rather than as the axis's verdict.
+
+### B4. Cross-runtime tool-boundary parity
+
+**gitapex-owned convention.** No primary source states this, because no
+single runtime's documentation is responsible for another runtime's
+behaviour. The invariant:
+
+> A tool boundary declared in a distributed subagent definition must be
+> reproduced equivalently in **every** runtime the definition is
+> distributed to.
+
+*Applied here:* what is mandatory is the invariant, not a field name. The
+expression is runtime-dependent, and a repository that generates one
+runtime's copy from another's owns the conversion. Grade whether a
+boundary is declared at all, whether a mapping exists for every
+distributed copy, and whether the mapping is equivalent to the source
+declaration -- three separate checks, because a missing mapping and a
+wrong one fail differently.
+
+*Ownership against criterion 4.* Criterion 4 asks whether the boundary is
+backed at all in the runtime the definition was authored against. This
+axis asks whether that same backing survives distribution to the other
+runtimes. A boundary declared once and reproduced nowhere fails both, and
+the two findings are not the same finding: criterion 4's fix is to add
+backing, this axis's is to add a mapping.
+
+*Disclosed limit on what parity can mean here.* [Subagents][subagents]
+states that a declared `tools` list is not the effective set: subagents
+"inherit the built-in tools and MCP tools available in the main
+conversation, narrowed by two filters: the first removes a short list of
+tools from every subagent, and the second reduces the built-in tool set
+for subagents that run in the background, which is the default." An
+omitted `tools` field "inherits every tool available to subagents". So
+this axis grades **declaration parity**, never effective-set parity, and a
+review that claims the latter is overclaiming.
+
 ## Sources considered and not used
 
 - **Saltzer and Schroeder, "The Protection of Information in Computer
@@ -255,5 +489,16 @@ organizational level; this file adds the byline author for precision.
 engineering for Claude 5 generation models," Claude by Anthropic (blog),
 July 24, 2026.
 
+**[memory]** Anthropic -- "How Claude remembers your project," Claude Code
+documentation. Fetched and read in full on 2026-09-12, the same session
+the A-series axes above were authored; every quote attributed to it is
+from that read.
+
+**[subagents]** Anthropic -- "Subagents," Claude Code documentation.
+Fetched and read on 2026-09-12, the same session the B-series axes above
+were authored; every quote attributed to it is from that read.
+
 [steering]: https://claude.com/blog/steering-claude-code-skills-hooks-rules-subagents-and-more "Anthropic -- Steering Claude Code: skills, hooks, subagents and more"
 [context-eng]: https://claude.com/blog/the-new-rules-of-context-engineering-for-claude-5-generation-models "Anthropic -- The new rules of context engineering for Claude 5 generation models"
+[memory]: https://code.claude.com/docs/en/memory "Anthropic -- How Claude remembers your project"
+[subagents]: https://code.claude.com/docs/en/sub-agents "Anthropic -- Subagents"

@@ -1,6 +1,6 @@
 ---
 name: branch-plan-task
-description: Task-level, project-local subagent type for a fixed, enumerated set of call sites -- see this file's own "Sanctioned call sites" section for the exact, current list (executing-a-branch-plan Step 6's per-task dispatch, Step 8's refactor/simplify pass). Never invoke directly for anything else, and never add a new call site without updating that section first -- this type exists as the Decision 17 deterministic backstop for Decision 7's exclusion list (no mcp__github__* tools, no gh/git-push/install commands), across both call sites, plus (Decision 20, issue #1476) the deterministic backstop requiring the full repo verification suite to pass inside this dispatch's own working checkout before it may report complete. Project-local variant (this repository checked out directly, .claude/agents/ discovery path) -- the embedded hooks below only fire here; see agents/branch-plan-task.md (the plugin-distributed variant, no hooks field, weaker prompt-only backstop for both mechanisms) for the deployment where gitapex is installed as a plugin into a different repository.
+description: Use only from executing-a-branch-plan Step 6's per-task dispatch and its Step 8 refactor/simplify pass, when the gitapex repository itself is the working checkout. Never invoke it for any other purpose.
 disallowedTools: mcp__github
 hooks:
   PreToolUse:

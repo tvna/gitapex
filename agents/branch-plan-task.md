@@ -1,6 +1,6 @@
 ---
 name: branch-plan-task
-description: Task-level, plugin-distributed subagent type for a fixed, enumerated set of call sites -- see this file's own "Sanctioned call sites" section for the exact, current list (executing-a-branch-plan Step 6's per-task dispatch, Step 8's refactor/simplify pass). Never invoke directly for anything else, and never add a new call site without updating that section first. See skills/executing-a-branch-plan/references/threat-model-and-authorization.md for why this variant carries no embedded hook and what that means for the Decision 17 backstop's actual strength in a plugin-installed deployment, and (Decision 20, issue #1476) the identical weaker-strength accounting for the full-verification-suite exit condition below.
+description: Use only from executing-a-branch-plan Step 6's per-task dispatch and its Step 8 refactor/simplify pass, in a repository where gitapex is installed as a plugin. Never invoke it for any other purpose.
 disallowedTools: mcp__github
 ---
 

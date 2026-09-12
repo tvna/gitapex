@@ -52,6 +52,7 @@ MYPY_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "skills/evaluating-deterministic-gate-quality/scripts",
             "skills/drafting-issues/scripts",
             "skills/executing-a-branch-plan/scripts",
+            "skills/evaluating-context-channel-maturity/scripts",
         ),
     ),
     ("skills/drafting-an-adr/scripts", ("skills/drafting-an-adr/scripts",)),

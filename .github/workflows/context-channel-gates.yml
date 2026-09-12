@@ -1,0 +1,57 @@
+name: Context channel gates
+
+# Issue #1963. Two whole-repository gates, run together because they
+# guard two halves of the same invariant set: that a distributed subagent
+# definition's tool boundary survives distribution, and that AGENTS.md's
+# own outbound references still resolve. Neither takes a diff-derived
+# argument, so both are also wired into gitapex_gate_local_preflight.py
+# and reachable before a push.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "agents/**"
+      - ".claude/agents/**"
+      - "hooks/gitapex_sync_opencode.py"
+      - "AGENTS.md"
+      - ".gitapex/ssot.json"
+      - "skills/*/SKILL.md"
+      - ".github/scripts/gitapex_gate_tool_boundary_parity.py"
+      - ".github/scripts/gitapex_gate_agents_md_reference_drift.py"
+      - ".github/workflows/context-channel-gates.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  context-channel-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner + checkout
+        uses: tvna/gitapex/.github/actions/harden-checkout@2f62b5648552a0f800b1b85e75ec108a7016dd02
+        with:
+          fetch-depth: '0'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
+        with:
+          enable-cache: true
+
+      # Check 3's third leg renders the OpenCode copy through the sync
+      # script's own generator rather than reading .opencode/agents/ from
+      # disk: .gitignore excludes that directory, so on a CI checkout the
+      # file is absent and a disk read would silently skip the only leg
+      # that observes the artifact actually carrying the boundary.
+      - name: Tool-boundary parity across Axis A runtimes
+        run: uv run --frozen python3 .github/scripts/gitapex_gate_tool_boundary_parity.py
+
+      - name: AGENTS.md outbound-reference drift
+        run: uv run --frozen python3 .github/scripts/gitapex_gate_agents_md_reference_drift.py

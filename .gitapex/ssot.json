@@ -2156,6 +2156,53 @@
         {"kind": "file-glob", "ref": "docs/gitapex/plans/*.md"},
         {"kind": "workflow-event", "ref": "plans-traceability-gate.yml:pull_request"}
       ]
+    },
+    {
+      "id": "tool-boundary-parity",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_gate_tool_boundary_parity.py",
+      "rule": "Issue #1963's cross-runtime invariant: a tool boundary declared in a distributed subagent definition must be reproduced equivalently in every runtime that definition is distributed to. Three checks, separated because a missing mapping and a wrong one fail differently: every agents/*.md declares tools: or disallowedTools:; every agents/*.md appears in hooks/gitapex_sync_opencode.py's AGENT_PERMISSION_SPECS with a mapping that actually denies something (a presence test would pass {'edit': 'allow'}, truthy while reproducing no boundary); and the source declaration, this script's own EXPECTED_BOUNDARIES table, and the OpenCode copy the sync script's generator actually emits all agree. A fourth row checks the reverse set difference -- a spec row naming a file absent from agents/ -- scoped to the sync module's own table so an arbitrary --repo-root reports no false absence. Equivalence keeps the table as explicit data rather than deriving the mapping from the source: the mapping is not one-to-one (OpenCode's list has no Claude counterpart, and *mcp* is a coarser wildcard than a concrete mcp__github__*), so a faithful derivation would encode those asymmetries as special cases anyway. The third leg RENDERS the OpenCode copy through the sync script's own _render_agent_copy rather than reading .opencode/agents/<name>.md: .gitignore excludes that directory, so the file is absent in every clone and every CI checkout -- an earlier version read it, found nothing, skipped the leg silently, and still reported that the generated copy agreed, about a file it had never opened (found by adversarial review before this gate shipped, and verified closed by renaming the generator's own permission key and confirming a FAIL). Fails closed with exit 2, never a silent pass, when the sync module is missing, fails at import for any reason (including a module-level sys.exit, which derives from BaseException and would otherwise terminate this gate with status 0 and no rows printed), does not expose AGENT_PERMISSION_SPECS or _render_agent_copy, or when an agents/*.md cannot be read or decoded. Disclosed scope limit: all three checks compare in-repo artifacts to each other, so a commit widening a boundary consistently across source, table and mapping passes -- this gate grades that the boundary is reproduced, never that it is strong enough. On Claude Code a declared tools: list is additionally not the effective set (two filters narrow it, and background subagents resolve differently), so what is verified is declaration parity, not effective-set parity; adjacent to issue #1730.",
+      "planes": [
+        "ci",
+        "local"
+      ],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_tool_boundary_parity.py"],
+      "trigger": ".github/workflows/context-channel-gates.yml on pull_request",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 1963,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "agents/*.md"},
+        {"kind": "file-glob", "ref": "hooks/gitapex_sync_opencode.py"},
+        {"kind": "workflow-event", "ref": "context-channel-gates.yml:pull_request"}
+      ]
+    },
+    {
+      "id": "agents-md-reference-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_gate_agents_md_reference_drift.py",
+      "rule": "Issue #1963: every backticked identifier in AGENTS.md must resolve to a real skills/<name>/SKILL.md or a real .gitapex/ssot.json gates[].id. Which tokens are checked is a shape test, not an allowlist of known non-references: lowercase, hyphen-separated, at least one hyphen. That separates planning-a-branch-from-an-issue from `catch`, which AGENTS.md also backticks as a language keyword, without needing an edit every time the prose gains a hyphen-free code span; getting a shape test wrong costs a false FAIL on a word rather than a missed dangling reference. Fenced code blocks are stripped first, since a hyphenated identifier inside one is sample text rather than a reference the file is making. AGENTS.md names eight skills and zero gate ids as of this entry, so the gate guards the skill-name index now and covers the gate-id index automatically once issue #1963's own AGENTS.md rewrite introduces one -- a data change, not a second gate. AGENTS.md section 3's rule that an invariant's drift gate ships in the same change is why it exists now rather than after that rewrite: the skill-name index is already real and was already ungated. Fails closed with exit 2, never a silent pass, on a missing or undecodable AGENTS.md, a missing or unparseable ssot.json, a registry payload that is valid JSON but not an object (calling .get() on [] or a string raises AttributeError, which would escape as a crash rather than this gate's own typed error -- found by the exception-handler-gap gate before shipping), a gates key present but not a list (which would otherwise yield an empty id set and turn every gate reference into a false FAIL), or a missing skills directory.",
+      "planes": [
+        "ci",
+        "local"
+      ],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_agents_md_reference_drift.py"],
+      "trigger": ".github/workflows/context-channel-gates.yml on pull_request",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 1963,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "AGENTS.md"},
+        {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
+        {"kind": "file-glob", "ref": "skills/*/SKILL.md"},
+        {"kind": "workflow-event", "ref": "context-channel-gates.yml:pull_request"}
+      ]
     }
   ],
   "clusters": {

@@ -1,0 +1,48 @@
+id: evaluating-context-channel-maturity-description-carries-design-archaeology
+name: Design archaeology in a description is named by B1, not excused by a cap
+description: A Subagent definition's description sits well inside every
+  numeric cap and still carries a record of the decisions and issues that
+  produced the file. The reviewer must FAIL axis B1 on the content type,
+  and must not report a PASS on the grounds that the description is short
+  enough -- length is a different axis with a different answer.
+tags:
+  - axis
+  - quality
+  - subagent-definition
+inputs:
+  prompt: |
+    Use evaluating-context-channel-maturity. Review this Subagent
+    definition's frontmatter against axis B1 (description trigger purity).
+
+    ---
+    name: release-task
+    description: Task-level subagent for a fixed, enumerated set of call
+      sites -- see this file's own "Sanctioned call sites" section for the
+      exact, current list. Never invoke directly for anything else. This
+      type exists as the Decision 17 deterministic backstop for Decision
+      7's exclusion list (Decision 20, issue #1476), and see
+      references/threat-model.md for why this variant carries no embedded
+      hook.
+    tools: Read, Grep
+    ---
+
+    The body already carries a "Sanctioned call sites" section listing the
+    two call sites, and a paragraph explaining the Decision 17 and
+    Decision 20 backstops in full.
+
+    The description is 402 characters, against a 500-character cap.
+
+    What is the B1 verdict, and what is the remedy?
+expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py): this fixture
+  # walks step 3's criteria-then-axis-block pass and step 4's per-axis
+  # verdict, which is where a B1 finding is actually reached and recorded.
+  exercises:
+    - "step 3"
+    - "step 4"
+  output_contains:
+    - "FAIL"
+  output_not_contains:
+    - "PASS because it is within the character cap"
+    - "PASS, the description is short enough"
+    - "lengthen the description"

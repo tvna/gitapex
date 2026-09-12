@@ -1,0 +1,40 @@
+id: evaluating-context-channel-maturity-always-loaded-cost-is-per-dispatch
+name: A project instruction under its line target can still fail A3
+description: A project-instruction file sits under the published 200-line
+  target, so a line-count-only reading would PASS it. The repository
+  dispatches subagents that re-load the whole instruction hierarchy, and
+  nothing in the file or its documentation acknowledges that the cost is
+  paid per dispatch rather than per session. The reviewer must reach A3
+  from that evidence rather than stopping at the line count, and must not
+  invent a size rule the primary source does not state.
+tags:
+  - axis
+  - quality
+  - project-instruction
+inputs:
+  prompt: |
+    Use evaluating-context-channel-maturity. Review this repository's
+    AGENTS.md against axis A3 (dispatch multiplier).
+
+    Facts available to you, all independently verified:
+
+    - AGENTS.md is 91 lines and 13,411 characters.
+    - The repository's own documented workflow dispatches subagents for
+      per-task execution and for review, several per change.
+    - Neither AGENTS.md nor any file documenting it mentions subagent
+      dispatch, per-dispatch context cost, or a size target of its own.
+    - The published guidance this skill cites gives a target of under 200
+      lines per project-instruction file.
+
+    What is the A3 verdict, and what evidence earns it?
+expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py): the target is a
+  # project instruction, so step 2's shape-checker run is what supplies the
+  # line count this fixture then asks the reviewer to look past.
+  exercises:
+    - "step 2"
+  output_contains:
+    - "A3"
+  output_not_contains:
+    - "PASS because it is under 200 lines"
+    - "PASS, 91 lines is within the target"
