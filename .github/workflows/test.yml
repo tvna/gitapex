@@ -413,7 +413,8 @@ jobs:
             skills/auditing-agent-product-scope/scripts \
             skills/evaluating-deterministic-gate-quality/scripts \
             skills/drafting-issues/scripts \
-            skills/executing-a-branch-plan/scripts
+            skills/executing-a-branch-plan/scripts \
+            skills/evaluating-context-channel-maturity/scripts
 
       - name: mypy (skills/drafting-an-adr/scripts)
         run: uv run --frozen mypy --config-file pyproject.toml skills/drafting-an-adr/scripts

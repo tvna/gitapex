@@ -246,3 +246,50 @@ def test_the_real_repository_passes() -> None:
     """The live check the ACM's own proof method names: this repository's
     own tree must satisfy the invariant after the fix in this change."""
     assert gate.main(["--repo-root", str(REPO_ROOT)]) == 0
+
+
+# --- load_permission_specs and read_checked, probed by name ------------
+
+
+def test_load_permission_specs_returns_the_module_table(tmp_path: pathlib.Path) -> None:
+    repo = _write_repo(tmp_path, agents={"branch-plan-task.md": _BRANCH_PLAN_SOURCE}, specs=_GOOD_SPEC)
+    assert gate.load_permission_specs(repo) == {"branch-plan-task.md": {"*mcp*": "deny"}}
+
+
+def test_load_permission_specs_is_unrunnable_without_a_loader(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """DEFEAT CASE: importlib can return a spec with no loader (a path it
+    recognises but cannot execute). That branch must raise, not fall
+    through to an AttributeError or an empty table."""
+    repo = _write_repo(tmp_path, agents={"a.md": _BRANCH_PLAN_SOURCE}, specs="")
+    monkeypatch.setattr(gate.importlib.util, "spec_from_file_location", lambda *a, **k: None)
+    with pytest.raises(gate.GateUnrunnable, match="cannot load"):
+        gate.load_permission_specs(repo)
+
+
+def test_read_checked_returns_decoded_text(tmp_path: pathlib.Path) -> None:
+    target = tmp_path / "a.md"
+    target.write_text("hello\n", encoding="utf-8")
+    assert gate.read_checked(target) == "hello\n"
+
+
+def test_read_checked_is_unrunnable_on_undecodable_bytes(tmp_path: pathlib.Path) -> None:
+    """An undecodable agent definition is the gate losing its ability to
+    judge, not a boundary failure -- exit 2, never a FAIL row."""
+    target = tmp_path / "a.md"
+    target.write_bytes(b"\xff\xfe\x00bad")
+    with pytest.raises(gate.GateUnrunnable, match="cannot read"):
+        gate.read_checked(target)
+
+
+def test_read_checked_is_unrunnable_on_a_missing_file(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(gate.GateUnrunnable, match="cannot read"):
+        gate.read_checked(tmp_path / "absent.md")
+
+
+def test_evaluate_surfaces_an_undecodable_source_as_unrunnable(tmp_path: pathlib.Path) -> None:
+    repo = _write_repo(tmp_path, agents={}, specs=_GOOD_SPEC)
+    (repo / "agents" / "branch-plan-task.md").write_bytes(b"\xff\xfe\x00bad")
+    with pytest.raises(gate.GateUnrunnable, match="cannot read"):
+        gate.evaluate(repo)

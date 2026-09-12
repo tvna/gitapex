@@ -166,6 +166,23 @@ def generated_permission_keys(text: str) -> set[str]:
     return keys
 
 
+def read_checked(path: Path) -> str:
+    """Read one input as UTF-8, or raise `GateUnrunnable`.
+
+    An agent definition or generated copy that cannot be read or decoded
+    is not a boundary failure -- it is the gate losing the ability to
+    judge one at all, which is exit 2, never a FAIL row and never a
+    silent skip. Catching `UnicodeDecodeError` at the read boundary and
+    re-raising this script's own typed error is the shape
+    `.github/scripts/gitapex_detect_changed_gate_scripts.py` already
+    uses.
+    """
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise GateUnrunnable(f"cannot read {path}: {error}") from error
+
+
 def evaluate(repo_root: Path) -> list[tuple[str, str, bool, str]]:
     """Return one `(check, subject, passed, detail)` row per graded fact."""
     specs = load_permission_specs(repo_root)
@@ -176,7 +193,7 @@ def evaluate(repo_root: Path) -> list[tuple[str, str, bool, str]]:
 
     for source in sources:
         name = source.name
-        fields = frontmatter_fields(source.read_text(encoding="utf-8"))
+        fields = frontmatter_fields(read_checked(source))
         declared = [key for key in BOUNDARY_KEYS if key in fields]
         rows.append(
             (
@@ -212,7 +229,7 @@ def evaluate(repo_root: Path) -> list[tuple[str, str, bool, str]]:
             problems.append(f"mapping denies {sorted(mapped_denials)}, table expects {sorted(expected_denials)}")
         generated = repo_root / OPENCODE_AGENTS_DIR / name
         if generated.is_file():
-            generated_keys = generated_permission_keys(generated.read_text(encoding="utf-8"))
+            generated_keys = generated_permission_keys(read_checked(generated))
             if generated_keys != set(expected_denials):
                 problems.append(
                     f"generated copy denies {sorted(generated_keys)}, table expects {sorted(expected_denials)}"
