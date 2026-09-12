@@ -144,6 +144,43 @@ Per-channel notes and primary-source grounding for each criterion, beyond
 what a common-case review needs from the definitions above:
 [references/criteria.md](references/criteria.md).
 
+## Channel-specific axes
+
+The five criteria above are common to every channel in scope. Two channels
+additionally carry axes of their own, because their published evidence
+bases differ sharply: CLAUDE.md/AGENTS.md has quotable numeric guidance,
+while subagent definitions have norms but no numbers. A single shared axis
+set would either overclaim on the subagent side or decline to use values
+that are quotable on the CLAUDE.md side.
+
+Axes use a channel namespace (`A`, `B`) rather than extending the common
+numbering, so criteria 1-5 keep their numbers and a later channel's axes
+can be added without renumbering. Grade a channel on the common five plus
+its own axis block; a channel with no block below is graded on the common
+five alone.
+
+**A. CLAUDE.md / AGENTS.md axes**
+
+| Axis | Question | Basis |
+|---|---|---|
+| A1 Content derivability | Does it carry content the agent can derive from the codebase -- directory layouts, dependency lists, architecture overviews -- rather than pitfalls, rationale, and conventions that differ from tool defaults? | Primary-source quotable |
+| A2 Always-loaded justification | For each rule, is it here because no deterministic gate can carry it, or is it prose restating a rule a gate already enforces? Full gate coverage means the gate is the source of truth; partial coverage keeps only the uncovered remainder | Primary-source quotable |
+| A3 Dispatch multiplier | Is the file's size chosen in the knowledge that a non-fork subagent re-loads the whole CLAUDE.md hierarchy on every dispatch, so the cost is per-dispatch and not per-session? | Primary-source quotable |
+| A4 Over-specification | Does it hand the model rules where the model's own judgement would serve, spending always-loaded context to constrain something that does not need constraining? | Primary-source quotable |
+
+**B. Subagent definition axes**
+
+| Axis | Question | Basis |
+|---|---|---|
+| B1 Description trigger purity | Does the description state **only when the subagent should be called**? Everything else -- what it does, its tool boundaries, design archaeology, authoring notes, restatements of the body -- is deleted. If *when it is called* is itself incoherent, that is the moment to fix the caller or split the subagent, never to lengthen the description | Primary-source quotable |
+| B2 Detail placement | Does detail live in the body, which loads only when the subagent runs, rather than in the description, which is always loaded? | Primary-source quotable |
+| B3 Roster size | Is the roster small enough that automatic delegation stays reliable, and is the combined description budget respected? | Primary-source quotable |
+| B4 Cross-runtime tool-boundary parity | Is a declared tool boundary reproduced equivalently in **every** runtime this definition is distributed to, not only the one it was authored against? | gitapex-owned convention |
+
+Numeric thresholds, each axis's own quoted grounding, and which values are
+this repository's own convention rather than a published limit:
+[references/criteria.md](references/criteria.md).
+
 ## Procedure
 
 1. **Confirm the precondition.** Read the target channel's actual
