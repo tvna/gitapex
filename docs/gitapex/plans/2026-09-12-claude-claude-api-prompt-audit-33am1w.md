@@ -91,9 +91,22 @@ Quoted Planned ops:
 > exists, the mapping is equivalent); add the OpenCode permission mapping for
 > `branch-plan-task` in `hooks/gitapex_sync_opencode.py`
 
-Files: new `skills/evaluating-context-channel-maturity/scripts/gitapex_check_tool_boundary_parity.py`,
-new `skills/evaluating-context-channel-maturity/scripts/test_gitapex_check_tool_boundary_parity.py`,
+Files: new `.github/scripts/gitapex_gate_tool_boundary_parity.py`,
+new `tests/test_gitapex_gate_tool_boundary_parity.py`,
 `hooks/gitapex_sync_opencode.py`.
+
+Placement correction, recorded rather than left as a silent drift from this
+plan's first revision: these files were planned under
+`skills/evaluating-context-channel-maturity/scripts/`, and moved to the
+never-deployed side during implementation. Every fact the checker reads is
+specific to this repository's own sync mechanism -- the source `agents/*.md`
+frontmatter, `hooks/gitapex_sync_opencode.py`'s own spec table, and the
+generated `.opencode/agents/` copies -- so shipping it in the plugin would
+distribute gitapex-internal logic to a consumer whose repository has none of
+those. Axis `B4` stays model-judged when the skill grades some other
+repository's subagents; this gate is that axis applied to the one instance
+this repository owns. Correction C4's boundary rule is not engaged, because
+nothing is shared between the two sides.
 
 Note: axis `B4`'s prose lands in Task 1's files, not here, so the two tasks do
 not share a file. This task owns only the checks and the mapping fix.

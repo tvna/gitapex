@@ -79,6 +79,39 @@ REVIEW_PERSONA_PERMISSION = {
     "*mcp*": "deny",
 }
 
+# `agents/branch-plan-task.md` declares `disallowedTools: mcp__github`, a
+# deny-list rather than review-persona's allow-list. Before issue #1963
+# this file synced that agent with no permission mapping at all, so the
+# boundary simply did not exist on OpenCode, which allows every tool by
+# default -- the structural backstop present on Claude Code was absent on
+# the runtime this script generates for.
+#
+# The mapping is deliberately BROADER than the source declaration: the
+# source denies MCP-provided GitHub tools specifically, while `*mcp*`
+# denies MCP-provided tools under any server's naming scheme. OpenCode's
+# wildcard-pattern permission keys match tool names, not server names, and
+# a concrete `mcp__github__*` has no faithful counterpart at that
+# granularity. Denying more than the source is a narrowing of what the
+# subagent may do, never a widening, so the boundary is reproduced and
+# then some -- the failure direction this asymmetry cannot produce is the
+# one that matters. This reuses the same reasoning, and the same key,
+# REVIEW_PERSONA_PERMISSION's own `*mcp*` entry already documents above.
+BRANCH_PLAN_TASK_PERMISSION = {
+    "*mcp*": "deny",
+}
+
+# Which plugin-distributed agent definitions are synced, and the OpenCode
+# permission mapping each one's declared Claude-side tool boundary is
+# reproduced by. Module-level, not a local inside sync_agents(), so a
+# drift gate can read it: issue #1963's tool-boundary parity checker
+# verifies this table, each source file's own frontmatter declaration, and
+# the generated copy all still agree. A local would have left the gate
+# parsing Python source text instead.
+AGENT_PERMISSION_SPECS = (
+    ("review-persona.md", REVIEW_PERSONA_PERMISSION),
+    ("branch-plan-task.md", BRANCH_PLAN_TASK_PERMISSION),
+)
+
 # Keys meaningful only to Claude Code's own agent loader. Dropped from the
 # generated OpenCode copies (OpenCode ignores unknown frontmatter, but
 # carrying a Claude-only allow-list string next to the permission mapping
@@ -237,12 +270,8 @@ def sync_agents(project_dir: Path, verify_only: bool, notes: list[str]) -> int:
     Returns the number of changes made."""
     agents_src = project_dir / AGENTS_SRC_DIRNAME
     agents_dst = project_dir / AGENTS_DST_DIRNAME
-    specs = (
-        ("review-persona.md", REVIEW_PERSONA_PERMISSION),
-        ("branch-plan-task.md", None),
-    )
     changes = 0
-    for filename, permission in specs:
+    for filename, permission in AGENT_PERMISSION_SPECS:
         src = agents_src / filename
         if not src.is_file():
             notes.append(f"SKIP: {src} not found")
