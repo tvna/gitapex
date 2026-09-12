@@ -67,6 +67,14 @@ Postcondition / Invariant).
 - Migration of `eliciting-a-design` (first prototype) and
   `drafting-a-pr-to-merge` (second prototype, low-freedom control).
 
+- Verification reduction (PR0): cutting the verification layers whose
+  measured yield does not justify their cost, while keeping the layers
+  that measurably find defects. See "Verification reduction" below.
+  Scope revision, 2026-09-12: the owner restated that reducing
+  verification was half of the original question; an earlier draft of
+  this document listed it as out of scope, and this section plus PR0
+  replace that listing.
+
 ### Out of scope (separate issues)
 
 - Narrowing or removing Dimension 5's sequential-pipeline exemption
@@ -74,17 +82,57 @@ Postcondition / Invariant).
   https://github.com/tvna/gitapex/issues/1662). The owner routes rubric
   edits through `scorer-gated-skill-edits`; this happens after the
   contract form has reached the core six skills.
-- Removing self-verification steps (`executing-a-branch-plan` Step 8,
-  `drafting-a-pr-to-merge` Step 8 inner layer) per the Opus 5 guidance,
-  read against AGENTS.md section 4's defense-in-depth rule as "safety
-  gates keep their layers; behavioral instructions are cut by
-  measurement". No existing issue covers this.
-- Ablating `invoking-gitapex`'s Red Flags table. Deferred until evals can
-  be run; the upstream lineage (obra/superpowers) reported measured TDD
-  regression when a comparable table was removed.
+- Ablating `invoking-gitapex`'s Red Flags table, and narrowing per-task
+  `screening-a-low-trust-contribution` on self-authored diffs. Both are
+  measure-first items: they need an eval baseline (API credentials)
+  before a cut can be justified; the upstream lineage (obra/superpowers)
+  reported measured TDD regression when a comparable table was removed.
 - Migrating the remaining four core skills. Decided after the two
   prototypes land.
 - Any change to `BODY_MAX_LINES` or `BODY_MAX_TOKENS`.
+
+## Verification reduction
+
+### Reading rule
+
+Three sources are read together. Anthropic's "Prompting Claude Opus 5"
+guide: explicit verification instructions and "use a subagent to verify"
+instructions cause over-verification and should be removed. Anthropic's
+"Steering Claude Code": a real guardrail is deterministic, enforced by
+hooks and permissions. AGENTS.md section 4: never collapse a layer safety
+relies on. The reconciliation: deterministic gates (hooks, CI, local
+preflight) keep their layers; probabilistic self-verification
+instructions are cut by measurement; exactly one fresh-context
+adversarial review per diff is kept.
+
+### Measured yield per layer
+
+Measured from the bodies of the eight most recently closed pull requests
+(#1803, #1825, #1916, #1917, #1936, #1942, #1945, #1954), retrospectives
+#1955 and #1951, and issue #1807, all read on 2026-09-12.
+
+| Layer | Measured | Verdict |
+|---|---|---|
+| `executing-a-branch-plan` Step 8 adversarial review (fresh `review-persona`) | Confirmed defects in every PR where it ran: #1954 8 findings / 5 fixed, #1942 3, #1916 6, #1825 17 | Keep. This is the one fresh-context review per diff |
+| `executing-a-branch-plan` Step 8 refactor pass | #1954 clean; retro #1759 fixed 3 corruptions | Shrink: diagnose only, edits in the main thread; fold into the review if yield stays low |
+| `drafting-a-pr-to-merge` Step 8 outer layer (Copilot / Claude Code Review App) | Zero responses in the sample; #1916 skipped on the owner's instruction; #1905 already cut the wait from 30 to 15 minutes; on #1969 most of 27 minutes and ~350k tokens went to polling | Remove the synchronous wait: request, record, handle any response at the next event |
+| `drafting-a-pr-to-merge` Step 8 inner layer (`reviewing-an-artifact` fan-out) | #1954 and #1969 zero confirmed; #1825 real cross-file drift over two fan-outs | Shrink: skip when the Execution log records a same-head adversarial review; otherwise one pass |
+| `battle-testing-a-skill` on `SKILL.md` changes | #1803 FAIL 2, #1825 FAIL 5, #1942 PASS after two fix rounds | Keep |
+| `evaluating-skill-quality` on `SKILL.md` changes | Real dimension-6 findings (#1951); up to three passes per PR (#1942); two-hour dispatch timeout (#1825) | Shrink: one isolated pass plus one post-fix pass; a third escalates |
+| `merge-retrospective` gate-proposal filing | #1955: 12 repairs, 6 filed, 5 closed as duplicates within minutes; #1807: Step 8's working-as-designed catches are the largest volume driver; 120 open / 141 closed gate proposals | Shrink via #1807 direction (a): tag working-as-designed catches, do not file them. #1806's dedup mechanics stay |
+| Per-task `screening-a-low-trust-contribution` on self-authored diffs | #1954: three runs, hard flags on governance paths need human sign-off | Measure first (security tier) |
+| `invoking-gitapex` per-turn skill check and Red Flags | No measurement | Measure first (ablation) |
+| Local preflight (49) and CI gates (73) | #1955 repairs 2 and 3 caught before push | Keep |
+| PreToolUse and Stop hooks | Work as designed; the Stop hook also blocks a push to a PR-less branch (#1631 open, #1940 closed as duplicate) | Keep; fix the PR-less case |
+| `skill-audit-disclosure` lines | Disclosure, not verification | Keep |
+
+### Connection to the contract form
+
+The inner-layer rule needs a machine-readable record of which review ran
+against which head. That record is what the `proof` block and the
+Execution log carry. Migrating to the contract form without reducing
+verification shrinks bodies but not per-PR cost; the two halves meet in
+`proof`.
 
 ## Architecture
 
@@ -332,6 +380,12 @@ Decomposition recorded here per
 `skills/eliciting-a-design/references/decomposition-and-tracking-issue.md`.
 Sub-projects, their relationship, and build order:
 
+0. **PR0, verification reduction.** Independent of PR1; may run in
+   parallel. Outer layer asynchronous; inner layer conditional on a
+   same-head review record; #1807 direction (a) for the repair
+   definition (owner decision); `evaluating-skill-quality` pass cap; the
+   Stop-hook PR-less case (#1631). PR3 migrates whichever Step 8 shape
+   has landed first.
 1. **PR1, foundation.** Schema `spec.contract` + ADR 0004 + generator and
    its co-located tests + `skill-contract-drift` registration + gate-id
    resolution in the ssot scanner + `drafting-a-skill` sidecar
@@ -355,6 +409,7 @@ created only after the owner confirms at issue formalization time
 directly). Filed 2026-09-12 after the owner confirmed:
 
 - Parent tracking issue: https://github.com/tvna/gitapex/issues/1964
+- PR0 child: https://github.com/tvna/gitapex/issues/1970
 - PR1 child: https://github.com/tvna/gitapex/issues/1965
 - PR2 child: https://github.com/tvna/gitapex/issues/1966
 - PR3 child: https://github.com/tvna/gitapex/issues/1967
@@ -455,6 +510,20 @@ Primary sources fetched during the dialogue:
 - https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns
   ("If you are too specific, Claude will follow your instructions even
   when a pivot may be more appropriate").
+
+Pull requests and issues read for the verification-reduction measurement:
+https://github.com/tvna/gitapex/pull/1954,
+https://github.com/tvna/gitapex/pull/1942,
+https://github.com/tvna/gitapex/pull/1916,
+https://github.com/tvna/gitapex/pull/1917,
+https://github.com/tvna/gitapex/pull/1825,
+https://github.com/tvna/gitapex/pull/1803,
+https://github.com/tvna/gitapex/pull/1969,
+https://github.com/tvna/gitapex/issues/1955,
+https://github.com/tvna/gitapex/issues/1951,
+https://github.com/tvna/gitapex/issues/1807,
+https://github.com/tvna/gitapex/issues/1806,
+https://github.com/tvna/gitapex/issues/1631.
 
 Repository facts measured at the time of writing: 29 skills; 86 gates in
 `.gitapex/ssot.json`; 9 skills declare `lifecycle.experimental`; eval run
