@@ -201,3 +201,10 @@ def test_a_non_object_ssot_payload_is_unrunnable(tmp_path: pathlib.Path) -> None
     (repo / ".gitapex" / "ssot.json").write_text("[]", encoding="utf-8")
     with pytest.raises(gate.GateUnrunnable, match="not an object"):
         gate.known_gate_ids(repo)
+
+
+def test_strip_fences_keeps_prose_and_drops_block_content() -> None:
+    """`strip_fences` is what keeps a fenced example from being graded as
+    a reference the file is making."""
+    assert gate.strip_fences("a\n```\nb\n```\nc\n") == "a\nc\n"
+    assert gate.strip_fences("a\nb\n") == "a\nb\n"

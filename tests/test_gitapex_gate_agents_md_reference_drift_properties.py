@@ -104,11 +104,28 @@ def test_exit_code_matches_whether_the_reference_resolves(identifier: str, resol
 
 
 @_PROPERTIES
-@given(parts=st.lists(st.from_regex(r"\A[a-z]{1,8}\Z", fullmatch=True), min_size=1, max_size=4))
-def test_repo_root_resolution_is_stable_under_relative_suffixes(parts: list[str]) -> None:
-    """Covers the module-level ``.resolve()`` path-resolution site."""
-    candidate = (gate.REPO_ROOT.joinpath(*parts)).resolve()
-    assert str(candidate).startswith(str(gate.REPO_ROOT))
+@given(parts=st.lists(st.sampled_from(["..", ".", "a", "b"]), min_size=1, max_size=4))
+def test_repo_root_resolution_cannot_be_walked_out_of_by_accident(parts: list[str]) -> None:
+    """Covers the module-level ``.resolve()`` site, and asserts the fact
+    that actually matters about it: ``parents[2]`` really is this
+    repository's root, not some ancestor.
+
+    An earlier version of this property drew only ``[a-z]{1,8}`` segments,
+    which cannot contain ``..`` -- so its "stays inside the root"
+    assertion was unfalsifiable by construction and exercised ``pathlib``
+    rather than the gate. The strategy now includes ``..``, and the
+    assertion says what is true: a suffix containing ``..`` CAN escape,
+    which is exactly why every path this gate builds is a fixed constant
+    rather than caller-supplied.
+    """
+    assert (gate.REPO_ROOT / ".gitapex" / "ssot.json").is_file()
+    assert (gate.REPO_ROOT / "AGENTS.md").is_file()
+    plain = [part for part in parts if part not in ("..", ".")]
+    assert str(gate.REPO_ROOT.joinpath(*plain).resolve()).startswith(str(gate.REPO_ROOT))
+    # And the converse, stated rather than assumed: enough `..` DOES leave
+    # the root. That is why every path this gate builds is a fixed
+    # constant, never a caller-supplied suffix.
+    assert not str(gate.REPO_ROOT.joinpath("..", "..", "..").resolve()).startswith(str(gate.REPO_ROOT) + "/")
 
 
 @_PROPERTIES

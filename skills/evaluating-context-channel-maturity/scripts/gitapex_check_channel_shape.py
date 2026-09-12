@@ -101,6 +101,10 @@ CHARS_PER_TOKEN_ESTIMATE = 4
 # lines is kept whole instead of being truncated at its first newline.
 _FRONTMATTER_DELIMITER = "---"
 _TOP_LEVEL_KEY_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):(.*)$")
+# A YAML alias reference: the value is `*anchor`, resolved by the loader
+# to an anchor defined elsewhere. Detected so the checker can fail closed
+# rather than report the alias token's own two-character length.
+_ALIAS_VALUE_RE = re.compile(r"\A\*[A-Za-z0-9_-]+\Z")
 
 _SUBAGENT = "subagent"
 _PROJECT_INSTRUCTION = "project-instruction"
@@ -122,6 +126,20 @@ class ChannelParseError(Exception):
     """Raised when a file cannot be split into frontmatter and body."""
 
 
+def _is_delimiter(line: str) -> bool:
+    """True only for a delimiter at column 0.
+
+    Leading whitespace is NOT stripped, deliberately. An indented `---`
+    is content -- inside a block scalar it is part of the value -- and
+    treating it as the closing delimiter truncates the frontmatter there.
+    That under-measures the value, which is the dangerous direction: a
+    description carrying an indented `---` would measure as its first few
+    lines and PASS a cap its real value exceeds. Trailing whitespace is
+    tolerated because it is invisible and changes nothing.
+    """
+    return line.rstrip() == _FRONTMATTER_DELIMITER
+
+
 def split_frontmatter(text: str) -> tuple[str, str]:
     """Return `(frontmatter_text, body_text)`.
 
@@ -129,10 +147,10 @@ def split_frontmatter(text: str) -> tuple[str, str]:
     delimiter line or the block is never closed -- the fail-closed path.
     """
     lines = text.split("\n")
-    if not lines or lines[0].strip() != _FRONTMATTER_DELIMITER:
+    if not lines or not _is_delimiter(lines[0]):
         raise ChannelParseError("no YAML frontmatter block: the file does not open with a '---' line")
     for index in range(1, len(lines)):
-        if lines[index].strip() == _FRONTMATTER_DELIMITER:
+        if _is_delimiter(lines[index]):
             return "\n".join(lines[1:index]), "\n".join(lines[index + 1 :])
     raise ChannelParseError("unterminated YAML frontmatter block: no closing '---' line")
 
@@ -154,8 +172,16 @@ def frontmatter_values(frontmatter_text: str) -> dict[str, str]:
             current = match.group(1)
             values.setdefault(current, []).append(match.group(2).strip())
         elif current is not None:
-            values[current].append(line.strip())
-    return {key: "\n".join(part for part in parts if part).strip() for key, parts in values.items()}
+            # Continuation lines are kept verbatim apart from trailing
+            # whitespace. Stripping their indentation would under-measure
+            # a block scalar with an explicit indentation indicator
+            # (`|2`), where indentation past the declared column is
+            # content, not layout -- and under-measuring is what lets an
+            # over-cap value PASS. Keeping the indentation can over-count
+            # by a few characters on an ordinary folded scalar; that
+            # direction only ever tightens the cap.
+            values[current].append(line.rstrip())
+    return {key: "\n".join(parts).strip() for key, parts in values.items()}
 
 
 def estimated_tokens(text: str) -> int:
@@ -192,6 +218,20 @@ def check_subagent(path: str, text: str) -> list[Finding]:
     description = values.get("description")
     if description is None:
         return [Finding(path, "frontmatter", False, "frontmatter declares no 'description' key")]
+    # A YAML alias (`description: *d`) measures as two characters here
+    # while the loader resolves it to an anchor defined elsewhere in the
+    # block -- an under-measurement with no upper bound. This checker does
+    # not resolve anchors, so it must not report a size it cannot stand
+    # behind.
+    if _ALIAS_VALUE_RE.match(description):
+        return [
+            Finding(
+                path,
+                "frontmatter",
+                False,
+                f"'description' is a YAML alias ({description!r}); this checker does not resolve anchors",
+            )
+        ]
     findings = [
         Finding(
             path,
@@ -229,7 +269,13 @@ def check_path(path: Path, kind: str) -> list[Finding]:
         return [Finding(str(path), "readable", False, f"unreadable: {error}")]
     if kind == _SUBAGENT:
         return check_subagent(str(path), text)
-    return check_project_instruction(str(path), text)
+    if kind == _PROJECT_INSTRUCTION:
+        return check_project_instruction(str(path), text)
+    # Never fall through to a default grading: an unrecognised kind means
+    # the caller asked for a grade this checker does not define, and
+    # silently applying the looser project-instruction rules to a subagent
+    # would skip the description cap entirely.
+    return [Finding(str(path), "kind", False, f"unknown channel kind {kind!r}")]
 
 
 def main(argv: list[str] | None = None) -> int:

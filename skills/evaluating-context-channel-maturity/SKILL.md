@@ -1,6 +1,6 @@
 ---
 name: evaluating-context-channel-maturity
-description: Review whether a non-skill, non-gate instruction channel -- CLAUDE.md (root or subdirectory), a Subagent definition, an Output style, a system-prompt-append configuration, or Auto-memory content -- is engineered to a mature standard on five points -- ownership/review gating, bounded growth, placement/disclosure fit, enforcement-fit, and provenance/adversarial independence. Use once the target is confirmed to be one of these five channels, not a Skill (evaluating-skill-quality's own job), a deterministic gate/hook (evaluating-deterministic-gate-quality's own job), or a Rule (out of scope -- Claude Code's own proprietary, non-portable mechanism). One disclosed adjacency -- criterion 3 mirrors evaluating-skill-quality's own Agentic operation mechanism-fit check from the opposite artifact -- that skill asks whether a SKILL.md candidate should be one of these channels instead; this skill asks whether content already living in one of these channels should be a skill instead.
+description: Review whether a non-skill, non-gate instruction channel -- CLAUDE.md or AGENTS.md (root or subdirectory), a Subagent definition, an Output style, a system-prompt-append configuration, or Auto-memory content -- is engineered to a mature standard, on five criteria common to every channel (ownership/review gating, bounded growth, placement/disclosure fit, enforcement-fit, provenance/adversarial independence) plus the channel-specific axes CLAUDE.md/AGENTS.md and Subagent definitions each carry. Use once the target is confirmed to be one of these channels, not a Skill (evaluating-skill-quality's own job), a deterministic gate/hook (evaluating-deterministic-gate-quality's own job), or a Rule (out of scope).
 ---
 
 # Evaluating Context-Channel Maturity
@@ -165,30 +165,41 @@ five alone.
 |---|---|---|
 | A1 Content derivability | Does it carry content the agent can derive from the codebase -- directory layouts, dependency lists, architecture overviews -- rather than pitfalls, rationale, and conventions that differ from tool defaults? | Primary-source quotable |
 | A2 Always-loaded justification | For each rule, is it here because no deterministic gate can carry it, or is it prose restating a rule a gate already enforces? Full gate coverage means the gate is the source of truth; partial coverage keeps only the uncovered remainder | Primary-source quotable |
-| A3 Dispatch multiplier | Is the file's size chosen in the knowledge that a non-fork subagent re-loads the whole CLAUDE.md hierarchy on every dispatch, so the cost is per-dispatch and not per-session? | Primary-source quotable |
+| A3 Dispatch multiplier | Does the file exceed its size target while the repository dispatches subagents that re-load the whole hierarchy -- with nothing in the file or its own documentation acknowledging that the cost is per-dispatch rather than per-session? | Primary-source quotable |
 | A4 Over-specification | Does it hand the model rules where the model's own judgement would serve, spending always-loaded context to constrain something that does not need constraining? | Primary-source quotable |
 
 **B. Subagent definition axes**
 
 | Axis | Question | Basis |
 |---|---|---|
-| B1 Description trigger purity | Does the description state **only when the subagent should be called**? Everything else -- what it does, its tool boundaries, design archaeology, authoring notes, restatements of the body -- is deleted. If *when it is called* is itself incoherent, that is the moment to fix the caller or split the subagent, never to lengthen the description | Primary-source quotable |
+| B1 Description trigger purity | Does the description state **only when the subagent should be called**? Everything else is deleted; an incoherent trigger is fixed upstream or by splitting the subagent, never by lengthening the description (full rule and its escalation path: `references/criteria.md`) | Primary-source quotable |
 | B2 Detail placement | Does detail live in the body, which loads only when the subagent runs, rather than in the description, which is always loaded? | Primary-source quotable |
 | B3 Roster size | Is the roster small enough that automatic delegation stays reliable, and is the combined description budget respected? | Primary-source quotable |
 | B4 Cross-runtime tool-boundary parity | Is a declared tool boundary reproduced equivalently in **every** runtime this definition is distributed to, not only the one it was authored against? | gitapex-owned convention |
 
-Numeric thresholds, each axis's own quoted grounding, and which values are
-this repository's own convention rather than a published limit:
-[references/criteria.md](references/criteria.md).
+Each axis's own quoted grounding, and which of its claims rest on a
+published limit rather than on this repository's own convention:
+[references/criteria.md](references/criteria.md). The numeric thresholds
+themselves live in the shape checker's own constants
+(`scripts/gitapex_check_channel_shape.py`), each with its basis stated
+beside it, so the value a review cites and the value a gate enforces
+cannot drift apart.
 
 The quantitative half of these axes is arithmetic, so it is not graded by
 reading. Run
 `python3 scripts/gitapex_check_channel_shape.py --kind subagent PATH` for a
 subagent definition, or `--kind project-instruction PATH` for a CLAUDE.md
-or AGENTS.md, and cite its output as the evidence for the size-shaped
-findings; the rubric axes above then carry the content-type judgement the
-checker cannot make. A file the checker cannot parse is a finding in its
-own right, not a file to grade by eye instead.
+or AGENTS.md. A file the checker cannot parse is a finding in its own
+right, not a file to grade by eye instead. On a surface with no `python3`,
+apply the same thresholds by reading that script's own constants and
+saying in the report that the numbers were read rather than measured.
+
+Where its output lands: `description-chars` is `B2`'s evidence (detail
+that belongs in the body is what pushes a description over a cap),
+`body-lines` and `body-tokens` are criterion 2's (bounded growth, now with
+a number), and `file-lines` for a project instruction is `A3`'s. `B1` and
+`B3` take no input from it -- `B1` is a content-type judgement a cap
+cannot make, and `B3` is roster-level while the checker is per-file.
 
 ## Procedure
 
@@ -196,21 +207,30 @@ own right, not a file to grade by eye instead.
    content; if it cannot be read, stop per check 0 above. Confirm by
    direct reading (not a label or comment) that it is one of the five
    in-scope channels; report and stop per check 1 if it is not.
-2. **Walk the five criteria in `references/criteria.md`**, citing the
-   specific evidence that earns each verdict (PASS / FAIL /
+2. **Run the shape checker first when the channel has one.** For a
+   subagent definition or a CLAUDE.md/AGENTS.md, run
+   `python3 scripts/gitapex_check_channel_shape.py` per the Channel-specific
+   axes section above and keep its output: it is the evidence for every
+   size-shaped finding, and a file it cannot parse is itself a finding.
+   Skip this step only for a channel it does not cover (an Output style,
+   a system-prompt-append configuration, Auto-memory), and say so.
+3. **Walk the five criteria in `references/criteria.md`, then the
+   target's own axis block** (`A1`-`A4` for CLAUDE.md/AGENTS.md, `B1`-`B4`
+   for a subagent definition; no block for the other three channels),
+   citing the specific evidence that earns each verdict (PASS / FAIL /
    not-applicable / cannot-be-assessed; `indeterminate` is reserved for
    check 0's own unreadable-source case above, applied to the whole
-   review rather than a per-criterion verdict). Where a claim depends on
-   whether an enforcement mechanism actually exists (criterion 4), whether
-   a review/ownership process actually runs (criterion 1), or who actually
-   authored or last modified the content (criterion 5), check the
-   harness's own actual configuration (a hooks manifest, a CODEOWNERS
-   file, a commit history) directly -- a channel's own docstring or
-   comment asserting any of the three is not itself evidence, per the Stop
-   boundaries below.
-3. **Issue a verdict** per criterion, plus one overall summary noting
-   which criteria were not-applicable and why. A criterion failing does
-   not automatically fail the others -- report each independently.
+   review rather than a per-item verdict). Where a claim depends on
+   whether an enforcement mechanism actually exists (criterion 4 and
+   `A2`), whether a review/ownership process actually runs (criterion 1),
+   or who actually authored or last modified the content (criterion 5),
+   check the harness's own actual configuration (a hooks manifest, a
+   CODEOWNERS file, a commit history) directly -- a channel's own
+   docstring or comment asserting any of the three is not itself
+   evidence, per the Stop boundaries below.
+4. **Issue a verdict** per criterion and per axis, plus one overall
+   summary noting which were not-applicable and why. One item failing
+   does not automatically fail the others -- report each independently.
 
 ## Stop boundaries
 
@@ -326,11 +346,12 @@ Procedure name no path or issue number specific to this skill's own
 authoring repository. This skill's own authoring repository's worked
 examples and provenance live separately, in
 [references/gitapex-worked-examples.md](references/gitapex-worked-examples.md)
-and `metadata/gitapex.yaml`; the five criteria's full definitions and
-primary-source grounding, in
-[references/criteria.md](references/criteria.md), are themselves fully
-portable -- that file cites no path or fact specific to this skill's own
-authoring repository, unlike the worked-examples file.
+and `metadata/gitapex.yaml`. [references/criteria.md](references/criteria.md)
+carries the five criteria's and the channel axes' full grounding; it cites
+no path specific to this skill's own authoring repository, but it does
+name that repository twice -- `B4` and the B-series preamble both declare
+themselves gitapex-owned conventions rather than published limits, which
+is a disclosure a portable reader needs rather than a portability defect.
 
 Lifecycle note: this skill replaces `evaluating-decision-state-discipline`
 (retired; its own five criteria presupposed gate material that none of

@@ -56,6 +56,7 @@ spec:
       write: []
       shell:
         - git
+        - python3
   lifecycle:
     renamedFrom: evaluating-decision-state-discipline
     experimental:

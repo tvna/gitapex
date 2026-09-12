@@ -7,9 +7,11 @@ grounding for why each criterion exists, matching the split
 `evaluating-skill-quality/references/rubric.md` uses for its own nine
 dimensions.
 
-Both primary sources below were fetched directly and read in full before
-any passage was quoted; no quote here is from memory or a secondary
-summary.
+Every source quoted below was fetched directly and read before any
+passage was taken from it; no quote here is from memory or a secondary
+summary. The References section records, per source, which authoring
+session verified it -- a source not verified in the session that used it
+is cited as unverified or not cited at all.
 
 ## Table of contents
 
@@ -283,6 +285,16 @@ rule, read the target gate's own scope in the repository's gate registry
 **and in the gate itself**. A registry entry naming a rule is not evidence
 that the gate's scope spans that rule's whole target range.
 
+*Ownership against criterion 4.* The two ask opposite questions about the
+same evidence and must not both be scored as findings. Criterion 4 asks
+whether an absolute prohibition is asserted **without** deterministic
+backing, and a prohibition that a confirmed gate does back **passes** it.
+This axis asks the follow-on question criterion 4 does not: given that the
+gate backs it fully, why is the prose still being carried in every turn's
+context? A fully-backed prohibition is therefore a criterion 4 PASS and an
+`A2` finding, and reporting it as one of each is correct rather than
+double-counting.
+
 ### A3. Dispatch multiplier
 
 Grounded in [Subagents][subagents]'s own statement of what a subagent
@@ -291,24 +303,35 @@ hierarchy the main conversation loads, including `~/.claude/CLAUDE.md`,
 project rules, `CLAUDE.local.md`, and managed policy files. The built-in
 Explore and Plan agents skip this."
 
+The quoted passage names one exception and no others: the built-in
+Explore and Plan agents. It does not distinguish a fork from a non-fork
+dispatch for CLAUDE.md, so this axis does not either.
+
 *Applied here:* the cost of this channel is not paid once per session. A
 repository that dispatches subagents re-charges the whole hierarchy on
-every non-fork dispatch, so a file that looks affordable against
-[memory]'s "target under 200 lines per CLAUDE.md file" may not be
-affordable against its own dispatch rate. This axis grades whether the
-size was chosen knowing that, not whether a specific number was hit --
-criterion 2 already grades whether a bound exists.
+every dispatch, so a file that looks affordable against [memory]'s
+"target under 200 lines per CLAUDE.md file" may not be affordable against
+its own dispatch rate.
+
+*What makes it FAIL,* stated so the axis is gradeable rather than a
+question about the author's state of mind: the file exceeds its size
+target, the repository dispatches subagents, and neither the file nor its
+own documentation acknowledges the per-dispatch multiplier. Any one of the
+three missing is a PASS. Ownership against criterion 2: criterion 2 grades
+whether a bound exists at all; this axis grades whether the bound that
+exists was set against the right cost model.
 
 ### A4. Over-specification
 
-Grounded in [The new rules of context engineering][context-eng]'s own
-shift from rule-writing to judgement, and in [memory]'s own reliability
-caveat for this channel: "there's no guarantee of strict compliance,
-especially for vague or conflicting instructions."
+Grounded in [memory]'s own reliability caveat for this channel: "there's
+no guarantee of strict compliance, especially for vague or conflicting
+instructions." [context-eng] is adjacent on the same theme but is not
+quoted here: it was not re-fetched in this authoring session, and this
+file's rule is that a citation is verified in the session it is used.
 
 *Applied here:* an always-loaded rule that constrains something the model
 would get right unaided spends context twice -- once to load, once to
-compete with the instructions that do matter. The same page names the
+compete with the instructions that do matter. [memory] names the
 compounding version of this: "if two rules contradict each other, Claude
 may pick one arbitrarily."
 
@@ -316,9 +339,11 @@ may pick one arbitrarily."
 
 **Subagents have no dedicated best-practices page.** Skills have one; the
 subagent documentation is reference material, and the only published
-numeric limit is a *combined* warning threshold, not a per-file one. Every
-numeric threshold in this section is therefore a gitapex-owned convention,
-stated as such, while the norms B1-B3 encode are quotable.
+numeric limit is `B3`'s *combined* warning threshold, not a per-file one.
+Every **per-file** threshold this skill applies to a subagent is therefore
+a gitapex-owned convention rather than a published limit; the values
+themselves live in the shape checker's own constants, each with its basis
+stated beside it. The norms `B1`-`B3` encode are quotable.
 
 ### B1. Description trigger purity
 
@@ -365,10 +390,16 @@ count."
 
 *Applied here:* the published budget is combined and generous, so a small
 roster will never approach it -- a repository at a few percent of 15,000
-tokens learns nothing from this threshold alone. Grade the roster on
-whether automatic delegation stays reliable as specialist agents
-accumulate, and treat the combined budget as a ceiling that has not yet
-bound rather than as the axis's real content.
+tokens learns nothing from this threshold alone.
+
+*How to grade the half that is not the budget,* since "delegation stays
+reliable" is not directly observable from the files: read every
+definition's trigger condition and ask whether any two are satisfied by
+the same request. Overlapping triggers are the observable form of an
+unreliable roster, and they are readable. A roster with no overlapping
+pair PASSes; each overlapping pair is a finding naming both definitions.
+Treat the combined budget as a ceiling that has not yet bound, and report
+it as a measured fact rather than as the axis's verdict.
 
 ### B4. Cross-runtime tool-boundary parity
 
@@ -387,6 +418,13 @@ boundary is declared at all, whether a mapping exists for every
 distributed copy, and whether the mapping is equivalent to the source
 declaration -- three separate checks, because a missing mapping and a
 wrong one fail differently.
+
+*Ownership against criterion 4.* Criterion 4 asks whether the boundary is
+backed at all in the runtime the definition was authored against. This
+axis asks whether that same backing survives distribution to the other
+runtimes. A boundary declared once and reproduced nowhere fails both, and
+the two findings are not the same finding: criterion 4's fix is to add
+backing, this axis's is to add a mapping.
 
 *Disclosed limit on what parity can mean here.* [Subagents][subagents]
 states that a declared `tools` list is not the effective set: subagents

@@ -77,15 +77,27 @@ def test_frontmatter_values_never_drops_a_continuation_line(key: str, value: str
     the first line alone -- the exact under-measurement a parser stopping
     at the first newline would produce, which would let an over-cap
     description pass."""
+    if not continuation.strip():
+        return
     parsed = ccs.frontmatter_values(f"{key}: {value}\n  {continuation}")
-    assert len(parsed[key]) >= len(value.strip())
+    # Strictly greater, not >=. A parser that stopped at the first newline
+    # would return exactly value.strip(), for which >= HOLDS -- so the
+    # earlier >= form passed on the very regression this docstring says it
+    # catches. The measured value must contain the continuation too.
+    assert len(parsed[key]) > len(value.strip())
+    assert continuation.strip() in parsed[key]
 
 
 @_PROPERTIES
 @given(text=st.text(max_size=400))
-def test_estimated_tokens_is_monotone_in_length(text: str) -> None:
+def test_estimated_tokens_is_monotone_and_never_over_reports(text: str) -> None:
+    """Monotone in length, and never larger than the character count --
+    properties of the estimate itself. Deliberately NOT a re-derivation of
+    `len(text) // CHARS_PER_TOKEN_ESTIMATE`, which would only detect a
+    change to the constant, not a wrong estimate."""
     assert ccs.estimated_tokens(text) <= ccs.estimated_tokens(text + "xxxx")
-    assert ccs.estimated_tokens(text) == len(text) // ccs.CHARS_PER_TOKEN_ESTIMATE
+    assert ccs.estimated_tokens(text) <= len(text)
+    assert ccs.estimated_tokens(text) >= 0
 
 
 @_PROPERTIES
@@ -128,10 +140,17 @@ def test_body_findings_always_reports_both_body_thresholds(body: str) -> None:
 
 
 @_PROPERTIES
-@given(description=_LINE_TEXT)
+@given(
+    description=st.integers(min_value=0, max_value=ccs.DESCRIPTION_MAX_CHARS * 2).map(lambda n: "d" * n),
+)
 def test_main_exit_code_matches_the_verdict(description: str) -> None:
     """Covers ``main``'s own comparison: the process exit code is 0 exactly
     when every graded fact passed, for any description length.
+
+    The description length is drawn across the whole range on both sides
+    of the cap. An earlier version drew from a 40-character strategy, so
+    the over-cap branch was never generated and the docstring's "for any
+    description length" was false.
 
     A plain `TemporaryDirectory` rather than pytest's `tmp_path`: hypothesis
     re-runs the body many times per test, and a function-scoped fixture is

@@ -1,6 +1,6 @@
 ---
 name: review-persona
-description: Read-only, plugin-distributed content-reasoning subagent for a fixed, enumerated set of call sites -- see this file's own "Sanctioned call sites" section below for the exact, current list (not re-enumerated here, the same drift this section's own entry 1 already avoids for a different list). Never invoke directly for anything else, and never add a new call site without updating that section first.
+description: Use only from reviewing-an-artifact, screening-a-low-trust-contribution, and executing-a-branch-plan, at the call sites this file's own Sanctioned call sites section enumerates. Never invoke it for any other purpose.
 tools: Read, Grep, Glob
 ---
 

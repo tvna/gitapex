@@ -114,8 +114,12 @@ def test_body_token_boundary() -> None:
     assert not next(f for f in findings if f.check == "body-tokens").passed
 
 
-def test_estimated_tokens_uses_the_shared_divisor() -> None:
-    assert ccs.estimated_tokens("x" * 40) == 40 // ccs.CHARS_PER_TOKEN_ESTIMATE
+def test_estimated_tokens_divides_by_four() -> None:
+    """The literal expected value, not a re-derivation through the same
+    constant: this asserts the estimate, where re-deriving it would only
+    detect a change to the constant's name."""
+    assert ccs.estimated_tokens("x" * 40) == 10
+    assert ccs.estimated_tokens("x" * 3) == 0
 
 
 def test_empty_body_counts_as_zero_lines() -> None:
@@ -200,3 +204,54 @@ def test_main_fails_on_an_over_length_description(tmp_path: Path, capsys: pytest
     target.write_text(_subagent("d" * (ccs.DESCRIPTION_MAX_CHARS + 1)), encoding="utf-8")
     assert ccs.main(["--kind", ccs._SUBAGENT, str(target)]) == 1
     assert "FAIL" in capsys.readouterr().out
+
+
+# --- the parse-layer defeats found by adversarial review ----------------
+
+
+def test_is_delimiter_requires_column_zero() -> None:
+    """`_is_delimiter` is the fix for the sharpest defeat found against
+    this checker: an indented `---` inside a block scalar is CONTENT, and
+    closing the frontmatter there truncates the value being measured."""
+    assert ccs._is_delimiter("---")
+    assert ccs._is_delimiter("---  ")
+    assert not ccs._is_delimiter("  ---")
+    assert not ccs._is_delimiter("\t---")
+
+
+def test_an_indented_delimiter_inside_a_block_scalar_does_not_truncate() -> None:
+    """DEFEAT CASE, live-reproduced before the fix: a ~1,000-character
+    description measured as ~102 and PASSed the 500-character cap, with
+    the overflow absorbed by the far looser body budget."""
+    text = "---\nname: x\ndescription: |\n  " + "A" * 100 + "\n  ---\n  " + "B" * 900 + "\ntools: Read\n---\n\nbody\n"
+    findings = ccs.check_subagent("p", text)
+    assert not next(f for f in findings if f.check == "description-chars").passed
+
+
+def test_a_yaml_alias_description_fails_closed() -> None:
+    """DEFEAT CASE: `description: *d` measures as two characters while the
+    loader resolves it to an anchor defined elsewhere in the block. The
+    checker does not resolve anchors, so it must not report a size it
+    cannot stand behind."""
+    text = "---\nname: x\n_d: &d " + "A" * 900 + "\ndescription: *d\ntools: Read\n---\n\nbody\n"
+    findings = ccs.check_subagent("p", text)
+    assert findings[0].check == "frontmatter"
+    assert not findings[0].passed
+
+
+def test_block_scalar_indentation_is_not_stripped_away() -> None:
+    """DEFEAT CASE: with an explicit indentation indicator (`|2`),
+    indentation past the declared column is content. Stripping it
+    under-measures by an attacker-chosen amount per line."""
+    text = "---\ndescription: |2\n" + "\n".join("      " + "X" * 50 for _ in range(3)) + "\n---\n\nbody\n"
+    measured = ccs.frontmatter_values(ccs.split_frontmatter(text)[0])["description"]
+    assert len(measured) > 3 * 50
+
+
+def test_an_unknown_kind_never_falls_through_to_project_instruction(tmp_path: Path) -> None:
+    """DEFEAT CASE: silently grading an unknown kind under the looser
+    project-instruction rules would skip the description cap entirely."""
+    target = tmp_path / "a.md"
+    target.write_text(_subagent("d" * 900), encoding="utf-8")
+    findings = ccs.check_path(target, "not-a-kind")
+    assert findings == [ccs.Finding(str(target), "kind", False, "unknown channel kind 'not-a-kind'")]

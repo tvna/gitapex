@@ -29,9 +29,25 @@ sys.path.insert(0, str(REPO_ROOT / ".github" / "scripts"))
 
 import gitapex_gate_tool_boundary_parity as gate  # noqa: E402
 
+# A stand-in for hooks/gitapex_sync_opencode.py carrying the two names the
+# gate imports. The renderer mimics the real generator's own permission
+# block (two-space indent, `key: value`); `render_broken` below mimics a
+# generator whose output shape drifted, which is what defeat case F needs.
 _SYNC_TEMPLATE = """AGENT_PERMISSION_SPECS = (
 {entries}
 )
+
+
+def _render_agent_copy(source_text, source_rel, permission):
+    out = ["---", "description: d", "mode: subagent"]
+    if permission is not None:
+        out.append("{permission_key}:")
+        for key, value in permission.items():
+            out.append("{indent}" + key + ": " + value)
+    out.append("---")
+    out.append("")
+    out.append("body")
+    return "\\n".join(out)
 """
 
 
@@ -40,16 +56,16 @@ def _write_repo(
     *,
     agents: dict[str, str],
     specs: str,
-    generated: dict[str, str] | None = None,
+    permission_key: str = "permission",
+    indent: str = "  ",
 ) -> pathlib.Path:
     (tmp_path / "agents").mkdir(parents=True, exist_ok=True)
     for name, text in agents.items():
         (tmp_path / "agents" / name).write_text(text, encoding="utf-8")
     (tmp_path / "hooks").mkdir(parents=True, exist_ok=True)
-    (tmp_path / "hooks" / "gitapex_sync_opencode.py").write_text(_SYNC_TEMPLATE.format(entries=specs), encoding="utf-8")
-    for name, text in (generated or {}).items():
-        (tmp_path / ".opencode" / "agents").mkdir(parents=True, exist_ok=True)
-        (tmp_path / ".opencode" / "agents" / name).write_text(text, encoding="utf-8")
+    (tmp_path / "hooks" / "gitapex_sync_opencode.py").write_text(
+        _SYNC_TEMPLATE.format(entries=specs, permission_key=permission_key, indent=indent), encoding="utf-8"
+    )
     return tmp_path
 
 
@@ -137,31 +153,61 @@ def test_partial_denial_set_fails(tmp_path: pathlib.Path) -> None:
 # --- generated-copy agreement (check 3's third leg) --------------------
 
 
-def test_generated_copy_agreeing_passes(tmp_path: pathlib.Path) -> None:
-    """The key is written unquoted by the generator (`f"  {key}: {value}"`),
-    so the checker must read that exact shape -- a quoted key would be a
-    different string and is deliberately not accepted as equivalent."""
-    rows = _rows(
-        tmp_path,
-        agents={"branch-plan-task.md": _BRANCH_PLAN_SOURCE},
-        specs=_GOOD_SPEC,
-        generated={
-            "branch-plan-task.md": "---\ndescription: d\nmode: subagent\npermission:\n  *mcp*: deny\n---\n\nbody\n"
-        },
-    )
+def test_rendered_copy_agreeing_passes(tmp_path: pathlib.Path) -> None:
+    """The generator writes the key unquoted at a two-space indent, so the
+    scan must read that exact shape."""
+    rows = _rows(tmp_path, agents={"branch-plan-task.md": _BRANCH_PLAN_SOURCE}, specs=_GOOD_SPEC)
     assert rows[("mapping-equivalent", "branch-plan-task.md")][0]
 
 
-def test_generated_copy_disagreeing_fails(tmp_path: pathlib.Path) -> None:
-    """DEFEAT CASE: source and in-repo mapping agree; only the generated
-    copy drifted. A two-way check would pass this."""
+def test_a_renamed_permission_key_in_the_generator_fails(tmp_path: pathlib.Path) -> None:
+    """DEFEAT CASE, and the one that motivated rendering rather than
+    reading: source and in-repo mapping agree, and only the GENERATOR's own
+    output shape drifted. The earlier version read `.opencode/agents/`
+    from disk -- a gitignored path absent in every checkout -- so it
+    skipped this leg silently and passed."""
     rows = _rows(
         tmp_path,
         agents={"branch-plan-task.md": _BRANCH_PLAN_SOURCE},
         specs=_GOOD_SPEC,
-        generated={"branch-plan-task.md": "---\ndescription: d\nmode: subagent\n---\n\nbody\n"},
+        permission_key="permissions",
     )
     assert not rows[("mapping-equivalent", "branch-plan-task.md")][0]
+
+
+def test_a_changed_generator_indent_fails(tmp_path: pathlib.Path) -> None:
+    """DEFEAT CASE: same shape drift, expressed as indentation rather than
+    a key name."""
+    rows = _rows(
+        tmp_path,
+        agents={"branch-plan-task.md": _BRANCH_PLAN_SOURCE},
+        specs=_GOOD_SPEC,
+        indent="    ",
+    )
+    assert not rows[("mapping-equivalent", "branch-plan-task.md")][0]
+
+
+def test_a_mapping_that_denies_nothing_fails(tmp_path: pathlib.Path) -> None:
+    """DEFEAT CASE: `{"edit": "allow"}` is truthy, so a presence test would
+    report it mapped while it reproduces no boundary at all."""
+    rows = _rows(
+        tmp_path,
+        agents={"branch-plan-task.md": _BRANCH_PLAN_SOURCE},
+        specs='    ("branch-plan-task.md", {"edit": "allow"}),',
+    )
+    assert not rows[("mapping-present", "branch-plan-task.md")][0]
+
+
+def test_a_registry_row_naming_a_missing_file_fails(tmp_path: pathlib.Path) -> None:
+    """DEFEAT CASE: the reverse set difference. A spec row for a file that
+    does not exist produces no source to iterate, so without an explicit
+    check it drifts silently forever."""
+    rows = _rows(
+        tmp_path,
+        agents={"branch-plan-task.md": _BRANCH_PLAN_SOURCE},
+        specs=_GOOD_SPEC + '\n    ("ghost.md", {"*mcp*": "deny"}),',
+    )
+    assert not rows[("source-present", "ghost.md")][0]
 
 
 # --- generated_permission_keys, probed directly ------------------------
@@ -251,12 +297,14 @@ def test_the_real_repository_passes() -> None:
 # --- load_permission_specs and read_checked, probed by name ------------
 
 
-def test_load_permission_specs_returns_the_module_table(tmp_path: pathlib.Path) -> None:
+def test_load_sync_module_returns_the_table_and_the_renderer(tmp_path: pathlib.Path) -> None:
     repo = _write_repo(tmp_path, agents={"branch-plan-task.md": _BRANCH_PLAN_SOURCE}, specs=_GOOD_SPEC)
-    assert gate.load_permission_specs(repo) == {"branch-plan-task.md": {"*mcp*": "deny"}}
+    specs, render = gate.load_sync_module(repo)
+    assert specs == {"branch-plan-task.md": {"*mcp*": "deny"}}
+    assert callable(render)
 
 
-def test_load_permission_specs_is_unrunnable_without_a_loader(
+def test_load_sync_module_is_unrunnable_without_a_loader(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """DEFEAT CASE: importlib can return a spec with no loader (a path it
@@ -265,7 +313,7 @@ def test_load_permission_specs_is_unrunnable_without_a_loader(
     repo = _write_repo(tmp_path, agents={"a.md": _BRANCH_PLAN_SOURCE}, specs="")
     monkeypatch.setattr(gate.importlib.util, "spec_from_file_location", lambda *a, **k: None)
     with pytest.raises(gate.GateUnrunnable, match="cannot load"):
-        gate.load_permission_specs(repo)
+        gate.load_sync_module(repo)
 
 
 def test_read_checked_returns_decoded_text(tmp_path: pathlib.Path) -> None:
@@ -293,3 +341,51 @@ def test_evaluate_surfaces_an_undecodable_source_as_unrunnable(tmp_path: pathlib
     (repo / "agents" / "branch-plan-task.md").write_bytes(b"\xff\xfe\x00bad")
     with pytest.raises(gate.GateUnrunnable, match="cannot read"):
         gate.evaluate(repo)
+
+
+def test_no_expectation_table_row_names_a_missing_agent() -> None:
+    """The stale-row check the gate itself cannot make: EXPECTED_BOUNDARIES
+    describes THIS repository, so grading it against an arbitrary
+    --repo-root would report false absences. It is graded here instead."""
+    present = {path.name for path in (REPO_ROOT / "agents").glob("*.md")}
+    assert set(gate.EXPECTED_BOUNDARIES) <= present
+
+
+def test_load_sync_module_is_unrunnable_without_a_renderer(tmp_path: pathlib.Path) -> None:
+    """DEFEAT CASE: a sync module carrying the spec table but no
+    `_render_agent_copy` would leave check 3's third leg with nothing to
+    call. That must be exit 2, not a skipped leg."""
+    repo = _write_repo(tmp_path, agents={"a.md": _BRANCH_PLAN_SOURCE}, specs="")
+    (repo / "hooks" / "gitapex_sync_opencode.py").write_text("AGENT_PERMISSION_SPECS = ()\n", encoding="utf-8")
+    with pytest.raises(gate.GateUnrunnable, match="_render_agent_copy"):
+        gate.load_sync_module(repo)
+
+
+def test_load_sync_module_is_unrunnable_on_a_module_level_sys_exit(tmp_path: pathlib.Path) -> None:
+    """DEFEAT CASE: SystemExit derives from BaseException, so a
+    module-level `sys.exit(0)` in the file this gate imports would
+    otherwise terminate the gate with status 0 and not one row printed --
+    a fully silent pass."""
+    repo = _write_repo(tmp_path, agents={"a.md": _BRANCH_PLAN_SOURCE}, specs="")
+    (repo / "hooks" / "gitapex_sync_opencode.py").write_text("import sys\n\nsys.exit(0)\n", encoding="utf-8")
+    with pytest.raises(gate.GateUnrunnable, match=r"sys\.exit"):
+        gate.load_sync_module(repo)
+
+
+def test_load_sync_module_is_unrunnable_on_any_import_error(tmp_path: pathlib.Path) -> None:
+    """A NameError at import time is not one of (OSError, SyntaxError,
+    ImportError); the narrower filter this started with let it escape as a
+    traceback, mis-signalling the documented exit 2."""
+    repo = _write_repo(tmp_path, agents={"a.md": _BRANCH_PLAN_SOURCE}, specs="")
+    (repo / "hooks" / "gitapex_sync_opencode.py").write_text("undefined_name\n", encoding="utf-8")
+    with pytest.raises(gate.GateUnrunnable, match="cannot import"):
+        gate.load_sync_module(repo)
+
+
+def test_read_checked_round_trips_and_fails_closed(tmp_path: pathlib.Path) -> None:
+    target = tmp_path / "a.md"
+    target.write_text("hello\n", encoding="utf-8")
+    assert gate.read_checked(target) == "hello\n"
+    target.write_bytes(b"\xff\xfe\x00bad")
+    with pytest.raises(gate.GateUnrunnable, match="cannot read"):
+        gate.read_checked(target)

@@ -25,7 +25,13 @@ different failures with different fixes:
    `hooks/gitapex_sync_opencode.py`'s `AGENT_PERMISSION_SPECS` with a
    non-None permission mapping.
 3. **mapping-equivalent** -- the source declaration, this file's own
-   expectation table, and the generated `.opencode/agents/` copy all agree.
+   expectation table, and the OpenCode copy the sync script's own
+   generator actually emits all agree. The third leg RENDERS that copy
+   rather than reading `.opencode/agents/<name>.md` from disk: `.gitignore`
+   excludes that directory, so the file is absent in every clone and every
+   CI checkout. An earlier version read it, found nothing, skipped the leg
+   silently, and still reported agreement about a file it had never
+   opened.
 
 Check 3 takes the "keep the constant and check three-way agreement" form
 rather than deriving the mapping from the source. Derivation was
@@ -48,8 +54,15 @@ Usage:
   uv run --frozen python3 .github/scripts/gitapex_gate_tool_boundary_parity.py
 
 Exit codes: 0 all three checks pass; 1 at least one fails; 2 the check
-itself could not run (the sync module is missing, or does not expose
-`AGENT_PERMISSION_SPECS`) -- never a silent pass.
+itself could not run (the sync module is missing, fails at import, or
+does not expose `AGENT_PERMISSION_SPECS` and `_render_agent_copy`) --
+never a silent pass.
+
+**What this gate does not claim.** All three checks compare in-repo
+artifacts to each other, so a commit that widens a boundary on the source
+AND in the table AND in the mapping passes cleanly. It grades that the
+boundary is reproduced, never that the boundary is strong enough; that
+judgement is axis B4's and a reviewer's.
 """
 
 from __future__ import annotations
@@ -58,16 +71,15 @@ import argparse
 import importlib.util
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-# Where the Claude-canonical definitions live, and where the generated
-# OpenCode copies are written. Both are fixed by
-# hooks/gitapex_sync_opencode.py's own constants; restated here as paths
-# rather than imported, so a sync-module import failure still yields the
-# exit-2 diagnostic below instead of an AttributeError.
+# Where the Claude-canonical definitions live, and where the generator
+# that produces the OpenCode copies lives. Restated here as paths rather
+# than imported, so a sync-module import failure still yields the exit-2
+# diagnostic below instead of an AttributeError.
 AGENTS_SRC_DIR = Path("agents")
-OPENCODE_AGENTS_DIR = Path(".opencode") / "agents"
 SYNC_MODULE_PATH = Path("hooks") / "gitapex_sync_opencode.py"
 # The Claude-side frontmatter keys that can express a tool boundary. A
 # definition declaring neither inherits every tool available to subagents.
@@ -124,11 +136,15 @@ def frontmatter_fields(text: str) -> dict[str, str]:
     return fields
 
 
-def load_permission_specs(repo_root: Path) -> dict[str, dict[str, str] | None]:
-    """Import the sync module by path and return its `AGENT_PERMISSION_SPECS`
-    as a mapping. Raises `GateUnrunnable` rather than returning an empty
-    result, so a missing or renamed module is never read as "no agents to
-    check"."""
+def load_sync_module(repo_root: Path) -> tuple[dict[str, dict[str, str] | None], Callable[..., str]]:
+    """Import the sync module by path and return `(AGENT_PERMISSION_SPECS
+    as a mapping, its own _render_agent_copy)`.
+
+    Raises `GateUnrunnable` rather than returning an empty result, so a
+    missing or renamed module is never read as "no agents to check". The
+    renderer is returned because check 3's third leg calls it: see
+    `evaluate`.
+    """
     module_path = repo_root / SYNC_MODULE_PATH
     spec = importlib.util.spec_from_file_location("gitapex_sync_opencode", module_path)
     if spec is None or spec.loader is None:
@@ -136,12 +152,24 @@ def load_permission_specs(repo_root: Path) -> dict[str, dict[str, str] | None]:
     module = importlib.util.module_from_spec(spec)
     try:
         spec.loader.exec_module(module)
-    except (OSError, SyntaxError, ImportError) as error:
-        raise GateUnrunnable(f"cannot import {SYNC_MODULE_PATH}: {error}") from error
+    # Deliberately broad. The narrower (OSError, SyntaxError, ImportError)
+    # this started as let every other module-level failure -- NameError,
+    # TypeError, a raised ValueError -- escape as a traceback, which
+    # mis-signals the exit-2 contract this gate documents. SystemExit is
+    # caught separately because it derives from BaseException: a
+    # module-level sys.exit(0) would otherwise terminate this gate with
+    # status 0 and not a single check row printed, a fully silent pass.
+    except SystemExit as error:
+        raise GateUnrunnable(f"{SYNC_MODULE_PATH} called sys.exit at import time: {error}") from error
+    except Exception as error:
+        raise GateUnrunnable(f"cannot import {SYNC_MODULE_PATH}: {error!r}") from error
     specs = getattr(module, "AGENT_PERMISSION_SPECS", None)
     if specs is None:
         raise GateUnrunnable(f"{SYNC_MODULE_PATH} exposes no AGENT_PERMISSION_SPECS")
-    return dict(specs)
+    renderer = getattr(module, "_render_agent_copy", None)
+    if renderer is None:
+        raise GateUnrunnable(f"{SYNC_MODULE_PATH} exposes no _render_agent_copy")
+    return dict(specs), renderer
 
 
 def generated_permission_keys(text: str) -> set[str]:
@@ -185,11 +213,25 @@ def read_checked(path: Path) -> str:
 
 def evaluate(repo_root: Path) -> list[tuple[str, str, bool, str]]:
     """Return one `(check, subject, passed, detail)` row per graded fact."""
-    specs = load_permission_specs(repo_root)
+    specs, render = load_sync_module(repo_root)
     rows: list[tuple[str, str, bool, str]] = []
     sources = sorted((repo_root / AGENTS_SRC_DIR).glob("*.md"))
     if not sources:
         raise GateUnrunnable(f"no {AGENTS_SRC_DIR}/*.md definitions found")
+
+    # The reverse set difference, checked explicitly: a spec row or a
+    # table row naming a file that does not exist produces no source to
+    # iterate, so without this it would drift silently forever. The sync
+    # script itself only logs a skip line and exits 0.
+    # Scoped to the sync module's own table, not to EXPECTED_BOUNDARIES:
+    # that constant describes this repository specifically, so grading it
+    # against an arbitrary --repo-root would report a false absence for
+    # every agent the other tree does not happen to have. A stale row in
+    # the constant itself is covered by its own test instead.
+    present = {source.name for source in sources}
+    for name in sorted(specs):
+        if name not in present:
+            rows.append(("source-present", name, False, f"named in a registry but absent from {AGENTS_SRC_DIR}/"))
 
     for source in sources:
         name = source.name
@@ -205,12 +247,16 @@ def evaluate(repo_root: Path) -> list[tuple[str, str, bool, str]]:
         )
 
         permission = specs.get(name)
+        # A mapping that exists but denies nothing ({"edit": "allow"}) is
+        # truthy while reproducing no boundary at all, so this checks for
+        # a real denial rather than for presence.
+        denials = {key for key, value in (permission or {}).items() if value == "deny"}
         rows.append(
             (
                 "mapping-present",
                 name,
-                bool(permission),
-                "mapped" if permission else "synced with no permission mapping",
+                bool(denials),
+                f"denies {sorted(denials)}" if denials else "synced with no permission mapping that denies anything",
             )
         )
 
@@ -224,15 +270,28 @@ def evaluate(repo_root: Path) -> list[tuple[str, str, bool, str]]:
             problems.append(
                 f"source declares {expected_key}={fields.get(expected_key)!r}, table expects {expected_value!r}"
             )
-        mapped_denials = {key for key, value in (permission or {}).items() if value == "deny"}
-        if mapped_denials != set(expected_denials):
-            problems.append(f"mapping denies {sorted(mapped_denials)}, table expects {sorted(expected_denials)}")
-        generated = repo_root / OPENCODE_AGENTS_DIR / name
-        if generated.is_file():
-            generated_keys = generated_permission_keys(read_checked(generated))
-            if generated_keys != set(expected_denials):
+        if denials != set(expected_denials):
+            problems.append(f"mapping denies {sorted(denials)}, table expects {sorted(expected_denials)}")
+        # Third leg: render the OpenCode copy through the sync script's
+        # OWN generator and read the permission block it actually emits.
+        # An earlier version read .opencode/agents/<name>.md from disk --
+        # which .gitignore excludes, so the file is absent in every clone
+        # and every CI checkout, the leg silently never ran, and the row
+        # still reported that the generated copy agreed, about a file it
+        # had not opened. Rendering closes that: it exercises the real
+        # artifact-producing path rather than an artifact that is never
+        # committed, so a change to the generator's own output shape (a
+        # renamed key, a different indent) fails here.
+        try:
+            rendered = render(read_checked(source), f"{AGENTS_SRC_DIR}/{name}", permission)
+        except Exception as error:  # the generator raises on malformed input
+            problems.append(f"the sync generator refused this source: {error!r}")
+        else:
+            rendered_keys = generated_permission_keys(rendered)
+            if rendered_keys != set(expected_denials):
                 problems.append(
-                    f"generated copy denies {sorted(generated_keys)}, table expects {sorted(expected_denials)}"
+                    f"the generated OpenCode copy denies {sorted(rendered_keys)}, "
+                    f"table expects {sorted(expected_denials)}"
                 )
         rows.append(
             (
