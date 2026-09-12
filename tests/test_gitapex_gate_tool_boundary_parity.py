@@ -389,3 +389,23 @@ def test_read_checked_round_trips_and_fails_closed(tmp_path: pathlib.Path) -> No
     target.write_bytes(b"\xff\xfe\x00bad")
     with pytest.raises(gate.GateUnrunnable, match="cannot read"):
         gate.read_checked(target)
+
+
+def test_a_generator_that_refuses_the_source_is_a_finding(tmp_path: pathlib.Path) -> None:
+    """DEFEAT CASE: the real generator raises on a source it cannot render
+    (no frontmatter, no description). That must surface as a failed
+    equivalence row, never as a skipped leg -- the same fail-open shape as
+    reading a file that is never committed."""
+    repo = _write_repo(tmp_path, agents={"branch-plan-task.md": _BRANCH_PLAN_SOURCE}, specs=_GOOD_SPEC)
+    (repo / "hooks" / "gitapex_sync_opencode.py").write_text(
+        'AGENT_PERMISSION_SPECS = (("branch-plan-task.md", {"*mcp*": "deny"}),)\n'
+        "\n"
+        "\n"
+        "def _render_agent_copy(source_text, source_rel, permission):\n"
+        '    raise ValueError("refused")\n',
+        encoding="utf-8",
+    )
+    rows = {(check, subject): (passed, detail) for check, subject, passed, detail in gate.evaluate(repo)}
+    passed, detail = rows[("mapping-equivalent", "branch-plan-task.md")]
+    assert not passed
+    assert "refused this source" in detail
