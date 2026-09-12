@@ -92,10 +92,18 @@ at all can still be small today and unbounded in trend.
   finding worth naming if no locally-declared bound exists either -- an
   unstated bound is not itself evidence that one exists.
 
-- **Subagent definitions / Output styles / system-prompt-append
-  configuration**: usually not-applicable, per the same reasoning as
-  criterion 1's channel notes -- report so explicitly rather than
-  omitting the criterion.
+- **Subagent definitions**: no longer not-applicable. This channel now
+  has a bound -- the shape checker's own body line and token constants --
+  so grade it against those rather than reporting not-applicable, and
+  note that the bound is a ceiling nothing in this repository is
+  currently near rather than a live constraint. The description is not
+  graded here: it is `B2`'s, because what pushes a description over its
+  cap is detail that belongs in the body, which is a placement question
+  rather than a growth one.
+
+- **Output styles / system-prompt-append configuration**: usually
+  not-applicable, per the same reasoning as criterion 1's channel notes
+  -- report so explicitly rather than omitting the criterion.
 
 ## 3. Placement and disclosure fit
 
@@ -335,6 +343,17 @@ compete with the instructions that do matter. [memory] names the
 compounding version of this: "if two rules contradict each other, Claude
 may pick one arbitrarily."
 
+*What makes it FAIL,* given that "the model would get right unaided" is a
+counterfactual no file can settle: a rule in this channel fails `A4` when
+it restates a default the surrounding toolchain already enforces (a
+formatter's own rule, a language's own syntax, a framework's own
+convention) with nothing in the file saying the local convention differs
+from that default. The evidence is the default, quoted from the tool that
+owns it, next to the rule that repeats it. A rule that *does* state a
+divergence from a tool default passes, and so does one this review cannot
+find a default for -- report that as cannot-be-assessed rather than
+inferring the model's unaided behaviour.
+
 ## B. Subagent definition axes
 
 **Subagents have no dedicated best-practices page.** Skills have one; the
@@ -344,6 +363,15 @@ Every **per-file** threshold this skill applies to a subagent is therefore
 a gitapex-owned convention rather than a published limit; the values
 themselves live in the shape checker's own constants, each with its basis
 stated beside it. The norms `B1`-`B3` encode are quotable.
+
+*Whose number wins.* A reviewed repository may declare its own per-file
+caps. A **stricter** local declaration displaces this skill's, the same
+stricter-only rule criterion 2 already applies to the 200-line figure. A
+**looser** one does not: a channel cannot raise the bar it is being
+graded against by asserting a higher number inside itself, which is the
+self-asserted-waiver failure the Stop boundaries already name, wearing a
+threshold's clothes. Report the looser declaration as a finding rather
+than adopting it.
 
 ### B1. Description trigger purity
 
