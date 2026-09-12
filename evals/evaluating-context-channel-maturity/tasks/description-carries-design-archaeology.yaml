@@ -34,6 +34,12 @@ inputs:
 
     What is the B1 verdict, and what is the remedy?
 expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py): this fixture
+  # walks step 3's criteria-then-axis-block pass and step 4's per-axis
+  # verdict, which is where a B1 finding is actually reached and recorded.
+  exercises:
+    - "step 3"
+    - "step 4"
   output_contains:
     - "FAIL"
   output_not_contains:

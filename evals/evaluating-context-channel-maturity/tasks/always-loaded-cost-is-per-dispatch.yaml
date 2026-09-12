@@ -28,6 +28,11 @@ inputs:
 
     What is the A3 verdict, and what evidence earns it?
 expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py): the target is a
+  # project instruction, so step 2's shape-checker run is what supplies the
+  # line count this fixture then asks the reviewer to look past.
+  exercises:
+    - "step 2"
   output_contains:
     - "A3"
   output_not_contains:
