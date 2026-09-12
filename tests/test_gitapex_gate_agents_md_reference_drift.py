@@ -259,3 +259,18 @@ def test_a_four_space_indented_run_is_not_a_fence_opener() -> None:
     sample line."""
     text = "`head-skill`\n    ```\n`still-prose-skill`\n"
     assert gate.referenced_identifiers(text) == ["head-skill", "still-prose-skill"]
+
+
+def test_a_scan_that_graded_nothing_is_unrunnable(tmp_path: pathlib.Path) -> None:
+    """DEFEAT CASE, fail-open direction: one line whose first non-space
+    characters are a run of 3+ backticks, with no later bare-fence line,
+    opens a fence that runs to the end of the document. Every reference
+    below it is dropped and the gate used to print
+    `PASS: all 0 backticked reference(s) resolve` and exit 0 -- a clean
+    verdict from a scan that read nothing. The dangling reference on that
+    very line is what proves the scan was lost, not clean."""
+    repo = _write_repo(tmp_path, agents_md="```bash``` is banned; see `nonexistent-skill`.\n")
+    assert gate.referenced_identifiers((repo / "AGENTS.md").read_text(encoding="utf-8")) == []
+    with pytest.raises(gate.GateUnrunnable, match="no backticked reference"):
+        gate.evaluate(repo)
+    assert gate.main(["--repo-root", str(repo)]) == 2

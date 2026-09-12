@@ -255,3 +255,31 @@ def test_an_unknown_kind_never_falls_through_to_project_instruction(tmp_path: Pa
     target.write_text(_subagent("d" * 900), encoding="utf-8")
     findings = ccs.check_path(target, "not-a-kind")
     assert findings == [ccs.Finding(str(target), "kind", False, "unknown channel kind 'not-a-kind'")]
+
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_the_real_repository_passes() -> None:
+    """The live check ACM row 4's proof method names. Both `.github/scripts/`
+    gates shipped beside this checker carry a `test_the_real_repository_passes`
+    against REPO_ROOT; this one had none, which left "the shape checker FAILs
+    against the pre-rewrite tree and PASSes after" as a one-time manual
+    observation with no regression guard. The checker is not wired into a
+    workflow or the local preflight (it is skill-owned, not
+    `.github/scripts/`-owned), so this test is the only thing that re-runs it
+    against the real tree at all."""
+    for relative, kind in (
+        ("agents/review-persona.md", "subagent"),
+        ("agents/branch-plan-task.md", "subagent"),
+        (".claude/agents/branch-plan-task.md", "subagent"),
+        ("AGENTS.md", "project-instruction"),
+    ):
+        path = _REPO_ROOT / relative
+        assert path.is_file(), relative
+        text = path.read_text(encoding="utf-8")
+        findings = (
+            ccs.check_subagent(relative, text) if kind == "subagent" else ccs.check_project_instruction(relative, text)
+        )
+        failed = [f"{finding.check}: {finding.detail}" for finding in findings if not finding.passed]
+        assert failed == [], f"{relative}: {failed}"

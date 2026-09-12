@@ -134,24 +134,37 @@ def test_every_table_row_names_a_real_boundary_key(name: str) -> None:
 def test_repo_root_resolution_cannot_be_walked_out_of_by_accident(parts: list[str]) -> None:
     """Covers the module-level ``.resolve()`` site, and asserts the fact
     that actually matters about it: ``parents[2]`` really is this
-    repository's root, not some ancestor.
+    repository's root, and a caller-supplied suffix can leave it -- which
+    is why every path this gate builds is a fixed constant instead.
 
-    An earlier version of this property drew only ``[a-z]{1,8}`` segments,
-    which cannot contain ``..`` -- so its "stays inside the root"
-    assertion was unfalsifiable by construction and exercised ``pathlib``
-    rather than the gate. The strategy now includes ``..``, and the
-    assertion says what is true: a suffix containing ``..`` CAN escape,
-    which is exactly why every path this gate builds is a fixed constant
-    rather than caller-supplied.
+    Two earlier revisions were unfalsifiable. The first drew only
+    ``[a-z]{1,8}`` segments, which cannot contain ``..``. The second added
+    ``..`` to the strategy and then filtered it back out of the assertion
+    (``plain = [part for part in parts if part not in ("..", ".")]``),
+    leaving the drawn input unable to change any outcome -- identical in
+    strength to the version it claimed to have fixed. The predicate below
+    is computed FROM the draw, so a different draw really does expect a
+    different answer.
     """
     assert (gate.REPO_ROOT / ".gitapex" / "ssot.json").is_file()
     assert (gate.REPO_ROOT / "AGENTS.md").is_file()
-    plain = [part for part in parts if part not in ("..", ".")]
-    assert str(gate.REPO_ROOT.joinpath(*plain).resolve()).startswith(str(gate.REPO_ROOT))
-    # And the converse, stated rather than assumed: enough `..` DOES leave
-    # the root. That is why every path this gate builds is a fixed
-    # constant, never a caller-supplied suffix.
-    assert not str(gate.REPO_ROOT.joinpath("..", "..", "..").resolve()).startswith(str(gate.REPO_ROOT) + "/")
+    # Soundness precondition for the walk below: no drawable segment can
+    # re-enter the root by name after a `..` has left it.
+    assert gate.REPO_ROOT.name not in {"..", ".", "a", "b"}
+    left_the_root = False
+    stack: list[str] = []
+    for part in parts:
+        if part == ".":
+            continue
+        if part == "..":
+            if stack:
+                stack.pop()
+            else:
+                left_the_root = True
+        else:
+            stack.append(part)
+    resolved = gate.REPO_ROOT.joinpath(*parts).resolve()
+    assert resolved.is_relative_to(gate.REPO_ROOT) is not left_the_root
 
 
 @_PROPERTIES

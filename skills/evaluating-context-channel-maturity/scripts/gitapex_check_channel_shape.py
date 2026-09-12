@@ -67,8 +67,11 @@ from pathlib import Path
 # leaves headroom without licensing the 717- and 1,074-character
 # descriptions that motivated issue #1963. It is deliberately a loose
 # backstop: once axis B1 (trigger purity) is applied, real descriptions
-# land well below it, and B1 is what actually detects the failure this
-# cap only bounds.
+# land well below it. This count is `B2`'s evidence, never `B1`'s (see
+# SKILL.md's own "Where its output lands"): what pushes a description over
+# a cap is detail that belongs in the body, which is B2. B1 grades content
+# type and takes no input from this number -- a cap cannot make that
+# judgement -- so B1 is what detects the failure this cap only bounds.
 DESCRIPTION_MAX_CHARS = 500
 # A subagent body is that subagent's system prompt and loads only when the
 # subagent runs, so it is far cheaper than the description above. These

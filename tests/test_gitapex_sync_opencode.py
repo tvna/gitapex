@@ -134,6 +134,11 @@ def test_agents_sync_rewrites_review_persona_for_opencode(tmp_path: pathlib.Path
     task = (project / ".opencode" / "agents" / "branch-plan-task.md").read_text(encoding="utf-8")
     assert "disallowedTools" not in task
     assert "mode: subagent" in task
+    # The mapping issue #1963 added. Both assertions above hold in the
+    # PRE-fix state too (the spec was `("branch-plan-task.md", None)`, so
+    # no permission block reached the copy at all), so neither of them
+    # covers this half of the change. This one does.
+    assert "*mcp*: deny" in task
 
     # Idempotent.
     assert sync.sync_agents(project, False, []) == 0
@@ -214,11 +219,18 @@ def test_real_checkout_skills_all_sync_clean() -> None:
     for skill_dir in shipped:
         name = sync._read_skill_name(skill_dir / "SKILL.md")
         assert name == skill_dir.name, f"skills/{skill_dir.name}: frontmatter name {name!r}"
-    # ... and the two distributed agents render without error.
-    for filename in ("review-persona.md", "branch-plan-task.md"):
+    # ... and every distributed agent renders, through ITS OWN permission
+    # spec. `AGENT_PERMISSION_SPECS` was raised to module level precisely
+    # so a consumer can iterate `(filename, permission)` pairs; an earlier
+    # revision of this loop hardcoded `REVIEW_PERSONA_PERMISSION` for both
+    # agents, which rendered branch-plan-task against the wrong mapping and
+    # would not have noticed its own spec going missing.
+    for filename, permission in sync.AGENT_PERMISSION_SPECS:
         text = (REPO_ROOT / "agents" / filename).read_text(encoding="utf-8")
-        rendered = sync._render_agent_copy(text, f"agents/{filename}", sync.REVIEW_PERSONA_PERMISSION)
+        rendered = sync._render_agent_copy(text, f"agents/{filename}", permission)
         assert "mode: subagent" in rendered
+        for key in permission or {}:
+            assert f"{key}: deny" in rendered
 
 
 def _assert_effectively_ignored(path: pathlib.Path, description: str) -> None:

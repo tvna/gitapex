@@ -102,12 +102,22 @@ def test_estimated_tokens_is_monotone_and_never_over_reports(text: str) -> None:
 
 @_PROPERTIES
 @given(description=_LINE_TEXT, body=st.text(max_size=200))
-def test_check_subagent_always_grades_every_threshold(description: str, body: str) -> None:
-    """A well-formed definition always produces exactly the three graded
-    facts -- never a partial result that a caller could mistake for a
-    pass."""
+def test_check_subagent_reaches_exactly_one_of_its_two_outcomes(description: str, body: str) -> None:
+    """`check_subagent` has exactly two terminal shapes and no third: it
+    grades all three thresholds, or it fails closed on the frontmatter with
+    a single finding. Never a subset, never nothing.
+
+    An earlier revision asserted the three-threshold set unconditionally.
+    `_LINE_TEXT` blacklists only `Cc`/`Cs` and `\n\r:`, so `*` is drawable
+    and `description="*a"` takes the YAML-alias branch, which emits
+    `{"frontmatter"}` alone -- the assertion was false for a value the
+    strategy could produce, and passed only because `derandomize=True`
+    fixes the draw sequence. Both branches are named here instead, which is
+    what makes the alias fail-closed path a covered outcome rather than an
+    unhandled one."""
     findings = ccs.check_subagent("p", f"---\ndescription: {description}\n---\n{body}")
-    assert {finding.check for finding in findings} == {"description-chars", "body-lines", "body-tokens"}
+    emitted = {finding.check for finding in findings}
+    assert emitted in ({"description-chars", "body-lines", "body-tokens"}, {"frontmatter"})
 
 
 @_PROPERTIES

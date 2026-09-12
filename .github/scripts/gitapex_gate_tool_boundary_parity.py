@@ -114,7 +114,17 @@ EXPECTED_BOUNDARIES: dict[str, tuple[str, str, tuple[str, ...]]] = {
 }
 
 _FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
-_FIELD_RE = re.compile(r"^(?P<key>[A-Za-z0-9_-]+)\s*:\s*(?P<value>.*?)\s*$")
+# Anchored at column 0: a key must start the line. A line that does not is
+# a CONTINUATION of the key above, and is joined onto it rather than
+# dropped -- the fail-open this gate exists to prevent otherwise reads a
+# widened boundary as unchanged. `tools: Read, Grep, Glob` followed by
+# `  , Bash` parsed first-line-only as `Read, Grep, Glob`, byte-identical
+# to EXPECTED_BOUNDARIES' own value, so all three legs reported agreement
+# about a boundary that had gained a tool. The same joining, for the same
+# reason, in `skills/evaluating-context-channel-maturity/scripts/
+# gitapex_check_channel_shape.py`'s own `frontmatter_values`, whose tests
+# carry the defeat case that proved a first-line-only parser defeatable.
+_FIELD_RE = re.compile(r"\A(?P<key>[A-Za-z0-9_-]+)\s*:\s*(?P<value>.*?)\s*$")
 _PERMISSION_ENTRY_RE = re.compile(r"^\s{2}(?P<key>\S+)\s*:\s*(?P<value>\S+)\s*$")
 
 
@@ -124,16 +134,27 @@ class GateUnrunnable(Exception):
 
 def frontmatter_fields(text: str) -> dict[str, str]:
     """Top-level frontmatter keys of `text`, or an empty mapping when the
-    file carries no frontmatter block at all."""
+    file carries no frontmatter block at all.
+
+    A value continued across lines is joined with a single space and read
+    whole; see `_FIELD_RE`'s own comment for the fail-open that a
+    first-line-only read leaves open. Values are not YAML-decoded -- this
+    gate compares a declaration against a table of declarations, and both
+    sides are compared as the text the file actually carries.
+    """
     match = _FRONTMATTER_RE.match(text)
     if match is None:
         return {}
-    fields = {}
+    parts: dict[str, list[str]] = {}
+    current: str | None = None
     for line in match.group(1).split("\n"):
         field = _FIELD_RE.match(line)
         if field:
-            fields[field.group("key")] = field.group("value")
-    return fields
+            current = field.group("key")
+            parts.setdefault(current, []).append(field.group("value"))
+        elif current is not None and line.strip():
+            parts[current].append(line.strip())
+    return {key: " ".join(value).strip() for key, value in parts.items()}
 
 
 def load_sync_module(repo_root: Path) -> tuple[dict[str, dict[str, str] | None], Callable[..., str]]:

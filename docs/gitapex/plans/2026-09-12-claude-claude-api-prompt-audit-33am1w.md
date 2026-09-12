@@ -25,6 +25,34 @@ under "Plan re-verification (2026-09-12)" and are folded into the rows below.
 | 7 | AGENTS.md is reduced to what cannot be derived | Cap 50 lines, target 40 | Move the procedural rules of sections 1/3/5/6 into skills; restate section 6's language rule so it names operator-facing output and repository artifacts separately | The rewritten file is at most 50 lines and every retained safety clause maps to a "partial remainder" or "uncovered" entry in the design's D4 table | No density cap is set, so characters per line stay unbounded -- accepted deliberately |
 | 8 | The skill has a measured eval baseline | Correction C3: authoring a fixture is not observing a FAIL, because the suite has never been executed | Author one fixture for Defect A and one for Defect B in this branch; execute `evals/scripts/gitapex_run_eval_suite.py` on a later branch and record the result | The fixtures exist and parse in this branch; the recorded baseline run shows both FAILing the new axes on the later branch | First-run cost is unmeasured. Correction C5: the coverage gate compares `fixture_count >= branch_count`, so added fixtures pass |
 
+## Registration correction (ACM row 3)
+
+Recorded rather than left as a silent drift from this plan's first
+revision, the same way Task 3's own placement correction below is.
+
+Row 3's Proof method ends "...; the checker is registered in
+`.gitapex/ssot.json`". That clause is NOT satisfied, and cannot be under
+this repository's current convention: every `.gitapex/ssot.json` gate
+names a `script` under `.github/scripts/`, `hooks/` or `evals/scripts/`,
+and no `skills/**` script is registered as a gate anywhere in the
+registry. `gitapex_check_channel_shape.py` is skill-owned -- it ships
+inside the distributed plugin and is invoked from the skill's own
+Procedure, not from a workflow -- so registering it would assert a wiring
+that does not exist.
+
+What replaces the clause: `tests/test_gitapex_check_channel_shape.py`'s
+own `test_the_real_repository_passes`, which runs the checker against the
+four real channel files this repository ships (`agents/review-persona.md`,
+both `branch-plan-task.md` copies, and `AGENTS.md`) on every pytest run.
+That is a regression guard on the same live tree the registry clause was
+reaching for, through the mechanism a skill-owned script actually has.
+
+Residual risk, stated rather than assumed away: the checker is still not a
+merge gate. A PR introducing an over-cap description in a file outside
+that test's own list is not blocked by anything deterministic. Closing
+that needs either a `.github/scripts/` wrapper or a directory sweep, and
+neither is in this branch's scope.
+
 ## Task Decomposition
 
 File-ownership map: computed with

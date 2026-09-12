@@ -401,3 +401,34 @@ def test_a_generator_that_refuses_the_source_is_a_finding(tmp_path: pathlib.Path
     passed, detail = rows[("mapping-equivalent", "branch-plan-task.md")]
     assert not passed
     assert "refused this source" in detail
+
+
+def _review_persona_spec() -> str:
+    denials = ", ".join(f'"{key}": "deny"' for key in gate.EXPECTED_BOUNDARIES["review-persona.md"][2])
+    return f'    ("review-persona.md", {{{denials}}}),'
+
+
+def test_a_continuation_line_widening_a_boundary_is_read(tmp_path: pathlib.Path) -> None:
+    """DEFEAT CASE, fail-open direction: the widened boundary reads back
+    byte-identical to the table when only the first line is parsed.
+
+    `tools: Read, Grep, Glob` followed by `  , Bash` gained a tool. A
+    first-line-only parser returned `Read, Grep, Glob` -- exactly
+    EXPECTED_BOUNDARIES' own value -- and all three legs then reported
+    `source, table and generated copy agree` about a boundary that had
+    changed. This is the one field this gate exists to protect."""
+    widened = _REVIEW_PERSONA_SOURCE.replace("tools: Read, Grep, Glob\n", "tools: Read, Grep, Glob\n  , Bash\n", 1)
+    assert widened != _REVIEW_PERSONA_SOURCE
+    assert gate.frontmatter_fields(widened)["tools"] == "Read, Grep, Glob , Bash"
+    rows = _rows(tmp_path, agents={"review-persona.md": widened}, specs=_review_persona_spec())
+    assert not rows[("mapping-equivalent", "review-persona.md")][0]
+
+
+def test_a_blank_line_inside_frontmatter_does_not_join_two_values(tmp_path: pathlib.Path) -> None:
+    """The joining F1 added must not run away: a blank line carries no
+    content, so it neither continues the key above nor merges it with the
+    key below."""
+    text = "---\nname: review-persona\ndescription: d\n\ntools: Read, Grep, Glob\n---\n\nbody\n"
+    fields = gate.frontmatter_fields(text)
+    assert fields["description"] == "d"
+    assert fields["tools"] == "Read, Grep, Glob"

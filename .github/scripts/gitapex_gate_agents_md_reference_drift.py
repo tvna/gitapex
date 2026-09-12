@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Drift gate for the outbound references `AGENTS.md` carries (issue #1963).
 
-`AGENTS.md` names other artifacts in backticks -- today eight skills, and
-after issue #1963's row-7 rewrite also the deterministic gates whose
-existence is the reason a prose rule was removed. Nothing checked that
+`AGENTS.md` names other artifacts in backticks -- eight skills and zero
+gate ids as of this gate landing. Gate ids are checked too, so issue
+#1963's row-7 rewrite (a later branch, not this one) is covered on the day
+it first names one rather than needing an edit here. Nothing checked that
 those names still resolve. A skill renamed or retired, or a gate id
 changed in `.gitapex/ssot.json`, silently turned a load-bearing pointer
 in an always-loaded instruction file into a dangling one, and the only
@@ -72,10 +73,18 @@ _IDENTIFIER_RE = re.compile(r"\A[a-z0-9]+(?:-[a-z0-9]+)+\Z")
 # FAIL); and the outer fence's own closing line then re-opens the
 # tracker, swallowing the prose after it so a genuinely dangling
 # reference goes unseen (fail-open, the direction that matters for a
-# drift gate). Same rule, same reason, as
-# `.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py` and
-# `.github/scripts/gitapex_gate_no_raw_gh_cli_in_docs.py`, each of which
-# carries its own copy: a `.github/scripts/` gate stays self-contained.
+# drift gate). Byte-identical to
+# `.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py`'s own
+# pair, which carries its own copy because a `.github/scripts/` gate stays
+# self-contained. `gitapex_gate_no_raw_gh_cli_in_docs.py` shares the
+# run-length half only: it applies its markers to `line.strip()`, so a
+# fence at ANY indentation opens a block there, a deliberate choice its own
+# docstring discloses (a flat scanner cannot see the container indentation
+# a fence nested in a list item carries). The two therefore disagree on a
+# 4+-space-indented fence: this gate reads it as an indented code block per
+# CommonMark and scans its content as prose. Not live -- AGENTS.md carries
+# no fenced block at all -- and the conservative direction here is the one
+# that over-reports rather than under-reports.
 _FENCE_OPEN_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})")
 _FENCE_CLOSE_RE = re.compile(r"^[ \t]{0,3}(`{3,}|~{3,})[ \t]*$")
 
@@ -172,6 +181,26 @@ def evaluate(repo_root: Path) -> list[tuple[str, bool, str]]:
             rows.append((identifier, True, f"resolves to a {SSOT_PATH} gate id"))
         else:
             rows.append((identifier, False, "resolves to no skill and no gate id"))
+    if not rows:
+        # Fail closed rather than report "all 0 references resolve". A
+        # scan that graded nothing is indistinguishable, in its own exit
+        # code, from a scan that graded everything and found it clean --
+        # and reaching zero does not take a malicious file: one line whose
+        # first non-space characters are a run of 3+ backticks, with no
+        # later bare-fence line, opens a fence that (correctly, per
+        # CommonMark) runs to the end of the document and drops every
+        # reference below it. `AGENTS.md` names artifacts today, so zero
+        # means the scan lost them, not that the file stopped referring to
+        # anything. Same position, same reason, as
+        # `gitapex_gate_tool_boundary_parity.py`'s own "no agents/*.md
+        # definitions found". If a future `AGENTS.md` genuinely carries no
+        # backticked reference, this gate has nothing left to guard and
+        # should be retired from the registry, not softened to exit 0.
+        raise GateUnrunnable(
+            f"no backticked reference found in {AGENTS_MD_PATH}; "
+            "an unterminated code fence drops every line after it, so this "
+            "is a lost scan rather than a clean one"
+        )
     return rows
 
 
