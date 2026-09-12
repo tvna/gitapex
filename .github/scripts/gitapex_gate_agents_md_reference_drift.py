@@ -112,6 +112,13 @@ def known_gate_ids(repo_root: Path) -> set[str]:
         raise GateUnrunnable(f"cannot read {SSOT_PATH}: {error}") from error
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise GateUnrunnable(f"cannot parse {SSOT_PATH}: {error}") from error
+    # A valid JSON document need not be an object: `[]`, `"x"`, `1` and
+    # `null` all parse. Calling .get() on one of those raises
+    # AttributeError, which would escape as a crash rather than this
+    # gate's own typed "cannot evaluate" -- the exact fail-open shape
+    # dimension 15 warns about.
+    if not isinstance(document, dict):
+        raise GateUnrunnable(f"{SSOT_PATH} is valid JSON but not an object")
     gates = document.get("gates")
     if not isinstance(gates, list):
         raise GateUnrunnable(f"{SSOT_PATH} carries no gates[] list")

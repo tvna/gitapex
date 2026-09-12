@@ -109,3 +109,25 @@ def test_repo_root_resolution_is_stable_under_relative_suffixes(parts: list[str]
     """Covers the module-level ``.resolve()`` path-resolution site."""
     candidate = (gate.REPO_ROOT.joinpath(*parts)).resolve()
     assert str(candidate).startswith(str(gate.REPO_ROOT))
+
+
+@_PROPERTIES
+@given(
+    identifier=_IDENTIFIER, fence=st.sampled_from(["```", "~~~"]), info=st.from_regex(r"\A[a-z]{0,6}\Z", fullmatch=True)
+)
+def test_strip_fences_removes_any_fenced_region(identifier: str, fence: str, info: str) -> None:
+    """Covers ``strip_fences``' own startswith/slicing calls directly: for
+    either fence marker and any info string, the fenced region is gone and
+    the surrounding prose survives."""
+    text = f"before `{identifier}`\n{fence}{info}\ninside `{identifier}`\n{fence}\nafter\n"
+    stripped = gate.strip_fences(text)
+    assert "before" in stripped
+    assert "after" in stripped
+    assert "inside" not in stripped
+
+
+@_PROPERTIES
+@given(lines=st.lists(_PROSE, min_size=0, max_size=6))
+def test_strip_fences_is_identity_on_fence_free_text(lines: list[str]) -> None:
+    text = "\n".join(lines)
+    assert gate.strip_fences(text) == text

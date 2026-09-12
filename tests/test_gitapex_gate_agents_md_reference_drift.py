@@ -191,3 +191,13 @@ def test_the_real_repository_passes() -> None:
     """The live check ACM row 6's proof method names: every backticked
     reference in this repository's own AGENTS.md must resolve today."""
     assert gate.main(["--repo-root", str(REPO_ROOT)]) == 0
+
+
+def test_a_non_object_ssot_payload_is_unrunnable(tmp_path: pathlib.Path) -> None:
+    """DEFEAT CASE: `[]`, `"x"`, `1` and `null` are all valid JSON. Calling
+    .get() on one raises AttributeError, which would escape as a crash
+    rather than this gate's own typed 'cannot evaluate'."""
+    repo = _write_repo(tmp_path, agents_md="x\n")
+    (repo / ".gitapex" / "ssot.json").write_text("[]", encoding="utf-8")
+    with pytest.raises(gate.GateUnrunnable, match="not an object"):
+        gate.known_gate_ids(repo)
