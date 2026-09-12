@@ -181,6 +181,15 @@ Numeric thresholds, each axis's own quoted grounding, and which values are
 this repository's own convention rather than a published limit:
 [references/criteria.md](references/criteria.md).
 
+The quantitative half of these axes is arithmetic, so it is not graded by
+reading. Run
+`python3 scripts/gitapex_check_channel_shape.py --kind subagent PATH` for a
+subagent definition, or `--kind project-instruction PATH` for a CLAUDE.md
+or AGENTS.md, and cite its output as the evidence for the size-shaped
+findings; the rubric axes above then carry the content-type judgement the
+checker cannot make. A file the checker cannot parse is a finding in its
+own right, not a file to grade by eye instead.
+
 ## Procedure
 
 1. **Confirm the precondition.** Read the target channel's actual

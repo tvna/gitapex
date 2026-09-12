@@ -79,6 +79,8 @@ DESCRIPTION_MAX_CHARS = 500
 # value; they are a ceiling against future growth, not a present
 # constraint.
 BODY_MAX_LINES = 500
+# The token half of the same borrowed body budget: a line count alone does
+# not bound a body whose lines are long, so the two are checked together.
 BODY_MAX_TOKENS = 5000
 # A project-instruction file loads into every session, and a non-fork
 # subagent re-loads the whole hierarchy on every dispatch. Unlike the
