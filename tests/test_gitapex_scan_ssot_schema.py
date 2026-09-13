@@ -8,9 +8,13 @@ against the real schema file (there is only one schema to test against).
 
 from __future__ import annotations
 
+import builtins
 import copy
+import importlib
 import json
 import pathlib
+import runpy
+import sys
 import typing
 
 import gitapex_scan_ssot_schema as drift
@@ -1259,3 +1263,200 @@ def test_contract_of_returns_none_for_missing_or_empty():
     assert drift._contract_of({"spec": {"contract": None}}) is None
     assert drift._contract_of("not-a-dict") is None
     assert drift._contract_of({"spec": {"contract": {"goal": {}}}}) == {"goal": {}}
+
+
+def test_contract_of_returns_none_for_non_dict_or_missing_spec():
+    """Companion to the above for the ``spec`` half of the guard: a missing
+    ``spec`` key or a non-dict ``spec`` value must also return None rather
+    than raising, distinct from the already-covered "spec present but
+    contract missing/empty" cases above."""
+    assert drift._contract_of({}) is None
+    assert drift._contract_of({"spec": "not-a-dict"}) is None
+    assert drift._contract_of({"spec": None}) is None
+
+
+def test_discover_skill_dirs_returns_empty_for_nonexistent_directory(tmp_path):
+    assert drift.discover_skill_dirs(tmp_path / "does-not-exist") == []
+
+
+def test_discover_skill_dirs_finds_only_directories_with_a_real_skill_md(tmp_path):
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(skills_dir, "fixture-skill", {})
+    (skills_dir / "no-skill-md").mkdir(parents=True)
+    assert drift.discover_skill_dirs(skills_dir) == [skills_dir / "fixture-skill"]
+
+
+def test_discover_contracts_skips_skill_with_no_sidecar_file(tmp_path):
+    """A skill directory with a real SKILL.md but no metadata/gitapex.yaml
+    sidecar file at all -- distinct from
+    test_discover_contracts_skips_sidecar_with_no_contract_block above,
+    which writes a sidecar that parses fine but declares no spec.contract
+    block. This exercises discover_contracts's own sidecar.is_file()
+    guard directly."""
+    skills_dir = _skills_dir(tmp_path)
+    skill_dir = skills_dir / "no-sidecar-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# fixture\n", encoding="utf-8")
+    assert drift.discover_contracts(skills_dir) == {}
+
+
+def test_discover_contracts_skips_sidecar_that_exhausts_memory_on_parse(tmp_path, monkeypatch):
+    """A hostile sidecar (a YAML alias-expansion "billion laughs" shape)
+    can make yaml.safe_load raise MemoryError instead of an ordinary
+    parse error -- simulated via monkeypatch rather than a real
+    memory-exhausting fixture. Asserts discover_contracts degrades the
+    same way it already does for every other malformed-sidecar shape:
+    silently skip, never crash the whole scan."""
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(skills_dir, "fixture-skill", {})
+
+    def _raise_memory_error(*args: object, **kwargs: object) -> None:
+        raise MemoryError("simulated alias-expansion exhaustion")
+
+    monkeypatch.setattr(drift.yaml, "safe_load", _raise_memory_error)
+    assert drift.discover_contracts(skills_dir) == {}
+
+
+def test_contract_gate_entry_with_non_string_id_is_skipped(tmp_path):
+    """A gates[] entry whose own id is not a string (schema-invalid --
+    skill-metadata-schema-drift's own finding to report, not this
+    scanner's) must not crash find_contract_gate_drift's dict-key lookup;
+    its own non-string guard just skips the entry silently."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(skills_dir, "fixture-skill", {"gates": [{"id": 123, "plane": "ci", "shipped": False}]})
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert not any("contract-gate" in f for f in findings), findings
+
+
+def test_contract_precondition_entry_with_non_string_id_is_skipped(tmp_path):
+    """A precondition[] entry whose own id is not a string is skipped by
+    find_contract_precondition_duplicate_ids's own non-string guard,
+    rather than being used as a dict key (which would still work for an
+    int, but not for an unhashable list/dict -- the same defensive
+    guard find_duplicate_ids already applies elsewhere in this module)."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(
+        skills_dir, "fixture-skill", {"precondition": [{"id": 1, "check": "fixture check", "onFail": "escalate"}]}
+    )
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert not any("contract-precondition-duplicate-id" in f for f in findings), findings
+
+
+def test_contract_handoff_non_dict_is_skipped(tmp_path):
+    """A schema-invalid non-dict spec.contract.handoff value must not
+    crash find_contract_handoff_drift's own .get() calls -- its own
+    isinstance guard skips the whole contract's handoff checks instead."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(skills_dir, "fixture-skill", {"handoff": "not-a-dict"})
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert not any("contract-handoff-unresolved" in f for f in findings), findings
+
+
+# ---------------------------------------------------------------------------
+# missing PyYAML dependency (issue #1076's own guard shape, ported onto this
+# module's own top-level `import yaml` under issue #1965). Mirrors
+# tests/test_gitapex_scan_skill_metadata_schema.py's own coverage for the
+# identical __name__-gated guard shape verbatim, retargeted at this module.
+# ---------------------------------------------------------------------------
+
+
+def test_missing_pyyaml_exits_with_clear_message_not_a_traceback(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """This module's own top-level `import yaml` is guarded the same way
+    gitapex_scan_skill_metadata_schema.py's own is (issue #1089): a
+    surface without the dev dependency group installed must exit 2 with
+    an actionable message, not a raw traceback. Simulated by setting
+    `sys.modules["yaml"] = None`, CPython's own documented mechanism for
+    making a subsequent `import yaml` raise ModuleNotFoundError. Runs the
+    script fresh via `runpy.run_path(..., run_name="__main__")` since the
+    guard's SystemExit(2) only fires under `__name__ == "__main__"`."""
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    script_path = str(pathlib.Path(drift.__file__))
+
+    with pytest.raises(SystemExit) as exc_info:
+        runpy.run_path(script_path, run_name="__main__")
+
+    assert exc_info.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "PyYAML" in stderr
+    assert "uv sync --group dev" in stderr
+
+
+def test_missing_pyyaml_on_plain_import_propagates_cleanly_not_systemexit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Converting a missing PyYAML into SystemExit(2) unconditionally --
+    including when this module is merely *imported* rather than run as a
+    script -- breaks pytest's own collection machinery (a bare SystemExit
+    is not a plain Exception). Asserts the guard's __name__ check: a plain
+    import with PyYAML missing must let ModuleNotFoundError itself
+    propagate, matching pre-guard behavior. Evicts the cached module first
+    to force a fresh top-level exec -- reusing the already-imported
+    `drift` object would skip the guard entirely and pass vacuously."""
+    module_name = "gitapex_scan_ssot_schema"
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    monkeypatch.delitem(sys.modules, module_name, raising=False)
+
+    with pytest.raises(ModuleNotFoundError) as exc_info:
+        importlib.import_module(module_name)
+
+    assert exc_info.value.name == "yaml"
+
+
+def test_broken_yaml_installation_error_propagates_unmodified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ModuleNotFoundError raised from INSIDE an already-found but
+    broken/partial PyYAML install carries error.name == "yaml.<submodule>",
+    not "yaml" -- this guard's own remediation ("install the dev
+    dependency group") would not fix a corrupted install, so misreporting
+    it as a plain missing-PyYAML case would send a reader chasing the
+    wrong problem. Simulated via builtins.__import__ patching, since there
+    is no single sys.modules entry representing "this package exists but
+    one of its own internal imports fails". Asserts the ORIGINAL
+    ModuleNotFoundError propagates uncaught, not converted to this
+    guard's SystemExit(2)."""
+    module_name = "gitapex_scan_ssot_schema"
+    real_import = builtins.__import__
+
+    def _fake_import(name: str, *args: object, **kwargs: object) -> object:
+        if name == "yaml":
+            raise ModuleNotFoundError("No module named 'yaml.tokens'", name="yaml.tokens")
+        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    monkeypatch.delitem(sys.modules, module_name, raising=False)
+
+    with pytest.raises(ModuleNotFoundError) as exc_info:
+        importlib.import_module(module_name)
+
+    assert exc_info.value.name == "yaml.tokens"
+
+
+def test_broken_yaml_installation_in_script_mode_propagates_unmodified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Isolates the intersection no other test above covers: a
+    broken/partial install (error.name == "yaml.tokens", not "yaml")
+    encountered via the CLI entry point itself (__name__ == "__main__",
+    via runpy.run_path the same way the script-mode test above does),
+    proving the error.name check still correctly re-raises rather than
+    being masked by the __name__ check alone."""
+    script_path = str(pathlib.Path(drift.__file__))
+    real_import = builtins.__import__
+
+    def _fake_import(name: str, *args: object, **kwargs: object) -> object:
+        if name == "yaml":
+            raise ModuleNotFoundError("No module named 'yaml.tokens'", name="yaml.tokens")
+        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+
+    with pytest.raises(ModuleNotFoundError) as exc_info:
+        runpy.run_path(script_path, run_name="__main__")
+
+    assert exc_info.value.name == "yaml.tokens"

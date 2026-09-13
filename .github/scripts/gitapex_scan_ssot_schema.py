@@ -659,7 +659,17 @@ def discover_contracts(skills_dir: pathlib.Path = SKILLS_DIR) -> dict[str, dict[
     (``gitapex_scan_skill_metadata_schema.py``) already owns reporting a
     broken or schema-invalid sidecar as its own finding, and duplicating
     that here would risk a second, possibly-diverging report for the same
-    root cause instead of simply having nothing left to check."""
+    root cause instead of simply having nothing left to check.
+
+    ``MemoryError`` is caught alongside the parse-failure exceptions for
+    the same reason ``RecursionError`` is: ``yaml.safe_load`` still
+    resolves YAML anchors/aliases, so a hostile sidecar (an
+    alias-expansion "billion laughs" shape) can exhaust memory instead of
+    merely recursing deeply. This is the same degrade-gracefully case
+    this function already applies to every other malformed-sidecar
+    shape -- catching it here is not new handling, only extending the
+    same existing tuple to a failure mode the rest of that tuple already
+    exists to guard against."""
     contracts: dict[str, dict[str, Any]] = {}
     for skill_dir in discover_skill_dirs(skills_dir):
         sidecar = skill_dir / SIDECAR_RELATIVE_PATH
@@ -667,7 +677,7 @@ def discover_contracts(skills_dir: pathlib.Path = SKILLS_DIR) -> dict[str, dict[
             continue
         try:
             instance = yaml.safe_load(sidecar.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, yaml.YAMLError, RecursionError):
+        except (OSError, UnicodeDecodeError, yaml.YAMLError, RecursionError, MemoryError):
             continue
         contract = _contract_of(instance)
         if contract is not None:
