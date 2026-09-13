@@ -199,7 +199,7 @@ def test_rendered_permission_frontmatter_parses_back_to_declared_mapping() -> No
     """
     import yaml
 
-    for permission in (sync.REVIEW_PERSONA_PERMISSION, None):
+    for _filename, permission in sync.AGENT_SPECS:
         rendered = sync._render_agent_copy(_PROBE_SOURCE, "agents/probe.md", permission)
         loaded = yaml.safe_load(_frontmatter_block(rendered))
         if permission is None:
@@ -223,8 +223,11 @@ def test_yaml_scalar_defeats_a_character_denylist_and_leaves_safe_keys_bare() ->
 
     The last group's first two are the opposite trap: punctuation-bearing
     but genuinely safe bare, so a rule that quotes on sight of any
-    non-alphanumeric would be wrong too -- and would rewrite the five
-    `<tool>: deny` lines the agents-sync test above asserts.
+    non-alphanumeric would be wrong too -- it would rewrite
+    `external_directory`, a real key of `REVIEW_PERSONA_PERMISSION`,
+    asserted bare below. (Not the five `<tool>: deny` lines the agents-sync
+    test above asserts: `edit`, `bash`, `task`, `webfetch` and `websearch`
+    are pure letters, so no punctuation rule reaches them either way.)
     """
     import yaml
 
@@ -239,12 +242,21 @@ def test_yaml_scalar_defeats_a_character_denylist_and_leaves_safe_keys_bare() ->
         ("mcp #github", "deny", "mcp"),
     ]
     for key, value, naive in defeats:
+        # What a bare emission parses back as -- pinned literally, so the
+        # `naive` column cannot drift into agreeing with the declared
+        # mapping without this line changing too.
         assert yaml.safe_load(f"permission:\n  {key}: {value}\n")["permission"] == naive, key
-        assert naive != {key: value}, key
+        # ...and what the generator emits instead. Both sides here come
+        # from `hooks/`, which is what makes the pair falsifiable: an
+        # earlier revision asserted `naive != {key: value}`, two of this
+        # test's own literals, which no change to the code could break.
         rendered = sync._render_agent_copy(_PROBE_SOURCE, "agents/probe.md", {key: value})
         assert yaml.safe_load(_frontmatter_block(rendered))["permission"] == {key: value}, key
+        assert yaml.safe_load(_frontmatter_block(rendered))["permission"] != naive, key
 
-    # Punctuation alone never forces quoting; a YAML indicator (`*`) does.
+    # The allowlist admits exactly three punctuation characters -- `_`, `.`
+    # and `-` -- so those never force quoting while every other one does,
+    # YAML indicator or not (`mcp #github` above is quoted too).
     assert sync._yaml_scalar("a.b-c") == "a.b-c"
     assert sync._yaml_scalar("external_directory") == "external_directory"
     assert sync._yaml_scalar("*mcp*") == '"*mcp*"'
@@ -256,10 +268,25 @@ def test_yaml_scalar_refuses_what_it_will_not_put_on_one_line(
     """A scalar carrying a line break cannot be made safe by quoting alone,
     so the helper raises instead of emitting a line that will not read
     back unchanged -- PyYAML folds a raw break inside a double-quoted
-    value to a space rather than rejecting it, which is worse, not better. `sync_agents` already catches ValueError, so the script stays
-    fail-soft by contract: a SKIP note, never a broken generated file."""
+    value to a space rather than rejecting it, which is worse, not better.
+
+    `sync_agents` catches the ValueError and turns it into a SKIP note, so
+    no broken file is written. Stated precisely, because the weaker claim
+    is the true one: a SKIP leaves any previously generated copy in place
+    and `--verify` still reports zero changes, so this is fail-soft, not
+    fail-closed. Unreachable from `AGENT_SPECS`, whose values are module
+    constants."""
     with pytest.raises(ValueError, match="refuses to emit on one line"):
         sync._yaml_scalar("mcp\nedit")
+
+    # The refusal class is a negation of what a one-line scalar can carry,
+    # not a list of offenders, and these are why. An earlier enumerating
+    # form (C0, DEL, C1, U+2028/9) let each of these through quoted, and
+    # PyYAML then raised ReaderError at load -- the same defect class this
+    # helper exists to prevent, one codepoint outside the list. Measured.
+    for _label, char in (("U+FFFE", "\ufffe"), ("U+FFFF", "\uffff"), ("lone surrogate", "\ud800")):
+        with pytest.raises(ValueError, match="refuses to emit on one line"):
+            sync._yaml_scalar(f"a{char}b")
 
     # A backslash or a double quote is escaped, not refused. Asserted
     # twice for different reasons: the spelling pins the emitted form so a
@@ -271,13 +298,66 @@ def test_yaml_scalar_refuses_what_it_will_not_put_on_one_line(
     assert sync._yaml_scalar('a"b\\c') == '"a\\"b\\\\c"'
     assert yaml.safe_load(f"{sync._yaml_scalar('a"b\\c')}: deny") == {'a"b\\c': "deny"}
 
-    monkeypatch.setattr(sync, "REVIEW_PERSONA_PERMISSION", {"mcp\nedit": "deny"})
+    # Patch the table, not the constant it holds: `AGENT_SPECS` binds the
+    # mapping at import time, so replacing `REVIEW_PERSONA_PERMISSION`
+    # alone would leave the table pointing at the original dict.
+    monkeypatch.setattr(sync, "AGENT_SPECS", (("review-persona.md", {"mcp\nedit": "deny"}),))
     project = _project(tmp_path)
     _write(project / "agents" / "review-persona.md", _PROBE_SOURCE)
     notes: list[str] = []
     assert sync.sync_agents(project, False, notes) == 0
     assert any("SKIP" in note and "refuses to emit on one line" in note for note in notes), notes
     assert not (project / ".opencode" / "agents" / "review-persona.md").exists()
+
+
+def test_render_refuses_a_frontmatter_line_it_cannot_copy() -> None:
+    """A multi-line frontmatter scalar is not copyable, and used to be
+    written out wrong with no error raised.
+
+    `_split_frontmatter` reads the block one line at a time, so a
+    multi-line value is captured as its first line and the remainder is
+    dropped. Measured against the pre-guard generator, both shapes below
+    WROTE A FILE: the block scalar emitted `description: |` with nothing
+    indented under it, which reads back as the empty string, and the
+    two-line quoted form emitted an unterminated scalar that swallowed
+    `mode:` and `hidden:` and then raised `ScannerError` at the consumer.
+    Silent for the first, loud in the wrong place for the second.
+
+    This is not hypothetical for the description specifically: issue #1982
+    records that `agents/branch-plan-task.md`'s description is truncated by
+    a ` #`, and a block scalar is one natural way to fix that -- which
+    would land exactly here.
+    """
+    for _label, block in (
+        ("block scalar", "description: |\n  Read-only review.\n  Second line."),
+        ("multi-line quoted", 'description: "Read-only review\n  continued."'),
+        ("indented continuation", "description: Read-only\n  review."),
+    ):
+        source = f"---\nname: probe\n{block}\n---\n\nBody.\n"
+        with pytest.raises(ValueError, match="cannot copy"):
+            sync._render_agent_copy(source, "agents/probe.md", sync.REVIEW_PERSONA_PERMISSION)
+
+    # A blank line and a comment are not continuation lines, and must not
+    # be mistaken for one -- neither carries a value the copy would lose.
+    import yaml
+
+    tolerated = "---\nname: probe\n\n# a comment\ndescription: Read-only review.\n---\n\nBody.\n"
+    rendered = sync._render_agent_copy(tolerated, "agents/probe.md", None)
+    assert yaml.safe_load(_frontmatter_block(rendered))["description"] == "Read-only review."
+
+
+def test_render_refuses_an_empty_permission_mapping() -> None:
+    """`{}` is not `None`. It emitted a bare `permission:` key, which parses
+    back as `None` -- on a default-allow runtime that is "every tool
+    permitted", the exact opposite of what the block is for, and the
+    generator reported success.
+
+    Distinguished from the `None` case, which correctly emits no
+    `permission` key at all and is asserted in the round-trip test above.
+    """
+    source = "---\nname: probe\ndescription: Read-only review.\n---\n\nBody.\n"
+    with pytest.raises(ValueError, match="empty permission mapping"):
+        sync._render_agent_copy(source, "agents/probe.md", {})
 
 
 def test_real_agent_files_render_to_loadable_frontmatter() -> None:
@@ -307,10 +387,7 @@ def test_real_agent_files_render_to_loadable_frontmatter() -> None:
     """
     import yaml
 
-    for filename, permission in (
-        ("review-persona.md", sync.REVIEW_PERSONA_PERMISSION),
-        ("branch-plan-task.md", None),
-    ):
+    for filename, permission in sync.AGENT_SPECS:
         source = (REPO_ROOT / "agents" / filename).read_text(encoding="utf-8")
         rendered = sync._render_agent_copy(source, f"agents/{filename}", permission)
         loaded = yaml.safe_load(_frontmatter_block(rendered))
@@ -358,23 +435,25 @@ def test_sync_script_imports_only_stdlib_modules() -> None:
     assert roots, "expected at least one import"
     assert roots <= sys.stdlib_module_names, sorted(roots - sys.stdlib_module_names)
 
-    # The walk above sees only `import` statements, and the shape an
-    # optional-dependency shim actually takes is a call: measured, adding
-    # `import importlib` + `importlib.import_module("yaml")` leaves every
-    # name in `roots` a stdlib one, so the assertion above still passes,
-    # and `__import__("yaml")` adds no name at all. Both are refused here.
+    # `roots <= stdlib` passes for a dynamic import, because every module
+    # that performs one is itself stdlib. The shape an optional-dependency
+    # shim takes is `import importlib` + `importlib.import_module("yaml")`,
+    # and measured, that leaves every name in `roots` a stdlib one.
     #
-    # Stated narrowly, the way the round-trip test above states its own
-    # limit: this is name equality against two identifiers, not a proof of
-    # anything. An alias (`from importlib import import_module as _load`),
-    # a `getattr`, or an `exec` string all walk past it. It closes the two
-    # shapes a maintainer would actually reach for, and nothing more.
+    # Excluding the import machinery by name catches it -- and catches
+    # strictly more than a walk over call nodes would: `from importlib
+    # import import_module as _load` records `importlib` in `roots` above
+    # (measured), while a call-node walk sees only the local name `_load`.
+    assert not (roots & {"importlib", "imp", "pkgutil", "runpy"}), sorted(roots)
+
+    # `__import__` is a builtin, so it appears in no import statement and
+    # in no root. It needs the call walk. Stated narrowly, the way the
+    # round-trip test above states its own limit: this is name equality
+    # against one identifier. A `getattr` or an `exec` string walks past
+    # it, and nothing here claims otherwise.
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        target = node.func
-        name = target.attr if isinstance(target, ast.Attribute) else target.id if isinstance(target, ast.Name) else ""
-        assert name not in {"__import__", "import_module"}, f"dynamic import via {name}()"
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            assert node.func.id != "__import__", "dynamic import via __import__()"
 
 
 def test_verify_mode_reports_drift_without_writing(tmp_path: pathlib.Path) -> None:

@@ -33,9 +33,15 @@ restores the prior tree exactly.
 change is confined to `hooks/` and `tests/`, so `drafting-a-skill` is not
 routed to, and the PR-body skill-audit disclosure convention does not
 apply -- `.github/scripts/gitapex_gate_skill_audit_disclosure.py`'s own
-trigger set is `skills/**/SKILL.md`, `docs/superpowers/specs/*.md`,
-`skills/*/scripts/*.py`, `evals/scripts/*.py` and
-`.github/scripts/*.py`, none of which this diff touches.
+workflow DOES fire: its `paths:` list carries eleven entries, and
+`hooks/**` is one of them. The disclosure requirement still does not
+apply, but for a reason one step further in -- corrected here after Step
+8 measured the trigger list rather than restating it from memory.
+`gitapex_detect_changed_gate_scripts.py` matches
+`hooks/(?:check[-_]|gitapex_check_)`; this file is `gitapex_sync_`, so it
+is not a changed gate script. It is also absent from `.gitapex/ssot.json`,
+so it is not a registered gate. With both flags empty the gate takes its
+"this diff triggers no skill-audit disclosure requirement" branch.
 
 ## Task 1: quote permission entries the generator emits
 
