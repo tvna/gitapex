@@ -232,6 +232,7 @@ import subprocess
 import sys
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -251,7 +252,11 @@ _API_ROOT = "https://api.github.com"
 _API_VERSION = "2022-11-28"
 _GIT_SUBPROCESS_TIMEOUT_SECONDS = 5
 _HTTP_TIMEOUT_SECONDS = 10
-_GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/(.+?)(?:\.git)?/?$")
+#: scp-like SSH syntax (`git@github.com:owner/repo.git`) has no URI scheme
+#: and is not parsed correctly by `urlparse` -- `[^/@\s]+@` requires the
+#: user@ prefix so a schemed URL (which never matches this shape) falls
+#: through to the `urlparse` branch below instead.
+_SCP_LIKE_RE = re.compile(r"^[^/@\s]+@([^:/\s]+):(.+)$")
 
 _DEFAULT_STATE: dict[str, Any] = {
     "push_detected": False,
@@ -469,6 +474,43 @@ def _run_git(
     return output or None
 
 
+def _parse_github_owner_repo(url: str) -> tuple[str, str] | None:
+    """Parse a git remote URL for a `github.com` owner/repo pair,
+    validating the actual host rather than merely searching for the
+    literal substring "github.com" anywhere in the string -- a defeat
+    case a live adversarial round found and reproduced: an earlier,
+    unanchored-search regex matched `https://evil.example.com/path/
+    github.com/owner/repo` (a non-github.com host) and a port-bearing URL
+    such as `https://github.com:8080/owner/repo.git` (parsing "8080" as
+    the owner and "owner/repo" -- with the embedded slash -- as the repo)
+    identically to a genuine `https://github.com/owner/repo.git`.
+
+    Handles both forms GitHub's own remote URLs take: the scp-like SSH
+    syntax (`git@github.com:owner/repo(.git)?`, which carries no URI
+    scheme and is not parsed correctly by `urlparse`), and every scheme
+    `urlparse` does understand (`https://github.com/owner/repo(.git)?`,
+    `ssh://git@github.com:22/owner/repo(.git)?`, with `urlparse` itself
+    separating a port number from the hostname in the latter). Returns
+    None for a host other than exactly `github.com` (case-insensitive),
+    or a path that does not resolve to exactly two non-empty segments
+    once a trailing `.git` is stripped."""
+    scp_match = _SCP_LIKE_RE.match(url)
+    if scp_match:
+        host, path = scp_match.group(1), scp_match.group(2)
+    else:
+        parsed = urllib.parse.urlparse(url)
+        host = parsed.hostname
+        path = parsed.path.lstrip("/")
+    if not host or host.lower() != "github.com":
+        return None
+    if path.endswith(".git"):
+        path = path[: -len(".git")]
+    owner, sep, repo = path.partition("/")
+    if not owner or not sep or not repo or "/" in repo:
+        return None
+    return owner, repo
+
+
 def _resolve_owner_repo(
     cwd: str | None, runner: Callable[..., subprocess.CompletedProcess[str]]
 ) -> tuple[str, str] | None:
@@ -476,15 +518,12 @@ def _resolve_owner_repo(
     owner/repo pair (HTTPS or SSH form) -- the same primitive
     hooks/gitapex_check_pr_duplicate_issue.py's own owner/repo inputs
     assume are already resolved, resolved here firsthand since this
-    module's PostToolUse trigger carries no such fields on its own."""
+    module's PostToolUse trigger carries no such fields on its own. See
+    `_parse_github_owner_repo` for the actual host-validated parse."""
     url = _run_git(["remote", "get-url", "origin"], cwd, runner)
     if url is None:
         return None
-    match = _GITHUB_REMOTE_RE.search(url)
-    if not match:
-        return None
-    owner, repo = match.group(1), match.group(2)
-    return (owner, repo) if owner and repo else None
+    return _parse_github_owner_repo(url)
 
 
 def _resolve_current_branch(cwd: str | None, runner: Callable[..., subprocess.CompletedProcess[str]]) -> str | None:

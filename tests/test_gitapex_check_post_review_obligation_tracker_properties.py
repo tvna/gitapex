@@ -3,8 +3,11 @@
 function (issue #1823, closing issue #1178's own
 ``detection-logic-property-coverage`` gap for the two ``.endswith()``
 string-comparison dispatch checks this issue added at lines 471 and 473),
-and for ``_resolve_owner_repo``'s own ``_GITHUB_REMOTE_RE`` regex (issue
-#1631, closing the same gap for that new detection-logic call site).
+and for ``_resolve_owner_repo``'s own ``_parse_github_owner_repo`` parser
+(issue #1631, closing the same gap for that new detection-logic call
+site, including two live-confirmed defeat-case regressions: a
+port-bearing URL and a spoofed non-github.com host embedding the
+literal substring "github.com" in its path).
 
 The two new dispatch predicates are::
 
@@ -164,7 +167,7 @@ def test_any_prefix_with_resolve_suffix_dispatches_and_updates_state(prefix: str
     assert result.get("resolve_calls") == 1
 
 
-# --- _resolve_owner_repo's own _GITHUB_REMOTE_RE regex (issue #1631) -----
+# --- _resolve_owner_repo's own _parse_github_owner_repo (issue #1631) ---
 
 #: Letters, digits, hyphen, underscore only -- deliberately excludes '.'
 #: and '/' so a generated owner/repo name can never itself be ambiguous
@@ -184,17 +187,32 @@ def _fake_runner_with_stdout(output: str) -> Any:
 
 
 @_PROPERTIES
+@given(owner=_owner_repo_strategy, repo=_owner_repo_strategy)
+def test_resolve_owner_repo_wires_git_remote_output_into_the_parser(owner: str, repo: str) -> None:
+    """**Integration property for the thin wrapper `_parse_github_owner_repo`
+    itself does not cover:** `_resolve_owner_repo` must actually run `git
+    remote get-url origin` via the given `runner` and hand its stdout to
+    `_parse_github_owner_repo` unchanged -- confirmed here end to end with a
+    fake runner standing in for the real subprocess, across a wide space of
+    owner/repo shapes, rather than assumed from `_parse_github_owner_repo`'s
+    own property coverage above."""
+    url = f"https://github.com/{owner}/{repo}.git"
+    result = tracker._resolve_owner_repo("/tmp/does-not-matter", _fake_runner_with_stdout(url))
+    assert result == (owner, repo)
+
+
+@_PROPERTIES
 @given(
     owner=_owner_repo_strategy,
     repo=_owner_repo_strategy,
     use_ssh=st.booleans(),
     has_dot_git=st.booleans(),
 )
-def test_resolve_owner_repo_parses_https_and_ssh_remotes(
+def test_parse_github_owner_repo_parses_https_and_ssh_remotes(
     owner: str, repo: str, use_ssh: bool, has_dot_git: bool
 ) -> None:
     """**Model-based, detects a real gap the fixed example tests cannot:**
-    ``_resolve_owner_repo`` must correctly parse both remote URL forms
+    ``_parse_github_owner_repo`` must correctly parse both remote URL forms
     GitHub itself hands out -- HTTPS
     (``https://github.com/<owner>/<repo>[.git]``) and SSH
     (``git@github.com:<owner>/<repo>[.git]``) -- across a wide space of
@@ -210,18 +228,50 @@ def test_resolve_owner_repo_parses_https_and_ssh_remotes(
     matching ``repo`` exactly."""
     suffix = ".git" if has_dot_git else ""
     url = f"git@github.com:{owner}/{repo}{suffix}" if use_ssh else f"https://github.com/{owner}/{repo}{suffix}"
-    result = tracker._resolve_owner_repo("/tmp/does-not-matter", _fake_runner_with_stdout(url))
+    result = tracker._parse_github_owner_repo(url)
     assert result == (owner, repo)
 
 
 @_PROPERTIES
 @given(text=st.text(max_size=60).filter(lambda s: "github.com" not in s))
-def test_resolve_owner_repo_returns_none_for_non_github_remotes(text: str) -> None:
+def test_parse_github_owner_repo_returns_none_for_non_github_remotes(text: str) -> None:
     """**Confirmed to have teeth (negation of the property above):** any
     remote URL string that never mentions ``github.com`` at all -- an
     empty string, a bare hostname, a GitLab/Bitbucket URL, arbitrary
     text -- must resolve to ``None``, never a fabricated owner/repo pair.
-    Pairs with the property above to bracket ``_GITHUB_REMOTE_RE``'s own
-    match/no-match contract."""
-    result = tracker._resolve_owner_repo("/tmp/does-not-matter", _fake_runner_with_stdout(text))
+    Pairs with the property above to bracket ``_parse_github_owner_repo``'s
+    own match/no-match contract."""
+    result = tracker._parse_github_owner_repo(text)
+    assert result is None
+
+
+@_PROPERTIES
+@given(owner=_owner_repo_strategy, repo=_owner_repo_strategy, port=st.integers(min_value=1, max_value=65535))
+def test_parse_github_owner_repo_strips_port_number_not_owner(owner: str, repo: str, port: int) -> None:
+    """**Regression for a live-confirmed defeat case:** a port-bearing
+    HTTPS remote URL (``https://github.com:<port>/<owner>/<repo>.git``,
+    a form `git remote get-url` can genuinely return, e.g. behind a
+    proxy) must still resolve to the real ``(owner, repo)`` pair -- an
+    unanchored regex previously matched the port digits themselves as
+    the owner and the remaining ``owner/repo`` (embedded slash intact)
+    as the repo, a live-reproduced mis-parse this test pins shut."""
+    url = f"https://github.com:{port}/{owner}/{repo}.git"
+    result = tracker._parse_github_owner_repo(url)
+    assert result == (owner, repo)
+
+
+@_PROPERTIES
+@given(owner=_owner_repo_strategy, repo=_owner_repo_strategy, evil_host=_owner_repo_strategy)
+def test_parse_github_owner_repo_rejects_spoofed_non_github_host(owner: str, repo: str, evil_host: str) -> None:
+    """**Regression for a live-confirmed defeat case:** a URL whose
+    actual host is not ``github.com`` but whose *path* embeds the
+    literal substring ``github.com/<owner>/<repo>`` (e.g.
+    ``https://evil.example.com/path/github.com/owner/repo``) must
+    resolve to ``None`` -- an unanchored regex previously matched this
+    exact shape and returned the spoofed owner/repo as if the remote
+    genuinely pointed at github.com. `_parse_github_owner_repo` must
+    validate the real, parsed hostname, never merely search the raw
+    string for the substring "github.com"."""
+    url = f"https://{evil_host}.example.com/path/github.com/{owner}/{repo}"
+    result = tracker._parse_github_owner_repo(url)
     assert result is None
