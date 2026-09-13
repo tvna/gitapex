@@ -131,7 +131,7 @@
           {
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-post-review-obligation-tracker.sh\"",
-            "timeout": 10
+            "timeout": 30
           }
         ]
       }

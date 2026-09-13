@@ -111,6 +111,13 @@ def test_reason_names_both_missing_steps() -> None:
 
 def test_writer_then_reader_end_to_end(tmp_path: Path, monkeypatch: Any) -> None:
     monkeypatch.setenv("TMPDIR", str(tmp_path))
+    # Issue #1631: without this, an ambient GH_TOKEN/GITHUB_TOKEN in the
+    # environment running this suite would make handle_bash's own
+    # no-open-PR check real (git subprocess + a live GitHub API call)
+    # instead of exercising the plain push_detected reset this test means
+    # to check -- see that function's own module-docstring comment.
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
     session_id = "e2e-1"
     tracker.process({"session_id": session_id, "tool_name": "Bash", "tool_input": {"command": "git push"}})
     state = json.loads(tracker.state_path(session_id).read_text())
@@ -176,6 +183,15 @@ def test_load_state_non_object_json_raises(tmp_path: Path) -> None:
 def _env(tmp_path: Path) -> dict[str, str]:
     env = dict(os.environ)
     env["TMPDIR"] = str(tmp_path)
+    # Issue #1631: gitapex_check_post_review_obligation_tracker.py's own
+    # handle_bash now makes a real GitHub REST call for a git-push Bash
+    # command whenever GH_TOKEN/GITHUB_TOKEN is set (see that module's own
+    # comment) -- these shell-wrapper integration tests exercise a plain
+    # `git push` end to end and must not have their outcome depend on
+    # whichever token happens to be set in the ambient CI/dev environment
+    # running this suite, nor make a real network call at all.
+    env.pop("GH_TOKEN", None)
+    env.pop("GITHUB_TOKEN", None)
     return env
 
 
