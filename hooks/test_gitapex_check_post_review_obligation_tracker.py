@@ -762,15 +762,19 @@ def test_handle_bash_push_with_api_error_arms_fail_closed(monkeypatch: Any) -> N
     assert new_state["push_detected"] is True
 
 
+def _runner_that_must_not_be_called(*_args: Any, **_kwargs: Any) -> None:
+    """Shared test double: raises if handle_bash ever calls it, proving
+    a code path that must short-circuit before any git subprocess call
+    actually does so (see the two tests that use it)."""
+    raise AssertionError("handle_bash must not shell out to git when no token is set")
+
+
 def test_handle_bash_push_with_no_token_arms_fail_closed_without_git_call() -> None:
     # No GH_TOKEN/GITHUB_TOKEN at all (the ambient default this module's
     # own autouse fixture establishes) must fail closed exactly like an
     # API error, and must never even attempt a git subprocess call -- the
     # fake runner raises if handle_bash calls it at all, proving the
     # token check short-circuits first.
-    def _runner_that_must_not_be_called(*_args: Any, **_kwargs: Any) -> None:
-        raise AssertionError("handle_bash must not shell out to git when no token is set")
-
     state = dict(tracker._DEFAULT_STATE)
     new_state = tracker.handle_bash(
         state,
@@ -795,3 +799,110 @@ def test_handle_bash_push_with_unresolvable_remote_arms_fail_closed(monkeypatch:
         opener=cast(Any, lambda _request: (_ for _ in ()).throw(AssertionError("must not call the network"))),
     )
     assert new_state["push_detected"] is True
+
+
+def test_handle_bash_push_with_unresolvable_branch_arms_fail_closed(monkeypatch: Any) -> None:
+    # A token and a resolvable remote are present, but the current branch
+    # name cannot be resolved (e.g. detached HEAD, or a non-git checkout)
+    # -- fails closed the same way an unresolvable remote does, and never
+    # reaches the network call.
+    monkeypatch.setenv("GH_TOKEN", "fake-token-for-test")
+    state = dict(tracker._DEFAULT_STATE)
+    new_state = tracker.handle_bash(
+        state,
+        {"command": "git push"},
+        cwd="/tmp/does-not-matter",
+        runner=_fake_git_runner(remote_url="https://github.com/tvna/gitapex.git", branch=None),
+        opener=cast(Any, lambda _request: (_ for _ in ()).throw(AssertionError("must not call the network"))),
+    )
+    assert new_state["push_detected"] is True
+
+
+def test_run_git_subprocess_exception_returns_none() -> None:
+    # _run_git's own except-fail-open path: a runner that raises OSError
+    # (e.g. git itself is missing from PATH) must return None, the same
+    # "could not resolve" signal a non-zero exit or a timeout produces.
+    def _raising_runner(*_args: Any, **_kwargs: Any) -> Any:
+        raise OSError("git: command not found")
+
+    assert tracker._run_git(["remote", "get-url", "origin"], "/tmp/does-not-matter", _raising_runner) is None
+
+
+def test_default_opener_delegates_to_urlopen(monkeypatch: Any) -> None:
+    # _default_opener is the production `opener` default -- confirm it
+    # actually calls urllib.request.urlopen with the given request and
+    # this module's own HTTP timeout, rather than exercising this only
+    # indirectly through a fake opener in every other test.
+    captured: dict[str, Any] = {}
+
+    def _fake_urlopen(request: Any, timeout: float | None = None) -> str:
+        captured["request"] = request
+        captured["timeout"] = timeout
+        return "sentinel-response"
+
+    monkeypatch.setattr(tracker.urllib.request, "urlopen", _fake_urlopen)
+    request = tracker.urllib.request.Request("https://api.github.com/repos/tvna/gitapex/pulls")
+    result = tracker._default_opener(request)
+    assert result == "sentinel-response"
+    assert captured["request"] is request
+    assert captured["timeout"] == tracker._HTTP_TIMEOUT_SECONDS
+
+
+def test_parse_github_owner_repo_rejects_a_bare_host_with_no_path() -> None:
+    # No "/" separator at all in the path (owner present, no repo, no
+    # separator) -- must not return a partial/garbage pair.
+    assert tracker._parse_github_owner_repo("https://github.com/just-an-owner") is None
+
+
+def test_parse_github_owner_repo_rejects_owner_only_with_trailing_slash() -> None:
+    # A path ending right after the separator (owner present, repo empty)
+    # must not return an empty-string repo.
+    assert tracker._parse_github_owner_repo("https://github.com/owner/") is None
+
+
+def test_branch_has_open_pr_returns_none_on_non_2xx_status() -> None:
+    # A non-2xx HTTP status (e.g. 404, 403) is "could not confirm", not a
+    # confirmed-empty result -- must not be read as "no open PR".
+    def _opener(_request: Any) -> Any:
+        return _FakeHttpResponse(404, "[]")
+
+    assert tracker._branch_has_open_pr("tvna", "gitapex", "some-branch", "fake-token", _opener) is None
+
+
+def test_branch_has_open_pr_returns_none_on_malformed_json() -> None:
+    # A 200 response whose body is not valid JSON at all -- must not
+    # crash, and must not be read as "no open PR".
+    def _opener(_request: Any) -> Any:
+        return _FakeHttpResponse(200, "not json{{{")
+
+    assert tracker._branch_has_open_pr("tvna", "gitapex", "some-branch", "fake-token", _opener) is None
+
+
+def test_branch_has_open_pr_returns_none_on_non_list_response() -> None:
+    # A 200 response whose JSON body parses but is not a list (e.g. an
+    # unexpected object, matching a malformed or future API shape) --
+    # must not be read as "no open PR".
+    def _opener(_request: Any) -> Any:
+        return _FakeHttpResponse(200, json.dumps({"message": "not a list"}))
+
+    assert tracker._branch_has_open_pr("tvna", "gitapex", "some-branch", "fake-token", _opener) is None
+
+
+def test_fake_git_runner_rejects_a_subcommand_handle_bash_never_calls() -> None:
+    # Defensive assertion inside this test module's own double: handle_bash
+    # only ever calls "git remote get-url origin" and "git rev-parse
+    # --abbrev-ref HEAD" -- confirm the fake fails loudly, rather than
+    # silently returning a plausible-looking success, for any other
+    # subcommand a future regression might introduce.
+    runner = _fake_git_runner(remote_url="https://github.com/tvna/gitapex.git", branch="main")
+    with pytest.raises(AssertionError, match="unexpected git subcommand"):
+        runner(["git", "status"])
+
+
+def test_runner_that_must_not_be_called_fails_loudly_if_ever_invoked() -> None:
+    # Confirms the shared "must not be called" test double above
+    # (test_handle_bash_push_with_no_token_arms_fail_closed_without_git_call)
+    # actually raises when invoked, rather than silently succeeding --
+    # otherwise that test's own assertion would prove nothing.
+    with pytest.raises(AssertionError, match="must not shell out to git"):
+        _runner_that_must_not_be_called()
