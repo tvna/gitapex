@@ -226,7 +226,7 @@ routed task's own work splits by Step instead:
   sweep + shape/drift checkers) run inside the dispatching
   `branch-plan-task` task itself**, using that task's own write/Bash
   access -- a file write, a bare `mkdir` for a brand-new skill
-  directory, running Step 6's own two checker scripts against the draft
+  directory, running Step 6's own three checker scripts against the draft
   directory. The task reads `drafting-a-skill`'s own file content
   directly (its procedure text, or its file path) and executes those
   Steps against it; this needs no separate dispatch, since the task

@@ -17,9 +17,10 @@ Loaded when this copy of the skill's own files lives in the gitapex repository -
 ```
 python3 skills/evaluating-skill-quality/scripts/gitapex_check_skill_shape.py --strict-token-budget --allowed-root <repo-root> skills/<new-skill-name>
 python3 skills/evaluating-skill-quality/scripts/gitapex_scan_execution_requirements_drift.py skills/<new-skill-name>
+python3 skills/drafting-a-skill/scripts/gitapex_generate_skill_contract.py --check skills/<new-skill-name>
 ```
 
-Both are read-only against the target directory; run them once the draft directory exists on disk, before Step 7's handoff, and fix every finding they report -- Step 7 does not run either check itself.
+All three are read-only against the target directory; run them once the draft directory exists on disk, before Step 7's handoff, and fix every finding they report -- Step 7 does not run any of them itself.
 
 ## Metadata schema and shape checker
 
