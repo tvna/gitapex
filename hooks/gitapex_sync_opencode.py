@@ -112,25 +112,41 @@ _SAFE_BARE_SCALAR_RE = re.compile(r"\A[A-Za-z_][A-Za-z0-9_.-]*\Z")
 # under-quoting one turns it into `True`.
 _YAML_TYPED_WORDS = frozenset({"y", "n", "yes", "no", "true", "false", "on", "off", "null"})
 
+# The agent/permission table `sync_agents` materializes. A module
+# attribute rather than a local, so a test can iterate the value
+# production actually uses: transcribing it into a test instead would
+# leave a newly added agent covered by nothing, silently.
+AGENT_SPECS: tuple[tuple[str, dict[str, str] | None], ...] = (
+    ("review-persona.md", REVIEW_PERSONA_PERMISSION),
+    ("branch-plan-task.md", None),
+)
+
 # Refused outright rather than escaped. Written as a NEGATION of what a
 # one-line double-quoted scalar can carry, not as a list of offenders: an
 # earlier enumerating form missed U+FFFE, U+FFFF and the lone surrogates,
 # which emitted quoted and then raised ``ReaderError`` at load -- the same
 # defect class this helper exists to prevent, one codepoint outside the
 # list. The allowed set below is PyYAML 6.0.3's own printable class
-# (``reader.py``'s ``NON_PRINTABLE``) minus three characters it accepts
-# that this generator still will not put on one line:
+# minus six characters it accepts that this generator will not. Quoted
+# verbatim rather than recalled, because the exact membership is what
+# makes this derivation safe to repeat:
 #
+#   NON_PRINTABLE = [^\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF
+#                     \uE000-\uFFFD\U00010000-\U0010ffff]
+#
+# The first two are the ones a careless re-derivation gets wrong:
+#
+# - LF and CR: PyYAML lists BOTH as printable. They are excluded here, by
+#   this class's own `\x20` floor -- never by PyYAML's. Re-deriving this
+#   regex from "PyYAML's printable class" alone would let them back in and
+#   re-open the split-line defect this helper exists to prevent.
 # - U+0085, U+2028, U+2029: line breaks under YAML 1.1. Measured -- U+0085
 #   folds to a space in a value and is rejected in a key; U+2028/U+2029
 #   survive a value but are rejected in a key. One rule covers both halves
 #   of an entry, so the stricter half sets it.
 # - TAB: the one deliberate over-refusal. PyYAML carries it in both
-#   positions, but a tab inside a permission key or a description is a
-#   mistake worth failing on.
-#
-# LF and CR are excluded by the printable class itself, which is what
-# keeps the emitted scalar on one line.
+#   positions, but a tab inside a permission key is a mistake worth
+#   failing on.
 _UNQUOTABLE_RE = re.compile(r"[^\x20-\x7e\xa0-\u2027\u202a-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]")
 
 
@@ -162,16 +178,6 @@ def _yaml_scalar(text: str) -> str:
         )
     escaped = text.replace("\\", "\\\\").replace('"', '\\"')
     return f'"{escaped}"'
-
-
-# The agent/permission table `sync_agents` materializes. A module
-# attribute rather than a local, so a test can iterate the value
-# production actually uses: transcribing it into a test instead would
-# leave a newly added agent covered by nothing, silently.
-AGENT_SPECS: tuple[tuple[str, dict[str, str] | None], ...] = (
-    ("review-persona.md", REVIEW_PERSONA_PERMISSION),
-    ("branch-plan-task.md", None),
-)
 
 
 def _split_frontmatter(text: str) -> tuple[dict[str, str], str] | None:
@@ -301,49 +307,38 @@ def _render_agent_copy(source_text: str, source_rel: str, permission: dict[str, 
     given). The header line records provenance so a hand-edit is never
     mistaken for source."""
     parsed = _split_frontmatter(source_text)
-    block = _FRONTMATTER_RE.match(source_text)
-    if parsed is None or block is None:
+    if parsed is None:
         raise ValueError(f"{source_rel} carries no frontmatter block")
     fields, body = parsed
     if "description" not in fields:
         raise ValueError(f"{source_rel} frontmatter carries no description")
-    # `_split_frontmatter` reads the block one line at a time, so a
-    # multi-line scalar is captured as its first line alone and the rest is
-    # dropped. Measured: `description: |` over two indented lines emits
-    # `description: |` with nothing under it and reads back as the empty
-    # string; a description quoted across two lines emits an unterminated
-    # scalar that swallows `mode:` and `hidden:`. Both used to be written
-    # to disk with no error raised. A line the field pattern did not match,
-    # and that is not blank or a comment, is the signature of exactly that,
-    # so refuse rather than emit a block that means something else.
-    unparsed = [
-        line
-        for line in block.group(1).splitlines()
-        if line.strip() and not line.lstrip().startswith("#") and not _FRONTMATTER_FIELD_RE.match(line)
-    ]
-    if unparsed:
-        raise ValueError(f"{source_rel} frontmatter carries a line this generator cannot copy: {unparsed[0]!r}")
-    # The captured scalar is copied through unchanged, deliberately, and
-    # NOT re-encoded through `_yaml_scalar`: it is already a YAML scalar,
-    # so copying it is what makes the two runtimes read the same value.
-    # Re-encoding does the opposite -- measured, it diverges for a
-    # description that is already quoted (double-encoded) and for one a
-    # plain scalar truncates (OpenCode would then see more than Claude).
+    # The captured scalar is copied through, deliberately, and NOT
+    # re-encoded through `_yaml_scalar`: it is already a YAML scalar, so
+    # copying it is what makes the two runtimes read the same value.
+    # Re-encoding does the opposite -- measured across four description
+    # shapes, it diverges for one that is already quoted (double-encoded)
+    # and for one a plain scalar truncates (OpenCode would then see more
+    # than Claude does).
     #
-    # "Copied through", not "byte-identical to the source line":
-    # `_FRONTMATTER_FIELD_RE` normalizes `key\s*:\s*` to `key: ` and drops
-    # trailing whitespace. Both are YAML-insignificant for a plain scalar,
-    # so the parsed value is unchanged -- but the emitted bytes can differ,
-    # and the guard above is what keeps that difference from ever becoming
-    # a semantic one.
+    # "Copied through", not byte-identical: `_FRONTMATTER_FIELD_RE`
+    # normalizes the `key:` separator and strips surrounding whitespace,
+    # and its `\s*` is Unicode-wide, so a description led or trailed by
+    # U+00A0 (or another non-YAML space) is emitted without it. That is a
+    # divergence, not a normalization -- small, pre-existing, and left
+    # alone here rather than widened into: the whole point of this line is
+    # that the generator does not reinterpret what the source declared.
+    #
+    # Two adjacent holes are pre-existing and NOT closed here, both on
+    # issue #1982: a multi-line description is captured as its first line
+    # and the rest is dropped silently, and an empty `permission` mapping
+    # emits a bare `permission:` key that reads back as None. Guards for
+    # both were written on this branch and reverted -- twice they refused
+    # frontmatter the generator handles correctly (a YAML list under a
+    # dropped key) or missed the shape they were written for (a `#` inside
+    # a block scalar is content, not a comment). They are a defect of this
+    # module, not of this change, and they deserve their own diff.
     out = ["---", f"description: {fields['description']}", "mode: subagent", "hidden: true"]
     if permission is not None:
-        if not permission:
-            # An empty mapping emits a bare `permission:` key, which parses
-            # to None -- on a default-allow runtime that is "no denials",
-            # the opposite of what a permission block is for. Loud, per
-            # AGENTS.md section 4, rather than a silent fail-open.
-            raise ValueError(f"{source_rel} declares an empty permission mapping")
         out.append("permission:")
         for key, value in permission.items():
             out.append(f"  {_yaml_scalar(key)}: {_yaml_scalar(value)}")

@@ -1,10 +1,10 @@
-# Branch plan: quote a permission key that is not a safe bare YAML scalar
+# Branch Plan: quote a permission key that is not a safe bare YAML scalar
 
 Issue: https://github.com/tvna/gitapex/issues/1971
 
 Branch: `claude/fix-1971-opencode-permission-quoting`, from `origin/main`.
 
-## Decomposition
+## Task Decomposition
 
 One task, one wave -- the degenerate case `executing-a-branch-plan`'s own
 Related-skills section names, not a skipped decomposition.
@@ -30,18 +30,27 @@ migration runs, and no data is deleted. `git revert` of the merge commit
 restores the prior tree exactly.
 
 `SKILL.md` classification: **no `SKILL.md` is created or edited.** The
-change is confined to `hooks/` and `tests/`, so `drafting-a-skill` is not
-routed to, and the PR-body skill-audit disclosure convention does not
-apply -- `.github/scripts/gitapex_gate_skill_audit_disclosure.py`'s own
-workflow DOES fire: its `paths:` list carries eleven entries, and
-`hooks/**` is one of them. The disclosure requirement still does not
-apply, but for a reason one step further in -- corrected here after Step
-8 measured the trigger list rather than restating it from memory.
+change touches `hooks/`, `tests/` and this file, so `drafting-a-skill` is
+not routed to.
+
+The PR-body skill-audit disclosure convention does not apply either, but
+by a longer chain than an earlier revision of this paragraph claimed. That
+revision said the trigger set does not include this diff's paths; measured,
+`.github/workflows/skill-audit-gate.yml`'s `paths:` list carries eleven
+entries and `hooks/**` is one, so the workflow DOES fire.
+
+What it computes is `gitapex_compute_skill_audit_flags.py`'s five-way
+disjunction -- `skill_md_lines`, `design_doc_lines`, `checker_lines`,
+`gate_scripts`, `reference_lines`. Every one is empty here: no
+`skills/**/SKILL.md` and no `skills/*/references/**`; `docs/gitapex/plans/`
+is not one of the `docs/*/specs/*.md` design-doc pathspecs; `hooks/` is in
+none of the checker-script pathspecs; and for `gate_scripts`,
 `gitapex_detect_changed_gate_scripts.py` matches
-`hooks/(?:check[-_]|gitapex_check_)`; this file is `gitapex_sync_`, so it
-is not a changed gate script. It is also absent from `.gitapex/ssot.json`,
-so it is not a registered gate. With both flags empty the gate takes its
-"this diff triggers no skill-audit disclosure requirement" branch.
+`hooks/(?:check[-_]|gitapex_check_)` while this file is `gitapex_sync_`,
+neither `.gitapex/ssot.json` nor `hooks/hooks.json` is touched. With the
+disjunction false the workflow skips the disclosure step entirely -- the
+grader is never invoked on CI, so the "no disclosure requirement" line it
+prints under a local `--check-diff` run is not what CI emits.
 
 ## Task 1: quote permission entries the generator emits
 
@@ -133,8 +142,13 @@ already a quoted scalar, and for `agents/branch-plan-task.md` it made
 OpenCode read 717 characters where Claude Code reads 615. Reverted.
 
 The reason raw interpolation is right is structural: the emitted line is
-byte-identical to the source line, so any conformant parser reads the
-same value from both. Re-encoding breaks exactly that.
+copied through from the source line, so any conformant parser reads the
+same value from both. Re-encoding breaks exactly that. (Copied through,
+not byte-identical: the frontmatter pattern normalizes the `key:`
+separator and strips surrounding whitespace with a Unicode-wide `\s*`.
+That is a small divergence in its own right, pre-existing and left alone,
+and it is why the claim is stated as fidelity of the parsed value rather
+than of the bytes.)
 
 The 102 characters are genuinely lost -- but in the source file, for
 every runtime, Claude Code included (this session's own agent listing
