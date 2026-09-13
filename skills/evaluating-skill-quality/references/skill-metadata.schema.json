@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://gitapex.io/schemas/evaluating-skill-quality/skill-metadata.schema.json",
   "title": "gitapex skill metadata sidecar (SkillMetadata gitapex.io/v1alpha1)",
-  "description": "Schema for every skills/*/metadata/gitapex.yaml sidecar. Kubernetes-CRD-shaped by deliberate convention (apiVersion/kind/metadata/spec envelope) -- never applied to a real cluster; the envelope buys schema versioning (apiVersion), a self-describing kind, and a clean metadata (identity) vs. spec (declared content) split. Structural/type/enum/pattern rules and the single cross-FIELD rule this format has (spec.skillDependencies.requires vs. spec.portability; spec.lifecycle.experimental vs. spec.lifecycle.stable) are expressed here. What this schema deliberately CANNOT express -- and therefore still needs a companion drift scanner, mirroring this repository's own layered-validation split between a JSON Schema validator (this file) and a repo-grounded reference-drift scanner for cross-file checks -- is anything that requires reading a SECOND file: metadata.name equalling the real skill directory name; spec.skillDependencies.requires/relatedTo and spec.lifecycle.deprecated.replacement each resolving to an existing sibling skills/*/ directory; and the repo-wide acyclicity of the spec.skillDependencies.requires graph across all sidecars (a single instance has no view of the graph). Also out of scope, permanently, by kind rather than by gap: every check in this skill's own bundled shape checker that inspects SKILL.md/references/*.md prose (bare-issue-number citation scanning, Markdown link/anchor resolution, cross-skill citation resolution, illustrative-model-identifier/placeholder scanning, step-location-contradiction detection, and more) -- those checks are not about this sidecar file's shape at all, and no JSON Schema for metadata/gitapex.yaml can ever cover them.",
+  "description": "Schema for every skills/*/metadata/gitapex.yaml sidecar. Kubernetes-CRD-shaped by deliberate convention (apiVersion/kind/metadata/spec envelope) -- never applied to a real cluster; the envelope buys schema versioning (apiVersion), a self-describing kind, and a clean metadata (identity) vs. spec (declared content) split. Structural/type/enum/pattern rules and the single cross-FIELD rule this format has (spec.skillDependencies.requires vs. spec.portability; spec.lifecycle.experimental vs. spec.lifecycle.stable) are expressed here. spec.contract, if present, is the one spec block a build step projects verbatim into SKILL.md at build time -- every other spec block stays sidecar-only. What this schema deliberately CANNOT express -- and therefore still needs a companion drift scanner, mirroring this repository's own layered-validation split between a JSON Schema validator (this file) and a repo-grounded reference-drift scanner for cross-file checks -- is anything that requires reading a SECOND file: metadata.name equalling the real skill directory name; spec.skillDependencies.requires/relatedTo and spec.lifecycle.deprecated.replacement each resolving to an existing sibling skills/*/ directory; and the repo-wide acyclicity of the spec.skillDependencies.requires graph across all sidecars (a single instance has no view of the graph). Also out of scope, permanently, by kind rather than by gap: every check in this skill's own bundled shape checker that inspects SKILL.md/references/*.md prose (bare-issue-number citation scanning, Markdown link/anchor resolution, cross-skill citation resolution, illustrative-model-identifier/placeholder scanning, step-location-contradiction detection, and more) -- those checks are not about this sidecar file's shape at all, and no JSON Schema for metadata/gitapex.yaml can ever cover them.",
   "type": "object",
   "required": ["apiVersion", "kind", "metadata", "spec"],
   "additionalProperties": false,
@@ -62,6 +62,10 @@
         "skillDependencies": { "$ref": "#/$defs/skillDependencies" },
         "lifecycle": { "$ref": "#/$defs/lifecycle" },
         "executionRequirements": { "$ref": "#/$defs/executionRequirements" },
+        "contract": {
+          "$ref": "#/$defs/contract",
+          "description": "spec.contract: optional Design-by-Contract block (precondition/goal/invariants/gates/escalation/handoff) -- absent entirely means this skill declares no contract yet, unchanged from today. See this schema's own top-level description for the projection invariant this field exists to carry."
+        },
         "externalCitations": {
           "type": "array",
           "minItems": 1,
@@ -94,6 +98,158 @@
           }
         }
       ]
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goal", "handoff"],
+      "description": "spec.contract: the Design-by-Contract block (precondition/goal/invariants/gates/escalation/handoff) a build step projects verbatim into SKILL.md -- see this schema's own top-level description for the projection invariant. goal and handoff are the only required blocks: a contract must state what it is trying to reach and where it hands off next; precondition/invariants/gates/escalation stay optional refinements a simpler contract may omit (an absent or empty array reads as 'none declared,' the same convention spec.skillDependencies' own requires/relatedTo already use, not spec.references' stricter 'non-empty if present' rule).",
+      "properties": {
+        "precondition": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/contractPrecondition" },
+          "description": "Checkpoints this contract's own procedure assumes hold before it runs, each with its own onFail action."
+        },
+        "goal": { "$ref": "#/$defs/contractGoal" },
+        "invariants": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/contractInvariant" },
+          "description": "Statements that must remain true throughout the procedure, each optionally tied to a $defs/contractGate entry's own id."
+        },
+        "gates": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/contractGate" },
+          "description": "Deterministic checks this contract relies on, named by id and the plane (ci/local/pretooluse/posttooluse/stop) they run on."
+        },
+        "escalation": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/contractEscalation" },
+          "description": "when/to pairs naming the condition that ends autonomous execution and who or what it escalates to."
+        },
+        "handoff": { "$ref": "#/$defs/contractHandoff" }
+      }
+    },
+    "contractProse": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[^\\n]*\\Z",
+      "description": "One line of contract prose (precondition[].check, goal.endState, goal.check, goal.constraints[], invariants[].text, escalation[].when, handoff.next.carries, handoff.downstream): non-empty, at most 200 chars, no embedded newline. Anchored with \\Z rather than a bare trailing $, for the same reason $defs/shapeWaiverItem's own reason field already documents in this file: Python's re module (the engine jsonschema's pattern keyword uses here) treats a bare $ as matching immediately before a single trailing newline, not only the true string end, so a value consisting of or ending in exactly one \\n would silently satisfy ^[^\\n]*$ despite still containing the excluded character. \\Z has no such trailing-newline dispensation."
+    },
+    "contractPrecondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "check", "onFail"],
+      "description": "One precondition checkpoint -- REFERENCES_ITEM_SUBKEYS-shaped, mirroring $defs/referenceItem's own one-record-per-item convention.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "The same kebab-case shape as $defs/skillNameRef (NAME_RE), but deliberately not a $ref to it: this id names the precondition itself, not a sibling skill directory, so it is never resolved by the companion scanner's dangling-reference checks."
+        },
+        "check": { "$ref": "#/$defs/contractProse" },
+        "onFail": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "A free kebab-case action label (e.g. \"escalate\", \"retry-once\") -- same shape as $defs/skillNameRef but not yet a closed enum; a later PR is expected to gate this against a fixed vocabulary."
+        }
+      }
+    },
+    "contractGoal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endState", "check"],
+      "description": "The one goal a contract states. constraints is optional: a goal with no additional constraints beyond endState/check is still a complete goal.",
+      "properties": {
+        "endState": { "$ref": "#/$defs/contractProse" },
+        "check": { "$ref": "#/$defs/contractProse" },
+        "constraints": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/contractProse" }
+        }
+      }
+    },
+    "contractInvariant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "gate"],
+      "description": "One invariant statement. gate is required but nullable -- present-and-null is the deliberate 'no automated gate enforces this yet' statement, distinct from omitting the key entirely (a schema-invalid shape here, unlike spec.skillDependencies' own null-vs-absent distinction one level up).",
+      "properties": {
+        "text": { "$ref": "#/$defs/contractProse" },
+        "gate": {
+          "type": ["string", "null"],
+          "description": "The id of a $defs/contractGate entry this invariant is enforced by, or null when no automated gate exists yet for it. Not itself resolved against spec.contract.gates[].id by this schema -- a same-document cross-reference no schema keyword here expresses, matching this file's own established schema/companion-scanner split for cross-file references."
+        }
+      }
+    },
+    "contractGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "plane", "shipped"],
+      "description": "One deterministic gate this contract relies on.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Free-form gate identifier, e.g. a script or CheckResult name -- no closed vocabulary, mirroring $defs/referenceItem's own free-form anchor field."
+        },
+        "plane": {
+          "type": "string",
+          "enum": ["ci", "local", "pretooluse", "posttooluse", "stop"],
+          "description": "Where this gate actually runs."
+        },
+        "shipped": {
+          "type": "boolean",
+          "description": "Whether this gate is already enforcing (true) or still only declared/planned (false)."
+        }
+      }
+    },
+    "contractEscalation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["when", "to"],
+      "description": "One when/to escalation pair.",
+      "properties": {
+        "when": { "$ref": "#/$defs/contractProse" },
+        "to": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+          "description": "A free kebab-case escalation target (e.g. \"human-operator\", \"main-thread\") -- same shape as $defs/skillNameRef but not a $ref to it (not a sibling skill directory) and not yet a closed enum, per $defs/contractPrecondition's own onFail field."
+        }
+      }
+    },
+    "contractHandoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["next"],
+      "description": "Where this contract's own procedure hands off next. inline/optional name skills this procedure itself dispatches or may dispatch; next names the single skill the whole procedure hands off to on completion.",
+      "properties": {
+        "next": { "$ref": "#/$defs/contractHandoffNext" },
+        "inline": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/skillNameRef" },
+          "description": "Skills this procedure always dispatches inline as part of its own execution."
+        },
+        "optional": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/skillNameRef" },
+          "description": "Skills this procedure may conditionally dispatch, but does not always reach."
+        },
+        "downstream": { "$ref": "#/$defs/contractProse" }
+      }
+    },
+    "contractHandoffNext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["skill"],
+      "description": "The single required handoff target. fallback and carries are optional: not every handoff needs a named fallback or a carries note.",
+      "properties": {
+        "skill": { "$ref": "#/$defs/skillNameRef" },
+        "fallback": { "$ref": "#/$defs/skillNameRef" },
+        "carries": { "$ref": "#/$defs/contractProse" }
+      }
     },
     "referenceItem": {
       "type": "object",

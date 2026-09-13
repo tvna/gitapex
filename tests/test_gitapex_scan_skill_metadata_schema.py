@@ -437,6 +437,95 @@ def test_execution_requirements_tools_and_packages_coexist() -> None:
     assert _violations(_mutated(executionRequirements=exec_req)) == []
 
 
+# ---- schema: spec.contract ----
+
+# A full, valid spec.contract instance -- every one of the six blocks
+# populated once, mirroring _VALID_INSTANCE's own "every gated block
+# declared once" fixture-construction pattern above.
+_VALID_CONTRACT: dict[str, Any] = {
+    "precondition": [
+        {
+            "id": "branch-checked-out",
+            "check": "the shared plan branch is checked out at or after BASE",
+            "onFail": "escalate",
+        }
+    ],
+    "goal": {
+        "endState": "the ACM row's planned ops are implemented and tested",
+        "check": "pytest and the local preflight gate both pass",
+        "constraints": ["touch only the files the task record names"],
+    },
+    "invariants": [
+        {"text": "the lifecycle block stays runtime-unread", "gate": None},
+    ],
+    "gates": [
+        {"id": "subagent-stop-verification", "plane": "stop", "shipped": True},
+    ],
+    "escalation": [
+        {"when": "verification fails twice", "to": "human-operator"},
+    ],
+    "handoff": {
+        "next": {
+            "skill": "drafting-a-pr-to-merge",
+            "fallback": "stop-and-replan",
+            "carries": "the merged branch and its event log",
+        },
+        "inline": ["merge-retrospective"],
+        "optional": ["outward-artifact-preflight"],
+        "downstream": "the opened pull request",
+    },
+}
+
+
+def _copy_contract() -> Any:
+    """A deep copy of _VALID_CONTRACT, round-tripped through JSON -- same
+    rationale as _copy_instance above: lets a test mutate/delete arbitrary
+    nested keys freely without the shared module-level fixture leaking
+    mutations across tests."""
+    return json.loads(json.dumps(_VALID_CONTRACT))
+
+
+def test_contract_full_valid_block_has_no_schema_violations() -> None:
+    assert _violations(_mutated(contract=_VALID_CONTRACT)) == []
+
+
+def test_contract_unknown_nested_key_is_flagged() -> None:
+    bad_contract = _copy_contract()
+    bad_contract["surprise"] = "nope"
+    assert _violations(_mutated(contract=bad_contract)) != []
+
+
+def test_contract_goal_check_oversized_is_flagged() -> None:
+    bad_contract = _copy_contract()
+    bad_contract["goal"]["check"] = "x" * 201
+    assert _violations(_mutated(contract=bad_contract)) != []
+
+
+def test_contract_invariant_text_embedded_newline_is_flagged() -> None:
+    bad_contract = _copy_contract()
+    bad_contract["invariants"][0]["text"] = "line one\nline two"
+    assert _violations(_mutated(contract=bad_contract)) != []
+
+
+def test_contract_gate_plane_outside_enum_is_flagged() -> None:
+    bad_contract = _copy_contract()
+    bad_contract["gates"][0]["plane"] = "cloud"
+    assert _violations(_mutated(contract=bad_contract)) != []
+
+
+def test_contract_handoff_next_missing_skill_is_flagged() -> None:
+    bad_contract = _copy_contract()
+    del bad_contract["handoff"]["next"]["skill"]
+    assert _violations(_mutated(contract=bad_contract)) != []
+
+
+def test_contract_absent_is_valid() -> None:
+    # spec.contract stays optional -- an existing sidecar with none of this
+    # declared must remain valid (the 29-real-sidecar gate below depends on
+    # this).
+    assert _violations(_VALID_INSTANCE) == []
+
+
 def _make_skill_dir(base: pathlib.Path, name: str) -> pathlib.Path:
     """A real skill directory fixture: base/name/SKILL.md exists, matching
     the definition _resolves_to_sibling_skill/discover_skill_dirs both use
