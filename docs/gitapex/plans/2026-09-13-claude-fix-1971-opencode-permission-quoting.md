@@ -109,13 +109,27 @@ string, not that OpenCode's matcher then denies every MCP-provided tool;
 and an eleven-key deny-list against a default-allow runtime is not
 equivalent to the closed allow-list `agents/review-persona.md` declares.
 
-One further residual risk, found during the Step 5 re-verification and
-recorded on the issue: `_render_agent_copy` emits `description:` through
-the same raw interpolation, so a description containing a colon-space or
-a trailing space-hash would break the same frontmatter block. Both
-current descriptions are safe. Widening this task to cover it would
-contradict the issue's own narrow-surface constraint, so it is left for a
-follow-up issue.
+One further risk was recorded here and on the issue during the Step 5
+re-verification: `_render_agent_copy` emits `description:` through the
+same raw interpolation, so a description containing a colon-space or a
+space-hash would break the same frontmatter block. It was deferred to a
+follow-up issue on the stated ground that "both current descriptions are
+safe".
+
+That ground was false, and Step 8's adversarial review caught it.
+`agents/branch-plan-task.md`'s description cites `issue #1476`; a plain
+YAML scalar ends at ` #`, so the generated copy already read back 615
+characters where 717 were declared -- 102 lost, silently, with no parse
+error. The description now goes through the same helper (commit
+`26a76988`), measured at 717/717 and 400/400 after the fix. This is not a
+widening of the narrow surface: it is the same defect, in the same
+function, one line up, and the deferral was an error of fact rather than
+a scope judgement.
+
+Still deferred, and this time on measurement rather than assumption: a
+YAML simple key may not exceed 1024 characters (1024 parses, 1025 raises
+`ScannerError`), which `_yaml_scalar` does not enforce because the longest
+key this module declares is 18 characters.
 
 ## Wave assignment
 
