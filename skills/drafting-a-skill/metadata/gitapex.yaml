@@ -5,6 +5,7 @@ metadata:
 spec:
   portability: Mixed
   capabilityAssumption: Broad
+  dependencyPolicy: Declared
   lifecycle:
     experimental:
       reason: "First draft, pending evaluating-skill-quality and battle-testing-a-skill review verdicts before graduating to stable"
@@ -357,6 +358,11 @@ spec:
       summary: "Resolving this branch's merge conflict surfaced one new fact recorded nowhere else: the Steps 3/4/5/7 dispatch mechanism -- review-persona via Agent/Task -- is Claude-Code/Agent-Skills-runtime-native, matching executing-a-branch-plan's own porting-boundary-map.md verdict for its structurally identical Step 8 dispatch. A runtime with no equivalent primitive substitutes its own mechanism, per Step 7's own 'no fresh-dispatch mechanism' branch, never via the caller's own privileged context."
       outcome:
         baseCommit: "9ca636881b71dbd7533a04868739f78fa819e271"
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1965"
+      summary: "Declared this skill's own dependency on scripts/gitapex_generate_skill_contract.py (the spec.contract projection work tracked under https://github.com/tvna/gitapex/issues/1964): spec.dependencyPolicy: Declared and spec.executionRequirements.packages.pip: [pyyaml] added, matching evaluating-skill-quality's own precedent. SKILL.md Step 2 now renders spec.contract with the generator after writing it; Step 6's checker sweep now also runs its --check mode alongside the two pre-existing checkers."
+      outcome:
+        baseCommit: "1c30bdf5992ff0923a3e3a5ab29e3e35d2bfa164"
   skillDependencies:
     requires:
       - evaluating-skill-quality
@@ -379,3 +385,6 @@ spec:
         - python3
         - mkdir
         - git
+    packages:
+      pip:
+        - pyyaml
