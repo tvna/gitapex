@@ -13,13 +13,18 @@ Design (settled on issue #1209, not guessed at implementation time): a
 marker-file state machine. This script is the writer half, invoked as a
 PostToolUse hook (matcher: Bash|mcp__(github|plugin_github_github)__resolve_review_thread|
 mcp__(github|plugin_github_github)__pull_request_read); hooks/gitapex_check_stop_review_obligation.py
-is the reader half, invoked as a Stop hook. Neither half makes its own
-GitHub API call -- this script reads only what the already-executed tool
-call itself returned (its own tool_response), reusing the pattern
-hooks/gitapex_check_post_write_provenance.py already established (issue
-#908: a PostToolUse hook's stdin payload does carry the tool's actual
-result). The Stop hook in turn reads only this state file, never the
-network -- see that module's own docstring for the full split.
+is the reader half, invoked as a Stop hook. For the resolve_review_thread
+and pull_request_read shapes, this script reads only what the
+already-executed tool call itself returned (its own tool_response),
+reusing the pattern hooks/gitapex_check_post_write_provenance.py already
+established (issue #908: a PostToolUse hook's stdin payload does carry
+the tool's actual result). For a classified git-push Bash call, this
+script additionally makes one GitHub REST call of its own (issue #1631:
+confirm whether the pushed branch already has an open PR before arming
+this obligation at all -- see `handle_bash`'s own docstring for the
+fail-closed mechanics). The Stop hook in turn reads only this state
+file, never the network -- see that module's own docstring for the full
+split.
 
 State file: ``${TMPDIR:-/tmp}/gitapex-review-obligation-<session_id>.json``,
 deliberately outside the git work tree (never pollutes `git status`) and
@@ -69,7 +74,32 @@ Three tool shapes update this file:
   pending cycle (push_detected=true, target_pr unset, everything else
   cleared) -- deliberately unconditional on the tool_response (a denied/
   failed push still means the agent intended one), matching this
-  module's own fail-toward-more-tracking posture.
+  module's own fail-toward-more-tracking posture -- **except** for issue
+  #1631's own no-open-PR case immediately below, the one case that
+  resets push_detected back to false instead.
+
+  **Issue #1631: a push to a branch with no open PR does not arm this
+  obligation.** `handle_bash` additionally resolves the pushed branch's
+  own remote (`git remote get-url origin`, parsed for a `github.com`
+  owner/repo pair -- `_resolve_owner_repo`) and the current branch name
+  (`git rev-parse --abbrev-ref HEAD` -- `_resolve_current_branch`),
+  then, only once both resolve and a `GH_TOKEN`/`GITHUB_TOKEN` is
+  present, calls the same deterministic REST List Pull Requests
+  endpoint hooks/gitapex_check_pr_duplicate_issue.py already relies on
+  for its own duplicate-PR check, filtered by `head`
+  (`GET /repos/{owner}/{repo}/pulls?head={owner}:{branch}&state=open` --
+  `_branch_has_open_pr`). A confirmed empty result resets the state to
+  fully untracked (`push_detected` stays false) -- there is no PR yet
+  for the Stop hook to demand a `pull_request_read` call against. Any
+  failure along this path -- no resolvable remote/branch, no token, a
+  network error, an unexpected HTTP status, or an unparseable response
+  body -- falls straight through to the unconditional
+  `push_detected=true` reset above: fail-closed, the same posture
+  `gitapex_check_pr_duplicate_issue.py` already applies to its own
+  GitHub-API-degraded case. Does not touch the `target_pr`-switch reset
+  logic, `_pr_key`, `_same_pr`, or any of issue #1482's other seven
+  disclosed residual risks -- scoped to the no-PR-exists case only, per
+  issue #1631's own Constraints.
 - mcp__github__resolve_review_thread: increments resolve_calls, but only
   once `target_pr` is already set (a push happened AND at least one
   pull_request_read has already run this cycle -- see `_pr_key`'s own
@@ -197,13 +227,31 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
+import subprocess
 import sys
 import tempfile
-from collections.abc import Iterator
+import urllib.error
+import urllib.request
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
 import gitapex_check_bash_safety as bash_safety
+
+#: Issue #1631's own REST lookup (GitHub's List Pull Requests endpoint,
+#: filtered by `head`) -- the same API root and version header
+#: hooks/gitapex_check_pr_duplicate_issue.py already uses for its own
+#: fail-closed duplicate-PR check; not imported from there (that module's
+#: own `_call` is underscore-prefixed, not a shared reuse surface per this
+#: repository's own convention -- see that module's docstring), so this is
+#: a small, separate re-implementation of the identical GET-with-retry
+#: shape rather than a cross-file import of a private helper.
+_API_ROOT = "https://api.github.com"
+_API_VERSION = "2022-11-28"
+_GIT_SUBPROCESS_TIMEOUT_SECONDS = 5
+_HTTP_TIMEOUT_SECONDS = 10
+_GITHUB_REMOTE_RE = re.compile(r"github\.com[:/]([^/]+)/(.+?)(?:\.git)?/?$")
 
 _DEFAULT_STATE: dict[str, Any] = {
     "push_detected": False,
@@ -386,13 +434,141 @@ def _contains_mergeable_state(node: Any) -> bool:
     return any("mergeable_state" in candidate or "mergeableState" in candidate for candidate in _iter_dicts(node))
 
 
-def handle_bash(state: dict[str, Any], tool_input: dict[str, Any]) -> dict[str, Any]:
+def _default_opener(request: urllib.request.Request) -> Any:
+    return urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_SECONDS)  # noqa: S310
+
+
+def _run_git(
+    args: list[str],
+    cwd: str | None,
+    runner: Callable[..., subprocess.CompletedProcess[str]],
+) -> str | None:
+    """Run a short-lived, read-only git subcommand and return its stripped
+    stdout, or None on any failure (missing git, non-zero exit, timeout) --
+    every caller below treats None as "could not resolve", which is this
+    module's own fail-closed trigger for issue #1631's no-PR check (see
+    `handle_bash`)."""
+    try:
+        result = runner(
+            ["git", *args],
+            capture_output=True,
+            text=True,
+            timeout=_GIT_SUBPROCESS_TIMEOUT_SECONDS,
+            cwd=cwd,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return None
+    if result.returncode != 0:
+        return None
+    output = result.stdout.strip()
+    return output or None
+
+
+def _resolve_owner_repo(
+    cwd: str | None, runner: Callable[..., subprocess.CompletedProcess[str]]
+) -> tuple[str, str] | None:
+    """Parse `git remote get-url origin`'s output for a `github.com`
+    owner/repo pair (HTTPS or SSH form) -- the same primitive
+    hooks/gitapex_check_pr_duplicate_issue.py's own owner/repo inputs
+    assume are already resolved, resolved here firsthand since this
+    module's PostToolUse trigger carries no such fields on its own."""
+    url = _run_git(["remote", "get-url", "origin"], cwd, runner)
+    if url is None:
+        return None
+    match = _GITHUB_REMOTE_RE.search(url)
+    if not match:
+        return None
+    owner, repo = match.group(1), match.group(2)
+    return (owner, repo) if owner and repo else None
+
+
+def _resolve_current_branch(cwd: str | None, runner: Callable[..., subprocess.CompletedProcess[str]]) -> str | None:
+    """The current branch name (`git rev-parse --abbrev-ref HEAD`) -- used
+    as the pushed branch's own name. A `git push` with no explicit
+    refspec pushes the current branch, and the common explicit form
+    (`git push -u origin <branch>`) is run from that same branch in
+    practice in this repository's own workflow; a detached HEAD or a
+    push naming a different branch than the current one is out of scope
+    for this heuristic, the same disclosed-heuristic posture `target_pr`
+    already carries elsewhere in this module (see module docstring)."""
+    branch = _run_git(["rev-parse", "--abbrev-ref", "HEAD"], cwd, runner)
+    return branch if branch and branch != "HEAD" else None
+
+
+def _branch_has_open_pr(
+    owner: str,
+    repo: str,
+    branch: str,
+    token: str,
+    opener: Callable[[urllib.request.Request], Any],
+) -> bool | None:
+    """True/False for a confirmed open-PR-exists/absent result against
+    GitHub's own deterministic List Pull Requests endpoint, filtered by
+    `head`; None on any fetch or shape failure -- the caller
+    (`handle_bash`) treats None as "could not confirm", falling through
+    to this module's own unconditional fail-closed reset."""
+    url = f"{_API_ROOT}/repos/{owner}/{repo}/pulls?head={owner}:{branch}&state=open"
+    request = urllib.request.Request(url, method="GET")  # noqa: S310 -- fixed https://api.github.com URL
+    request.add_header("Authorization", f"Bearer {token}")
+    request.add_header("Accept", "application/vnd.github+json")
+    request.add_header("X-GitHub-Api-Version", _API_VERSION)
+    try:
+        with opener(request) as response:
+            status = int(response.status)
+            body = response.read().decode("utf-8", errors="replace")
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+    if not (200 <= status < 300):
+        return None
+    try:
+        data = json.loads(body) if body else []
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, list):
+        return None
+    return len(data) > 0
+
+
+def handle_bash(
+    state: dict[str, Any],
+    tool_input: dict[str, Any],
+    *,
+    cwd: str | None = None,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+    opener: Callable[[urllib.request.Request], Any] = _default_opener,
+) -> dict[str, Any]:
     command = tool_input.get("command")
     if not isinstance(command, str) or not command:
         return state
     verdict = bash_safety.classify(command)
     if not verdict.is_git_push:
         return state
+
+    # Issue #1631: a push to a branch with no open PR at all does not arm
+    # this obligation -- there is no PR yet for the Stop hook to demand a
+    # pull_request_read call against. Every step below must resolve for
+    # this branch to take effect; any failure (no token, missing
+    # git/remote, no resolvable branch, or an API/shape error) falls
+    # through to the unconditional push_detected=true reset, fail-closed
+    # exactly like this repository's other REST-backed hooks (e.g.
+    # hooks/gitapex_check_pr_duplicate_issue.py). The token check runs
+    # first and short-circuits before either git subprocess call: with no
+    # token this check could never call the API anyway, so there is
+    # nothing to gain by shelling out to git first (also keeps this
+    # module's own test suite, and any environment with no GH_TOKEN/
+    # GITHUB_TOKEN set, from ever invoking git as a side effect of this
+    # function).
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if token:
+        owner_repo = _resolve_owner_repo(cwd, runner)
+        branch = _resolve_current_branch(cwd, runner)
+        if owner_repo is not None and branch is not None:
+            owner, repo = owner_repo
+            has_open_pr = _branch_has_open_pr(owner, repo, branch, token, opener)
+            if has_open_pr is False:
+                return dict(_DEFAULT_STATE)
+
     return dict(_DEFAULT_STATE, push_detected=True)
 
 
@@ -467,7 +643,8 @@ def process(payload: dict[str, Any]) -> dict[str, Any] | None:
     state = _read_state(path)
 
     if tool_name == "Bash":
-        new_state = handle_bash(state, tool_input)
+        cwd = payload.get("cwd")
+        new_state = handle_bash(state, tool_input, cwd=cwd if isinstance(cwd, str) and cwd else None)
     elif isinstance(tool_name, str) and tool_name.endswith("__resolve_review_thread"):
         new_state = handle_resolve_review_thread(state, payload.get("tool_response"))
     elif isinstance(tool_name, str) and tool_name.endswith("__pull_request_read"):

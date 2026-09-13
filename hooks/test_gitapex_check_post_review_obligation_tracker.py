@@ -30,6 +30,7 @@ import json
 import os
 import shutil
 import subprocess
+import urllib.error
 from pathlib import Path
 from typing import Any, cast
 
@@ -51,6 +52,15 @@ def _isolated_tmpdir(tmp_path: Path, monkeypatch: Any) -> None:
     # every test in this module, not just the ones that pass tmp_path
     # explicitly.
     monkeypatch.setenv("TMPDIR", str(tmp_path))
+    # Issue #1631: handle_bash's own no-open-PR check short-circuits on a
+    # missing GH_TOKEN/GITHUB_TOKEN (see that function's own comment), so
+    # clearing both here keeps every test below -- except the dedicated
+    # #1631 tests, which set one back explicitly -- from ever invoking git
+    # or the network as a side effect of a plain `git push` push_detected
+    # reset, regardless of what the ambient CI/dev environment happens to
+    # have set.
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
 
 
 def _push(session_id: str) -> None:
@@ -644,3 +654,144 @@ def test_resolve_review_thread_with_plugin_namespaced_tool_name() -> None:
     )
     assert result is not None
     assert result["resolve_calls"] == 1
+
+
+# --- Issue #1631: no-open-PR case for handle_bash -----------------------
+#
+# handle_bash's own no-open-PR check is exercised directly (not through
+# process()) via fake runner/opener callables, so none of these tests ever
+# shells out to a real `git` subprocess or makes a real network call --
+# see handle_bash's own module-docstring comment for the fail-closed
+# mechanics these tests confirm.
+
+
+def _fake_git_runner(*, remote_url: str | None, branch: str | None) -> Any:
+    """A `runner` stand-in for handle_bash's own git-subprocess calls,
+    returning a canned CompletedProcess for `git remote get-url origin`
+    and `git rev-parse --abbrev-ref HEAD`, and failing (returncode 1) for
+    the one whose canned value is None -- the same "could not resolve"
+    shape a real missing remote/detached-HEAD checkout would produce."""
+
+    def runner(args: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[str]:
+        if args[:3] == ["git", "remote", "get-url"]:
+            if remote_url is None:
+                return subprocess.CompletedProcess(args, 1, stdout="", stderr="fatal: no such remote 'origin'")
+            return subprocess.CompletedProcess(args, 0, stdout=remote_url + "\n", stderr="")
+        if args[:2] == ["git", "rev-parse"]:
+            if branch is None:
+                return subprocess.CompletedProcess(args, 1, stdout="", stderr="fatal: not a git repository")
+            return subprocess.CompletedProcess(args, 0, stdout=branch + "\n", stderr="")
+        raise AssertionError(f"unexpected git subcommand in test fake: {args}")
+
+    return runner
+
+
+class _FakeHttpResponse:
+    def __init__(self, status: int, body: str) -> None:
+        self.status = status
+        self._body = body
+
+    def read(self) -> bytes:
+        return self._body.encode("utf-8")
+
+    def __enter__(self) -> _FakeHttpResponse:
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        return None
+
+
+def _fake_opener(*, prs: list[dict[str, Any]] | None = None, raise_error: bool = False) -> Any:
+    """An `opener` stand-in for handle_bash's own GitHub REST call.
+    `raise_error=True` simulates a network/API failure; otherwise returns
+    a 200 whose JSON body is `prs` (an empty list when omitted -- "no open
+    PR found")."""
+
+    def opener(_request: Any) -> _FakeHttpResponse:
+        if raise_error:
+            raise urllib.error.URLError("simulated network failure")
+        return _FakeHttpResponse(200, json.dumps(prs if prs is not None else []))
+
+    return opener
+
+
+def test_handle_bash_push_with_no_open_pr_does_not_arm(monkeypatch: Any) -> None:
+    # Criterion: "PR無し -> 立たない" -- a confirmed empty open-PR list for
+    # the pushed branch must leave push_detected False, never arming the
+    # Stop-hook obligation for a branch with no PR yet to read.
+    monkeypatch.setenv("GH_TOKEN", "fake-token-for-test")
+    state = dict(tracker._DEFAULT_STATE)
+    new_state = tracker.handle_bash(
+        state,
+        {"command": "git push -u origin claude/some-branch"},
+        cwd="/tmp/does-not-matter",
+        runner=_fake_git_runner(remote_url="https://github.com/tvna/gitapex.git", branch="claude/some-branch"),
+        opener=_fake_opener(prs=[]),
+    )
+    assert new_state["push_detected"] is False
+
+
+def test_handle_bash_push_with_open_pr_arms_as_before(monkeypatch: Any) -> None:
+    # Criterion: "PR有り -> 従来通り立つ" -- an existing open PR for the
+    # pushed branch must arm push_detected exactly as it did before #1631.
+    monkeypatch.setenv("GH_TOKEN", "fake-token-for-test")
+    state = dict(tracker._DEFAULT_STATE)
+    new_state = tracker.handle_bash(
+        state,
+        {"command": "git push -u origin claude/some-branch"},
+        cwd="/tmp/does-not-matter",
+        runner=_fake_git_runner(remote_url="https://github.com/tvna/gitapex.git", branch="claude/some-branch"),
+        opener=_fake_opener(prs=[{"number": 1209}]),
+    )
+    assert new_state["push_detected"] is True
+
+
+def test_handle_bash_push_with_api_error_arms_fail_closed(monkeypatch: Any) -> None:
+    # Criterion: "APIエラー -> 立つ" -- a network/API failure while
+    # confirming open-PR status must fail closed to the pre-#1631 behavior
+    # (arm the obligation), never silently treated as "no PR".
+    monkeypatch.setenv("GH_TOKEN", "fake-token-for-test")
+    state = dict(tracker._DEFAULT_STATE)
+    new_state = tracker.handle_bash(
+        state,
+        {"command": "git push -u origin claude/some-branch"},
+        cwd="/tmp/does-not-matter",
+        runner=_fake_git_runner(remote_url="https://github.com/tvna/gitapex.git", branch="claude/some-branch"),
+        opener=_fake_opener(raise_error=True),
+    )
+    assert new_state["push_detected"] is True
+
+
+def test_handle_bash_push_with_no_token_arms_fail_closed_without_git_call() -> None:
+    # No GH_TOKEN/GITHUB_TOKEN at all (the ambient default this module's
+    # own autouse fixture establishes) must fail closed exactly like an
+    # API error, and must never even attempt a git subprocess call -- the
+    # fake runner raises if handle_bash calls it at all, proving the
+    # token check short-circuits first.
+    def _runner_that_must_not_be_called(*_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("handle_bash must not shell out to git when no token is set")
+
+    state = dict(tracker._DEFAULT_STATE)
+    new_state = tracker.handle_bash(
+        state,
+        {"command": "git push -u origin claude/some-branch"},
+        cwd="/tmp/does-not-matter",
+        runner=cast(Any, _runner_that_must_not_be_called),
+    )
+    assert new_state["push_detected"] is True
+
+
+def test_handle_bash_push_with_unresolvable_remote_arms_fail_closed(monkeypatch: Any) -> None:
+    # A token is present, but the pushed checkout has no "origin" remote
+    # at all (git remote get-url fails) -- fails closed the same way an
+    # API error does, and never reaches the network call.
+    monkeypatch.setenv("GH_TOKEN", "fake-token-for-test")
+    state = dict(tracker._DEFAULT_STATE)
+    new_state = tracker.handle_bash(
+        state,
+        {"command": "git push"},
+        cwd="/tmp/does-not-matter",
+        runner=_fake_git_runner(remote_url=None, branch="claude/some-branch"),
+        opener=cast(Any, lambda _request: (_ for _ in ()).throw(AssertionError("must not call the network"))),
+    )
+    assert new_state["push_detected"] is True
