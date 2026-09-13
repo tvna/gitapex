@@ -17,6 +17,7 @@ import runpy
 import sys
 import typing
 
+import gitapex_scan_skill_metadata_schema as sibling_scanner
 import gitapex_scan_ssot_schema as drift
 import pytest
 
@@ -1460,3 +1461,44 @@ def test_broken_yaml_installation_in_script_mode_propagates_unmodified(
         runpy.run_path(script_path, run_name="__main__")
 
     assert exc_info.value.name == "yaml.tokens"
+
+
+# ---------------------------------------------------------------------------
+# Parity with gitapex_scan_skill_metadata_schema.py's own sidecar-discovery
+# helpers, deliberately copied rather than imported here (this module's own
+# docstring). deterministic-gate-quality review (issue #1965) flagged this
+# duplication as disclosed in prose but not backed by any automated
+# synchronization check, unlike this exact file's own
+# test_policy_source_format_literal_matches_schema_enum for a different
+# duplicated-value pair -- this closes that gap the same way: run both
+# implementations against the same inputs and assert identical output,
+# rather than merely trusting the docstrings' own "mirrors ... own" claim.
+# ---------------------------------------------------------------------------
+
+
+def test_discover_skill_dirs_matches_sibling_scanners_own_implementation(tmp_path):
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(skills_dir, "fixture-skill-a", {})
+    _write_skill_with_contract(skills_dir, "fixture-skill-b", {})
+    (skills_dir / "no-skill-md-dir").mkdir(parents=True)
+    assert drift.discover_skill_dirs(skills_dir) == sibling_scanner.discover_skill_dirs(skills_dir)
+
+
+def test_resolves_to_sibling_skill_matches_sibling_scanners_own_implementation(tmp_path):
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(skills_dir, "real-skill", {})
+    for name in (
+        "real-skill",
+        "does-not-exist",
+        "",
+        ".",
+        "..",
+        "../real-skill",
+        "/etc/passwd",
+        "a/b",
+        "a\\b",
+        "real-skill/",
+    ):
+        assert drift._resolves_to_sibling_skill(name, skills_dir) == sibling_scanner._resolves_to_sibling_skill(
+            name, skills_dir
+        ), name
