@@ -150,9 +150,14 @@ def test_agents_sync_rewrites_review_persona_for_opencode(tmp_path: pathlib.Path
     # the spelling pins the emitted form so a change to it is deliberate.
     import yaml
 
-    assert yaml.safe_load(_frontmatter_block(persona))["permission"]["*mcp*"] == "deny"
+    loaded = yaml.safe_load(_frontmatter_block(persona))
+    assert loaded["permission"]["*mcp*"] == "deny"
     assert '"*mcp*": deny' in persona
-    assert "description: Read-only review." in persona
+    # The description goes through the same helper, so it arrives quoted
+    # too. Asserted the same two ways, and for the same reason: a plain
+    # scalar carrying ` #` reads back truncated at the `#` with no error.
+    assert loaded["description"] == "Read-only review."
+    assert 'description: "Read-only review."' in persona
     assert "mode: subagent" in persona
     assert "Body." in persona
     # Sources stay Claude-canonical: never rewritten.
@@ -184,11 +189,13 @@ def test_rendered_permission_frontmatter_parses_back_to_declared_mapping() -> No
     `REVIEW_PERSONA_PERMISSION` leaves this test (and the whole suite)
     green, confirmed by running it. Five of the eleven denials
     (`todowrite`, `question`, `external_directory`, `skill`, `lsp`) are
-    named by no assertion anywhere; the other six are pinned literally by
-    the agents-sync test above. That gap is pre-existing -- issue #1971's
-    own scope is the emission, not the denial set -- and closing it
-    belongs with issue #1963's tool-boundary parity work, where an
-    expectation table independent of this constant is the whole point.
+    pinned as denials by no assertion anywhere -- `external_directory`
+    appears in one, but only as a safe-bare-scalar shape case, which says
+    nothing about whether it should be denied. The other six are pinned
+    literally by the agents-sync test above. That gap is pre-existing --
+    issue #1971's own scope is the emission, not the denial set -- and
+    closing it belongs with issue #1963's tool-boundary parity work, where
+    an expectation table independent of this constant is the whole point.
     """
     import yaml
 
@@ -250,14 +257,14 @@ def test_yaml_scalar_refuses_what_double_quoting_cannot_carry(
     so the helper raises instead of emitting a line that will not parse
     back. `sync_agents` already catches ValueError, so the script stays
     fail-soft by contract: a SKIP note, never a broken generated file."""
-    with pytest.raises(ValueError, match="cannot carry on one line"):
+    with pytest.raises(ValueError, match="refuses to emit on one line"):
         sync._yaml_scalar("mcp\nedit")
 
     # A backslash or a double quote is escaped, not refused. Asserted
-    # twice: the emitted spelling, and what a parser reads back from it.
-    # The spelling assertion alone would pass a wrong-but-parseable
-    # escaping (a swapped replace order emits a different literal, but so
-    # would an escaping that round-trips to the wrong string).
+    # twice for different reasons: the spelling pins the emitted form so a
+    # change to it is deliberate, and the parse states the contract that
+    # spelling exists to satisfy -- which is what a reader needs in order
+    # to judge whether some future respelling is still correct.
     import yaml
 
     assert sync._yaml_scalar('a"b\\c') == '"a\\"b\\\\c"'
@@ -268,7 +275,7 @@ def test_yaml_scalar_refuses_what_double_quoting_cannot_carry(
     _write(project / "agents" / "review-persona.md", _PROBE_SOURCE)
     notes: list[str] = []
     assert sync.sync_agents(project, False, notes) == 0
-    assert any("SKIP" in note and "cannot carry on one line" in note for note in notes), notes
+    assert any("SKIP" in note and "refuses to emit on one line" in note for note in notes), notes
     assert not (project / ".opencode" / "agents" / "review-persona.md").exists()
 
 
@@ -278,12 +285,13 @@ def test_real_agent_files_render_to_loadable_frontmatter() -> None:
     frontmatter a YAML parser loads.
 
     The round-trip test above uses a synthetic probe source, so it never
-    sees the real files' own `description` values -- which
-    `_render_agent_copy` still interpolates raw, one line above the
-    permission block it now quotes. Both current descriptions are safe
-    plain scalars, so this passes today; it exists to fail the day one
-    stops being, rather than leaving the whole real-file path unparsed by
-    any test. Issue #1971 defers hardening that line itself.
+    sees the real files' own `description` values. That gap was not
+    theoretical: `agents/branch-plan-task.md`'s description cites
+    `issue #1476`, and a plain YAML scalar ends at ` #` -- so the
+    generated copy read back 102 characters short, with no parse error
+    anywhere to notice it. This test is what makes that loud, and it is
+    why `_render_agent_copy` now routes the description through
+    `_yaml_scalar` too, not only the permission block (#1971).
 
     The agent/permission pairs are named explicitly for the same reason
     the round-trip test names them: `sync_agents` holds them in a local
@@ -297,10 +305,15 @@ def test_real_agent_files_render_to_loadable_frontmatter() -> None:
         ("branch-plan-task.md", None),
     ):
         source = (REPO_ROOT / "agents" / filename).read_text(encoding="utf-8")
+        parsed = sync._split_frontmatter(source)
+        assert parsed is not None, filename
         rendered = sync._render_agent_copy(source, f"agents/{filename}", permission)
         loaded = yaml.safe_load(_frontmatter_block(rendered))
-        assert loaded["mode"] == "subagent", filename
-        assert isinstance(loaded["description"], str) and loaded["description"], filename
+        # Equality against the declared value, not `isinstance(str)`: a
+        # description carrying ` #` parses back as a non-empty string that
+        # has silently lost everything from the `#` onward, so a type check
+        # passes on exactly the corruption this test exists to catch.
+        assert loaded["description"] == parsed[0]["description"], filename
         if permission is None:
             assert "permission" not in loaded, filename
         else:
@@ -327,8 +340,9 @@ def test_sync_script_imports_only_stdlib_modules() -> None:
     import sys
 
     source = (REPO_ROOT / "hooks" / "gitapex_sync_opencode.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
     roots: set[str] = set()
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             roots.update(alias.name.split(".")[0] for alias in node.names)
         elif isinstance(node, ast.ImportFrom):
@@ -337,6 +351,18 @@ def test_sync_script_imports_only_stdlib_modules() -> None:
             roots.add("." * node.level + (node.module or "").split(".")[0])
     assert roots, "expected at least one import"
     assert roots <= sys.stdlib_module_names, sorted(roots - sys.stdlib_module_names)
+
+    # The walk above sees only `import` statements, and the shape an
+    # optional-dependency shim actually takes is a call: measured, adding
+    # `import importlib` + `importlib.import_module("yaml")` leaves every
+    # name in `roots` a stdlib one, so the assertion above still passes.
+    # `__import__("yaml")` adds no name at all. Both are refused here.
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        target = node.func
+        name = target.attr if isinstance(target, ast.Attribute) else target.id if isinstance(target, ast.Name) else ""
+        assert name not in {"__import__", "import_module"}, f"dynamic import via {name}()"
 
 
 def test_verify_mode_reports_drift_without_writing(tmp_path: pathlib.Path) -> None:
@@ -414,11 +440,6 @@ def test_real_checkout_skills_all_sync_clean() -> None:
     for skill_dir in shipped:
         name = sync._read_skill_name(skill_dir / "SKILL.md")
         assert name == skill_dir.name, f"skills/{skill_dir.name}: frontmatter name {name!r}"
-    # ... and the two distributed agents render without error.
-    for filename in ("review-persona.md", "branch-plan-task.md"):
-        text = (REPO_ROOT / "agents" / filename).read_text(encoding="utf-8")
-        rendered = sync._render_agent_copy(text, f"agents/{filename}", sync.REVIEW_PERSONA_PERMISSION)
-        assert "mode: subagent" in rendered
 
 
 def _assert_effectively_ignored(path: pathlib.Path, description: str) -> None:

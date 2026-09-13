@@ -112,10 +112,16 @@ _SAFE_BARE_SCALAR_RE = re.compile(r"\A[A-Za-z_][A-Za-z0-9_.-]*\Z")
 # under-quoting one turns it into `True`.
 _YAML_TYPED_WORDS = frozenset({"y", "n", "yes", "no", "true", "false", "on", "off", "null"})
 
-# What a double-quoted scalar cannot carry on one line once only backslash
-# and `"` are escaped: the C0 controls (a raw newline would split the line
-# in two), DEL and the C1 block, and the Unicode line/paragraph separators
-# YAML 1.1 also counts as line breaks.
+# Refused outright rather than escaped: the C0 controls (a raw newline
+# would split the line in two), DEL, the C1 block, and the Unicode
+# line/paragraph separators YAML 1.1 also counts as line breaks. One rule
+# covers both halves of an entry, so it is the stricter half that sets it
+# -- measured against PyYAML 6.0.3, U+0085 is folded to a space in a value
+# and rejected in a key, and U+2028/U+2029 survive a value but are
+# rejected in a key (a key must be one line). TAB is the one deliberate
+# over-refusal: PyYAML carries it in both positions, but a tab inside a
+# permission key or a description is a mistake worth failing on, and the
+# alternative is a more intricate regex for no reachable gain.
 _UNQUOTABLE_RE = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
 
 
@@ -128,14 +134,19 @@ def _yaml_scalar(text: str) -> str:
     double-quoting alone cannot carry, rather than emitting a line that
     would not parse back -- ``sync_agents`` turns that into a SKIP note, so
     the script stays fail-soft without ever writing a broken file.
+
+    One bound is not enforced here because nothing can reach it: a YAML
+    simple key may not exceed 1024 characters, quotes included, and past
+    that PyYAML raises on the *reader's* side, not this one. Measured at
+    1024 (parses) and 1025 (``ScannerError``); the longest key this module
+    declares is 18 characters.
     """
     if _SAFE_BARE_SCALAR_RE.match(text) and text.lower() not in _YAML_TYPED_WORDS:
         return text
     unquotable = _UNQUOTABLE_RE.search(text)
     if unquotable:
         raise ValueError(
-            f"scalar {text!r} carries U+{ord(unquotable.group()):04X}, "
-            "which a double-quoted YAML scalar cannot carry on one line"
+            f"scalar {text!r} carries U+{ord(unquotable.group()):04X}, which this generator refuses to emit on one line"
         )
     escaped = text.replace("\\", "\\\\").replace('"', '\\"')
     return f'"{escaped}"'
@@ -263,7 +274,8 @@ def sync_skills(project_dir: Path, verify_only: bool, notes: list[str]) -> int:
 
 def _render_agent_copy(source_text: str, source_rel: str, permission: dict[str, str] | None) -> str:
     """Rebuild an agent definition for OpenCode: keep ``description`` and
-    the body verbatim, drop Claude-only frontmatter keys, add
+    the body verbatim (the description quoted where a plain scalar would
+    not read back unchanged), drop Claude-only frontmatter keys, add
     ``mode: subagent`` + ``hidden: true`` (+ the permission mapping when
     given). The header line records provenance so a hand-edit is never
     mistaken for source."""
@@ -273,7 +285,10 @@ def _render_agent_copy(source_text: str, source_rel: str, permission: dict[str, 
     fields, body = parsed
     if "description" not in fields:
         raise ValueError(f"{source_rel} frontmatter carries no description")
-    out = ["---", f"description: {fields['description']}", "mode: subagent", "hidden: true"]
+    # Through the same helper as a permission scalar, for the same reason:
+    # a description carrying ` #` (a real one does -- an issue reference)
+    # is read back truncated at the `#` with no parse error to notice.
+    out = ["---", f"description: {_yaml_scalar(fields['description'])}", "mode: subagent", "hidden: true"]
     if permission is not None:
         out.append("permission:")
         for key, value in permission.items():
