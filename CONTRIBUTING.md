@@ -128,8 +128,7 @@ a **pre-push** hook that runs every gate with a working-tree-only form in
 one pass, before the push leaves your machine. A warm run of all 50 wired
 gates measures roughly 24 seconds end to end (issue #1512's network-
 exception-set-drift gate; different hardware than the figures below --
-the prior 49-gate set measured roughly 24 seconds, the
-prior 48-gate set measured roughly 24 seconds, the
+the prior 48-gate set measured roughly 24 seconds, the
 prior 47-gate set measured roughly 22 seconds, the
 prior 45-gate set measured roughly 14 seconds, the
 prior 44-gate set measured roughly 15 seconds, the 43-gate set before that

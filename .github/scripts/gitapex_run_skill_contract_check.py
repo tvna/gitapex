@@ -37,6 +37,18 @@ region matches a fresh regeneration (including the zero-skills case), 1 on
 any drift, generation failure, or a `--check` subprocess that times out.
 """
 
+# patch-coverage: WAIVED: this whole file is exercised via
+# tests/test_gitapex_skill_contract_drift.py -- the skill-contract-drift
+# gate's own registered `trigger` file in .gitapex/ssot.json, named after
+# the gate id rather than this script's own stem, since one test file
+# covers both this wrapper and the generator script the gate's own
+# script[] array names together. patch-coverage's own file-discovery only
+# recognizes a source file's stem-matched tests/test_<stem>.py
+# (_properties.py), with no fallback for a differently-named gate-scoped
+# test file -- the same gap this file's own check_skill/discover_contracts
+# function-body-test-coverage: WAIVED comments already disclose for the
+# identical reason.
+
 from __future__ import annotations
 
 import subprocess
