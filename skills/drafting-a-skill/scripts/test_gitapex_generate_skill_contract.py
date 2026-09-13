@@ -582,3 +582,78 @@ def test_apply_region_replaces_only_the_marker_delimited_content(tmp_path: pathl
     # apply_region always wraps region_text in exactly one blank line on
     # each side, regardless of the original spacing between the markers.
     assert result == f"before\n{generator.BEGIN_MARKER}\n\nNEW CONTENT\n\n{generator.END_MARKER}\nafter\n"
+
+
+# ---------------------------------------------------------------------------
+# Defeat tests -- adversarial-review finding (issue #1965): _locate_markers
+# used to accept a marker sharing its own line with other content, silently
+# excluding the smuggled content from the computed region. Each test below
+# reconstructs the exact defeat shape the finding described and asserts the
+# fix actually rejects it, rather than merely asserting the fix's own
+# strip()-based implementation detail.
+# ---------------------------------------------------------------------------
+
+
+def test_begin_marker_with_content_appended_on_same_line_fails_loudly(tmp_path: pathlib.Path) -> None:
+    """The false-negative shape itself: content directly appended after the
+    begin marker on its own line used to be silently skipped past (by
+    ``text.index("\\n", begin_pos)`` landing on that line's own end),
+    placing it outside the computed region entirely -- so neither
+    region-replacement nor ``--check``'s own drift comparison ever saw it.
+    Must now raise GenerationError instead of silently treating the line
+    as a clean marker line."""
+    skill_md_path = tmp_path / "SKILL.md"
+    text = f"before\n{generator.BEGIN_MARKER}## Precondition\nold\n{generator.END_MARKER}\nafter\n"
+    with pytest.raises(generator.GenerationError, match="own line"):
+        generator.apply_region(text, "NEW CONTENT", skill_md_path)
+
+
+def test_end_marker_with_content_appended_on_same_line_fails_loudly(tmp_path: pathlib.Path) -> None:
+    """Companion to the above for the end marker's own line."""
+    skill_md_path = tmp_path / "SKILL.md"
+    text = f"before\n{generator.BEGIN_MARKER}\nold\n{generator.END_MARKER}trailing junk\nafter\n"
+    with pytest.raises(generator.GenerationError, match="own line"):
+        generator.apply_region(text, "NEW CONTENT", skill_md_path)
+
+
+def test_both_markers_on_one_line_fails_loudly_not_corrupted_output(tmp_path: pathlib.Path) -> None:
+    """Second disclosed consequence of the same gap: with both markers
+    packed onto a single line, the old implementation computed
+    region_start > region_end, which apply_region's own
+    ``text[:region_start] + ... + text[region_end:]`` would have turned
+    into duplicated, corrupted output rather than a clean replace. Must
+    now raise GenerationError before ever reaching that slice."""
+    skill_md_path = tmp_path / "SKILL.md"
+    text = f"before\n{generator.BEGIN_MARKER}{generator.END_MARKER}\nafter\n"
+    with pytest.raises(generator.GenerationError, match="own line"):
+        generator.apply_region(text, "NEW CONTENT", skill_md_path)
+
+
+def test_begin_marker_as_last_line_with_no_trailing_newline_fails_loudly_not_crashes(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Third disclosed consequence: with the begin marker as the file's
+    very last line and no trailing newline, the pre-fix implementation
+    crashed with an uncaught ValueError from
+    `text.index("\\n", begin_pos)` (`.index` raises when the target isn't
+    found, unlike `.find`). No end marker can legitimately follow a
+    truly-last-line begin marker, so this text also has zero end markers
+    -- the marker-count check reports that first, but the assertion that
+    matters is the same either way: no uncaught ValueError reaches the
+    caller."""
+    skill_md_path = tmp_path / "SKILL.md"
+    text = f"before\n{generator.BEGIN_MARKER}"
+    with pytest.raises(generator.GenerationError):
+        generator.apply_region(text, "NEW CONTENT", skill_md_path)
+
+
+def test_main_check_mode_flags_content_smuggled_onto_marker_line_as_drift(tmp_path: pathlib.Path) -> None:
+    """End-to-end reproduction of the finding's actual real-world impact:
+    a committed SKILL.md whose begin-marker line carries smuggled content
+    must fail `--check` (loudly, as a generation failure) rather than the
+    pre-fix behavior of silently reporting no drift because the smuggled
+    content sat outside the computed region."""
+    skill_dir = _make_skill(
+        tmp_path, "smuggled-marker-skill", _copy_full_contract(), begin_line=f"{generator.BEGIN_MARKER}## Injected"
+    )
+    assert generator.main(["--check", str(skill_dir)]) == 1

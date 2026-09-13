@@ -484,9 +484,37 @@ def _locate_markers(text: str, skill_md_path: Path) -> tuple[int, int]:
     region_end is the index at the start of the end marker's own line --
     exactly the substring apply_region replaces. Raises GenerationError
     (module docstring's own "Marker pair" section) when either marker does
-    not appear exactly once, or when the end marker precedes the begin
-    marker -- this generator never guesses which pair, or which ordering,
-    is the real one."""
+    not appear exactly once, when the end marker precedes the begin
+    marker, when either marker shares its own line with any other
+    content, or when the begin marker's own line has no trailing newline
+    (there would then be no region left to replace) -- this generator
+    never guesses which pair, which ordering, or which part of a marker's
+    own line is the real marker.
+
+    Adversarial-review finding (issue #1965): the marker search below only
+    ever matched the marker text's own bare substring position, with
+    nothing checking that the matched marker actually occupies its own
+    line. A begin marker with content appended on the same line (e.g.
+    ``<!-- gitapex:contract:begin -->## Precondition``) used to let
+    ``text.index("\\n", begin_pos)`` skip straight past the appended
+    content to that line's own end, silently placing the injected text
+    outside the computed region -- so a hostile or merely corrupted
+    ``SKILL.md`` could carry undetected content past both this function's
+    own region-replacement and ``--check``'s own drift comparison (a false
+    negative: ``--check`` reported clean on a file it should have
+    flagged). The same gap let two same-line markers compute
+    ``region_start > region_end``, corrupting ``apply_region``'s output,
+    and let a missing trailing newline after the begin marker crash with
+    an uncaught ``ValueError`` instead of this function's own controlled
+    ``GenerationError``. The per-marker own-line check below closes all
+    three at once: each marker's own line, stripped, must equal that
+    marker exactly -- which also proves ``begin_line_end`` below is never
+    ``-1`` by the time it is read: were the begin marker's own line
+    unterminated (no ``"\\n"`` before end of text), its own slice would
+    run to the text's own end and could only equal ``BEGIN_MARKER``
+    exactly if nothing else -- the already-located end marker included --
+    followed it, contradicting the marker-count/ordering checks above
+    that already require a distinct end marker at or after that point."""
     begin_positions = [match.start() for match in re.finditer(re.escape(BEGIN_MARKER), text)]
     end_positions = [match.start() for match in re.finditer(re.escape(END_MARKER), text)]
     if len(begin_positions) != 1 or len(end_positions) != 1:
@@ -498,9 +526,20 @@ def _locate_markers(text: str, skill_md_path: Path) -> tuple[int, int]:
     begin_pos, end_pos = begin_positions[0], end_positions[0]
     if end_pos < begin_pos:
         raise GenerationError(f"{skill_md_path}: the {END_MARKER!r} marker appears before the {BEGIN_MARKER!r} marker")
-    begin_line_end = text.index("\n", begin_pos) + 1
+    begin_line_end = 0
+    for marker, pos in ((BEGIN_MARKER, begin_pos), (END_MARKER, end_pos)):
+        line_start = text.rfind("\n", 0, pos) + 1
+        line_end = text.find("\n", pos)
+        own_line = text[line_start : len(text) if line_end == -1 else line_end]
+        if own_line.strip() != marker:
+            raise GenerationError(
+                f"{skill_md_path}: the {marker!r} marker must occupy its own line, with nothing "
+                f"else on it -- found {own_line!r}"
+            )
+        if marker is BEGIN_MARKER:
+            begin_line_end = line_end
     end_line_start = text.rfind("\n", 0, end_pos) + 1
-    return begin_line_end, end_line_start
+    return begin_line_end + 1, end_line_start
 
 
 def apply_region(text: str, region_text: str, skill_md_path: Path) -> str:
