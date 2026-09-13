@@ -30,10 +30,22 @@ task, nothing to depend on).
 
 Irreversibility classification: **not irreversible.** The task rewrites
 one YAML frontmatter string value in one tracked file. Nothing writes
-outside the repository, no migration runs, no data is deleted, and the
-dropped rationale text is not lost from the repo -- it already appears in
-this same file's own body (line 53). `git revert` of the merge commit
-restores the prior description exactly.
+outside the repository, no migration runs, no data is deleted.
+`git revert` of the merge commit restores the prior description exactly.
+
+Precision on "not lost from the repo" (corrected after Step 8 review):
+the dropped rationale clause names two things, at two different
+locations, not one. The `Decision 20, issue #1476` citation already
+appeared in this same file's own body (line 53) before this task ran.
+The `threat-model-and-authorization.md` pointer did not appear anywhere
+else in this file's body at the time this task ran -- it was restored by
+a separate Step 8 follow-up fix (see the Operations note below), not
+preserved by the original task. The third dropped clause, the negative
+"Never invoke directly for anything else..." constraint, is not
+preserved anywhere in this file's body at all; it is unchanged in the
+Sanctioned call sites section's own similar restriction below and in the
+sibling `.claude/agents/branch-plan-task.md`'s own frontmatter (a
+different file -- see Residual risk).
 
 `SKILL.md` classification: **no `SKILL.md` is created or edited.** The
 change touches `agents/branch-plan-task.md` and this plan file only, so
@@ -70,7 +82,17 @@ paraphrased:
    > section for the exact, current list (executing-a-branch-plan Step
    > 6's per-task dispatch, Step 8's refactor/simplify pass).
 
-   No other line in the file changes.
+   No other line changes as part of this task's own operation.
+
+   (Correction, added after Step 8 review: a separate follow-up fix,
+   made during Step 8's own review round rather than this task, also
+   changed the body paragraph at what are now lines 74-77 -- replacing a
+   "see the reference cited above" pointer, left dangling by this
+   task's own description edit, with an explicit citation of
+   `skills/executing-a-branch-plan/references/threat-model-and-authorization.md`.
+   That fix is recorded in the PR's own Execution log, not itemized as a
+   second task here, since it was a direct repair of a defect this task's
+   own edit introduced rather than a separately-planned operation.)
 
 ### Proof method
 
@@ -99,6 +121,16 @@ a direct YAML round-trip measurement, run before and after:
   quoting fix) in every agent-type listing that surfaces it -- that is
   the point of the issue author's decided approach, disclosed on the
   issue itself, not an incidental side effect.
+- `.claude/agents/branch-plan-task.md` -- a separate, project-local
+  deployment variant of this same agent definition, carrying its own
+  embedded enforcement hooks -- has the identical `#1476` YAML
+  plain-scalar truncation hazard in its own frontmatter `description:`
+  value. Confirmed still present as of this PR's own Step 8 review; not
+  touched by this task, since issue #1982 names only
+  `agents/branch-plan-task.md`. Routed to a new, separate issue rather
+  than folded into this fix (the two files are deliberately different
+  deployment variants, not accidental duplicates, and removing or
+  editing one is not this task's decision to make unilaterally).
 
 ## Wave assignment
 
