@@ -175,8 +175,20 @@ def test_rendered_permission_frontmatter_parses_back_to_declared_mapping() -> No
     explicitly here: review-persona's `REVIEW_PERSONA_PERMISSION`, and
     branch-plan-task's `None`. Asserting on the parsed mapping rather than
     on the emitted spelling is the point -- it is what a consumer of the
-    generated file actually does, and it catches both a block that fails
-    to parse and one that parses into the wrong keys.
+    generated file actually does.
+
+    What this proves, stated narrowly: SERIALIZATION FIDELITY. The
+    declared mapping survives the emit-and-parse round trip unchanged. It
+    does NOT prove the declared mapping is the right one -- the constant
+    sits on both sides of the comparison, so deleting `"lsp": "deny"` from
+    `REVIEW_PERSONA_PERMISSION` leaves this test (and the whole suite)
+    green, confirmed by running it. Five of the eleven denials
+    (`todowrite`, `question`, `external_directory`, `skill`, `lsp`) are
+    named by no assertion anywhere; the other six are pinned literally
+    below. That gap is pre-existing -- issue #1971's own scope is the
+    emission, not the denial set -- and closing it belongs with issue
+    #1963's tool-boundary parity work, where an expectation table
+    independent of this constant is the whole point.
     """
     import yaml
 
@@ -241,8 +253,15 @@ def test_yaml_scalar_refuses_what_double_quoting_cannot_carry(
     with pytest.raises(ValueError, match="cannot carry on one line"):
         sync._yaml_scalar("mcp\nedit")
 
-    # A backslash or a double quote is escaped, not refused.
+    # A backslash or a double quote is escaped, not refused. Asserted
+    # twice: the emitted spelling, and what a parser reads back from it.
+    # The spelling assertion alone would pass a wrong-but-parseable
+    # escaping (a swapped replace order emits a different literal, but so
+    # would an escaping that round-trips to the wrong string).
+    import yaml
+
     assert sync._yaml_scalar('a"b\\c') == '"a\\"b\\\\c"'
+    assert yaml.safe_load(f"{sync._yaml_scalar('a"b\\c')}: deny") == {'a"b\\c': "deny"}
 
     monkeypatch.setattr(sync, "REVIEW_PERSONA_PERMISSION", {"mcp\nedit": "deny"})
     project = _project(tmp_path)
@@ -251,6 +270,41 @@ def test_yaml_scalar_refuses_what_double_quoting_cannot_carry(
     assert sync.sync_agents(project, False, notes) == 0
     assert any("SKIP" in note and "cannot carry on one line" in note for note in notes), notes
     assert not (project / ".opencode" / "agents" / "review-persona.md").exists()
+
+
+def test_real_agent_files_render_to_loadable_frontmatter() -> None:
+    """The live-tree half of the round-trip: the real `agents/*.md` this
+    repository ships, rendered through the real generator, must produce
+    frontmatter a YAML parser loads.
+
+    The round-trip test above uses a synthetic probe source, so it never
+    sees the real files' own `description` values -- which
+    `_render_agent_copy` still interpolates raw, one line above the
+    permission block it now quotes. Both current descriptions are safe
+    plain scalars, so this passes today; it exists to fail the day one
+    stops being, rather than leaving the whole real-file path unparsed by
+    any test. Issue #1971 defers hardening that line itself.
+
+    The agent/permission pairs are named explicitly for the same reason
+    the round-trip test names them: `sync_agents` holds them in a local
+    `specs` tuple, not a module attribute. Naming the wrong permission for
+    an agent here would verify a configuration production never produces.
+    """
+    import yaml
+
+    for filename, permission in (
+        ("review-persona.md", sync.REVIEW_PERSONA_PERMISSION),
+        ("branch-plan-task.md", None),
+    ):
+        source = (REPO_ROOT / "agents" / filename).read_text(encoding="utf-8")
+        rendered = sync._render_agent_copy(source, f"agents/{filename}", permission)
+        loaded = yaml.safe_load(_frontmatter_block(rendered))
+        assert loaded["mode"] == "subagent", filename
+        assert isinstance(loaded["description"], str) and loaded["description"], filename
+        if permission is None:
+            assert "permission" not in loaded, filename
+        else:
+            assert loaded["permission"] == permission, filename
 
 
 def test_sync_script_imports_only_stdlib_modules() -> None:
