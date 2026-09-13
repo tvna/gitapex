@@ -57,8 +57,8 @@ PR-body skill-audit disclosure convention does not apply.
 
 ## Task 1: implement the defeat-test-mutation-coverage gate
 
-Source ACM rows (issue #1799's own table, quoted verbatim per this
-skill's own step-3 convention -- six rows, one target mechanism):
+Source ACM rows: issue #1799's own table, quoted verbatim per this
+skill's own step-3 convention -- six rows, one target mechanism.
 
 > [from #1733] Planned ops: A CI step or pre-commit check that
 > mutation-tests each named regex alternative/branch a new or changed
