@@ -38,7 +38,7 @@ never guesses which pair (or which ordering) is the real one, per issue
 
 **Rendering.** The six `spec.contract` children render, in schema-property
 order, as `## <Heading>` sections: `Precondition`, `Goal`, `Invariants`,
-`Gates`, `Escalation`, `Handoff` -- the first five heading strings taken
+`Gates`, `Escalation`, `Handoff` -- five of those six heading strings taken
 verbatim from `docs/glossary.md`'s own `Goal`/`Gates`/`Escalation`/
 `Handoff`/`Invariants` entries (added by the sibling task that landed those
 glossary entries first, so this script's heading strings are fixed only
@@ -349,31 +349,35 @@ def _render_gates(records: list[dict[str, object]]) -> str:
     # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     """Per-record format: `- <id> (<plane>, <state>)`.
 
-    Wording judgment call (disclosed per this task's own instructions): the
-    Branch Plan's own draft text for the parenthetical's second half was
-    "shipped with the plugin" (true) / "gitapex repository only" (false) --
-    a portability/distribution axis. But
+    Corrected wording (issue #1965 Step 8 aggregate review, refs #1965):
+    an earlier revision of this function rendered "already enforcing" /
+    "not yet enforcing", reasoning from an enforcement-state axis that
     skill-metadata.schema.json's own `$defs/contractGate.properties.shipped`
-    documents a different axis: "Whether this gate is already enforcing
-    (true) or still only declared/planned (false)". Rendering the Branch
-    Plan's literal words here would misrepresent what the field actually
-    means (a gate can ship entirely inside the plugin package while still
-    being merely declared/planned, or vice versa -- the two axes are
-    independent). This renders "already enforcing" / "not yet enforcing"
-    instead, preserving the same required two-state distinction while
-    matching the schema's own documented semantics. (This reading is also
-    consistent with, not contradicted by, issue #1965's own downstream
-    Task 6 cross-field rule tying `shipped: true` to a hook-plane gate
-    (pretooluse/posttooluse/stop): a hook-plane gate structurally blocks
-    execution in real time -- "already enforcing" in the strongest sense --
-    while a ci/local-plane gate is not yet wired to block that way, even if
-    it already runs.)"""
+    description used to state. That reading did not survive contact with
+    Task 6's own shipped-consistency rule
+    (`.github/scripts/gitapex_scan_ssot_schema.py`'s `find_contract_gate_drift`,
+    `shipped == True` exactly when `plane` is a hook plane): a `ci`-plane
+    gate that already runs on every PR -- `ssot-schema-drift` itself is one
+    -- would be REJECTED by that rule if declared `shipped: true` (the
+    factually accurate "already enforcing" reading), forcing `shipped:
+    false`, which this function would then have rendered as the false
+    statement "not yet enforcing" about a gate running on every single PR.
+    The schema's own field description was the error, not this function's
+    original Branch Plan draft text: issue #1965's own Proposed solution
+    1(c) states the field exists "so the generator needs no
+    repository-specific knowledge of which planes ship" -- a distribution
+    axis (does this gate's own plane ship to a consumer install, i.e. is
+    it a hook plane living under `hooks/`, or does it stay this
+    repository's own `ci`/`local` dev-time-only tooling), not a runtime
+    enforcement-state one. The schema description was corrected to match;
+    this function now renders that same axis, using the Branch Plan's own
+    original draft wording for it."""
     lines = ["## Gates", ""]
     if not records:
         lines.append("- none")
     else:
         for item in records:
-            state = "already enforcing" if item["shipped"] else "not yet enforcing"
+            state = "shipped with the plugin" if item["shipped"] else "gitapex repository only"
             lines.append(f"- {item['id']} ({item['plane']}, {state})")
     return "\n".join(lines)
 

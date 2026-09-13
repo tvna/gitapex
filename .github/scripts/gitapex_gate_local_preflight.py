@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One consolidated local pre-push / pre-PR-open gate runner (issue #876).
 
-This repository enforces 50 registered deterministic gates. Before this
+This repository enforces 87 registered deterministic gates. Before this
 script existed, roughly half of them had a perfectly good working-tree-only
 invocation and yet ran *only* as separate CI jobs, so an agent preparing a
 PR discovered gaps one CI job at a time on an already-open PR -- push, wait,
@@ -29,7 +29,7 @@ required exactly when ``planes`` contains ``"local"``, and ``local_exclusion``
 it does not. A new gate therefore cannot land in the registry without one or
 the other, and ``gitapex_scan_ssot_schema.py`` (itself one of the gates this
 runner runs) fails the build if it does. That is the drift-test branch issue
-#876's third criterion explicitly allows, and it is what keeps the 24
+#876's third criterion explicitly allows, and it is what keeps the 37
 currently-excluded gates readable as deliberate exclusions rather than as
 coverage this runner silently lost.
 
@@ -211,7 +211,6 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # combined measures roughly 24 s end to end (issue #1512's network-
 # exception-set-drift gate; different hardware than the figures
 # below, see this paragraph's own closing parenthetical -- the
-# prior 49-gate set measured roughly 24 s, the
 # prior 48-gate set measured roughly 24 s, the
 # prior 47-gate set measured roughly 22 s, the
 # prior 45-gate set measured roughly 14 s, the

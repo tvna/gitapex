@@ -32,9 +32,22 @@ declaring skill exists yet) -- proven instead by this file's own
 co-tested `tests/test_gitapex_skill_contract_drift.py`'s synthetic
 fixtures for the positive/negative drift cases.
 
+Also sweeps for the opposite gap (issue #1965 Step 8 aggregate adversarial
+review): a `skills/*/SKILL.md` that carries the generator's own marker
+pair (`<!-- gitapex:contract:begin/end -->`) but whose sidecar declares no
+`spec.contract` at all is invisible to every check above -- `discover_contracts`
+only ever looks at the sidecar side, so a hand-typed, stale, or corrupted
+marker pair in a non-target skill would sit unverified indefinitely, even
+though a reader (human or model) sees the same generator markers and
+reasonably assumes the region is gate-backed. `_orphaned_marker_skills`
+below closes that gap directly, without invoking the generator (which
+would itself refuse such a skill as "not a target" and exit 0, telling this
+caller nothing about the orphaned marker pair it just declined to check).
+
 Exit code: 0 when every discovered skill's committed `SKILL.md` contract
-region matches a fresh regeneration (including the zero-skills case), 1 on
-any drift, generation failure, or a `--check` subprocess that times out.
+region matches a fresh regeneration (including the zero-skills case) and no
+orphaned marker pair exists, 1 on any drift, an orphaned marker pair,
+generation failure, or a `--check` subprocess that times out.
 """
 
 # patch-coverage: WAIVED: this whole file is exercised via
@@ -61,6 +74,14 @@ import gitapex_scan_ssot_schema as ssot_schema
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 GENERATOR_SCRIPT = REPO_ROOT / "skills" / "drafting-a-skill" / "scripts" / "gitapex_generate_skill_contract.py"
+
+# Literal copies of the generator's own BEGIN_MARKER/END_MARKER (issue
+# #1965's own generator, gitapex_generate_skill_contract.py) -- not
+# imported, for the same "no cross-resolve into skills/drafting-a-skill/scripts"
+# mypy-grouping reason this module's own docstring already gives for
+# invoking that script as a subprocess rather than importing it.
+_BEGIN_MARKER = "<!-- gitapex:contract:begin -->"
+_END_MARKER = "<!-- gitapex:contract:end -->"
 
 # Generous relative to a single skill's own read/render/diff cost (no
 # network, no heavy dependency resolution beyond `uv run`'s own warm
@@ -91,10 +112,37 @@ def check_skill(skill_dir: Path) -> subprocess.CompletedProcess[str]:
     )
 
 
+def _orphaned_marker_skills(skills_dir: Path, contract_names: set[str]) -> list[str]:
+    # function-body-test-coverage: WAIVED: exercised via tests/test_gitapex_skill_contract_drift.py -- see check_skill's own identical waiver comment above for the full reason.
+    """Every `skills/<name>/SKILL.md` carrying the generator's own marker
+    pair whose sidecar is NOT in `contract_names` (i.e. declares no
+    `spec.contract`) -- see module docstring for why this closes a real
+    gap `discover_contracts`-driven checks alone cannot see. A read
+    failure on one `SKILL.md` is not this sweep's own concern -- a
+    corrupted or non-UTF-8 `SKILL.md` is `skill-metadata-schema-drift`'s
+    own finding to report, matching this repository's established
+    graceful-degradation convention for a sidecar read failure -- so it
+    is silently skipped here, not raised."""
+    orphaned: list[str] = []
+    for skill_md in sorted(skills_dir.glob("*/SKILL.md")):
+        name = skill_md.parent.name
+        if name in contract_names:
+            continue
+        try:
+            text = skill_md.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        if _BEGIN_MARKER in text or _END_MARKER in text:
+            orphaned.append(name)
+    return orphaned
+
+
 def main() -> int:
     # function-body-test-coverage: WAIVED: exercised via tests/test_gitapex_skill_contract_drift.py -- see check_skill's own identical waiver comment above for the full reason.
     contract_names = sorted(ssot_schema.discover_contracts())
-    if not contract_names:
+    orphaned = _orphaned_marker_skills(ssot_schema.SKILLS_DIR, set(contract_names))
+
+    if not contract_names and not orphaned:
         print("skill-contract-drift: no skills/*/ declares spec.contract yet -- nothing to check.")
         return 0
 
@@ -112,8 +160,17 @@ def main() -> int:
             print(result.stdout)
             print(result.stderr, file=sys.stderr)
 
-    if failed:
-        print(f"skill-contract-drift failed for: {', '.join(failed)}", file=sys.stderr)
+    if orphaned:
+        print(
+            f"skill-contract-drift: {', '.join(orphaned)} carries a contract marker pair "
+            "in SKILL.md but declares no spec.contract in its sidecar -- either declare "
+            "spec.contract and regenerate, or remove the stray marker pair.",
+            file=sys.stderr,
+        )
+
+    if failed or orphaned:
+        if failed:
+            print(f"skill-contract-drift failed for: {', '.join(failed)}", file=sys.stderr)
         return 1
     print(f"skill-contract-drift: {len(contract_names)} contract-declaring skill(s) match a fresh regeneration.")
     return 0

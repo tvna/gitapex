@@ -397,10 +397,12 @@ this specific concept -- fresh-term case, not a conflict resolution.
 
 Within `spec.contract`, the block (and its generated `## Gates` heading)
 naming the SSOT gate id(s) from `.gitapex/ssot.json` that verify a
-skill's own output, plus what the next skill downstream re-derives on
-its own rather than trusting. Distinct from the Acceptance Criteria
-Map's own `Proof method` column: that column names the verification
-method recorded per ACM row and is unchanged by this term.
+skill's own output. Distinct from the Acceptance Criteria Map's own
+`Proof method` column: that column names the verification method
+recorded per ACM row and is unchanged by this term. Also distinct from
+`Handoff`'s own `downstream` field (see that entry below) -- what the
+next skill downstream re-derives on its own rather than trusting is
+part of the handoff, not this block.
 
 Resolved by the repository owner, directly, on 2026-09-13, per the
 Resolve step: the design doc's own working name, `Proof`, collided with
@@ -425,8 +427,10 @@ Within `spec.contract`, the block (and its generated `## Handoff`
 heading) naming what happens to *execution* at the end of one skill's
 own procedure: the next skill in a pipeline (`next`, with an optional
 `fallback` and what it `carries`), any skill invoked inline mid-
-procedure when available (`inline`), and optional tooling (`optional`).
-Distinct from both other Handoff-named entries in this glossary, which
+procedure when available (`inline`), optional tooling (`optional`), and
+what the next skill downstream re-derives on its own rather than
+trusting (`downstream`). Distinct from both other Handoff-named entries
+in this glossary, which
 are person-facing, not skill-to-skill: `Portable Question Handoff`
 (preferring `AskUserQuestion` for a decision needing the *user's*
 input) and `Decision handoff` (a structured, evidence-backed

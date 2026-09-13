@@ -140,7 +140,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["id", "check", "onFail"],
-      "description": "One precondition checkpoint -- REFERENCES_ITEM_SUBKEYS-shaped, mirroring $defs/referenceItem's own one-record-per-item convention.",
+      "description": "One precondition checkpoint -- its own id/check/onFail subkeys, mirroring $defs/referenceItem's own one-record-per-item convention (that convention only, not referenceItem's REFERENCES_ITEM_SUBKEYS field names, which this block shares none of).",
       "properties": {
         "id": {
           "type": "string",
@@ -178,7 +178,7 @@
         "text": { "$ref": "#/$defs/contractProse" },
         "gate": {
           "type": ["string", "null"],
-          "description": "The id of a $defs/contractGate entry this invariant is enforced by, or null when no automated gate exists yet for it. Not itself resolved against spec.contract.gates[].id by this schema -- a same-document cross-reference no schema keyword here expresses, matching this file's own established schema/companion-scanner split for cross-file references."
+          "description": "The id of a real .gitapex/ssot.json registered gate this invariant is enforced by -- the same registry spec.contract.gates[].id itself resolves against -- or null when no automated gate exists yet for it. Not itself resolved by this schema -- a companion-scanner cross-reference no schema keyword here expresses, matching this file's own established schema/companion-scanner split for cross-file references."
         }
       }
     },
@@ -200,7 +200,7 @@
         },
         "shipped": {
           "type": "boolean",
-          "description": "Whether this gate is already enforcing (true) or still only declared/planned (false)."
+          "description": "Whether this gate's own plane ships to a consumer install (true exactly when plane is a hook plane -- pretooluse, posttooluse, or stop -- since only hooks/ ships to a consumer install) or stays this repository's own dev-time-only tooling (false for ci or local, which run only inside this repository's own CI/pre-push machinery) -- a distribution axis, not a runtime-enforcement-state one."
         }
       }
     },

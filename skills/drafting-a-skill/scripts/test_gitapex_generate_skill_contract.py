@@ -145,8 +145,8 @@ _EXPECTED_FULL_REGION = (
     "\n"
     "## Gates\n"
     "\n"
-    "- subagent-stop-verification (stop, already enforcing)\n"
-    "- skill-contract-drift (ci, not yet enforcing)\n"
+    "- subagent-stop-verification (stop, shipped with the plugin)\n"
+    "- skill-contract-drift (ci, gitapex repository only)\n"
     "\n"
     "## Escalation\n"
     "\n"
@@ -256,12 +256,12 @@ def test_empty_handoff_inline_and_optional_render_no_bullets() -> None:
 
 def test_gates_shipped_true_renders_already_enforcing() -> None:
     rendered = generator.render_contract_region(_FULL_CONTRACT)
-    assert "- subagent-stop-verification (stop, already enforcing)" in rendered
+    assert "- subagent-stop-verification (stop, shipped with the plugin)" in rendered
 
 
 def test_gates_shipped_false_renders_not_yet_enforcing() -> None:
     rendered = generator.render_contract_region(_FULL_CONTRACT)
-    assert "- skill-contract-drift (ci, not yet enforcing)" in rendered
+    assert "- skill-contract-drift (ci, gitapex repository only)" in rendered
 
 
 def test_invariants_with_gate_id_renders_gate_suffix() -> None:

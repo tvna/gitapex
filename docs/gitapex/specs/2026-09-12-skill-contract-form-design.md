@@ -174,7 +174,7 @@ spec:
     gates:                       # optional; absent/empty means "none declared"
       - id: some-ssot-gate-id
         plane: ci                # ci | local | pretooluse | posttooluse | stop
-        shipped: true            # already enforcing (true) vs. planned (false)
+        shipped: true            # ships to a consumer install (true, a hook plane) vs. gitapex repository only (false, ci/local)
     escalation:                  # optional; absent/empty means "none declared"
       - when: "condition"
         to: owner                # free kebab-case target; no closed enum yet
@@ -271,8 +271,12 @@ plain Markdown with no line wrapping:
   `gate` is a non-null string, `- <text> (prose-only)` when `gate` is
   `null`; an empty list renders `- none`.
 - **Gates**: one bullet per entry, `- <id> (<plane>, <state>)`, where
-  `<state>` is `already enforcing` when `shipped` is `true` and `not
-  yet enforcing` when `false`; an empty list renders `- none`.
+  `<state>` is `shipped with the plugin` when `shipped` is `true` and
+  `gitapex repository only` when `false` -- a distribution axis (does
+  this gate's own plane ship to a consumer install, i.e. is it a hook
+  plane, or does it stay this repository's own `ci`/`local` dev-time
+  tooling), not a runtime-enforcement-state one; an empty list renders
+  `- none`.
 - **Escalation**: a bullet list (`- <when> -> <to>`) for fewer than 3
   entries; a plain, unpadded Markdown table (`| When | To |`) for 3 or
   more; an empty list renders `- none` (correctly bullet-shaped, since

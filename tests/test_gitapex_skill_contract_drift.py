@@ -38,25 +38,16 @@ from __future__ import annotations
 import json
 import pathlib
 import subprocess
-import sys
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-
-# skills/drafting-a-skill/scripts is not one of [tool.pytest.ini_options]
-# pythonpath's own listed directories (nothing outside this one test file
-# needs a bare `import gitapex_generate_skill_contract`), so this follows
-# the same explicit sys.path.insert + bare-import convention
-# tests/test_gitapex_gate_plans_traceability.py and
-# tests/test_gitapex_compute_skill_audit_flags.py already use for
-# `.github/scripts` -- pointed at this one different directory instead.
-# pyproject.toml's own [tool.mypy] mypy_path carries the matching entry so
-# this same import resolves under the strict mypy invocation that checks
-# this directory ("tests + pythonpath-linked roots").
-sys.path.insert(0, str(REPO_ROOT / "skills" / "drafting-a-skill" / "scripts"))
-
-import gitapex_generate_skill_contract as generator  # noqa: E402
-import gitapex_run_skill_contract_check as runner  # noqa: E402 -- .github/scripts is already in pythonpath
-import pytest  # noqa: E402
+# skills/drafting-a-skill/scripts is one of [tool.pytest.ini_options]
+# pythonpath's own listed directories (issue #1965 Step 8 aggregate
+# review: added there alongside the matching [tool.mypy] mypy_path entry,
+# closing the mirror-comment gap that config's own comment already
+# states), so a bare `import gitapex_generate_skill_contract` resolves
+# with no explicit sys.path.insert needed here.
+import gitapex_generate_skill_contract as generator
+import gitapex_run_skill_contract_check as runner
+import pytest
 
 # ---------------------------------------------------------------------------
 # Generator-level positive/negative cases (Branch Plan Task 5's own Planned
@@ -161,17 +152,25 @@ def _completed(returncode: int, stdout: str = "", stderr: str = "") -> subproces
 
 
 def test_main_returns_zero_when_no_skill_declares_a_contract(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: pathlib.Path
 ) -> None:
+    # SKILLS_DIR monkeypatched to an empty tmp_path, not the real repository
+    # tree: the orphaned-marker sweep (added alongside this test's own
+    # discover_contracts stub) now runs on every main() call, and this
+    # test's own "zero" assertion must hold on its own merits, not on the
+    # incidental, unpinned fact that no real skills/*/SKILL.md happens to
+    # carry a stray marker pair today.
     monkeypatch.setattr(runner.ssot_schema, "discover_contracts", lambda: {})
+    monkeypatch.setattr(runner.ssot_schema, "SKILLS_DIR", tmp_path)
     assert runner.main() == 0
     assert "nothing to check" in capsys.readouterr().out
 
 
 def test_main_returns_zero_when_every_discovered_skill_passes(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: pathlib.Path
 ) -> None:
     monkeypatch.setattr(runner.ssot_schema, "discover_contracts", lambda: {"skill-a": {}, "skill-b": {}})
+    monkeypatch.setattr(runner.ssot_schema, "SKILLS_DIR", tmp_path)
     monkeypatch.setattr(runner, "check_skill", lambda skill_dir: _completed(0))
     rc = runner.main()
     out = capsys.readouterr().out
@@ -180,9 +179,10 @@ def test_main_returns_zero_when_every_discovered_skill_passes(
 
 
 def test_main_returns_one_and_names_only_the_failing_skill(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: pathlib.Path
 ) -> None:
     monkeypatch.setattr(runner.ssot_schema, "discover_contracts", lambda: {"skill-a": {}, "skill-b": {}})
+    monkeypatch.setattr(runner.ssot_schema, "SKILLS_DIR", tmp_path)
 
     def fake_check_skill(skill_dir: pathlib.Path) -> subprocess.CompletedProcess[str]:
         if skill_dir.name == "skill-b":
@@ -199,12 +199,13 @@ def test_main_returns_one_and_names_only_the_failing_skill(
 
 
 def test_main_treats_a_timed_out_skill_as_a_failure(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: pathlib.Path
 ) -> None:
     # A hung `--check` subprocess must still fail the gate loudly, matching
     # gitapex_run_precommit_mypy.py's own identical timeout-as-failure
     # contract for its per-group subprocess.
     monkeypatch.setattr(runner.ssot_schema, "discover_contracts", lambda: {"skill-a": {}})
+    monkeypatch.setattr(runner.ssot_schema, "SKILLS_DIR", tmp_path)
 
     def fake_check_skill(skill_dir: pathlib.Path) -> subprocess.CompletedProcess[str]:
         raise subprocess.TimeoutExpired(cmd="uv", timeout=runner._CHECK_TIMEOUT_SECONDS)
@@ -215,6 +216,65 @@ def test_main_treats_a_timed_out_skill_as_a_failure(
     assert rc == 1
     assert "skill-a" in err
     assert "timed out" in err
+
+
+def test_main_reports_an_orphaned_marker_skill_as_a_failure(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: pathlib.Path
+) -> None:
+    """main()'s own wiring of _orphaned_marker_skills into the pass/fail
+    verdict (not the sweep function itself, already pinned above) -- a
+    contract-declaring skill passes its own check, but a sibling orphaned
+    marker pair must still fail the whole gate and name itself in stderr."""
+    monkeypatch.setattr(runner.ssot_schema, "discover_contracts", lambda: {"skill-a": {}})
+    skills_dir = tmp_path / "skills"
+    orphan_dir = skills_dir / "orphan-skill"
+    orphan_dir.mkdir(parents=True)
+    (orphan_dir / "SKILL.md").write_text(
+        _SKILL_MD_TEMPLATE.format(name="orphan-skill", begin=generator.BEGIN_MARKER, end=generator.END_MARKER),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(runner.ssot_schema, "SKILLS_DIR", skills_dir)
+    monkeypatch.setattr(runner, "check_skill", lambda skill_dir: _completed(0))
+    rc = runner.main()
+    err = capsys.readouterr().err
+    assert rc == 1
+    assert "orphan-skill" in err
+    assert "declares no spec.contract" in err
+
+
+# ---------------------------------------------------------------------------
+# _orphaned_marker_skills (issue #1965 Step 8 aggregate adversarial review):
+# a SKILL.md carrying the generator's own marker pair whose sidecar declares
+# no spec.contract at all is invisible to every discover_contracts-driven
+# check above -- these three cases pin the sweep that closes that gap.
+# ---------------------------------------------------------------------------
+
+
+def test_orphaned_marker_skills_flags_a_marker_carrying_skill_with_no_contract(tmp_path: pathlib.Path) -> None:
+    skills_dir = tmp_path / "skills"
+    orphan_dir = skills_dir / "orphan-skill"
+    orphan_dir.mkdir(parents=True)
+    (orphan_dir / "SKILL.md").write_text(
+        _SKILL_MD_TEMPLATE.format(name="orphan-skill", begin=generator.BEGIN_MARKER, end=generator.END_MARKER),
+        encoding="utf-8",
+    )
+    assert runner._orphaned_marker_skills(skills_dir, set()) == ["orphan-skill"]
+
+
+def test_orphaned_marker_skills_does_not_flag_a_contract_declaring_skill(tmp_path: pathlib.Path) -> None:
+    skill_dir = _write_fixture_skill(tmp_path, "fixture-skill")
+    assert runner._orphaned_marker_skills(skill_dir.parent, {"fixture-skill"}) == []
+
+
+def test_orphaned_marker_skills_ignores_a_skill_with_no_markers_at_all(tmp_path: pathlib.Path) -> None:
+    skills_dir = tmp_path / "skills"
+    plain_dir = skills_dir / "plain-skill"
+    plain_dir.mkdir(parents=True)
+    (plain_dir / "SKILL.md").write_text(
+        "---\nname: plain-skill\ndescription: no markers here.\n---\n\n# plain-skill\n",
+        encoding="utf-8",
+    )
+    assert runner._orphaned_marker_skills(skills_dir, set()) == []
 
 
 def test_check_skill_invokes_uv_run_frozen_python3_generator_with_check_flag(
