@@ -69,8 +69,8 @@ assertion is affected).
 1. Add a module-level helper that returns a YAML-safe rendering of one
    scalar: unchanged when it is already a safe bare scalar, otherwise
    double-quoted with `\` and `"` escaped. A value carrying a character
-   that double-quoting alone cannot carry safely raises rather than
-   emitting a broken line. Standard library only -- `re`, never
+   this generator will not put on one line raises rather than emitting
+   something that would not read back. Standard library only -- `re`, never
    `yaml.safe_dump` (C1).
 2. Route `_render_agent_copy`'s permission lines through that helper, for
    both the key and the value (C3).
@@ -110,26 +110,43 @@ and an eleven-key deny-list against a default-allow runtime is not
 equivalent to the closed allow-list `agents/review-persona.md` declares.
 
 One further risk was recorded here and on the issue during the Step 5
-re-verification: `_render_agent_copy` emits `description:` through the
-same raw interpolation, so a description containing a colon-space or a
-space-hash would break the same frontmatter block. It was deferred to a
-follow-up issue on the stated ground that "both current descriptions are
-safe".
+re-verification: `_render_agent_copy` emits `description:` through raw
+interpolation, so a description containing a colon-space or a space-hash
+"would break the same frontmatter block". Deferred to a follow-up issue
+on the ground that "both current descriptions are safe".
 
-That ground was false, and Step 8's adversarial review caught it.
-`agents/branch-plan-task.md`'s description cites `issue #1476`; a plain
-YAML scalar ends at ` #`, so the generated copy already read back 615
-characters where 717 were declared -- 102 lost, silently, with no parse
-error. The description now goes through the same helper (commit
-`26a76988`), measured at 717/717 and 400/400 after the fix. This is not a
-widening of the narrow surface: it is the same defect, in the same
-function, one line up, and the deferral was an error of fact rather than
-a scope judgement.
+Step 8 went through two rounds on that one sentence, and the second
+round's measurement is the one that holds.
 
-Still deferred, and this time on measurement rather than assumption: a
-YAML simple key may not exceed 1024 characters (1024 parses, 1025 raises
-`ScannerError`), which `_yaml_scalar` does not enforce because the longest
-key this module declares is 18 characters.
+Round 1 read it as a generator defect, and the description was routed
+through `_yaml_scalar` (commit `26a76988`). Round 2 measured the result
+against what the SOURCE file itself parses to, and the change was a
+regression: raw interpolation agreed with the source in 4 of 4 shapes,
+the re-encoded form in 1 of 4. It double-encoded a description that was
+already a quoted scalar, and for `agents/branch-plan-task.md` it made
+OpenCode read 717 characters where Claude Code reads 615. Reverted.
+
+The reason raw interpolation is right is structural: the emitted line is
+byte-identical to the source line, so any conformant parser reads the
+same value from both. Re-encoding breaks exactly that.
+
+The 102 characters are genuinely lost -- but in the source file, for
+every runtime, Claude Code included (this session's own agent listing
+shows that description ending at "and (Decision 20, issue"). That is a
+defect in `agents/branch-plan-task.md`, not in this generator, and it is
+tracked on its own issue rather than repaired behind a mirror. What this
+branch adds is the test that would have caught the misdiagnosis: the
+live-tree test now asserts the generated copy parses to what the source's
+own frontmatter parses to, and it fails when the description is
+re-encoded.
+
+Two bounds stay unenforced, on measurement rather than assumption. A YAML
+key may not exceed 1024 characters (1024 parses, 1025 raises
+`ScannerError`); the longest key `_yaml_scalar` ever sees is 18. And a
+refusal leaves any previously generated copy in place while `--verify`
+still reports zero changes -- pre-existing behaviour of every `ValueError`
+path in `sync_agents`, and unreachable from the module constants that are
+once again this helper's only callers.
 
 ## Wave assignment
 

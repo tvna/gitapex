@@ -153,11 +153,11 @@ def test_agents_sync_rewrites_review_persona_for_opencode(tmp_path: pathlib.Path
     loaded = yaml.safe_load(_frontmatter_block(persona))
     assert loaded["permission"]["*mcp*"] == "deny"
     assert '"*mcp*": deny' in persona
-    # The description goes through the same helper, so it arrives quoted
-    # too. Asserted the same two ways, and for the same reason: a plain
-    # scalar carrying ` #` reads back truncated at the `#` with no error.
+    # The description is copied byte-for-byte from the source instead, so
+    # it arrives unquoted. Both are asserted: the spelling pins the
+    # verbatim copy, the parse pins what a consumer reads back from it.
     assert loaded["description"] == "Read-only review."
-    assert 'description: "Read-only review."' in persona
+    assert "description: Read-only review." in persona
     assert "mode: subagent" in persona
     assert "Body." in persona
     # Sources stay Claude-canonical: never rewritten.
@@ -250,12 +250,13 @@ def test_yaml_scalar_defeats_a_character_denylist_and_leaves_safe_keys_bare() ->
     assert sync._yaml_scalar("*mcp*") == '"*mcp*"'
 
 
-def test_yaml_scalar_refuses_what_double_quoting_cannot_carry(
+def test_yaml_scalar_refuses_what_it_will_not_put_on_one_line(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A scalar carrying a line break cannot be made safe by quoting alone,
-    so the helper raises instead of emitting a line that will not parse
-    back. `sync_agents` already catches ValueError, so the script stays
+    so the helper raises instead of emitting a line that will not read
+    back unchanged -- PyYAML folds a raw break inside a double-quoted
+    value to a space rather than rejecting it, which is worse, not better. `sync_agents` already catches ValueError, so the script stays
     fail-soft by contract: a SKIP note, never a broken generated file."""
     with pytest.raises(ValueError, match="refuses to emit on one line"):
         sync._yaml_scalar("mcp\nedit")
@@ -285,13 +286,19 @@ def test_real_agent_files_render_to_loadable_frontmatter() -> None:
     frontmatter a YAML parser loads.
 
     The round-trip test above uses a synthetic probe source, so it never
-    sees the real files' own `description` values. That gap was not
-    theoretical: `agents/branch-plan-task.md`'s description cites
-    `issue #1476`, and a plain YAML scalar ends at ` #` -- so the
-    generated copy read back 102 characters short, with no parse error
-    anywhere to notice it. This test is what makes that loud, and it is
-    why `_render_agent_copy` now routes the description through
-    `_yaml_scalar` too, not only the permission block (#1971).
+    sees the real files' own `description` values, and what must hold of
+    those is not that they parse -- it is that they parse to the SAME
+    thing the source's own frontmatter does. `_render_agent_copy` copies
+    the description line byte-for-byte to get that, and this test is what
+    holds it there: routing the line through `_yaml_scalar` instead, as
+    an earlier revision of this branch did, re-encodes an already-encoded
+    scalar and makes this assertion fail on `branch-plan-task.md`.
+
+    Fidelity is the contract, not correctness of the source: that file's
+    description cites `issue #1476`, a plain YAML scalar ends at ` #`, and
+    so BOTH runtimes read it 102 characters short. That is a defect in the
+    source file, tracked separately; a generator that quietly showed
+    OpenCode more than Claude sees would hide it rather than fix it.
 
     The agent/permission pairs are named explicitly for the same reason
     the round-trip test names them: `sync_agents` holds them in a local
@@ -305,15 +312,15 @@ def test_real_agent_files_render_to_loadable_frontmatter() -> None:
         ("branch-plan-task.md", None),
     ):
         source = (REPO_ROOT / "agents" / filename).read_text(encoding="utf-8")
-        parsed = sync._split_frontmatter(source)
-        assert parsed is not None, filename
         rendered = sync._render_agent_copy(source, f"agents/{filename}", permission)
         loaded = yaml.safe_load(_frontmatter_block(rendered))
-        # Equality against the declared value, not `isinstance(str)`: a
-        # description carrying ` #` parses back as a non-empty string that
-        # has silently lost everything from the `#` onward, so a type check
-        # passes on exactly the corruption this test exists to catch.
-        assert loaded["description"] == parsed[0]["description"], filename
+        # Against the source's own YAML parse -- not against
+        # `_split_frontmatter`'s regex capture, which would put this
+        # module on both sides of the comparison and pass on a value the
+        # two runtimes disagree about.
+        assert loaded["description"] == yaml.safe_load(_frontmatter_block(source))["description"], filename
+        # Emitted unconditionally, and asserted nowhere else in the suite.
+        assert loaded["hidden"] is True, filename
         if permission is None:
             assert "permission" not in loaded, filename
         else:
@@ -337,7 +344,6 @@ def test_sync_script_imports_only_stdlib_modules() -> None:
     `*mcp*` quoting fix depends on -- would otherwise be unguarded (#1971).
     """
     import ast
-    import sys
 
     source = (REPO_ROOT / "hooks" / "gitapex_sync_opencode.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
@@ -355,8 +361,14 @@ def test_sync_script_imports_only_stdlib_modules() -> None:
     # The walk above sees only `import` statements, and the shape an
     # optional-dependency shim actually takes is a call: measured, adding
     # `import importlib` + `importlib.import_module("yaml")` leaves every
-    # name in `roots` a stdlib one, so the assertion above still passes.
-    # `__import__("yaml")` adds no name at all. Both are refused here.
+    # name in `roots` a stdlib one, so the assertion above still passes,
+    # and `__import__("yaml")` adds no name at all. Both are refused here.
+    #
+    # Stated narrowly, the way the round-trip test above states its own
+    # limit: this is name equality against two identifiers, not a proof of
+    # anything. An alias (`from importlib import import_module as _load`),
+    # a `getattr`, or an `exec` string all walk past it. It closes the two
+    # shapes a maintainer would actually reach for, and nothing more.
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue

@@ -130,16 +130,18 @@ def _yaml_scalar(text: str) -> str:
 
     Returned byte-identical when it is already safe bare, so ``bash`` stays
     ``bash``; otherwise double-quoted with backslash and ``"`` escaped, so
-    ``*mcp*`` becomes ``"*mcp*"``. Raises ``ValueError`` for a scalar that
-    double-quoting alone cannot carry, rather than emitting a line that
-    would not parse back -- ``sync_agents`` turns that into a SKIP note, so
-    the script stays fail-soft without ever writing a broken file.
+    ``*mcp*`` becomes ``"*mcp*"``. Raises ``ValueError`` for a scalar this
+    generator refuses to put on one line, rather than emitting something
+    that would not read back -- ``sync_agents`` turns that into a SKIP
+    note, so the script stays fail-soft without ever writing a broken
+    file.
 
-    One bound is not enforced here because nothing can reach it: a YAML
-    simple key may not exceed 1024 characters, quotes included, and past
-    that PyYAML raises on the *reader's* side, not this one. Measured at
-    1024 (parses) and 1025 (``ScannerError``); the longest key this module
-    declares is 18 characters.
+    Callers are the permission mapping only, whose keys and values are
+    module constants: every input is known at import time, so the refusal
+    path is unreachable in production and one bound goes unenforced. A
+    YAML *key* may not exceed 1024 characters, quotes included -- measured
+    at 1024 (parses) and 1025 (``ScannerError``, raised by the reader, not
+    here) -- and the longest key declared below is 18.
     """
     if _SAFE_BARE_SCALAR_RE.match(text) and text.lower() not in _YAML_TYPED_WORDS:
         return text
@@ -274,8 +276,7 @@ def sync_skills(project_dir: Path, verify_only: bool, notes: list[str]) -> int:
 
 def _render_agent_copy(source_text: str, source_rel: str, permission: dict[str, str] | None) -> str:
     """Rebuild an agent definition for OpenCode: keep ``description`` and
-    the body verbatim (the description quoted where a plain scalar would
-    not read back unchanged), drop Claude-only frontmatter keys, add
+    the body verbatim, drop Claude-only frontmatter keys, add
     ``mode: subagent`` + ``hidden: true`` (+ the permission mapping when
     given). The header line records provenance so a hand-edit is never
     mistaken for source."""
@@ -285,10 +286,13 @@ def _render_agent_copy(source_text: str, source_rel: str, permission: dict[str, 
     fields, body = parsed
     if "description" not in fields:
         raise ValueError(f"{source_rel} frontmatter carries no description")
-    # Through the same helper as a permission scalar, for the same reason:
-    # a description carrying ` #` (a real one does -- an issue reference)
-    # is read back truncated at the `#` with no parse error to notice.
-    out = ["---", f"description: {_yaml_scalar(fields['description'])}", "mode: subagent", "hidden: true"]
+    # Emitted byte-identical to the source line, deliberately, and NOT
+    # through `_yaml_scalar`: the source line is already a YAML scalar, so
+    # copying it verbatim is what makes the two runtimes read the same
+    # value. Re-encoding it does the opposite -- measured, it diverges for
+    # a description that is already quoted (double-encoded) and for one a
+    # plain scalar truncates (OpenCode would then see more than Claude).
+    out = ["---", f"description: {fields['description']}", "mode: subagent", "hidden: true"]
     if permission is not None:
         out.append("permission:")
         for key, value in permission.items():
