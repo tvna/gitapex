@@ -457,7 +457,11 @@ def _run_git(
             cwd=cwd,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired, ValueError):
+    except (  # except-fail-open: WAIVED: None is this module's own explicit "could not resolve" signal -- every caller (handle_bash, via _resolve_owner_repo/_resolve_current_branch) treats None as unresolved and falls through to the unconditional push_detected=true reset, fail-closed at the caller, never a silent clean/pass. Re-raising would crash this PostToolUse hook -- which must never block an already-executed tool call -- over an expected environment condition (git absent, a non-git checkout, a subprocess timeout).
+        OSError,
+        subprocess.TimeoutExpired,
+        ValueError,
+    ):
         return None
     if result.returncode != 0:
         return None
@@ -517,13 +521,17 @@ def _branch_has_open_pr(
         with opener(request) as response:
             status = int(response.status)
             body = response.read().decode("utf-8", errors="replace")
-    except (urllib.error.URLError, OSError, ValueError):
+    except (  # except-fail-open: WAIVED: None here means "could not confirm open-PR status" -- handle_bash treats None the same as any other unresolved step and falls through to the fail-closed push_detected=true reset, never silently reading a network/API failure as "no PR exists". Re-raising would crash this PostToolUse hook over an expected, retriable-elsewhere condition (network failure, malformed response), the same posture gitapex_check_pr_duplicate_issue.py's own fetch already takes for its own fail-closed deny.
+        urllib.error.URLError,
+        OSError,
+        ValueError,
+    ):
         return None
     if not (200 <= status < 300):
         return None
     try:
         data = json.loads(body) if body else []
-    except json.JSONDecodeError:
+    except json.JSONDecodeError:  # except-fail-open: WAIVED: same reasoning as the fetch except-clause immediately above -- a malformed (non-JSON) response body is treated as "could not confirm", not a crash, and handle_bash's own fail-closed reset covers it identically.
         return None
     if not isinstance(data, list):
         return None

@@ -2,7 +2,9 @@
 ``hooks/gitapex_check_post_review_obligation_tracker.py``'s ``process``
 function (issue #1823, closing issue #1178's own
 ``detection-logic-property-coverage`` gap for the two ``.endswith()``
-string-comparison dispatch checks this issue added at lines 471 and 473).
+string-comparison dispatch checks this issue added at lines 471 and 473),
+and for ``_resolve_owner_repo``'s own ``_GITHUB_REMOTE_RE`` regex (issue
+#1631, closing the same gap for that new detection-logic call site).
 
 The two new dispatch predicates are::
 
@@ -28,7 +30,9 @@ Reproducibility: ``derandomize=True`` with an explicit ``max_examples`` and
 from __future__ import annotations
 
 import os
+import subprocess
 import tempfile
+from typing import Any
 
 import gitapex_check_post_review_obligation_tracker as tracker
 from hypothesis import given, settings
@@ -158,3 +162,66 @@ def test_any_prefix_with_resolve_suffix_dispatches_and_updates_state(prefix: str
                 os.environ["TMPDIR"] = old
     assert result is not None
     assert result.get("resolve_calls") == 1
+
+
+# --- _resolve_owner_repo's own _GITHUB_REMOTE_RE regex (issue #1631) -----
+
+#: Letters, digits, hyphen, underscore only -- deliberately excludes '.'
+#: and '/' so a generated owner/repo name can never itself be ambiguous
+#: against the regex's own '.git' suffix or '/' separator handling; that
+#: narrower edge (a literal '.' inside a repo name colliding with the
+#: optional trailing '.git') is a known, accepted limitation of this
+#: heuristic parser, not something this property is trying to pin.
+_OWNER_REPO_CHARS = st.characters(whitelist_categories=("Ll", "Lu", "Nd"), whitelist_characters="-_")
+_owner_repo_strategy = st.text(alphabet=_OWNER_REPO_CHARS, min_size=1, max_size=20)
+
+
+def _fake_runner_with_stdout(output: str) -> Any:
+    def runner(args: list[str], **_kwargs: Any) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args, 0, stdout=output + "\n", stderr="")
+
+    return runner
+
+
+@_PROPERTIES
+@given(
+    owner=_owner_repo_strategy,
+    repo=_owner_repo_strategy,
+    use_ssh=st.booleans(),
+    has_dot_git=st.booleans(),
+)
+def test_resolve_owner_repo_parses_https_and_ssh_remotes(
+    owner: str, repo: str, use_ssh: bool, has_dot_git: bool
+) -> None:
+    """**Model-based, detects a real gap the fixed example tests cannot:**
+    ``_resolve_owner_repo`` must correctly parse both remote URL forms
+    GitHub itself hands out -- HTTPS
+    (``https://github.com/<owner>/<repo>[.git]``) and SSH
+    (``git@github.com:<owner>/<repo>[.git]``) -- across a wide space of
+    owner/repo name shapes, with or without a trailing ``.git`` suffix.
+
+    **Confirmed to have teeth:** a regex requiring a literal trailing
+    slash after the repo name fails every ``has_dot_git=False`` case
+    generated here (GitHub's own URLs carry no trailing slash without
+    ``.git``); a regex anchored only to the ``https://`` form fails
+    every ``use_ssh=True`` case; a regex that does not strip an optional
+    ``.git`` suffix fails every ``has_dot_git=True`` case, since the
+    returned repo name would then carry the literal suffix instead of
+    matching ``repo`` exactly."""
+    suffix = ".git" if has_dot_git else ""
+    url = f"git@github.com:{owner}/{repo}{suffix}" if use_ssh else f"https://github.com/{owner}/{repo}{suffix}"
+    result = tracker._resolve_owner_repo("/tmp/does-not-matter", _fake_runner_with_stdout(url))
+    assert result == (owner, repo)
+
+
+@_PROPERTIES
+@given(text=st.text(max_size=60).filter(lambda s: "github.com" not in s))
+def test_resolve_owner_repo_returns_none_for_non_github_remotes(text: str) -> None:
+    """**Confirmed to have teeth (negation of the property above):** any
+    remote URL string that never mentions ``github.com`` at all -- an
+    empty string, a bare hostname, a GitLab/Bitbucket URL, arbitrary
+    text -- must resolve to ``None``, never a fabricated owner/repo pair.
+    Pairs with the property above to bracket ``_GITHUB_REMOTE_RE``'s own
+    match/no-match contract."""
+    result = tracker._resolve_owner_repo("/tmp/does-not-matter", _fake_runner_with_stdout(text))
+    assert result is None
