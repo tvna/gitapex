@@ -152,6 +152,7 @@ class GenerationError(Exception):
 
 
 def _read_utf8_text(path: Path) -> str:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     """Read `path` as UTF-8 text, or raise GenerationError naming `path`
     and the failure -- the one read boundary every file this generator
     touches goes through, mirroring the identical helper already
@@ -173,18 +174,21 @@ def _read_utf8_text(path: Path) -> str:
 
 
 def _require_dict(value: object, sidecar_path: Path, what: str) -> dict[str, object]:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     if not isinstance(value, dict):
         raise GenerationError(f"{sidecar_path}: {what} must be a mapping, got {type(value).__name__}")
     return value
 
 
 def _require_nonempty_str(value: object, sidecar_path: Path, what: str) -> str:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     if not isinstance(value, str) or not value:
         raise GenerationError(f"{sidecar_path}: {what} must be a non-empty string, got {value!r}")
     return value
 
 
 def _require_list(value: object, sidecar_path: Path, what: str) -> list[object]:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     """None (the key absent) reads as an empty list -- spec.contract's own
     array children (precondition/invariants/gates/escalation) and
     goal.constraints/handoff.inline/handoff.optional are all optional per
@@ -199,6 +203,7 @@ def _require_list(value: object, sidecar_path: Path, what: str) -> list[object]:
 
 
 def _validate_contract(contract: dict[str, object], sidecar_path: Path) -> None:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     """Enough structural validation for every _render_* helper below to
     index the contract's fields directly, without re-deriving the same
     presence/type checks at each call site. Full schema conformance
@@ -260,6 +265,7 @@ def _validate_contract(contract: dict[str, object], sidecar_path: Path) -> None:
 
 
 def load_sidecar_contract(skill_dir: Path) -> dict[str, object] | None:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     """The parsed `spec.contract` mapping from `<skill_dir>/metadata/
     gitapex.yaml`, or None when this skill declares no contract at all --
     the "not a target" outcome (module docstring's own section), which
@@ -271,7 +277,14 @@ def load_sidecar_contract(skill_dir: Path) -> dict[str, object] | None:
     text = _read_utf8_text(sidecar_path)
     try:
         manifest = yaml.safe_load(text)
-    except yaml.YAMLError as error:
+    except (yaml.YAMLError, RecursionError, MemoryError) as error:
+        # RecursionError/MemoryError alongside yaml.YAMLError: safe_load
+        # blocks arbitrary object construction but still resolves
+        # anchors/aliases, so a hostile or malformed sidecar can still
+        # exhaust stack or memory via alias expansion -- the same risk
+        # gitapex_check_skill_shape.py's own sidecar read already guards
+        # against (skills/evaluating-skill-quality/scripts/
+        # gitapex_check_skill_shape.py, check_shape()'s manifest_raw read).
         raise GenerationError(f"{sidecar_path}: is not valid YAML: {error}") from error
     if not isinstance(manifest, dict):
         raise GenerationError(f"{sidecar_path}: must parse to a YAML mapping, got {type(manifest).__name__}")
@@ -291,6 +304,7 @@ def load_sidecar_contract(skill_dir: Path) -> dict[str, object] | None:
 
 
 def _render_precondition(records: list[dict[str, object]]) -> str:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     lines = ["## Precondition", ""]
     if not records:
         lines.append("- none")
@@ -301,6 +315,7 @@ def _render_precondition(records: list[dict[str, object]]) -> str:
 
 
 def _render_goal(goal: dict[str, object]) -> str:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     lines = [
         "## Goal",
         "",
@@ -314,6 +329,7 @@ def _render_goal(goal: dict[str, object]) -> str:
 
 
 def _render_invariants(records: list[dict[str, object]]) -> str:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     """Per-record suffix: `(gate: <id>)` when `gate` is a non-null string,
     `(prose-only)` when `gate` is null -- the Branch Plan's own required
     format, matched verbatim (no wording judgment call needed here, unlike
@@ -330,6 +346,7 @@ def _render_invariants(records: list[dict[str, object]]) -> str:
 
 
 def _render_gates(records: list[dict[str, object]]) -> str:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     """Per-record format: `- <id> (<plane>, <state>)`.
 
     Wording judgment call (disclosed per this task's own instructions): the
@@ -362,6 +379,7 @@ def _render_gates(records: list[dict[str, object]]) -> str:
 
 
 def _render_escalation(records: list[dict[str, object]]) -> str:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     """Bullet list (`- <when> -> <to>`) for fewer than 3 records; a plain,
     unpadded Markdown table (`| When | To |`) for 3 or more -- the Branch
     Plan's own stated threshold. An empty list renders `- none` (the same
@@ -382,6 +400,7 @@ def _render_escalation(records: list[dict[str, object]]) -> str:
 
 
 def _render_handoff(handoff: dict[str, object]) -> str:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     """Singular-block bullet lines, one field per line (module docstring's
     own rendering rules): the required `next.skill` always renders (with
     an optional `(fallback: ...)` parenthetical when `next.fallback` is
@@ -428,6 +447,7 @@ def _render_handoff(handoff: dict[str, object]) -> str:
 
 
 def render_contract_region(contract: dict[str, object]) -> str:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     """The full contract-region text (no leading/trailing blank lines,
     sections joined by exactly one blank line each) -- what sits strictly
     between the begin/end marker lines once apply_region wraps it. Never
@@ -458,6 +478,7 @@ def render_contract_region(contract: dict[str, object]) -> str:
 
 
 def _locate_markers(text: str, skill_md_path: Path) -> tuple[int, int]:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     """Returns (region_start, region_end): region_start is the index right
     after the begin marker's own line (its own trailing newline included),
     region_end is the index at the start of the end marker's own line --
@@ -483,6 +504,7 @@ def _locate_markers(text: str, skill_md_path: Path) -> tuple[int, int]:
 
 
 def apply_region(text: str, region_text: str, skill_md_path: Path) -> str:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     """`text` (a full SKILL.md's current content) with the marker-delimited
     region replaced by `region_text`, wrapped in exactly one blank line on
     each side -- the marker lines themselves are never touched."""
@@ -491,6 +513,7 @@ def apply_region(text: str, region_text: str, skill_md_path: Path) -> str:
 
 
 def compute_rendered_skill_md(skill_dir: Path) -> tuple[str, str] | None:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     """(rendered_full_text, original_full_text) for `<skill_dir>/SKILL.md`,
     or None when this skill is not a generator target (no spec.contract
     declared -- load_sidecar_contract's own docstring). SKILL.md is
@@ -513,6 +536,7 @@ def compute_rendered_skill_md(skill_dir: Path) -> tuple[str, str] | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
         "skill_dir",
