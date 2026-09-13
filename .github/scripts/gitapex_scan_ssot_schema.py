@@ -21,6 +21,22 @@ This scanner is the drift gate shipped alongside that registry. It fails if:
 - any ``gates[].id`` or ``policy_sources[].id`` is used more than once (an
   unnoticed duplicate would silently make one entry invisible to every
   cross-reference this scanner performs); or
+- a skills/*/metadata/gitapex.yaml sidecar's own ``spec.contract.
+  invariants[].gate`` (when not ``null``) or ``spec.contract.gates[].id``
+  value does not resolve to a real ``gates[].id`` in this same
+  ``.gitapex/ssot.json`` registry (``find_contract_gate_drift`` -- issue
+  #1965); or
+- such a ``spec.contract.gates[]`` entry that DOES resolve declares a
+  ``plane`` that is not one of that same ssot gate's own ``planes[]``, or
+  a ``shipped`` value inconsistent with the hook-plane/non-hook-plane
+  rule (same function, since only ``skills/`` and ``hooks/`` ship to a
+  consumer install); or
+- a single sidecar's own ``spec.contract.precondition[].id`` values are
+  not unique within that one contract
+  (``find_contract_precondition_duplicate_ids``); or
+- a ``spec.contract.handoff.next.skill``/``fallback``, or an
+  ``inline[]``/``optional[]`` entry, does not name a real
+  ``skills/<name>/`` directory (``find_contract_handoff_drift``); or
 - any ``gates[].local_invocation``/``local_stdin`` argv token that is
   unambiguously a repository path does not exist as a real file, or escapes
   the repository root (issue #876 -- see ``find_local_invocation_drift``);
@@ -57,6 +73,24 @@ string), for the same reason as before: a schema-invalid entry is
 ``find_schema_violations``'s finding to report, not a reason for this
 function to raise past it.
 
+The three contract checks above read every skills/*/metadata/gitapex.yaml
+sidecar that declares a non-empty ``spec.contract`` block via
+``discover_contracts``, adapted from -- not imported from --
+``gitapex_scan_skill_metadata_schema.py``'s own sidecar-discovery helpers
+(``discover_skill_dirs``/``_resolves_to_sibling_skill``). That sibling
+file's own ``SIDECAR_RELATIVE_PATH`` comment documents why: every
+``.github/scripts/*.py`` script that reads this sidecar hardcodes its own
+copy of this path/discovery logic instead, so each script stays
+independently runnable rather than depending on another script's own
+module being importable. A sidecar that is missing, unreadable, not valid
+YAML, or declares no ``spec.contract`` block contributes nothing to these
+three checks -- validating that shape is ``skill-metadata-schema-drift``'s
+job (``gitapex_scan_skill_metadata_schema.py``), not this scanner's;
+silently skipping it here mirrors this module's own ``_parse_registry``
+graceful-degradation convention (defer to the checker that actually owns
+the shape) rather than risking a second, possibly-diverging error report
+for the same root cause.
+
 It does not check the converse -- a real gate script with no registry entry
 at all (under-registration, a "shadow gate") is a known, accepted gap; see
 the PR that introduced this scanner for why that was left as a follow-up
@@ -82,9 +116,40 @@ import _gitapex_argv_safety
 import _gitapex_schema_validation
 from pydantic import BaseModel, ConfigDict, ValidationError
 
+try:
+    import yaml
+except ModuleNotFoundError as error:
+    # why-not(#1076): mirrors gitapex_scan_skill_metadata_schema.py's own
+    # __name__-gated guard verbatim in shape -- only convert to SystemExit
+    # when run as a script, so pytest collecting this module (e.g. `import
+    # gitapex_scan_ssot_schema as drift`) never hits a bare SystemExit,
+    # which is not a plain Exception and would surface as INTERNALERROR
+    # instead of a clean collection error. error.name narrows further to
+    # "PyYAML itself is absent"; a corrupted partial install re-raises
+    # unmodified rather than being misdiagnosed by this guard's own
+    # remediation text.
+    if error.name != "yaml" or __name__ != "__main__":
+        raise
+    print(
+        f"error: {error}. This script requires PyYAML, which is not on "
+        "the import path -- install the dev dependency group first: "
+        "uv sync --group dev",
+        file=sys.stderr,
+    )
+    raise SystemExit(2) from error
+
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 SCHEMA_PATH = REPO_ROOT / ".gitapex" / "ssot.schema.json"
+SKILLS_DIR = REPO_ROOT / "skills"
+# Mirrors gitapex_scan_skill_metadata_schema.py's own SIDECAR_RELATIVE_PATH
+# constant -- duplicated as a literal here rather than imported, per that
+# file's own documented convention (see this module's own docstring).
+SIDECAR_RELATIVE_PATH = "metadata/gitapex.yaml"
+# The plane names that actually ship to a consumer install (skills/ and
+# hooks/ only) -- gates[].shipped must be true exactly when plane is one
+# of these, per issue #1965's own stated reasoning.
+_HOOK_PLANES = frozenset({"pretooluse", "posttooluse", "stop"})
 
 
 class RegistryReadError(Exception):
@@ -537,13 +602,216 @@ def find_duplicate_ids(instance: Any) -> list[str]:
     return findings
 
 
+def discover_skill_dirs(skills_dir: pathlib.Path = SKILLS_DIR) -> list[pathlib.Path]:
+    """Every skills/<name>/ directory with a real SKILL.md, sorted. Mirrors
+    gitapex_scan_skill_metadata_schema.py's own discover_skill_dirs (not
+    imported -- see this module's own docstring for why each
+    .github/scripts/*.py script that reads this sidecar keeps its own
+    copy)."""
+    if not skills_dir.is_dir():
+        return []
+    return sorted(p.parent for p in skills_dir.glob("*/SKILL.md") if p.is_file())
+
+
+def _resolves_to_sibling_skill(name: str, skills_dir: pathlib.Path) -> bool:
+    """Whether ``name`` names an existing sibling skill directory: a bare
+    path component (no separator, not ``.``/``..``) whose ``skills_dir /
+    name`` also contains a real ``SKILL.md``. Mirrors
+    gitapex_scan_skill_metadata_schema.py's own
+    ``_is_bare_skill_name``/``_resolves_to_sibling_skill`` pair (not
+    imported -- see this module's own docstring). The bare-name guard
+    matters for the same reason that file's own docstring gives: pathlib's
+    ``/`` operator discards its left operand when the right side is
+    absolute, so an unguarded ``(skills_dir / name).is_dir()`` could read
+    an absolute or ``../``-escaping reference as resolving whenever the
+    escaped path happens to exist on disk."""
+    if name in ("", ".", "..") or "/" in name or "\\" in name:
+        return False
+    return (skills_dir / name / "SKILL.md").is_file()
+
+
+def _contract_of(instance: Any) -> dict[str, Any] | None:
+    """Extract a non-empty ``spec.contract`` block from a parsed sidecar
+    instance, or ``None`` when absent, non-dict, or empty -- the same
+    isinstance-guard style ``find_duplicate_ids`` already applies to raw
+    dict traversal in this module. Deliberately permissive about what
+    ``instance``/``spec``/``contract`` may otherwise contain: validating
+    the shape of a sidecar is not this scanner's job (see this module's
+    own docstring), so a value it cannot recognize is treated as "nothing
+    to check here," never as a crash."""
+    if not isinstance(instance, dict):
+        return None
+    spec = instance.get("spec")
+    if not isinstance(spec, dict):
+        return None
+    contract = spec.get("contract")
+    return contract if isinstance(contract, dict) and contract else None
+
+
+def discover_contracts(skills_dir: pathlib.Path = SKILLS_DIR) -> dict[str, dict[str, Any]]:
+    """Every skills/<name>/metadata/gitapex.yaml sidecar that declares a
+    non-empty spec.contract block, keyed by skill directory name.
+
+    A sidecar that is missing, unreadable, not valid UTF-8/YAML, or
+    declares no ``spec.contract`` block is silently absent from the
+    result -- see this module's own docstring for why that is deliberate
+    rather than a gap: skill-metadata-schema-drift
+    (``gitapex_scan_skill_metadata_schema.py``) already owns reporting a
+    broken or schema-invalid sidecar as its own finding, and duplicating
+    that here would risk a second, possibly-diverging report for the same
+    root cause instead of simply having nothing left to check."""
+    contracts: dict[str, dict[str, Any]] = {}
+    for skill_dir in discover_skill_dirs(skills_dir):
+        sidecar = skill_dir / SIDECAR_RELATIVE_PATH
+        if not sidecar.is_file():
+            continue
+        try:
+            instance = yaml.safe_load(sidecar.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, yaml.YAMLError, RecursionError):
+            continue
+        contract = _contract_of(instance)
+        if contract is not None:
+            contracts[skill_dir.name] = contract
+    return contracts
+
+
+def _as_dict_list(value: Any) -> list[dict[str, Any]]:
+    """``value`` filtered down to its dict entries when it is a list, else
+    ``[]`` -- the same defensive non-dict-entry guard ``find_duplicate_ids``
+    already applies to gates[]/policy_sources[] entries, applied here to
+    contract sub-lists that may carry a schema-invalid non-dict item (that
+    invalidity is skill-metadata-schema-drift's finding to report, not
+    this scanner's)."""
+    if not isinstance(value, list):
+        return []
+    return [entry for entry in value if isinstance(entry, dict)]
+
+
+def find_contract_gate_drift(registry: SsotRegistry | None, skills_dir: pathlib.Path = SKILLS_DIR) -> list[str]:
+    """Return one message per skills/*/metadata/gitapex.yaml contract
+    gate-id or plane/shipped drift against this same .gitapex/ssot.json
+    registry (issue #1965):
+
+    - every ``spec.contract.invariants[].gate`` value that is a non-null
+      string, and every ``spec.contract.gates[].id`` value, must equal a
+      real ``id`` in ``registry.gates`` -- ``null`` on ``invariants[].gate``
+      is always valid (an explicit "no automated gate yet" prose-only
+      disclosure, per skill-metadata.schema.json's own contractInvariant.gate
+      description) and never checked against the registry; an empty
+      ``spec.contract.gates`` list is this block's own valid "no gates yet"
+      equivalent, not a finding.
+    - for a ``gates[]`` entry that DOES resolve (an unresolvable id is
+      already flagged above, not double-flagged here): its own ``plane``
+      must be one of that SAME ssot gate's own ``planes[]`` -- a contract
+      gate naming a plane the underlying ssot gate doesn't actually run on
+      is drift. Separately, ``shipped`` must be true exactly when
+      ``plane`` is a hook plane (pretooluse/posttooluse/stop), because
+      only skills/ and hooks/ ship to a consumer install -- checked
+      independently of the plane-membership result above, since the two
+      are separate invariants."""
+    if registry is None:
+        return []
+    known_gates = {gate.id: gate for gate in registry.gates}
+    findings: list[str] = []
+    for skill_name, contract in discover_contracts(skills_dir).items():
+        for invariant in _as_dict_list(contract.get("invariants")):
+            gate_ref = invariant.get("gate")
+            if gate_ref is None or not isinstance(gate_ref, str):
+                continue
+            if gate_ref not in known_gates:
+                findings.append(
+                    f"contract-gate-id-drift: {skill_name}: invariants references unknown ssot gate id {gate_ref!r}"
+                )
+        for entry in _as_dict_list(contract.get("gates")):
+            gate_id = entry.get("id")
+            if not isinstance(gate_id, str):
+                continue
+            ssot_gate = known_gates.get(gate_id)
+            if ssot_gate is None:
+                findings.append(
+                    f"contract-gate-id-drift: {skill_name}: gates references unknown ssot gate id {gate_id!r}"
+                )
+                continue
+            plane = entry.get("plane")
+            shipped = entry.get("shipped")
+            if isinstance(plane, str) and plane not in ssot_gate.planes:
+                findings.append(
+                    f"contract-gate-plane-drift: {skill_name}: gate {gate_id!r} declares plane {plane!r}, "
+                    f"not in ssot gate {gate_id!r}'s own planes {ssot_gate.planes!r}"
+                )
+            if isinstance(plane, str) and isinstance(shipped, bool):
+                expected_shipped = plane in _HOOK_PLANES
+                if shipped != expected_shipped:
+                    findings.append(
+                        f"contract-gate-shipped-drift: {skill_name}: gate {gate_id!r} on plane {plane!r} "
+                        f"has shipped={shipped!r}, expected {expected_shipped!r}"
+                    )
+    return findings
+
+
+def find_contract_precondition_duplicate_ids(skills_dir: pathlib.Path = SKILLS_DIR) -> list[str]:
+    """Return one message per skills/*/metadata/gitapex.yaml contract whose
+    own spec.contract.precondition[].id values are not unique -- checked
+    within one contract only, never across contracts/skills (each
+    contract's precondition ids are that contract's own namespace)."""
+    findings: list[str] = []
+    for skill_name, contract in discover_contracts(skills_dir).items():
+        seen: dict[str, int] = {}
+        for entry in _as_dict_list(contract.get("precondition")):
+            precondition_id = entry.get("id")
+            if not isinstance(precondition_id, str):
+                continue
+            seen[precondition_id] = seen.get(precondition_id, 0) + 1
+        for precondition_id, count in seen.items():
+            if count > 1:
+                findings.append(
+                    f"contract-precondition-duplicate-id: {skill_name}: precondition id "
+                    f"{precondition_id!r} is used {count} times"
+                )
+    return findings
+
+
+def find_contract_handoff_drift(skills_dir: pathlib.Path = SKILLS_DIR) -> list[str]:
+    """Return one message per skills/*/metadata/gitapex.yaml contract whose
+    own handoff.next.skill, handoff.next.fallback (when present -- it's
+    optional), or any handoff.inline[]/optional[] entry does not resolve
+    to a real skills/<name>/ directory."""
+    findings: list[str] = []
+    for skill_name, contract in discover_contracts(skills_dir).items():
+        handoff = contract.get("handoff")
+        if not isinstance(handoff, dict):
+            continue
+        next_block = handoff.get("next")
+        if isinstance(next_block, dict):
+            for field in ("skill", "fallback"):
+                value = next_block.get(field)
+                if isinstance(value, str) and not _resolves_to_sibling_skill(value, skills_dir):
+                    findings.append(
+                        f"contract-handoff-unresolved: {skill_name}: handoff.next.{field} references "
+                        f"unknown skill directory {value!r}"
+                    )
+        for list_key in ("inline", "optional"):
+            entries = handoff.get(list_key)
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if isinstance(entry, str) and not _resolves_to_sibling_skill(entry, skills_dir):
+                    findings.append(
+                        f"contract-handoff-unresolved: {skill_name}: handoff.{list_key} references "
+                        f"unknown skill directory {entry!r}"
+                    )
+    return findings
+
+
 def find_drift(
     instance_path: pathlib.Path = SSOT_PATH,
     schema_path: pathlib.Path = SCHEMA_PATH,
     repo_root: pathlib.Path = REPO_ROOT,
+    skills_dir: pathlib.Path = SKILLS_DIR,
 ) -> list[str]:
-    """Return every drift finding across schema validation and the three
-    repo-grounded reference checks. Empty list means the registry is clean."""
+    """Return every drift finding across schema validation and every
+    repo-grounded reference check, including the sidecar-vs-registry
+    contract checks. Empty list means the registry is clean."""
     instance = _gitapex_schema_validation.load_json_or_raise(instance_path, RegistryReadError)
     schema = _gitapex_schema_validation.load_json_or_raise(schema_path, RegistryReadError)
     # load_json_or_raise does not itself check the parsed value's shape (its
@@ -570,6 +838,9 @@ def find_drift(
     findings.extend(find_policy_ref_drift(registry))
     findings.extend(find_cluster_drift(registry))
     findings.extend(find_duplicate_ids(instance))
+    findings.extend(find_contract_gate_drift(registry, skills_dir))
+    findings.extend(find_contract_precondition_duplicate_ids(skills_dir))
+    findings.extend(find_contract_handoff_drift(skills_dir))
     return findings
 
 
