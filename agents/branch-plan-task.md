@@ -71,8 +71,10 @@ are also registered in the calling session) independently provides, and
 the full-verification-suite exit condition above rests entirely on this
 prose instruction -- there is no deterministic backstop of any kind for
 it in this deployment mode, unlike the project-local variant's embedded
-`SubagentStop` hook -- see the reference cited above for the full, honest
-accounting of what is and is not structurally enforced here.
+`SubagentStop` hook -- see
+`skills/executing-a-branch-plan/references/threat-model-and-authorization.md`
+for the full, honest accounting of what is and is not structurally
+enforced here.
 
 **If you are running inside a git worktree** (design doc Decision 13,
 `isolation: 'worktree'`), before your own first Bash call, confirm this
