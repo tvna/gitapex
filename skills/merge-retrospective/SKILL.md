@@ -67,6 +67,7 @@ N. [one-line label] <what happened and how it was fixed, in prose>
    Status: `<machine-readable slug>`
    Proposed gate: <durable gate text -- only for "missing deterministic gate">
    Filed as: #<issue number> -- present once Step 5 confirms the filed issue exists
+   Tag: review-worked-as-designed <only when Step 4's own bar is met -- see below>
    Recurrence note: <only present when repairs share a recurring thesis>
 ```
 
@@ -179,6 +180,26 @@ discipline -- ground it in the actual code before writing it.
    `missing-deterministic-gate` repair keeps its Step 2 index ready for
    Step 5's filed-issue title below -- still nothing written yet. Also
    check for recurrence (see above) for Step 5's `Recurrence note:`.
+
+   **`review-worked-as-designed` tag** (per `docs/adr/0004-reduce-verification-to-one-fresh-review-per-diff.md`, which adopts direction (a) of the review decided at https://github.com/tvna/gitapex/issues/1807). A
+   `missing-deterministic-gate` repair whose own record states that an
+   existing review round -- most commonly `executing-a-branch-plan`
+   Step 8's adversarial review, or `drafting-a-pr-to-merge` Step 8's
+   inner layer -- caught the defect it was specifically designed to
+   catch is additionally tagged `review-worked-as-designed`. This tag
+   applies only when the repair's own record states the catching
+   mechanism functioned exactly as designed; it never applies merely
+   because a human reviewer happened to notice something no review
+   layer was dispatched to check at all -- an ad hoc catch by luck, not
+   by design, which stays an ordinary `missing-deterministic-gate`
+   repair with no tag and no exemption from Step 5's filing rule below.
+   When genuinely ambiguous which of the two this is, default to no tag
+   (file it) rather than guess: the tag exempts a repair from
+   gate-proposal filing, so the default under ambiguity favors keeping
+   the safety net, not discarding it. This tag never applies to the
+   other two taxonomy categories, and never substitutes for
+   `Classification`/`Status` -- see
+   `references/repair-record-format.md` for the recorded field shape.
 4b. **Backlog-grounded proposal review.** Establish a review verdict for
     every `missing-deterministic-gate` repair from this cycle -- from one
     batched dispatch covering the whole cycle, not one dispatch per
@@ -241,10 +262,16 @@ discipline -- ground it in the actual code before writing it.
      a standalone issue or a script call -- they stay recorded inline
      exactly as here, unchanged.
     - **File each `missing-deterministic-gate` repair as its own
-      standalone issue**, via
+      standalone issue -- except one tagged `review-worked-as-designed`
+      (Step 4 above).** A tagged repair is still recorded in the
+      retrospective body in full, exactly like any other repair, but
+      never gets its own gate-proposal issue and never carries a
+      `Filed as:` line -- its `review-worked-as-designed` tag is itself
+      the disclosed reason no issue follows. Every other
+      `missing-deterministic-gate` repair files via
       `skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py`
       plus a direct `mcp__github__*` exact-title search/create-or-match
-      flow, then record `Filed as: #<issue number>` alongside that
+      flow, then records `Filed as: #<issue number>` alongside that
       repair's own `Status:` line -- see
       `references/gate-proposal-filing-mechanics.md` for the full
       mechanics (the script call, the no-match/one-match/more-than-one-
