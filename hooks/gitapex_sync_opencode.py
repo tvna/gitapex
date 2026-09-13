@@ -88,97 +88,6 @@ CLAUDE_ONLY_FRONTMATTER_KEYS = ("name", "tools", "disallowedTools")
 _FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 _FRONTMATTER_FIELD_RE = re.compile(r"^(?P<key>[A-Za-z0-9_-]+)\s*:\s*(?P<value>.*?)\s*$")
 
-# A scalar is emitted bare only when it matches this allowlist: it starts
-# with a letter or underscore, and carries nothing but letters, digits,
-# underscore, dot and hyphen. An allowlist deliberately, not a denylist of
-# "dangerous" characters -- YAML gives meaning to enough indicators (`*`
-# alias, `&` anchor, `!` tag, `%` directive, `@` and backtick reserved, the
-# flow set `[]{},`, `: ` and ` #`, a leading or trailing space) that any
-# denylist is one indicator away from silently emitting a line that will
-# not parse, which is the defect this guards (issue #1971). The
-# leading-character rule also keeps a bare scalar from being read back as a
-# number, and from opening a `---` document marker.
-_SAFE_BARE_SCALAR_RE = re.compile(r"\A[A-Za-z_][A-Za-z0-9_.-]*\Z")
-
-# Matching the allowlist is necessary but not sufficient: these plain
-# scalars parse cleanly and are then *resolved* to bool or null rather than
-# to the string itself, corrupting a mapping silently with no parse error
-# to notice. Compared case-insensitively against a wider list than any one
-# parser uses: PyYAML 6.0.3's own resolver takes yes/no/true/false/on/off
-# (lower, Capitalized and UPPER only), while YAML 1.1's type repository
-# (yaml.org/type/bool.html) also lists y/Y/n/N. OpenCode's own parser is
-# unobserved -- this script exists precisely to write files another tool
-# reads -- so quote for the widest rule. Over-quoting a key costs nothing;
-# under-quoting one turns it into `True`.
-_YAML_TYPED_WORDS = frozenset({"y", "n", "yes", "no", "true", "false", "on", "off", "null"})
-
-# The agent/permission table `sync_agents` materializes. A module
-# attribute rather than a local, so a test can iterate the value
-# production actually uses: transcribing it into a test instead would
-# leave a newly added agent covered by nothing, silently.
-AGENT_SPECS: tuple[tuple[str, dict[str, str] | None], ...] = (
-    ("review-persona.md", REVIEW_PERSONA_PERMISSION),
-    ("branch-plan-task.md", None),
-)
-
-# Refused outright rather than escaped. Written as a NEGATION of what a
-# one-line double-quoted scalar can carry, not as a list of offenders: an
-# earlier enumerating form missed U+FFFE, U+FFFF and the lone surrogates,
-# which emitted quoted and then raised ``ReaderError`` at load -- the same
-# defect class this helper exists to prevent, one codepoint outside the
-# list. The allowed set below is PyYAML 6.0.3's own printable class
-# minus six characters it accepts that this generator will not. Quoted
-# verbatim rather than recalled, because the exact membership is what
-# makes this derivation safe to repeat:
-#
-#   NON_PRINTABLE = [^\x09\x0A\x0D\x20-\x7E\x85\xA0-\uD7FF
-#                     \uE000-\uFFFD\U00010000-\U0010ffff]
-#
-# The first two are the ones a careless re-derivation gets wrong:
-#
-# - LF and CR: PyYAML lists BOTH as printable. They are excluded here, by
-#   this class's own `\x20` floor -- never by PyYAML's. Re-deriving this
-#   regex from "PyYAML's printable class" alone would let them back in and
-#   re-open the split-line defect this helper exists to prevent.
-# - U+0085, U+2028, U+2029: line breaks under YAML 1.1. Measured -- U+0085
-#   folds to a space in a value and is rejected in a key; U+2028/U+2029
-#   survive a value but are rejected in a key. One rule covers both halves
-#   of an entry, so the stricter half sets it.
-# - TAB: the one deliberate over-refusal. PyYAML carries it in both
-#   positions, but a tab inside a permission key is a mistake worth
-#   failing on.
-_UNQUOTABLE_RE = re.compile(r"[^\x20-\x7e\xa0-\u2027\u202a-\ud7ff\ue000-\ufffd\U00010000-\U0010ffff]")
-
-
-def _yaml_scalar(text: str) -> str:
-    """Render one scalar so a YAML parser reads it back as exactly ``text``.
-
-    Returned byte-identical when it is already safe bare, so ``bash`` stays
-    ``bash``; otherwise double-quoted with backslash and ``"`` escaped, so
-    ``*mcp*`` becomes ``"*mcp*"``. Raises ``ValueError`` for a scalar this
-    generator refuses to put on one line, rather than emitting something
-    that would not read back -- ``sync_agents`` turns that into a SKIP
-    note, so the script stays fail-soft without ever writing a broken
-    file.
-
-    Callers are the permission mapping only, whose keys and values are
-    module constants: every input is known at import time, so the refusal
-    path is unreachable in production and one bound goes unenforced. A
-    YAML *key* may not exceed 1024 characters, quotes included -- measured
-    at 1024 (parses) and 1025 (``ScannerError``, raised by the reader, not
-    here) -- and the longest key in ``REVIEW_PERSONA_PERMISSION`` above is
-    18.
-    """
-    if _SAFE_BARE_SCALAR_RE.match(text) and text.lower() not in _YAML_TYPED_WORDS:
-        return text
-    unquotable = _UNQUOTABLE_RE.search(text)
-    if unquotable:
-        raise ValueError(
-            f"scalar {text!r} carries U+{ord(unquotable.group()):04X}, which this generator refuses to emit on one line"
-        )
-    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{escaped}"'
-
 
 def _split_frontmatter(text: str) -> tuple[dict[str, str], str] | None:
     """Split leading YAML frontmatter into (fields, body). None when the
@@ -312,36 +221,11 @@ def _render_agent_copy(source_text: str, source_rel: str, permission: dict[str, 
     fields, body = parsed
     if "description" not in fields:
         raise ValueError(f"{source_rel} frontmatter carries no description")
-    # The captured scalar is copied through, deliberately, and NOT
-    # re-encoded through `_yaml_scalar`: it is already a YAML scalar, so
-    # copying it is what makes the two runtimes read the same value.
-    # Re-encoding does the opposite -- measured across four description
-    # shapes, it diverges for one that is already quoted (double-encoded)
-    # and for one a plain scalar truncates (OpenCode would then see more
-    # than Claude does).
-    #
-    # "Copied through", not byte-identical: `_FRONTMATTER_FIELD_RE`
-    # normalizes the `key:` separator and strips surrounding whitespace,
-    # and its `\s*` is Unicode-wide, so a description led or trailed by
-    # U+00A0 (or another non-YAML space) is emitted without it. That is a
-    # divergence, not a normalization -- small, pre-existing, and left
-    # alone here rather than widened into: the whole point of this line is
-    # that the generator does not reinterpret what the source declared.
-    #
-    # Two adjacent holes are pre-existing and NOT closed here, both on
-    # issue #1982: a multi-line description is captured as its first line
-    # and the rest is dropped silently, and an empty `permission` mapping
-    # emits a bare `permission:` key that reads back as None. Guards for
-    # both were written on this branch and reverted -- twice they refused
-    # frontmatter the generator handles correctly (a YAML list under a
-    # dropped key) or missed the shape they were written for (a `#` inside
-    # a block scalar is content, not a comment). They are a defect of this
-    # module, not of this change, and they deserve their own diff.
     out = ["---", f"description: {fields['description']}", "mode: subagent", "hidden: true"]
     if permission is not None:
         out.append("permission:")
         for key, value in permission.items():
-            out.append(f"  {_yaml_scalar(key)}: {_yaml_scalar(value)}")
+            out.append(f"  {key}: {value}")
     out.append("---")
     out.append(GENERATED_HEADER.format(source=source_rel))
     out.append(body)
@@ -353,8 +237,12 @@ def sync_agents(project_dir: Path, verify_only: bool, notes: list[str]) -> int:
     Returns the number of changes made."""
     agents_src = project_dir / AGENTS_SRC_DIRNAME
     agents_dst = project_dir / AGENTS_DST_DIRNAME
+    specs = (
+        ("review-persona.md", REVIEW_PERSONA_PERMISSION),
+        ("branch-plan-task.md", None),
+    )
     changes = 0
-    for filename, permission in AGENT_SPECS:
+    for filename, permission in specs:
         src = agents_src / filename
         if not src.is_file():
             notes.append(f"SKIP: {src} not found")
