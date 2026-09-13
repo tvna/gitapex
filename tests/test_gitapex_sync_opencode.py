@@ -184,11 +184,11 @@ def test_rendered_permission_frontmatter_parses_back_to_declared_mapping() -> No
     `REVIEW_PERSONA_PERMISSION` leaves this test (and the whole suite)
     green, confirmed by running it. Five of the eleven denials
     (`todowrite`, `question`, `external_directory`, `skill`, `lsp`) are
-    named by no assertion anywhere; the other six are pinned literally
-    below. That gap is pre-existing -- issue #1971's own scope is the
-    emission, not the denial set -- and closing it belongs with issue
-    #1963's tool-boundary parity work, where an expectation table
-    independent of this constant is the whole point.
+    named by no assertion anywhere; the other six are pinned literally by
+    the agents-sync test above. That gap is pre-existing -- issue #1971's
+    own scope is the emission, not the denial set -- and closing it
+    belongs with issue #1963's tool-boundary parity work, where an
+    expectation table independent of this constant is the whole point.
     """
     import yaml
 
@@ -214,10 +214,10 @@ def test_yaml_scalar_defeats_a_character_denylist_and_leaves_safe_keys_bare() ->
     to every one of them, which is why the round-trip test above compares
     parsed values instead of checking that parsing merely succeeded.
 
-    The last group is the opposite trap: punctuation-bearing but genuinely
-    safe bare, so a rule that quotes on sight of any non-alphanumeric would
-    be wrong too -- and would rewrite the five `<tool>: deny` lines the
-    agents-sync test above asserts.
+    The last group's first two are the opposite trap: punctuation-bearing
+    but genuinely safe bare, so a rule that quotes on sight of any
+    non-alphanumeric would be wrong too -- and would rewrite the five
+    `<tool>: deny` lines the agents-sync test above asserts.
     """
     import yaml
 
@@ -237,7 +237,7 @@ def test_yaml_scalar_defeats_a_character_denylist_and_leaves_safe_keys_bare() ->
         rendered = sync._render_agent_copy(_PROBE_SOURCE, "agents/probe.md", {key: value})
         assert yaml.safe_load(_frontmatter_block(rendered))["permission"] == {key: value}, key
 
-    # Safe bare despite the punctuation: returned byte-identical, never quoted.
+    # Punctuation alone never forces quoting; a YAML indicator (`*`) does.
     assert sync._yaml_scalar("a.b-c") == "a.b-c"
     assert sync._yaml_scalar("external_directory") == "external_directory"
     assert sync._yaml_scalar("*mcp*") == '"*mcp*"'
