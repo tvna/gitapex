@@ -88,6 +88,58 @@ CLAUDE_ONLY_FRONTMATTER_KEYS = ("name", "tools", "disallowedTools")
 _FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n", re.DOTALL)
 _FRONTMATTER_FIELD_RE = re.compile(r"^(?P<key>[A-Za-z0-9_-]+)\s*:\s*(?P<value>.*?)\s*$")
 
+# A scalar is emitted bare only when it matches this allowlist: it starts
+# with a letter or underscore, and carries nothing but letters, digits,
+# underscore, dot and hyphen. An allowlist deliberately, not a denylist of
+# "dangerous" characters -- YAML gives meaning to enough indicators (`*`
+# alias, `&` anchor, `!` tag, `%` directive, `@` and backtick reserved, the
+# flow set `[]{},`, `: ` and ` #`, a leading or trailing space) that any
+# denylist is one indicator away from silently emitting a line that will
+# not parse, which is the defect this guards (issue #1971). The
+# leading-character rule also keeps a bare scalar from being read back as a
+# number, and from opening a `---` document marker.
+_SAFE_BARE_SCALAR_RE = re.compile(r"\A[A-Za-z_][A-Za-z0-9_.-]*\Z")
+
+# Matching the allowlist is necessary but not sufficient: these plain
+# scalars parse cleanly and are then *resolved* to bool or null rather than
+# to the string itself, corrupting a mapping silently with no parse error
+# to notice. Compared case-insensitively against a wider list than any one
+# parser uses: PyYAML 6.0.3's own resolver takes yes/no/true/false/on/off
+# (lower, Capitalized and UPPER only), while YAML 1.1's type repository
+# (yaml.org/type/bool.html) also lists y/Y/n/N. OpenCode's own parser is
+# unobserved -- this script exists precisely to write files another tool
+# reads -- so quote for the widest rule. Over-quoting a key costs nothing;
+# under-quoting one turns it into `True`.
+_YAML_TYPED_WORDS = frozenset({"y", "n", "yes", "no", "true", "false", "on", "off", "null"})
+
+# What a double-quoted scalar cannot carry on one line once only backslash
+# and `"` are escaped: the C0 controls (a raw newline would split the line
+# in two), DEL and the C1 block, and the Unicode line/paragraph separators
+# YAML 1.1 also counts as line breaks.
+_UNQUOTABLE_RE = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
+
+
+def _yaml_scalar(text: str) -> str:
+    """Render one scalar so a YAML parser reads it back as exactly ``text``.
+
+    Returned byte-identical when it is already safe bare, so ``bash`` stays
+    ``bash``; otherwise double-quoted with backslash and ``"`` escaped, so
+    ``*mcp*`` becomes ``"*mcp*"``. Raises ``ValueError`` for a scalar that
+    double-quoting alone cannot carry, rather than emitting a line that
+    would not parse back -- ``sync_agents`` turns that into a SKIP note, so
+    the script stays fail-soft without ever writing a broken file.
+    """
+    if _SAFE_BARE_SCALAR_RE.match(text) and text.lower() not in _YAML_TYPED_WORDS:
+        return text
+    unquotable = _UNQUOTABLE_RE.search(text)
+    if unquotable:
+        raise ValueError(
+            f"scalar {text!r} carries U+{ord(unquotable.group()):04X}, "
+            "which a double-quoted YAML scalar cannot carry on one line"
+        )
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
 
 def _split_frontmatter(text: str) -> tuple[dict[str, str], str] | None:
     """Split leading YAML frontmatter into (fields, body). None when the
@@ -225,7 +277,7 @@ def _render_agent_copy(source_text: str, source_rel: str, permission: dict[str, 
     if permission is not None:
         out.append("permission:")
         for key, value in permission.items():
-            out.append(f"  {key}: {value}")
+            out.append(f"  {_yaml_scalar(key)}: {_yaml_scalar(value)}")
     out.append("---")
     out.append(GENERATED_HEADER.format(source=source_rel))
     out.append(body)

@@ -44,6 +44,26 @@ def _project(tmp_path: pathlib.Path) -> pathlib.Path:
     return tmp_path
 
 
+_FRONTMATTER_DELIMITER = "---\n"
+
+# One agent source, reused by every rendering test below: the generator only
+# ever reads `description` off the source frontmatter, so the permission
+# mapping under test is the sole variable.
+_PROBE_SOURCE = "---\nname: probe\ndescription: Probe agent.\n---\n\nBody.\n"
+
+
+def _frontmatter_block(rendered: str) -> str:
+    """The YAML text between a rendered agent copy's own `---` delimiters.
+
+    Deliberately not `sync._split_frontmatter`: that returns the module's
+    own line-regex parse of the block, which is exactly the parse these
+    tests must not trust. A real YAML parser has to see the raw text.
+    """
+    assert rendered.startswith(_FRONTMATTER_DELIMITER), rendered
+    end = rendered.index("\n" + _FRONTMATTER_DELIMITER, len(_FRONTMATTER_DELIMITER))
+    return rendered[len(_FRONTMATTER_DELIMITER) : end]
+
+
 def test_skills_sync_links_valid_skills_and_skips_rest(tmp_path: pathlib.Path) -> None:
     project = _project(tmp_path)
     _skill(project, "good-skill")
@@ -122,9 +142,16 @@ def test_agents_sync_rewrites_review_persona_for_opencode(tmp_path: pathlib.Path
     assert "tools:" not in persona.split("---")[1]
     for denied in ("edit: deny", "bash: deny", "task: deny", "webfetch: deny", "websearch: deny"):
         assert denied in persona
-    # MCP-server-provided tools are denied under any naming scheme
-    # (OpenCode wildcard-pattern permission keys).
-    assert "*mcp*: deny" in persona
+    # MCP-server-provided tools are denied under any naming scheme (OpenCode
+    # wildcard-pattern permission keys). `*` opens an alias in YAML node
+    # position, so this key reaches the copy quoted -- and what must hold is
+    # not the spelling but that a parser reads the key back as the literal
+    # `*mcp*` (issue #1971). Both are asserted: the parse is the contract,
+    # the spelling pins the emitted form so a change to it is deliberate.
+    import yaml
+
+    assert yaml.safe_load(_frontmatter_block(persona))["permission"]["*mcp*"] == "deny"
+    assert '"*mcp*": deny' in persona
     assert "description: Read-only review." in persona
     assert "mode: subagent" in persona
     assert "Body." in persona
@@ -137,6 +164,125 @@ def test_agents_sync_rewrites_review_persona_for_opencode(tmp_path: pathlib.Path
 
     # Idempotent.
     assert sync.sync_agents(project, False, []) == 0
+
+
+def test_rendered_permission_frontmatter_parses_back_to_declared_mapping() -> None:
+    """Every permission entry the generator emits must survive a YAML
+    round-trip as the literal string that was declared (issue #1971).
+
+    `sync_agents` holds its agent/permission table as a local `specs`
+    tuple rather than a module attribute, so its two cases are named
+    explicitly here: review-persona's `REVIEW_PERSONA_PERMISSION`, and
+    branch-plan-task's `None`. Asserting on the parsed mapping rather than
+    on the emitted spelling is the point -- it is what a consumer of the
+    generated file actually does, and it catches both a block that fails
+    to parse and one that parses into the wrong keys.
+    """
+    import yaml
+
+    for permission in (sync.REVIEW_PERSONA_PERMISSION, None):
+        rendered = sync._render_agent_copy(_PROBE_SOURCE, "agents/probe.md", permission)
+        loaded = yaml.safe_load(_frontmatter_block(rendered))
+        if permission is None:
+            # No mapping declared means no `permission` key at all -- not an
+            # empty mapping, and not a key carrying None.
+            assert "permission" not in loaded, loaded
+        else:
+            assert loaded["permission"] == permission
+
+
+def test_yaml_scalar_defeats_a_character_denylist_and_leaves_safe_keys_bare() -> None:
+    """Defeat cases for the helper's own "safe bare scalar" rule.
+
+    The first three carry no YAML indicator character at all, or carry one
+    only in combination with a space, so a rule written as a denylist of
+    dangerous characters emits all three bare -- and each then parses
+    *without raising* into something that is not the string that was
+    declared. A rule that asks only "did this raise ScannerError?" is blind
+    to every one of them, which is why the round-trip test above compares
+    parsed values instead of checking that parsing merely succeeded.
+
+    The last group is the opposite trap: punctuation-bearing but genuinely
+    safe bare, so a rule that quotes on sight of any non-alphanumeric would
+    be wrong too -- and would rewrite the five `<tool>: deny` lines the
+    agents-sync test above asserts.
+    """
+    import yaml
+
+    # (key, value, what the *bare* emission parses back as -- in no case the
+    # declared mapping, and in no case an exception)
+    defeats = [
+        # A YAML resolver reads `on` as a boolean, so the key becomes True.
+        ("on", "deny", {True: "deny"}),
+        # The same trap on the value side: `no` becomes False.
+        ("edit", "no", {"edit": False}),
+        # ` #` opens a comment, collapsing the mapping to a bare string.
+        ("mcp #github", "deny", "mcp"),
+    ]
+    for key, value, naive in defeats:
+        assert yaml.safe_load(f"permission:\n  {key}: {value}\n")["permission"] == naive, key
+        assert naive != {key: value}, key
+        rendered = sync._render_agent_copy(_PROBE_SOURCE, "agents/probe.md", {key: value})
+        assert yaml.safe_load(_frontmatter_block(rendered))["permission"] == {key: value}, key
+
+    # Safe bare despite the punctuation: returned byte-identical, never quoted.
+    assert sync._yaml_scalar("a.b-c") == "a.b-c"
+    assert sync._yaml_scalar("external_directory") == "external_directory"
+    assert sync._yaml_scalar("*mcp*") == '"*mcp*"'
+
+
+def test_yaml_scalar_refuses_what_double_quoting_cannot_carry(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A scalar carrying a line break cannot be made safe by quoting alone,
+    so the helper raises instead of emitting a line that will not parse
+    back. `sync_agents` already catches ValueError, so the script stays
+    fail-soft by contract: a SKIP note, never a broken generated file."""
+    with pytest.raises(ValueError, match="cannot carry on one line"):
+        sync._yaml_scalar("mcp\nedit")
+
+    # A backslash or a double quote is escaped, not refused.
+    assert sync._yaml_scalar('a"b\\c') == '"a\\"b\\\\c"'
+
+    monkeypatch.setattr(sync, "REVIEW_PERSONA_PERMISSION", {"mcp\nedit": "deny"})
+    project = _project(tmp_path)
+    _write(project / "agents" / "review-persona.md", _PROBE_SOURCE)
+    notes: list[str] = []
+    assert sync.sync_agents(project, False, notes) == 0
+    assert any("SKIP" in note and "cannot carry on one line" in note for note in notes), notes
+    assert not (project / ".opencode" / "agents" / "review-persona.md").exists()
+
+
+def test_sync_script_imports_only_stdlib_modules() -> None:
+    """The generator must keep running under a bare `python3`.
+
+    `.opencode/plugins/gitapex-session.js` invokes it as
+    `process.env.GITAPEX_PYTHON || "python3"` against the script path
+    directly -- outside any uv environment or venv -- and the script is
+    fail-soft by contract, so a third-party import would surface as an
+    advisory non-zero exit rather than as a visible failure. Parsed with
+    `ast`, not matched as text, so a commented-out or string-embedded
+    `import` neither passes nor fails the check by accident.
+
+    `.github/scripts/gitapex_gate_stdlib_only_claim_drift.py` discovers its
+    candidates from `.github/scripts/*.py` and `evals/scripts/*.py` only,
+    so `hooks/` carries no such gate and this constraint -- which the
+    `*mcp*` quoting fix depends on -- would otherwise be unguarded (#1971).
+    """
+    import ast
+    import sys
+
+    source = (REPO_ROOT / "hooks" / "gitapex_sync_opencode.py").read_text(encoding="utf-8")
+    roots: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            roots.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            # A relative import cannot resolve for a script run by path, so
+            # it fails this assertion by never being a stdlib name.
+            roots.add("." * node.level + (node.module or "").split(".")[0])
+    assert roots, "expected at least one import"
+    assert roots <= sys.stdlib_module_names, sorted(roots - sys.stdlib_module_names)
 
 
 def test_verify_mode_reports_drift_without_writing(tmp_path: pathlib.Path) -> None:
