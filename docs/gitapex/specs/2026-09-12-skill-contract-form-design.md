@@ -4,10 +4,13 @@
 
 Design agreed via `eliciting-a-design` dialogue on 2026-09-11/12 with the
 repository owner and formalized the same day into tracking issue
-https://github.com/tvna/gitapex/issues/1964 with three child issues (see
+https://github.com/tvna/gitapex/issues/1964 with four child issues (see
 Rollout). This document describes the settled design and records the
-decomposition into three pull requests and the decisions made along the
-way.
+decomposition into four pull requests and the decisions made along the
+way. The verification-reduction half is recorded as an accepted ADR,
+`docs/adr/0004-reduce-verification-to-one-fresh-review-per-diff.md`
+(approved 2026-09-13), which also carries the 2025-2026 published
+evidence listed under Evidence below.
 
 ## Problem
 
@@ -61,7 +64,7 @@ Postcondition / Invariant).
   skill's `SKILL.md`, plus a `--check` drift mode.
 - A repository gate registering that drift check and a gate-id
   resolution check for `invariants[].gate` and `proof.gates[]`.
-- A schema change adding `spec.contract`, recorded as ADR 0004.
+- A schema change adding `spec.contract`, recorded as an ADR (next free number after 0004).
 - Glossary entries for the new terms, via
   `establishing-ubiquitous-language`, before any heading is rendered.
 - Migration of `eliciting-a-design` (first prototype) and
@@ -92,6 +95,11 @@ Postcondition / Invariant).
 - Any change to `BODY_MAX_LINES` or `BODY_MAX_TOKENS`.
 
 ## Verification reduction
+
+Decision record: `docs/adr/0004-reduce-verification-to-one-fresh-review-per-diff.md`
+(Accepted, approved by tvna, 2026-09-13). The ADR is the authoritative
+statement of the decision and its evidence; this section is the design
+view of the same decision.
 
 ### Reading rule
 
@@ -286,7 +294,7 @@ for source-to-generated with `--check`; `pr-body-preflight` for a gate whose
 - `rubric.md` lines that say "maintainer-facing, never auto-loaded"
   (around lines 95 and 1078 at the time of writing) get the same
   one-sentence carve-out.
-- Recorded as `docs/adr/0004-*.md` via `drafting-an-adr` (structure and
+- Recorded as `docs/adr/NNNN-*.md (next free number; 0004 is taken by the verification-reduction ADR)` via `drafting-an-adr` (structure and
   interface change; Nygard's significance test is met).
 
 ### Vocabulary
@@ -386,7 +394,7 @@ Sub-projects, their relationship, and build order:
    definition (owner decision); `evaluating-skill-quality` pass cap; the
    Stop-hook PR-less case (#1631). PR3 migrates whichever Step 8 shape
    has landed first.
-1. **PR1, foundation.** Schema `spec.contract` + ADR 0004 + generator and
+1. **PR1, foundation.** Schema `spec.contract` + the spec.contract ADR (next free number after 0004) + generator and
    its co-located tests + `skill-contract-drift` registration + gate-id
    resolution in the ssot scanner + `drafting-a-skill` sidecar
    declarations (Declared, PyYAML) + glossary entries. Tests exercise a
@@ -510,6 +518,28 @@ Primary sources fetched during the dialogue:
 - https://claude.com/blog/a-field-guide-to-claude-fable-finding-your-unknowns
   ("If you are too specific, Claude will follow your instructions even
   when a pivot may be more appropriate").
+
+Published research (2025-2026) read at its arXiv abstract page on
+2026-09-13 for the verification-reduction decision; each is cited in
+the ADR with the scope its abstract states:
+https://arxiv.org/abs/2502.08235 (overthinking in agentic tasks),
+https://arxiv.org/abs/2503.13657 (multi-agent failure taxonomy, task
+verification as a failure class),
+https://arxiv.org/abs/2606.05976 (self-correction versus correcting
+external input),
+https://arxiv.org/abs/2502.01839 (self-verification improves with
+sampling scale; a qualifier),
+https://arxiv.org/abs/2604.03196 (code review agents in pull requests),
+https://arxiv.org/abs/2604.16790 (LLM-as-a-judge bias in software
+engineering),
+https://arxiv.org/abs/2605.00914 (cost of multi-agent debate versus
+isolated self-correction, 7B-8B models),
+https://arxiv.org/abs/2604.02460 (single- versus multi-agent under equal
+token budgets),
+https://arxiv.org/abs/2606.13003 (multi-agent advantage depends on
+expert architecture),
+https://arxiv.org/abs/2608.28795 (verification reach, artifact quality,
+and cost in coding agents).
 
 Pull requests and issues read for the verification-reduction measurement:
 https://github.com/tvna/gitapex/pull/1954,
