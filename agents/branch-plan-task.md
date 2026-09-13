@@ -1,6 +1,6 @@
 ---
 name: branch-plan-task
-description: Task-level, plugin-distributed subagent type for a fixed, enumerated set of call sites -- see this file's own "Sanctioned call sites" section for the exact, current list (executing-a-branch-plan Step 6's per-task dispatch, Step 8's refactor/simplify pass). Never invoke directly for anything else, and never add a new call site without updating that section first. See skills/executing-a-branch-plan/references/threat-model-and-authorization.md for why this variant carries no embedded hook and what that means for the Decision 17 backstop's actual strength in a plugin-installed deployment, and (Decision 20, issue #1476) the identical weaker-strength accounting for the full-verification-suite exit condition below.
+description: Task-level, plugin-distributed subagent type for a fixed, enumerated set of call sites -- see this file's own "Sanctioned call sites" section for the exact, current list (executing-a-branch-plan Step 6's per-task dispatch, Step 8's refactor/simplify pass).
 disallowedTools: mcp__github
 ---
 
@@ -71,8 +71,10 @@ are also registered in the calling session) independently provides, and
 the full-verification-suite exit condition above rests entirely on this
 prose instruction -- there is no deterministic backstop of any kind for
 it in this deployment mode, unlike the project-local variant's embedded
-`SubagentStop` hook -- see the reference cited above for the full, honest
-accounting of what is and is not structurally enforced here.
+`SubagentStop` hook -- see
+`skills/executing-a-branch-plan/references/threat-model-and-authorization.md`
+for the full, honest accounting of what is and is not structurally
+enforced here.
 
 **If you are running inside a git worktree** (design doc Decision 13,
 `isolation: 'worktree'`), before your own first Bash call, confirm this

@@ -336,11 +336,13 @@ def test_real_agent_files_render_to_loadable_frontmatter() -> None:
     an earlier revision of this branch did, re-encodes an already-encoded
     scalar and makes this assertion fail on `branch-plan-task.md`.
 
-    Fidelity is the contract, not correctness of the source: that file's
-    description cites `issue #1476`, a plain YAML scalar ends at ` #`, and
-    so BOTH runtimes read it 102 characters short. That is a defect in the
-    source file, tracked separately; a generator that quietly showed
-    OpenCode more than Claude sees would hide it rather than fix it.
+    Fidelity is the contract, not correctness of the source: `branch-plan-
+    task.md`'s description used to cite `issue #1476`, and a plain YAML
+    scalar ends at ` #`, so both runtimes read it 102 characters short
+    until issue #1982's fix removed that citation. This assertion never
+    depended on that defect being present -- fidelity holds either way --
+    but a generator that quietly showed OpenCode more than Claude sees
+    would still hide a future recurrence rather than fix it.
 
     Iterates `AGENT_SPECS` for the same reason the round-trip test above
     does: naming a permission for an agent by hand verifies whatever the
