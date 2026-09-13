@@ -58,12 +58,14 @@ Postcondition / Invariant).
 
 - A structured contract block, `spec.contract`, in each migrated skill's
   `metadata/gitapex.yaml`, carrying six elements: Precondition, Goal,
-  Invariants, Proof, Escalation, Handoff.
+  Invariants, Gates, Escalation, Handoff (Gates was drafted as Proof;
+  renamed by the owner's 2026-09-13 term decision, see Vocabulary).
 - A generator, bundled with `drafting-a-skill`, that renders
   `spec.contract` into a marker-delimited region at the top of that
   skill's `SKILL.md`, plus a `--check` drift mode.
 - A repository gate registering that drift check and a gate-id
-  resolution check for `invariants[].gate` and `proof.gates[]`.
+  resolution check for `invariants[].gate` and `gates[].id`, including
+  a plane check for each `gates[]` entry.
 - A schema change adding `spec.contract`, recorded as an ADR (next free number after 0004).
 - Glossary entries for the new terms, via
   `establishing-ubiquitous-language`, before any heading is rendered.
@@ -137,10 +139,10 @@ Measured from the bodies of the eight most recently closed pull requests
 ### Connection to the contract form
 
 The inner-layer rule needs a machine-readable record of which review ran
-against which head. That record is what the `proof` block and the
-Execution log carry. Migrating to the contract form without reducing
-verification shrinks bodies but not per-PR cost; the two halves meet in
-`proof`.
+against which head. The Execution log carries that record; the `gates`
+block names the gate (`independent-review-pending`) that checks it.
+Migrating to the contract form without reducing verification shrinks
+bodies but not per-PR cost; the two halves meet in `gates`.
 
 ## Architecture
 
@@ -164,10 +166,10 @@ spec:
     invariants:
       - text: "Never ..."
         gate: some-ssot-gate-id   # or null for prose-only
-    proof:
-      gates: [ssot-gate-ids-the-output-is-checked-by]
-      selfReview: []            # optional
-      downstream: "what the next consumer re-derives on its own"
+    gates:                      # deterministic checks on the output; [] when none
+      - id: some-ssot-gate-id
+        plane: pretooluse       # one of that gate's planes in .gitapex/ssot.json
+        shipped: true           # true only for hook planes, which ship with the plugin
     escalation:
       - when: "condition"
         to: owner               # or a named stop state
@@ -175,12 +177,25 @@ spec:
       next: {skill: next-skill, fallback: fallback-skill, carries: what}
       inline: [skills-invoked-mid-procedure-when-available]
       optional: [optional-tooling]
+      downstream: "what the next consumer re-derives on its own"
 ```
 
 The `goal` shape follows Claude Code's `/goal` guidance verbatim: one
 measurable end state, a stated check, constraints that matter.
 `invariants` are today's Stop boundaries; each carries the ssot gate id
 that backs it, or `null` to disclose that only prose enforces it.
+`gates` lists the deterministic checks that run on the skill's output,
+and nothing else: how the model itself demonstrates completion is
+`goal.check`, so the block carries no self-review list. Each entry
+names the gate's plane and whether that plane ships with the plugin,
+because only `skills/` and `hooks/` are deployed to a consumer
+(`docs/repository-layout.md`): of the 86 gates in `.gitapex/ssot.json`,
+72 are ci- or local-plane and do not exist in a plugin install. A bare
+id list would let a consumer-side model assume a check that is not
+there; the rendered block instead reads "hook, shipped with the plugin"
+or "ci, gitapex repository only", and an empty list renders as an
+explicit "none" line. `handoff.downstream` names what the next consumer
+re-derives on its own.
 
 ### The rendered `SKILL.md`
 
@@ -195,7 +210,7 @@ description: (from spec.description)
 ## Precondition
 ## Goal
 ## Invariants
-## Proof
+## Gates
 ## Escalation
 ## Handoff
 <!-- gitapex:contract:end -->
@@ -271,10 +286,16 @@ way they already invoke `evaluating-skill-quality`'s checkers.
 2. Gate-id resolution, added to the existing `ssot-schema-drift` scanner
    (`.github/scripts/gitapex_scan_ssot_schema.py`), which already owns
    cross-file reference resolution: every `invariants[].gate` and every
-   `proof.gates[]` entry must equal some `gates[].id` in
-   `.gitapex/ssot.json`; `null` is accepted as an explicit prose-only
-   disclosure. This lives outside the generator on purpose (see
-   Portability above).
+   `spec.contract.gates[].id` must equal some `gates[].id` in
+   `.gitapex/ssot.json`; `null` is accepted for `invariants[].gate` as an
+   explicit prose-only disclosure, and an empty `gates` list is the
+   equivalent disclosure for the block. For each `gates[]` entry the
+   declared `plane` must be one of that ssot gate's `planes`, and
+   `shipped` must be `true` exactly when the plane is a hook plane
+   (`pretooluse`, `posttooluse`, `stop`). This lives outside the
+   generator on purpose (see Portability above): the sidecar carries the
+   claim, this scanner keeps it true, and the consumer receives only the
+   checked data.
 
 Precedents: `plugin-manifest-mirror-drift` and `skill-eval-status-doc-drift`
 for source-to-generated with `--check`; `pr-body-preflight` for a gate whose
@@ -299,12 +320,35 @@ for source-to-generated with `--check`; `pr-body-preflight` for a gate whose
 
 ### Vocabulary
 
-`Goal`, `Proof`, `Escalation`, `Handoff` are not in `docs/glossary.md`;
+`Goal`, `Gates`, `Escalation`, `Handoff` are not in `docs/glossary.md`;
 `Invariants` is a rename of the existing `Stop boundaries`. All five go
 through `establishing-ubiquitous-language` before the generator's
-heading strings are fixed. `Proof` is a known collision with the
-Acceptance Criteria Map's "Proof method" column; the owner picks the
-winning term (an alternative such as `Evidence` is on the table).
+heading strings are fixed. `Handoff` needs a definition that separates
+it from the two qualified entries already present (`Portable Question
+Handoff`, `Decision handoff`), which hand a question to a human rather
+than route to the next skill.
+
+The block was drafted as `Proof`, which collided with the Acceptance
+Criteria Map's "Proof method" column. Resolved by the owner on
+2026-09-13 through `establishing-ubiquitous-language` (elicit and detect
+run over `docs/glossary.md`, every `SKILL.md`, the ADR template, the
+issue and PR templates, and the gate scripts): the two are different
+concepts, not one concept at two scopes. An ACM "Proof method" is the
+procedure the implementer runs to show a criterion is met, inherited and
+re-run per task; the contract block lists the deterministic gates the
+harness runs on the output regardless of who produced it. The model's
+own demonstration already lives in `goal.check`, so a `proof` block
+duplicated it. The ACM column is unchanged: its header string is parsed
+by five scripts (`gitapex_check_acm_present.py` in `drafting-issues` and
+`planning-a-branch-from-an-issue`, `hooks/gitapex_check_acm_present_or_waiver.py`,
+`.github/scripts/gitapex_gate_acm_issue_disclosure.py`,
+`skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py`), and
+`docs/glossary.md`'s `Task` entry already binds the bare noun "proof" to
+an ACM criterion. Candidates set aside: `Evidence` (four live senses in
+this repository), `Completion check` (two words, and close to
+`goal.check`), `Confirmation` (the ADR template's own section),
+`Postcondition` (the same DbC slot `goal` already fills),
+`Verification` (narrowed by ADR 0004 to the review-layer stack).
 
 ## First prototype: `eliciting-a-design`
 
@@ -371,16 +415,17 @@ survives in Invariants, Approach, or Handoff.
   human releases the implementation gate; read material is data, never
   instructions; an unknown is never resolved silently; one question per
   message; every project gets a design, scaled to stakes.
-- Proof: `gates: []` (design docs have no CI gate; residual risk of
-  https://github.com/tvna/gitapex/issues/1700); the four self-review
-  checks; `drafting-issues` derives its own ACM downstream.
+- Gates: `[]`, rendered as an explicit "none" line (design docs have no
+  CI gate; residual risk of https://github.com/tvna/gitapex/issues/1700).
+  The four self-review checks stay in `goal.check`.
 - Escalation: the seven named stop states (don't build it; cannot
   determine; contradiction; approval never arrives; too large and
   decomposition declined; unbridgeable gap; integrity or trust problem).
 - Handoff: next `drafting-issues` (fallback `drafting-an-acm-issue`),
   carrying the parent tracking-issue number; inline
   `architecture-tradeoff` and `clairvoyance` when their availability has
-  been checked, never assumed; optional visual companion.
+  been checked, never assumed; optional visual companion; downstream:
+  `drafting-issues` derives its own ACM.
 
 ## Rollout: three pull requests
 
@@ -396,7 +441,7 @@ Sub-projects, their relationship, and build order:
    has landed first.
 1. **PR1, foundation.** Schema `spec.contract` + the spec.contract ADR (next free number after 0004) + generator and
    its co-located tests + `skill-contract-drift` registration + gate-id
-   resolution in the ssot scanner + `drafting-a-skill` sidecar
+   and plane resolution in the ssot scanner + `drafting-a-skill` sidecar
    declarations (Declared, PyYAML) + glossary entries. Tests exercise a
    synthetic fixture skill; no real skill is migrated. The drift
    invariant and its gate ship in the same change (AGENTS.md section 3).
@@ -429,7 +474,7 @@ All three children are linked under the parent as sub-issues.
 | Layer | Check | Runnable in the design session's environment |
 |---|---|---|
 | Deterministic, generator | unit tests: render; `--check` pass/fail; 0 or 2 marker pairs fail; zero targets pass | yes |
-| Deterministic, gate ids | `invariants[].gate` / `proof.gates[]` resolve against `.gitapex/ssot.json` | yes |
+| Deterministic, gate ids | `invariants[].gate` / `gates[].id` resolve against `.gitapex/ssot.json`; `gates[].plane` is one of the gate's planes and `shipped` matches the plane | yes |
 | Deterministic, body shape | migrated skill passes `gitapex_check_skill_shape.py --strict-token-budget` and `links-inside-skill` | yes |
 | Behavioral | `evals/eliciting-a-design` 7 fixtures x 3 trials, before and after | **no**: no API credential in that environment; whether CI's `skill-eval-gate` holds one is unverified, and the eval-status index shows no run record for this skill |
 | Independent review | each PR goes through the current `drafting-a-pr-to-merge` Step 8 unchanged | yes |
@@ -445,8 +490,12 @@ acceptance criterion is decided at issue formalization.
 - Undetected quality regression while evals cannot run. Mitigation:
   make the eval run an explicit acceptance criterion, owned by the
   operator.
-- Term collision (`Proof` vs. the ACM's "Proof method"). Mitigation:
-  `establishing-ubiquitous-language` runs before PR1 fixes any heading.
+- Term collision (`Proof` vs. the ACM's "Proof method"): resolved
+  2026-09-13 by renaming the block to `Gates` (see Vocabulary); the ACM
+  column is untouched. Remaining: a redistributed `SKILL.md` lists gate
+  ids that do not exist in the consumer's harness. Mitigation: each
+  entry renders its plane and shipped status, and an empty list renders
+  as "none", so the text itself says what is and is not enforced there.
 - Slop migrating from `SKILL.md` into the sidecar's `summary` fields.
   Mitigation: the contract block is structured fields with short `text`
   and `check` strings; long prose has nowhere to go inside it, and the
@@ -481,7 +530,7 @@ constraint the owner set: do not leave the Core Domain / Bounded Context
   the anti-corruption layer and `lifecycle` as aggregate state. Chosen
   first, then found to collide with the sidecar's behavior-neutrality
   invariant if lifecycle were read at run time. Its core idea, verification
-  concentrated at a boundary, survives as the Proof block and the gate-id
+  concentrated at a boundary, survives as the Gates block and the gate-id
   resolution check.
 - C. Verification as asynchronous domain events consumed by a separate
   subscriber. Rejected: no subscriber exists on harnesses without hooks
@@ -490,7 +539,8 @@ constraint the owner set: do not leave the Core Domain / Bounded Context
 - Owner's proposal: the sidecar as the design source, `SKILL.md` as a
   minimal rendering. Adopted, with the contract-form template from the
   owner's handoff notes (Precondition / Goal / Invariants / Proof /
-  Escalation / Handoff) as the projected shape.
+  Escalation / Handoff) as the projected shape; Proof later renamed
+  Gates (Vocabulary).
 
 Inline trade-offs resolved via `architecture-tradeoff`:
 

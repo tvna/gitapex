@@ -153,7 +153,8 @@ the `## Independent review verdict` section of a PR body.
   self-verification is cut.
 - A machine-readable record of which review ran against which head, so
   the later contract-form migration (issues #1965 to #1967) can cite it
-  from a `proof` block instead of re-running.
+  from a `gates` block instead of re-running (the block was drafted as
+  `proof`; renamed on 2026-09-13, see the design doc's Vocabulary).
 - Consistency with the 2025-2026 published evidence above: verification
   pays where its reach matches the failure mode and where the reviewer
   reads the artifact as external input; redundant rounds over the same
@@ -220,7 +221,7 @@ Good, because the layer that finds defects is left untouched, and the
 change is a cut of duplication and dead waiting, not of coverage.
 
 Good, because the recorded review becomes a citable fact the contract
-form's `proof` block can consume, joining the two halves of the owner's
+form's `gates` block can consume, joining the two halves of the owner's
 question.
 
 Good, because gate-proposal volume driven by working-as-designed catches
