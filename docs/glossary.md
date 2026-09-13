@@ -378,3 +378,85 @@ mechanism-fit`, sweeping every live repository cross-reference to match
 `evals/*/results/*`, and other skills' own past decision-log/eval-status
 entries recording a specific past review session's own language, none of
 which this resolution rewrites).
+
+## `Goal`
+
+Within `spec.contract` (the generated `SKILL.md` contract block), the one
+measurable end state a skill's own procedure must reach, its own stated
+check, and the constraints that must not change on the way there.
+Rendered as the generated `## Goal` heading. Follows Claude Code's own
+`/goal` guidance verbatim.
+
+Adopted via `establishing-ubiquitous-language`'s Elicit/Detect/Resolve
+procedure while designing the skill contract form
+(`docs/gitapex/specs/2026-09-12-skill-contract-form-design.md`,
+Architecture section; issue #1964). No existing gitapex synonym covered
+this specific concept -- fresh-term case, not a conflict resolution.
+
+## `Gates`
+
+Within `spec.contract`, the block (and its generated `## Gates` heading)
+naming the SSOT gate id(s) from `.gitapex/ssot.json` that verify a
+skill's own output, plus what the next skill downstream re-derives on
+its own rather than trusting. Distinct from the Acceptance Criteria
+Map's own `Proof method` column: that column names the verification
+method recorded per ACM row and is unchanged by this term.
+
+Resolved by the repository owner, directly, on 2026-09-13, per the
+Resolve step: the design doc's own working name, `Proof`, collided with
+the ACM's `Proof method` column (`Evidence` was also considered);
+`Gates` wins as the distinct term
+(`docs/gitapex/specs/2026-09-12-skill-contract-form-design.md`,
+Vocabulary section).
+
+## `Escalation`
+
+Within `spec.contract`, the block (and its generated `## Escalation`
+heading) mapping a condition a skill's own procedure can detect
+("when") to who or what receives control once it fires ("to": the
+repository owner, or a named stop state).
+
+Adopted via the same procedure and design doc as `Goal`, above. No
+existing gitapex synonym for this specific concept -- fresh-term case.
+
+## `Handoff`
+
+Within `spec.contract`, the block (and its generated `## Handoff`
+heading) naming what happens to *execution* at the end of one skill's
+own procedure: the next skill in a pipeline (`next`, with an optional
+`fallback` and what it `carries`), any skill invoked inline mid-
+procedure when available (`inline`), and optional tooling (`optional`).
+Distinct from both other Handoff-named entries in this glossary, which
+are person-facing, not skill-to-skill: `Portable Question Handoff`
+(preferring `AskUserQuestion` for a decision needing the *user's*
+input) and `Decision handoff` (a structured, evidence-backed
+recommendation presented to a *human* at a closing gate). This
+`Handoff` never involves a human directly.
+
+Adopted via the same procedure and design doc as `Goal`, above; checked
+against both existing Handoff entries in the Detect step -- no
+collision, the three name genuinely different concepts despite the
+shared word, matching the `Architecture trade-off` vs. `Approach`
+precedent above.
+
+## `Invariants`
+
+Within `spec.contract`, the block (and its generated `## Invariants`
+heading) listing hard behavioral limits a skill's own procedure must
+never cross ("Never ..."), each optionally carrying the SSOT gate id
+that backs it, or `null` to disclose that only prose enforces it.
+
+Superseded terms: `Stop boundaries` -- the prose section heading
+individual `SKILL.md` files across this repository use today for the
+same concept (e.g. `establishing-ubiquitous-language/SKILL.md`'s own
+`## Stop boundaries` section). Resolved by the repository owner,
+directly, per the Resolve step, while designing the skill contract form
+(`docs/gitapex/specs/2026-09-12-skill-contract-form-design.md`,
+Architecture section: "`invariants` are today's Stop boundaries"; issue
+#1964). `Stop boundaries` has no standalone entry of its own in this
+glossary to mark superseded -- like the `Dimension`/`Shape check` pair
+above, it was prose usage repeated across many files rather than a
+prior glossary entry, so this note is where the resolution is recorded,
+following that same precedent. Individual `SKILL.md` files' own
+`## Stop boundaries` sections are renamed to `## Invariants` as each
+skill migrates to `spec.contract`, not renamed in bulk by this entry.
