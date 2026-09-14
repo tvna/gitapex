@@ -114,8 +114,13 @@ natural-language claims (see "Why not parse docstrings" below):
      (a nested container, a call, a name reference) is never graded under
      category 3 -- only the four scalar ``Constant`` types listed above are.
    * A display nested inside a ``with`` block still counts as unconditional
-     -- only ``If``/``Try``/``For``/``AsyncFor``/``While`` are treated as a
-     guard, matching this category's own literal wording.
+     -- only ``If``/``Try``/``TryStar``/``For``/``AsyncFor``/``While`` are
+     treated as a guard, matching this category's own literal wording
+     (``TryStar`` -- ``try``/``except*``, Python 3.11+ -- is not an
+     ``ast.Try`` subclass, so it is added to the guard set explicitly
+     rather than falling out of an ``isinstance`` check on ``ast.Try``
+     alone; this repository's own ``requires-python = ">=3.12"`` means it
+     is always present).
    * A display sitting directly in a class body (a class attribute, not
      inside any method) has no enclosing function at all and is never
      graded under category 3.

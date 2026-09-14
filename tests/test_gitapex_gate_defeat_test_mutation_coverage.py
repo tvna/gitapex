@@ -233,10 +233,18 @@ def test_removal_span_for_item_sole_item_with_no_comma_at_all_leaves_an_empty_li
     """A one-item sequence with nothing following the item at all (not even
     a trailing comma) -- the removal span must not run past the end of
     `source` while scanning for one. The item's own span must reach all the
-    way to `len(source)` for this to actually exercise the `cursor <
-    len(source)` guards -- a fixture with any trailing byte (even a closing
-    `}`) never drives `cursor` past the guard's own boundary, and passes
-    just as well with the guards deleted."""
+    way to `len(source)` for this to actually exercise the while-loop's own
+    `cursor < len(source)` guard -- a fixture with any trailing byte (even a
+    closing `}`) never drives `cursor` past that guard's own boundary, and
+    passes just as well with it deleted (`b"" in _TRAILING_WHITESPACE` is
+    True, so deleting the while-loop guard here would hang instead of
+    failing this assertion -- that hang, not a passing assert, is what
+    pins it). The `if cursor < len(source)` guard immediately below the
+    loop is not pinned by this fixture, or by any fixture: once the loop
+    exits, `source[cursor:cursor+1]` is either a real byte or `b""`, and
+    `b"" == b","` is always False, so the length check that guard performs
+    is unreachable to falsify -- deleting it changes nothing for any input.
+    """
     source = b'"only": 1'
     assert len(source) == 9
     assert gate._removal_span_for_item([(0, 9)], 0, source) == (0, 9)
@@ -731,16 +739,16 @@ def test_end_to_end_single_entry_dict_with_a_trailing_comma_does_not_crash_the_s
     """Regression for the SyntaxError defect an independent adversarial
     review found (issue #1799, PR #2000): a module-level dict with exactly
     one entry, written with an explicit trailing comma (this repository's
-    own common multi-line formatting), used to leave `CONST = {\n}` after
-    the sole entry's own span alone was spliced out -- that was fine --
-    but the comma survived, so a source with the comma written on the
-    *item's own line* (`"only": 1,`) left a dangling `,` right after the
-    opening brace once the whole entry was removed together with a stray
-    comma the old code never accounted for consuming. Exercises the full
-    find_violations path (real mutation write + real pytest subprocess),
-    not just the unit-level _removal_span_for_item checks above, so a
-    regression in how this function's return value is actually spliced
-    into a file on disk would be caught here too."""
+    own common multi-line formatting), used to have only the sole entry's
+    own span spliced out -- the comma that followed it was never consumed.
+    With the comma written on the *item's own line* (`"only": 1,`), that
+    left a dangling `,` right behind the opening brace once the entry
+    itself was removed (`CONST = {\n    ,\n}`) -- a hard SyntaxError, not
+    the harmless `CONST = {}` a correct splice produces. Exercises the
+    full find_violations path (real mutation write + real pytest
+    subprocess), not just the unit-level _removal_span_for_item checks
+    above, so a regression in how this function's return value is
+    actually spliced into a file on disk would be caught here too."""
     fixture_path = ".github/scripts/gitapex_check_fixture.py"
     test_path = "tests/test_gitapex_check_fixture.py"
     fixture_src = 'CONST = {\n    "only": 1,\n}\n'
@@ -927,6 +935,10 @@ def test_run_mutation_raises_scan_error_when_the_mutation_write_fails(
 def test_run_mutation_raises_scan_error_when_the_restore_write_fails(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """The restore-write failure message must also tell a human exactly how
+    to recover the file (`git checkout -- <path>`), not just that recovery
+    is needed -- the file may genuinely still hold mutated bytes on disk
+    once this branch is reached."""
     fixture_path = ".github/scripts/gitapex_check_fixture.py"
     test_path = "tests/test_gitapex_check_fixture.py"
     fixture_src = "def make():\n    return 1\n"
@@ -944,8 +956,11 @@ def test_run_mutation_raises_scan_error_when_the_restore_write_fails(
         return original_write_bytes(self, data)
 
     monkeypatch.setattr(pathlib.Path, "write_bytes", _fail_on_second_call)
-    with pytest.raises(gate.ScanError, match="could not restore"):
+    with pytest.raises(
+        gate.ScanError, match=r"could not restore.*git checkout -- .*gitapex_check_fixture\.py"
+    ) as excinfo:
         gate._run_mutation(absolute, b"", original_bytes, (0, 1), [test_absolute], tmp_path)
+    assert str(absolute) in str(excinfo.value)
 
 
 def test_run_mutation_raises_scan_error_on_subprocess_timeout(
@@ -1069,36 +1084,6 @@ def test_run_mutation_does_not_attempt_a_restore_write_when_the_initial_write_fa
     with pytest.raises(gate.ScanError, match="could not write a mutated copy"):
         gate._run_mutation(absolute, b"", original_bytes, (0, 1), [test_absolute], tmp_path)
     assert calls["n"] == 1
-
-
-@pytest.mark.slow
-def test_run_mutation_restore_failure_names_a_concrete_git_checkout_recovery_command(
-    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """The restore-write failure message must tell a human exactly how to
-    recover the file (`git checkout -- <path>`), not just that recovery is
-    needed -- the file may genuinely still hold mutated bytes on disk once
-    this branch is reached."""
-    fixture_path = ".github/scripts/gitapex_check_fixture.py"
-    test_path = "tests/test_gitapex_check_fixture.py"
-    fixture_src = "def make():\n    return 1\n"
-    test_src = "import gitapex_check_fixture\n\n\ndef test_x():\n    pass\n"
-    absolute = _write(tmp_path, fixture_path, fixture_src)
-    test_absolute = _write(tmp_path, test_path, test_src)
-    original_bytes = absolute.read_bytes()
-    original_write_bytes = pathlib.Path.write_bytes
-    calls = {"n": 0}
-
-    def _fail_on_second_call(self: pathlib.Path, data: bytes) -> int:
-        calls["n"] += 1
-        if calls["n"] == 2:
-            raise OSError("simulated restore failure")
-        return original_write_bytes(self, data)
-
-    monkeypatch.setattr(pathlib.Path, "write_bytes", _fail_on_second_call)
-    with pytest.raises(gate.ScanError, match=r"git checkout -- .*gitapex_check_fixture\.py") as excinfo:
-        gate._run_mutation(absolute, b"", original_bytes, (0, 1), [test_absolute], tmp_path)
-    assert str(absolute) in str(excinfo.value)
 
 
 # --- direct unit tests for internal helpers ---------------------------------

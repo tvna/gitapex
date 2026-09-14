@@ -188,11 +188,15 @@ repos:
       # review (issue #1799, PR #2000). Gates run sequentially here (see
       # gitapex_gate_local_preflight.py's own docstring), so no other wired
       # gate ever reads a file mid-mutation. If the restore write itself
-      # fails (disk full, permissions) or this process is killed before it
-      # runs (SIGKILL, OOM), that gate's own raised ScanError names `git
-      # checkout -- <path>` as the recovery command -- which discards
-      # whatever uncommitted edit was sitting in that file at the time,
-      # including the very change you were about to push.
+      # fails (disk full, permissions), that gate's own raised ScanError
+      # names `git checkout -- <path>` as the recovery command -- which
+      # discards whatever uncommitted edit was sitting in that file at the
+      # time, including the very change you were about to push. If this
+      # process is instead killed before the restore write ever runs
+      # (SIGKILL, OOM), Python never executes the `finally` block that
+      # would raise that ScanError -- there is no error, no message, and
+      # no automatic notice at all; the file is silently left holding
+      # mutated bytes on disk until a `git status`/`git diff` catches it.
       #
       # `uv run --frozen python3`, not a bare `python3`: the runner imports
       # _gitapex_schema_validation.py, which needs jsonschema -- not
