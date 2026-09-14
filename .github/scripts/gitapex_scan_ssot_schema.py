@@ -697,7 +697,11 @@ def _as_dict_list(value: Any) -> list[dict[str, Any]]:
     return [entry for entry in value if isinstance(entry, dict)]
 
 
-def find_contract_gate_drift(registry: SsotRegistry | None, skills_dir: pathlib.Path = SKILLS_DIR) -> list[str]:
+def find_contract_gate_drift(
+    registry: SsotRegistry | None,
+    skills_dir: pathlib.Path = SKILLS_DIR,
+    contracts: dict[str, dict[str, Any]] | None = None,
+) -> list[str]:
     """Return one message per skills/*/metadata/gitapex.yaml contract
     gate-id or plane/shipped drift against this same .gitapex/ssot.json
     registry (issue #1965):
@@ -718,12 +722,24 @@ def find_contract_gate_drift(registry: SsotRegistry | None, skills_dir: pathlib.
       ``plane`` is a hook plane (pretooluse/posttooluse/stop), because
       only skills/ and hooks/ ship to a consumer install -- checked
       independently of the plane-membership result above, since the two
-      are separate invariants."""
+      are separate invariants.
+
+    ``contracts`` lets ``find_drift`` pass its own single, already-computed
+    ``discover_contracts()`` result through to all three contract-checking
+    functions rather than each re-sweeping and re-parsing every sidecar
+    independently (three full sidecar reads per ``find_drift`` call instead
+    of one) -- the exact redundant-rescan shape
+    ``gitapex_scan_skill_metadata_schema.py``'s own module docstring
+    already documents fixing once, for its sibling ``_requires_graph``
+    helper (issue #1965 aggregate review). Defaults to ``None`` so every
+    existing standalone call site (this function's own tests included)
+    keeps working unchanged, falling back to a fresh
+    ``discover_contracts(skills_dir)`` call."""
     if registry is None:
         return []
     known_gates = {gate.id: gate for gate in registry.gates}
     findings: list[str] = []
-    for skill_name, contract in discover_contracts(skills_dir).items():
+    for skill_name, contract in (contracts if contracts is not None else discover_contracts(skills_dir)).items():
         for invariant in _as_dict_list(contract.get("invariants")):
             gate_ref = invariant.get("gate")
             if gate_ref is None or not isinstance(gate_ref, str):
@@ -759,13 +775,20 @@ def find_contract_gate_drift(registry: SsotRegistry | None, skills_dir: pathlib.
     return findings
 
 
-def find_contract_precondition_duplicate_ids(skills_dir: pathlib.Path = SKILLS_DIR) -> list[str]:
+def find_contract_precondition_duplicate_ids(
+    skills_dir: pathlib.Path = SKILLS_DIR,
+    contracts: dict[str, dict[str, Any]] | None = None,
+) -> list[str]:
     """Return one message per skills/*/metadata/gitapex.yaml contract whose
     own spec.contract.precondition[].id values are not unique -- checked
     within one contract only, never across contracts/skills (each
-    contract's precondition ids are that contract's own namespace)."""
+    contract's precondition ids are that contract's own namespace).
+
+    ``contracts``: see ``find_contract_gate_drift``'s own docstring -- the
+    same shared-computation parameter, defaulting to a fresh
+    ``discover_contracts(skills_dir)`` call when not supplied."""
     findings: list[str] = []
-    for skill_name, contract in discover_contracts(skills_dir).items():
+    for skill_name, contract in (contracts if contracts is not None else discover_contracts(skills_dir)).items():
         seen: dict[str, int] = {}
         for entry in _as_dict_list(contract.get("precondition")):
             precondition_id = entry.get("id")
@@ -781,13 +804,20 @@ def find_contract_precondition_duplicate_ids(skills_dir: pathlib.Path = SKILLS_D
     return findings
 
 
-def find_contract_handoff_drift(skills_dir: pathlib.Path = SKILLS_DIR) -> list[str]:
+def find_contract_handoff_drift(
+    skills_dir: pathlib.Path = SKILLS_DIR,
+    contracts: dict[str, dict[str, Any]] | None = None,
+) -> list[str]:
     """Return one message per skills/*/metadata/gitapex.yaml contract whose
     own handoff.next.skill, handoff.next.fallback (when present -- it's
     optional), or any handoff.inline[]/optional[] entry does not resolve
-    to a real skills/<name>/ directory."""
+    to a real skills/<name>/ directory.
+
+    ``contracts``: see ``find_contract_gate_drift``'s own docstring -- the
+    same shared-computation parameter, defaulting to a fresh
+    ``discover_contracts(skills_dir)`` call when not supplied."""
     findings: list[str] = []
-    for skill_name, contract in discover_contracts(skills_dir).items():
+    for skill_name, contract in (contracts if contracts is not None else discover_contracts(skills_dir)).items():
         handoff = contract.get("handoff")
         if not isinstance(handoff, dict):
             continue
@@ -848,9 +878,10 @@ def find_drift(
     findings.extend(find_policy_ref_drift(registry))
     findings.extend(find_cluster_drift(registry))
     findings.extend(find_duplicate_ids(instance))
-    findings.extend(find_contract_gate_drift(registry, skills_dir))
-    findings.extend(find_contract_precondition_duplicate_ids(skills_dir))
-    findings.extend(find_contract_handoff_drift(skills_dir))
+    contracts = discover_contracts(skills_dir)
+    findings.extend(find_contract_gate_drift(registry, skills_dir, contracts))
+    findings.extend(find_contract_precondition_duplicate_ids(skills_dir, contracts))
+    findings.extend(find_contract_handoff_drift(skills_dir, contracts))
     return findings
 
 

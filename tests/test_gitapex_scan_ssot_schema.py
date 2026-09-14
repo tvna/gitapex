@@ -1025,6 +1025,32 @@ def _write_skill_with_contract(skills_dir: pathlib.Path, skill_name: str, contra
     return skill_dir
 
 
+def test_find_drift_sweeps_sidecars_for_contracts_exactly_once(tmp_path, monkeypatch):
+    """Regression guard (issue #1965 Step 8 aggregate review): find_drift's
+    three contract-checking functions (find_contract_gate_drift,
+    find_contract_precondition_duplicate_ids, find_contract_handoff_drift)
+    must share one discover_contracts() call, not each independently
+    re-sweep and re-parse every skills/*/metadata/gitapex.yaml sidecar --
+    the exact redundant-rescan shape gitapex_scan_skill_metadata_schema.py's
+    own module docstring already documents fixing once for its sibling
+    _requires_graph helper."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(skills_dir, "fixture-skill", {})
+
+    calls = 0
+    real_discover_contracts = drift.discover_contracts
+
+    def counting_discover_contracts(skills_dir=drift.SKILLS_DIR):
+        nonlocal calls
+        calls += 1
+        return real_discover_contracts(skills_dir)
+
+    monkeypatch.setattr(drift, "discover_contracts", counting_discover_contracts)
+    drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert calls == 1, f"discover_contracts() called {calls} times in one find_drift() run, expected 1"
+
+
 def test_contract_gate_id_unknown_is_flagged(tmp_path):
     """Issue #1965, case 1: a gates[].id naming an id not in
     .gitapex/ssot.json fails."""

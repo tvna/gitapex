@@ -1053,13 +1053,16 @@
       "target": [
         {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
         {"kind": "file-glob", "ref": ".gitapex/ssot.schema.json"},
+        {"kind": "file-glob", "ref": "skills/*/metadata/gitapex.yaml"},
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:push"},
         {"kind": "cross-registry-consistency", "ref": "gates[].script <-> real files on disk"},
         {"kind": "cross-registry-consistency", "ref": "gates[].policy_refs[] <-> policy_sources[].id"},
         {"kind": "cross-registry-consistency", "ref": "gates[].cluster <-> clusters keys"},
         {"kind": "cross-registry-consistency", "ref": "gates[].local_invocation/local_stdin path tokens <-> real files on disk"},
-        {"kind": "cross-registry-consistency", "ref": "gates[].local_invocation <-> gates[].script (same gate)"}
+        {"kind": "cross-registry-consistency", "ref": "gates[].local_invocation <-> gates[].script (same gate)"},
+        {"kind": "cross-registry-consistency", "ref": "a contract-declaring skill's spec.contract.invariants[].gate and spec.contract.gates[].id <-> gates[].id (this same registry)"},
+        {"kind": "cross-registry-consistency", "ref": "a contract-declaring skill's spec.contract.gates[].plane/shipped <-> that same gates[].id entry's own planes[] (this same registry)"}
       ]
     },
     {

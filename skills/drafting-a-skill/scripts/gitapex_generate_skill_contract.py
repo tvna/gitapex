@@ -73,14 +73,14 @@ script's own co-located `test_gitapex_generate_skill_contract.py` doing
 normal `ModuleNotFoundError` instead -- the friendly `SystemExit(2)`
 message is reserved for the documented CLI entry point only.
 
-Not yet wired into any deterministic gate: the `skill-contract-drift`
-`.gitapex/ssot.json` entry ADR 0005's own Confirmation section names is
-prospective work tracked separately (issue #1965's own Task 5, downstream
-of this one). Zero real `skills/*/` directories declare `spec.contract` as
-of this script landing (a prototype-stage feature, migrated in one at a
-time), so this script's own live-repository behavior against every real
-skill today is the uniform "not a target" outcome -- proven instead by the
-synthetic fixtures in this file's own co-located test module.
+Wired into the `skill-contract-drift` `.gitapex/ssot.json` entry ADR
+0005's own Confirmation section names (issue #1965's own Task 5, landed
+in the same PR as this generator). Zero real `skills/*/` directories
+declare `spec.contract` as of this script landing (a prototype-stage
+feature, migrated in one at a time), so this script's own live-repository
+behavior against every real skill today is the uniform "not a target"
+outcome -- proven instead by the synthetic fixtures in this file's own
+co-located test module.
 
 Usage:
   python3 gitapex_generate_skill_contract.py <skills/NAME>
@@ -382,6 +382,19 @@ def _render_gates(records: list[dict[str, object]]) -> str:
     return "\n".join(lines)
 
 
+def _escape_table_cell(value: object) -> str:
+    # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
+    """Escape a literal `|` in a Markdown table cell value (`\\|`) -- unlike
+    `escalation[].to` (kebab-case-only, per skill-metadata.schema.json's
+    own $defs/contractEscalation.to pattern), `escalation[].when` is a free
+    `contractProse` field (any non-newline character, `|` included), so a
+    3+-record table (the one place this generator renders a real Markdown
+    table rather than a bullet list) would otherwise silently gain an
+    extra unescaped cell boundary and corrupt the row (issue #1965 Step 8
+    aggregate review)."""
+    return str(value).replace("|", "\\|")
+
+
 def _render_escalation(records: list[dict[str, object]]) -> str:
     # function-body-test-coverage: WAIVED: exercised via this module's own co-located test_gitapex_generate_skill_contract.py (skills/drafting-a-skill/scripts/); this gate's _test_relative_paths() only recognizes top-level tests/test_gitapex_generate_skill_contract.py(_properties.py), with no fallback for the pre-existing co-located-test convention -- the same gate-side gap gitapex_check_skill_shape.py's own check_shape()/main() already disclose.
     """Bullet list (`- <when> -> <to>`) for fewer than 3 records; a plain,
@@ -396,7 +409,7 @@ def _render_escalation(records: list[dict[str, object]]) -> str:
         lines.append("| When | To |")
         lines.append("| --- | --- |")
         for item in records:
-            lines.append(f"| {item['when']} | {item['to']} |")
+            lines.append(f"| {_escape_table_cell(item['when'])} | {_escape_table_cell(item['to'])} |")
     else:
         for item in records:
             lines.append(f"- {item['when']} -> {item['to']}")

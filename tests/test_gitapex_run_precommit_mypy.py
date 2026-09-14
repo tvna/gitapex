@@ -136,5 +136,6 @@ def test_mypy_groups_check_every_skill_scripts_directory_named_in_ci() -> None:
         "skills/drafting-issues/scripts",
         "skills/planning-a-branch-from-an-issue/scripts",
         "skills/setup-gitapex-toolchain/scripts",
+        "skills/drafting-a-skill/scripts",
     ):
         assert expected in all_dirs

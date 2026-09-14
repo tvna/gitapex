@@ -6,15 +6,18 @@ Proposed
 
 ## Context and Problem Statement
 
-This decision is partially implemented. `skills/evaluating-skill-quality/references/skill-metadata.schema.json`'s
-`$defs/contract` block already landed on this branch (commit `dcf32779`,
-this same PR's foundation task), but the generator that actually performs
-the projection this ADR describes
+This decision is fully implemented as of this same PR (issue #1965's own
+foundation task): `skills/evaluating-skill-quality/references/skill-metadata.schema.json`'s
+`$defs/contract` block (commit `dcf32779`), the generator that actually
+performs the projection this ADR describes
 (`skills/drafting-a-skill/scripts/gitapex_generate_skill_contract.py`),
-its `--check` gate (`skill-contract-drift`), and the gate-id resolution
-addition to the ssot scanner are not yet built -- remaining work tracked
-under the same child issue, https://github.com/tvna/gitapex/issues/1965,
-and the sibling child issues https://github.com/tvna/gitapex/issues/1966
+its `--check` gate (`skill-contract-drift`, registered in
+`.gitapex/ssot.json`), and the gate-id resolution addition to the ssot
+scanner (`.github/scripts/gitapex_scan_ssot_schema.py`) all landed
+together under https://github.com/tvna/gitapex/issues/1965. Zero real
+skills declare `spec.contract` yet -- migration to this form is separate,
+per-skill work, tracked under the sibling child issues
+https://github.com/tvna/gitapex/issues/1966
 (`eliciting-a-design` migration) and
 https://github.com/tvna/gitapex/issues/1967
 (`drafting-a-pr-to-merge` migration), under parent tracking issue
@@ -163,9 +166,10 @@ per the schema shape this branch's foundation task already merged
   `.gitapex/ssot.json` or a sibling skill's own directory.
 
 The generator itself, its `skill-contract-drift` gate, and the gate-id
-resolution addition to the ssot scanner are prospective as of this ADR --
-not yet built, tracked as remaining foundation-task work under
-https://github.com/tvna/gitapex/issues/1965 and the migration work under
+resolution addition to the ssot scanner all shipped together with this
+ADR under the same foundation-task PR, https://github.com/tvna/gitapex/issues/1965.
+The migration work that actually moves a real skill onto this shape stays
+separate and prospective, tracked under
 https://github.com/tvna/gitapex/issues/1966 /
 https://github.com/tvna/gitapex/issues/1967, all under parent tracking
 issue https://github.com/tvna/gitapex/issues/1964.
@@ -203,12 +207,14 @@ move to `references/procedure.md`) for content that does not fit
 cleanly into `spec.contract`'s six blocks -- this is real per-skill
 migration work, not automated by this decision alone.
 
-Bad, because the schema shape (`$defs/contract`) now exists ahead of the
-generator that actually reads it -- until the remaining foundation-task
-generator/gate work lands (https://github.com/tvna/gitapex/issues/1965),
-`spec.contract` is a declarable-but-unenforced shape: a skill could
-hand-declare it today with no `skill-contract-drift` gate yet checking
-that a rendered `SKILL.md` actually matches it.
+Bad, because until a real skill actually migrates
+(https://github.com/tvna/gitapex/issues/1966 /
+https://github.com/tvna/gitapex/issues/1967), `spec.contract` is a
+declared-and-enforced-but-unused shape: the schema, generator, and
+`skill-contract-drift` gate all landed together in this same PR, but
+zero real skills declare `spec.contract` yet, so the gate is exercised
+only by its own synthetic test fixtures today, not by any production
+target.
 
 Bad, because `precondition[].onFail`, `escalation[].to`, and
 `gates[].id` are deliberately open, non-enum string fields for now (per
@@ -226,18 +232,21 @@ numbered-step form.
 
 ## Confirmation
 
-Two gates, both prospective as of this ADR (named in Bad above, tracked
-under https://github.com/tvna/gitapex/issues/1965, not yet shipped):
+Two gates, both shipped together with this ADR under
+https://github.com/tvna/gitapex/issues/1965:
 `skill-contract-drift` (a new `.gitapex/ssot.json` `ci`/`local` entry
 whose `--check` mode re-renders each contract-declaring skill's marker
-region from its sidecar and diffs it against the committed one) will be
-the mechanism that verifies a `SKILL.md`'s generated region actually
+region from its sidecar and diffs it against the committed one) is the
+mechanism that verifies a `SKILL.md`'s generated region actually
 matches its sidecar's `spec.contract`; a gate-id resolution addition to
 the existing `ssot-schema-drift` scanner
-(`.github/scripts/gitapex_scan_ssot_schema.py`) will verify every
+(`.github/scripts/gitapex_scan_ssot_schema.py`) verifies every
 `invariants[].gate` and `gates[].id` entry actually names a real gate in
-`.gitapex/ssot.json`. Until both land, compliance with the projection
-boundary this ADR states relies on review -- the same as the schema's
-own `additionalProperties: false` constraint on `$defs/contract` relies
-on review today to notice a hand-edit that tries to smuggle a
-non-contract field in via a sibling `spec` block instead.
+`.gitapex/ssot.json`. Both are exercised today only by their own
+synthetic test fixtures, since zero real skills declare `spec.contract`
+yet; once a real skill migrates, compliance with the projection boundary
+this ADR states is enforced by these two gates directly, not review
+alone -- the same as the schema's own `additionalProperties: false`
+constraint on `$defs/contract` still relies on review to notice a
+hand-edit that tries to smuggle a non-contract field in via a sibling
+`spec` block instead.

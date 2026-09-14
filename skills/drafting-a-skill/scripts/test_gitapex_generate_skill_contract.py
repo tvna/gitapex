@@ -254,12 +254,12 @@ def test_empty_handoff_inline_and_optional_render_no_bullets() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_gates_shipped_true_renders_already_enforcing() -> None:
+def test_gates_shipped_true_renders_shipped_with_the_plugin() -> None:
     rendered = generator.render_contract_region(_FULL_CONTRACT)
     assert "- subagent-stop-verification (stop, shipped with the plugin)" in rendered
 
 
-def test_gates_shipped_false_renders_not_yet_enforcing() -> None:
+def test_gates_shipped_false_renders_gitapex_repository_only() -> None:
     rendered = generator.render_contract_region(_FULL_CONTRACT)
     assert "- skill-contract-drift (ci, gitapex repository only)" in rendered
 
@@ -306,6 +306,24 @@ def test_escalation_three_records_renders_table() -> None:
     assert "| c | main-thread |" in rendered
 
 
+def test_escalation_table_escapes_a_literal_pipe_in_when() -> None:
+    """escalation[].when is a free contractProse field (any non-newline
+    character, `|` included) -- a literal `|` in a 3+-record table must
+    not be allowed to inject an extra unescaped cell boundary and corrupt
+    the row (issue #1965 Step 8 aggregate review)."""
+    contract = _copy_full_contract()
+    contract["escalation"] = [
+        {"when": "retry limit reached | operator unavailable", "to": "human-operator"},
+        {"when": "b", "to": "stop-and-replan"},
+        {"when": "c", "to": "main-thread"},
+    ]
+    rendered = generator.render_contract_region(contract)
+    assert "| retry limit reached \\| operator unavailable | human-operator |" in rendered
+    # The unescaped literal must not survive -- that's the exact shape that
+    # would read as a spurious third cell to a Markdown table parser.
+    assert "| retry limit reached | operator unavailable | human-operator |" not in rendered
+
+
 def test_escalation_table_has_no_padding_alignment() -> None:
     contract = _copy_full_contract()
     contract["escalation"] = [
@@ -346,7 +364,7 @@ def test_missing_goal_raises_generation_error(tmp_path: pathlib.Path) -> None:
 
 def test_missing_handoff_next_skill_raises_generation_error(tmp_path: pathlib.Path) -> None:
     contract = _copy_full_contract()
-    del contract["handoff"]["next"]["skill"]  # type: ignore[index]
+    del contract["handoff"]["next"]["skill"]
     skill_dir = _make_skill(tmp_path, "missing-handoff-skill-skill", contract)
     with pytest.raises(generator.GenerationError, match=r"spec.contract.handoff.next.skill"):
         generator.compute_rendered_skill_md(skill_dir)
