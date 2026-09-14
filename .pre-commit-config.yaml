@@ -178,6 +178,22 @@ repos:
       # enforcement for the ordinary path, not a command a contributor has
       # to remember to type.
       #
+      # Issue #1799's own defeat-test-mutation-coverage gate is also the
+      # first wired gate whose own detection mechanism writes to disk --
+      # every other wired gate only reads and reasons about the AST. It
+      # temporarily overwrites an in-scope source file's own real bytes on
+      # this machine (not a copy) for the duration of one pytest subprocess
+      # per graded element, restoring the original bytes in a `finally`
+      # block regardless of outcome; found by an independent adversarial
+      # review (issue #1799, PR #2000). Gates run sequentially here (see
+      # gitapex_gate_local_preflight.py's own docstring), so no other wired
+      # gate ever reads a file mid-mutation. If the restore write itself
+      # fails (disk full, permissions) or this process is killed before it
+      # runs (SIGKILL, OOM), that gate's own raised ScanError names `git
+      # checkout -- <path>` as the recovery command -- which discards
+      # whatever uncommitted edit was sitting in that file at the time,
+      # including the very change you were about to push.
+      #
       # `uv run --frozen python3`, not a bare `python3`: the runner imports
       # _gitapex_schema_validation.py, which needs jsonschema -- not
       # guaranteed present on a bare system python3 (issue #1485). Each

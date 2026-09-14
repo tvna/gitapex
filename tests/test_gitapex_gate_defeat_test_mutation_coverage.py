@@ -563,6 +563,7 @@ def test_waived_lines_ignores_a_waiver_string_inside_a_string_literal() -> None:
 # --- find_violations: end-to-end mutation-and-rerun, one per category -------
 
 
+@pytest.mark.slow
 def test_end_to_end_category1_vacuous_test_leaves_a_finding_then_fixing_it_clears(tmp_path: pathlib.Path) -> None:
     """Red-then-green proof, category 1 (regex alternation), mirroring
     issue #1799's own #1733/#1735 CR-alternative-prefix-shaped gap: a test
@@ -605,6 +606,7 @@ def test_end_to_end_category1_vacuous_test_leaves_a_finding_then_fixing_it_clear
     assert waived_fixed == []
 
 
+@pytest.mark.slow
 def test_end_to_end_category2_vacuous_test_leaves_a_finding_then_fixing_it_clears(tmp_path: pathlib.Path) -> None:
     """Red-then-green proof, category 2 (module-level dict entry),
     mirroring issue #1799's own #1990 REVIEW_PERSONA_PERMISSION-shaped
@@ -651,6 +653,7 @@ def test_end_to_end_category2_vacuous_test_leaves_a_finding_then_fixing_it_clear
     assert waived_fixed == []
 
 
+@pytest.mark.slow
 def test_end_to_end_category3_vacuous_test_leaves_a_finding_then_fixing_it_clears(tmp_path: pathlib.Path) -> None:
     """Red-then-green proof, category 3 (unconditionally emitted literal),
     mirroring issue #1799's own #1991 "hidden: true"-shaped gap: a test
@@ -689,6 +692,7 @@ def test_end_to_end_category3_vacuous_test_leaves_a_finding_then_fixing_it_clear
     assert waived_fixed == []
 
 
+@pytest.mark.slow
 def test_end_to_end_single_entry_dict_with_a_trailing_comma_does_not_crash_the_scan(
     tmp_path: pathlib.Path,
 ) -> None:
@@ -746,6 +750,7 @@ def test_find_violations_skips_a_source_with_no_diff_touched_paired_test(tmp_pat
     assert (violations, waived, graded) == ([], [], 0)
 
 
+@pytest.mark.slow
 def test_find_violations_waiver_honoured_on_the_reported_line(tmp_path: pathlib.Path) -> None:
     fixture_path = ".github/scripts/gitapex_check_fixture.py"
     test_path = "tests/test_gitapex_check_fixture.py"
@@ -812,6 +817,7 @@ def test_find_violations_raises_scan_error_for_non_utf8_source(tmp_path: pathlib
         gate.find_violations(diff_text, tmp_path)
 
 
+@pytest.mark.slow
 def test_find_violations_raises_scan_error_on_a_collection_error_mutation(tmp_path: pathlib.Path) -> None:
     """A paired test file that itself fails to *import* at all (a
     module-level `NameError`, not merely a runtime failure inside a test
@@ -833,6 +839,7 @@ def test_find_violations_raises_scan_error_on_a_collection_error_mutation(tmp_pa
         gate.find_violations(diff_text, tmp_path)
 
 
+@pytest.mark.slow
 def test_run_mutation_restores_the_original_bytes_even_when_pytest_errors(tmp_path: pathlib.Path) -> None:
     fixture_path = ".github/scripts/gitapex_check_fixture.py"
     test_path = "tests/test_gitapex_check_fixture.py"
@@ -884,6 +891,7 @@ def test_run_mutation_raises_scan_error_when_the_mutation_write_fails(
         gate._run_mutation(absolute, b"", original_bytes, (0, 1), [test_absolute], tmp_path)
 
 
+@pytest.mark.slow
 def test_run_mutation_raises_scan_error_when_the_restore_write_fails(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1261,6 +1269,7 @@ def test_main_returns_0_and_prints_ok_on_a_clean_diff(
     assert "OK: 1 in-scope file(s) graded" in capsys.readouterr().out
 
 
+@pytest.mark.slow
 def test_main_returns_1_and_prints_violations_citing_the_issue(
     tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -1284,6 +1293,7 @@ def test_main_returns_1_and_prints_violations_citing_the_issue(
     assert "defeat-test-mutation-coverage: WAIVED" in captured.err
 
 
+@pytest.mark.slow
 def test_main_prints_a_waived_finding_separately(tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]) -> None:
     fixture_path = ".github/scripts/gitapex_check_fixture.py"
     test_path = "tests/test_gitapex_check_fixture.py"

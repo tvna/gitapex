@@ -2198,7 +2198,7 @@
       "planes": ["ci", "local"],
       "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_defeat_test_mutation_coverage.py"],
       "local_stdin": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_run_base_diff.py", "--", "*.py"],
-      "trigger": ".github/workflows/defeat-test-mutation-coverage-gate.yml on pull_request, plus tests/test_gitapex_gate_defeat_test_mutation_coverage.py inside the pytest step of .github/workflows/test.yml",
+      "trigger": ".github/workflows/defeat-test-mutation-coverage-gate.yml on pull_request, plus tests/test_gitapex_gate_defeat_test_mutation_coverage.py and tests/test_gitapex_gate_defeat_test_mutation_coverage_properties.py inside the pytest step of .github/workflows/test.yml",
       "policy_refs": [],
       "cluster": "test-integrity",
       "tracking_issue": 1799,
