@@ -134,9 +134,8 @@ paired tests, roughly doubling the prior warm-run baseline on its own --
 different hardware than the figures below in any case; issue #1965's own
 skill-contract-drift gate landed on a parallel branch --
 the prior 50-gate set (defeat-test-mutation-coverage) measured roughly 49
-seconds, the prior 50-gate set (network-exception-set-drift, issue #1512)
+seconds, the prior 49-gate set (network-exception-set-drift, issue #1512)
 measured roughly 24 seconds, the
-prior 49-gate set measured roughly 24 seconds, the
 prior 48-gate set measured roughly 24 seconds, the
 prior 47-gate set measured roughly 22 seconds, the
 prior 45-gate set measured roughly 14 seconds, the

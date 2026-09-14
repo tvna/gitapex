@@ -164,6 +164,33 @@ def test_node_byte_span_accounts_for_a_multibyte_character_earlier_on_the_line()
     assert body[start:end] == '"héllo|wörld"'.encode()
 
 
+# --- _span ---------------------------------------------------------------
+
+
+def test_span_single_line_node_returns_just_that_line() -> None:
+    source = "x = 1\n"
+    tree = ast.parse(source)
+    assign = tree.body[0]
+    assert isinstance(assign, ast.Assign)
+    assert gate._span(assign.value) == {1}
+
+
+def test_span_multiline_node_returns_every_line_from_start_to_end() -> None:
+    """A node whose own value spans several physical lines -- confirmed
+    directly against a real parenthesized expression, not assumed: parens
+    themselves fall outside `lineno`/`end_lineno`, so this pins the BinOp's
+    own line range as `_span`'s caller sites (`_regex_alternation_elements`,
+    `_literal_display_elements`) rely on it."""
+    source = "x = (\n    1\n    + 2\n)\n"
+    tree = ast.parse(source)
+    assign = tree.body[0]
+    assert isinstance(assign, ast.Assign)
+    node = assign.value
+    assert isinstance(node, ast.BinOp)
+    assert (node.lineno, node.end_lineno) == (2, 3)
+    assert gate._span(node) == {2, 3}
+
+
 # --- _removal_span_for_item ---------------------------------------------------
 
 
@@ -205,9 +232,14 @@ def test_removal_span_for_item_sole_item_trailing_comma_skips_intervening_whites
 def test_removal_span_for_item_sole_item_with_no_comma_at_all_leaves_an_empty_literal() -> None:
     """A one-item sequence with nothing following the item at all (not even
     a trailing comma) -- the removal span must not run past the end of
-    `source` while scanning for one."""
-    source = b'{"only": 1}'
-    assert gate._removal_span_for_item([(1, 10)], 0, source) == (1, 10)
+    `source` while scanning for one. The item's own span must reach all the
+    way to `len(source)` for this to actually exercise the `cursor <
+    len(source)` guards -- a fixture with any trailing byte (even a closing
+    `}`) never drives `cursor` past the guard's own boundary, and passes
+    just as well with the guards deleted."""
+    source = b'"only": 1'
+    assert len(source) == 9
+    assert gate._removal_span_for_item([(0, 9)], 0, source) == (0, 9)
 
 
 def test_removal_span_for_item_first_of_several_consumes_the_trailing_separator() -> None:
@@ -1039,6 +1071,7 @@ def test_run_mutation_does_not_attempt_a_restore_write_when_the_initial_write_fa
     assert calls["n"] == 1
 
 
+@pytest.mark.slow
 def test_run_mutation_restore_failure_names_a_concrete_git_checkout_recovery_command(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

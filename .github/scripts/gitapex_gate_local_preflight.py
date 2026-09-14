@@ -218,8 +218,8 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # end, unlike every other wired gate, which is pure AST inspection, it
 # spawns a real pytest subprocess per graded element and self-grades its
 # own regex/dict/literal elements against its own paired tests; the prior
-# 50-gate set (network-exception-set-drift, issue #1512) measured roughly
-# 24 s, the prior 49-gate set measured roughly 24 s, the
+# 49-gate set (network-exception-set-drift, issue #1512) measured roughly
+# 24 s, the
 # prior 48-gate set measured roughly 24 s, the
 # prior 47-gate set measured roughly 22 s, the
 # prior 45-gate set measured roughly 14 s, the
