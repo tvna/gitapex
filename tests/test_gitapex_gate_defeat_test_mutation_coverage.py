@@ -864,6 +864,118 @@ def test_run_mutation_raises_scan_error_when_subprocess_run_itself_errors(
     assert absolute.read_bytes() == original_bytes
 
 
+# --- _run_mutation: containment check (path-traversal defense in depth) -----
+
+
+def test_is_within_root_accepts_root_itself_and_a_nested_path(tmp_path: pathlib.Path) -> None:
+    nested = tmp_path / "a" / "b" / "c.py"
+    nested.parent.mkdir(parents=True)
+    nested.write_text("x = 1\n", encoding="utf-8")
+    assert gate._is_within_root(tmp_path, tmp_path) is True
+    assert gate._is_within_root(nested, tmp_path) is True
+
+
+def test_is_within_root_rejects_a_sibling_directory_that_merely_shares_a_prefix(tmp_path: pathlib.Path) -> None:
+    """A naive string-prefix containment check
+    (``str(candidate).startswith(str(root))``) wrongly accepts a sibling
+    directory that merely shares `root`'s own name as a text prefix --
+    `root`=`.../repo`, `candidate`=`.../repo-evil/x.py`. `_is_within_root`
+    must not repeat that defect: it resolves both sides to absolute,
+    normalized paths and checks real containment, not string prefixing."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    sibling = tmp_path / "repo-evil"
+    sibling.mkdir()
+    evil = sibling / "x.py"
+    evil.write_text("x = 1\n", encoding="utf-8")
+    assert str(evil).startswith(str(root))  # the naive check would wrongly accept this
+    assert gate._is_within_root(evil, root) is False
+
+
+def test_is_within_root_rejects_a_dot_dot_escape_above_root(tmp_path: pathlib.Path) -> None:
+    root = tmp_path / "repo"
+    root.mkdir()
+    outside = tmp_path / "outside.py"
+    outside.write_text("x = 1\n", encoding="utf-8")
+    escaping = root / ".." / "outside.py"
+    assert gate._is_within_root(escaping, root) is False
+
+
+def test_run_mutation_refuses_to_write_outside_root(tmp_path: pathlib.Path) -> None:
+    """The containment check runs before any write is attempted: a target
+    resolving outside `root` raises `ScanError` and the file is left
+    byte-for-byte untouched."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    target = outside_dir / "evil.py"
+    original = b"def make():\n    return 1\n"
+    target.write_bytes(original)
+    test_absolute = root / "tests" / "test_evil.py"
+    with pytest.raises(gate.ScanError, match="does not resolve to a path contained within"):
+        gate._run_mutation(target, b"", original, (0, 1), [test_absolute], root)
+    assert target.read_bytes() == original
+
+
+# --- _run_mutation: the first mutated-bytes write is inside try/finally too -
+
+
+def test_run_mutation_does_not_attempt_a_restore_write_when_the_initial_write_fails(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A first-write `OSError` (disk full, permission denied) means nothing
+    was ever written to disk -- the `finally` block must not then attempt a
+    pointless (and potentially itself-failing) restore write. Asserted here
+    by call-counting `write_bytes`: exactly one call, not two."""
+    fixture_path = ".github/scripts/gitapex_check_fixture.py"
+    test_path = "tests/test_gitapex_check_fixture.py"
+    fixture_src = "def make():\n    return 1\n"
+    test_src = "import gitapex_check_fixture\n\n\ndef test_x():\n    pass\n"
+    absolute = _write(tmp_path, fixture_path, fixture_src)
+    test_absolute = _write(tmp_path, test_path, test_src)
+    original_bytes = absolute.read_bytes()
+    calls = {"n": 0}
+
+    def _counting_raising_write_bytes(self: pathlib.Path, data: bytes) -> int:
+        calls["n"] += 1
+        raise OSError("simulated write failure")
+
+    monkeypatch.setattr(pathlib.Path, "write_bytes", _counting_raising_write_bytes)
+    with pytest.raises(gate.ScanError, match="could not write a mutated copy"):
+        gate._run_mutation(absolute, b"", original_bytes, (0, 1), [test_absolute], tmp_path)
+    assert calls["n"] == 1
+
+
+def test_run_mutation_restore_failure_names_a_concrete_git_checkout_recovery_command(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The restore-write failure message must tell a human exactly how to
+    recover the file (`git checkout -- <path>`), not just that recovery is
+    needed -- the file may genuinely still hold mutated bytes on disk once
+    this branch is reached."""
+    fixture_path = ".github/scripts/gitapex_check_fixture.py"
+    test_path = "tests/test_gitapex_check_fixture.py"
+    fixture_src = "def make():\n    return 1\n"
+    test_src = "import gitapex_check_fixture\n\n\ndef test_x():\n    pass\n"
+    absolute = _write(tmp_path, fixture_path, fixture_src)
+    test_absolute = _write(tmp_path, test_path, test_src)
+    original_bytes = absolute.read_bytes()
+    original_write_bytes = pathlib.Path.write_bytes
+    calls = {"n": 0}
+
+    def _fail_on_second_call(self: pathlib.Path, data: bytes) -> int:
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise OSError("simulated restore failure")
+        return original_write_bytes(self, data)
+
+    monkeypatch.setattr(pathlib.Path, "write_bytes", _fail_on_second_call)
+    with pytest.raises(gate.ScanError, match=r"git checkout -- .*gitapex_check_fixture\.py") as excinfo:
+        gate._run_mutation(absolute, b"", original_bytes, (0, 1), [test_absolute], tmp_path)
+    assert str(absolute) in str(excinfo.value)
+
+
 # --- direct unit tests for internal helpers ---------------------------------
 
 

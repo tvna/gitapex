@@ -156,6 +156,19 @@ with no dangling separator; removing the sole element of a one-item sequence
 leaves an empty literal (``{}``, a pattern with no alternatives, exact same
 technique), also valid.
 
+Before any byte is written, ``_is_within_root`` re-checks that the target
+file's own absolute path actually resolves (symlinks and ``..`` components
+included) to somewhere inside ``--root`` -- defense in depth on top of, not
+a replacement for, ``in_scope``'s own fixed ``_IN_SCOPE_RE`` shape. This
+gate is the odd one out among its sibling gates precisely because it is the
+only one whose own detection mechanism actually writes to disk (its
+siblings only ever read and reason about the AST); a diff-derived path that
+somehow resolved outside the repository root would otherwise let this
+gate's own mutation engine overwrite an arbitrary file. A path failing this
+check raises :class:`ScanError` before ``write_bytes`` is ever called, the
+same fail-closed contract every other malformed-input case in this gate
+already gets.
+
 The mutated bytes are written over the on-disk source file for the duration
 of one ``pytest`` subprocess invocation scoped to exactly the paired test
 file(s) this diff itself touches (see "Why not parse docstrings" above), then
@@ -166,7 +179,16 @@ memory once, before the first mutation of that file, and every restore comes
 from that same in-memory copy -- never by re-reading the file from disk after
 a prior mutation -- so an interrupted restore can never let a later
 mutation's restore step re-save an already-mutated copy as if it were the
-original.
+original. The very first mutated-bytes write is itself inside this same
+``try``/``finally`` protection (not a bare write before it, as an earlier
+version of this gate had it), so an ``OSError`` on that first write still
+runs the ``finally`` block; the restore write itself is skipped there
+(nothing was actually written yet, so nothing needs restoring), while the
+raised :class:`ScanError` still names the failure plainly. Where the
+*restore* write (not the initial one) fails instead -- the on-disk file
+genuinely may still hold mutated bytes -- the raised :class:`ScanError`
+now also names a concrete recovery command (``git checkout -- <path>``)
+rather than leaving a human to guess.
 
 If the paired suite still exits 0 (every test passed) against the mutated
 source, that element is a ``defeat-test-mutation-gap`` finding: its paired
@@ -225,9 +247,10 @@ Exit codes
 ----------
 0 clean, 1 a vacuous-coverage finding, 2 the scan could not be trusted
 (malformed diff, an in-scope or paired-test file that cannot be
-read/parsed, a ``--root`` that is not a directory, or a subprocess ``pytest``
-invocation that itself errors for a reason other than "tests ran and
-passed/failed" -- e.g. a collection error) -- the same fail-closed contract
+read/parsed, a ``--root`` that is not a directory, a diff-derived path that
+does not resolve inside ``--root`` (``_is_within_root``), or a subprocess
+``pytest`` invocation that itself errors for a reason other than "tests ran
+and passed/failed" -- e.g. a collection error) -- the same fail-closed contract
 both sibling gates already state, dimension 15 of
 ``skills/evaluating-deterministic-gate-quality/references/dimensions.md``.
 
@@ -901,6 +924,24 @@ def _invalidate_pycache(absolute_path: pathlib.Path) -> None:
         shutil.rmtree(cache_dir, ignore_errors=True)
 
 
+def _is_within_root(candidate: pathlib.Path, root: pathlib.Path) -> bool:
+    """True iff `candidate` resolves (symlinks and `..` components
+    included) to `root` itself or somewhere inside it -- the path-traversal
+    containment check `_run_mutation` runs immediately before writing a
+    single mutated byte to disk, on top of (never a replacement for)
+    `in_scope`'s own fixed `_IN_SCOPE_RE` shape. Real defect class this
+    would catch that a plain string-prefix check would not: a same-prefixed
+    sibling directory (`root=/repo`, `candidate=/repo-evil/x.py`) -- both
+    sides are resolved to absolute, normalized paths before comparison, so
+    neither a `..`-relative escape nor a textual-prefix coincidence can
+    pass. `Path.is_relative_to` returns a plain bool (never raises), so
+    there is no failure-mode exception to route wrong here -- deliberately
+    not `relative_to(...)` wrapped in a `try`/`except ValueError: return
+    False`, which is this same falsy-default-on-exception shape
+    `except-fail-open` (issue #1722) exists to catch."""
+    return candidate.resolve().is_relative_to(root.resolve())
+
+
 def _run_mutation(
     absolute_path: pathlib.Path,
     bom: bytes,
@@ -914,31 +955,42 @@ def _run_mutation(
     bytes in a `finally` block regardless of outcome. Returns True iff the
     mutation SURVIVED (the paired suite still passed clean); False iff at
     least one paired test failed (the mutation was caught). Raises
-    `ScanError` for anything else -- a write/restore failure, a subprocess
-    that could not be started or timed out, or a pytest exit code that is
-    neither 0 nor 1 -- per the module docstring's own "Exit codes" section.
+    `ScanError` for anything else -- `absolute_path` resolving outside
+    `root`, a write/restore failure, a subprocess that could not be started
+    or timed out, or a pytest exit code that is neither 0 nor 1 -- per the
+    module docstring's own "Exit codes" section.
     """
+    if not _is_within_root(absolute_path, root):
+        raise ScanError(
+            f"refusing to mutate {absolute_path} -- it does not resolve to a path contained "
+            f"within --root {root}. This gate's own mutation engine writes real bytes to disk, "
+            "unlike its sibling AST-only gates, so a diff-derived path that would resolve "
+            "outside the repository root is rejected before any write is attempted."
+        )
+
     start, end = removal_span
     mutated = bom + original_body[:start] + original_body[end:]
+    mutated_write_succeeded = False
     try:
-        absolute_path.write_bytes(mutated)
-    except OSError as error:
-        raise ScanError(f"could not write a mutated copy of {absolute_path}: {error}") from error
-    _invalidate_pycache(absolute_path)
+        try:
+            absolute_path.write_bytes(mutated)
+            mutated_write_succeeded = True
+        except OSError as error:
+            raise ScanError(f"could not write a mutated copy of {absolute_path}: {error}") from error
+        _invalidate_pycache(absolute_path)
 
-    env = dict(os.environ)
-    extra_path = str(absolute_path.parent)
-    existing = env.get("PYTHONPATH", "")
-    env["PYTHONPATH"] = f"{extra_path}{os.pathsep}{existing}" if existing else extra_path
-    # Defense in depth alongside `_invalidate_pycache`: never let the
-    # subprocess itself write a new cache entry that a later mutation (or
-    # a later, unrelated import of the restored original) could read back
-    # as stale. `_invalidate_pycache` alone already prevents a stale read
-    # by clearing the directory before every run; this just stops a new
-    # one from being created in the first place.
-    env["PYTHONDONTWRITEBYTECODE"] = "1"
+        env = dict(os.environ)
+        extra_path = str(absolute_path.parent)
+        existing = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = f"{extra_path}{os.pathsep}{existing}" if existing else extra_path
+        # Defense in depth alongside `_invalidate_pycache`: never let the
+        # subprocess itself write a new cache entry that a later mutation (or
+        # a later, unrelated import of the restored original) could read back
+        # as stale. `_invalidate_pycache` alone already prevents a stale read
+        # by clearing the directory before every run; this just stops a new
+        # one from being created in the first place.
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
 
-    try:
         try:
             completed = subprocess.run(  # noqa: S603
                 [sys.executable, "-m", "pytest", "--no-cov", "-n0", "-q", "-x", *(str(p) for p in test_paths)],
@@ -958,11 +1010,24 @@ def _run_mutation(
                 f"pytest failed to run grading a mutated copy of {absolute_path} against {test_paths}: {error}"
             ) from error
     finally:
-        try:
-            absolute_path.write_bytes(bom + original_body)
-        except OSError as error:
-            raise ScanError(f"could not restore {absolute_path} after mutation testing: {error}") from error
-        _invalidate_pycache(absolute_path)
+        # The initial mutated-bytes write above is inside this same
+        # try/finally (not a bare write before it): an `OSError` there is
+        # still caught by the `except OSError` immediately around it and
+        # re-raised as `ScanError`, but that re-raise still runs this
+        # `finally` block on its way out. `mutated_write_succeeded` staying
+        # False in that specific case means nothing was actually written to
+        # disk, so there is nothing to restore -- the restore write below is
+        # skipped, not attempted and ignored.
+        if mutated_write_succeeded:
+            try:
+                absolute_path.write_bytes(bom + original_body)
+            except OSError as error:
+                raise ScanError(
+                    f"could not restore {absolute_path} after mutation testing: {error}. The file "
+                    f"may still contain mutated bytes on disk -- run `git checkout -- {absolute_path}` "
+                    "to restore it before re-running this gate or committing."
+                ) from error
+            _invalidate_pycache(absolute_path)
 
     if completed.returncode == 0:
         return True

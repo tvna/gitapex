@@ -4,8 +4,12 @@
 ``detection-logic-property-coverage`` gate (issue #1178), contains a regex-,
 path-resolution-, or string-comparison-shaped call: :func:`in_scope`,
 :func:`_stem`, :func:`_diff_target_path`, :func:`_looks_like_real_header_pair`,
-:func:`parse_added_lines`, :func:`_waived_lines`, :func:`_split_bom`, and
-:func:`_string_literal_content_span`.
+:func:`parse_added_lines`, :func:`_waived_lines`, :func:`_split_bom`,
+:func:`_string_literal_content_span`, and :func:`_is_within_root` (the
+path-traversal containment check `_run_mutation` runs immediately before
+writing a mutated byte to disk -- a defense-in-depth hardening beyond
+`in_scope`'s own fixed scope pattern; step 8's own refactor/simplify pass,
+issue #1799).
 
 ``in_scope``, ``_diff_target_path``, ``_looks_like_real_header_pair`` and
 ``parse_added_lines`` are copied verbatim (or near-verbatim, for ``in_scope``'s
@@ -35,6 +39,8 @@ docstring gives the full rationale, not repeated here beyond this pointer.
 """
 
 from __future__ import annotations
+
+import pathlib
 
 import gitapex_gate_defeat_test_mutation_coverage as gate
 import pytest
@@ -255,3 +261,37 @@ def test_string_literal_content_span_recovers_exactly_the_quoted_content(prefix:
     raw = f"{prefix}{quote}{content}{quote}".encode()
     start, end = gate._string_literal_content_span(raw)
     assert raw[start:end] == content.encode()
+
+
+_PATH_SEGMENT = st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789_-", min_size=1, max_size=12)
+
+
+@_PROPERTIES
+@given(
+    root_segments=st.lists(_PATH_SEGMENT, min_size=1, max_size=4),
+    nested_segments=st.lists(_PATH_SEGMENT, min_size=1, max_size=4),
+    outside_segment=_PATH_SEGMENT,
+)
+def test_is_within_root_accepts_nested_paths_and_rejects_a_resolved_escape(
+    root_segments: list[str], nested_segments: list[str], outside_segment: str
+) -> None:
+    """Model-based, independent of `_is_within_root`'s own implementation:
+    a path built strictly beneath `root` is always within it; a path that
+    walks back out of `root` (however many `..` components, into a
+    same-shaped but differently-named top-level directory) never is. Real
+    defect class this would catch: a naive string-prefix containment check
+    (`str(candidate).startswith(str(root))`) wrongly accepting a
+    same-prefixed sibling directory, or a check that forgets to resolve
+    `..` components before comparing. `outside_segment` is deliberately
+    given a fixed prefix longer than any generated `root_segments` entry
+    (`_PATH_SEGMENT`'s own `max_size=12` vs. `"definitely-outside-"`'s 19
+    characters) so the escaped path can never coincide with `root` by pure
+    chance."""
+    root = pathlib.Path("/" + "/".join(root_segments))
+    nested = root.joinpath(*nested_segments)
+    assert gate._is_within_root(root, root) is True
+    assert gate._is_within_root(nested, root) is True
+
+    escape_depth = len(root_segments) + len(nested_segments) + 2
+    escaped = nested.joinpath(*([".."] * escape_depth), f"definitely-outside-{outside_segment}")
+    assert gate._is_within_root(escaped, root) is False
