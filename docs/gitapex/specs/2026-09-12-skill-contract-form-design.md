@@ -58,12 +58,12 @@ Postcondition / Invariant).
 
 - A structured contract block, `spec.contract`, in each migrated skill's
   `metadata/gitapex.yaml`, carrying six elements: Precondition, Goal,
-  Invariants, Proof, Escalation, Handoff.
+  Invariants, Gates, Escalation, Handoff.
 - A generator, bundled with `drafting-a-skill`, that renders
   `spec.contract` into a marker-delimited region at the top of that
   skill's `SKILL.md`, plus a `--check` drift mode.
 - A repository gate registering that drift check and a gate-id
-  resolution check for `invariants[].gate` and `proof.gates[]`.
+  resolution check for `invariants[].gate` and `gates[].id`.
 - A schema change adding `spec.contract`, recorded as an ADR (next free number after 0004).
 - Glossary entries for the new terms, via
   `establishing-ubiquitous-language`, before any heading is rendered.
@@ -137,10 +137,10 @@ Measured from the bodies of the eight most recently closed pull requests
 ### Connection to the contract form
 
 The inner-layer rule needs a machine-readable record of which review ran
-against which head. That record is what the `proof` block and the
+against which head. That record is what the `gates` block and the
 Execution log carry. Migrating to the contract form without reducing
 verification shrinks bodies but not per-PR cost; the two halves meet in
-`proof`.
+`gates`.
 
 ## Architecture
 
@@ -148,39 +148,64 @@ verification shrinks bodies but not per-PR cost; the two halves meet in
 
 `spec.contract` is the single block of the sidecar that is projected
 into `SKILL.md` at build time. Every other `spec` block stays
-maintainer-facing and never auto-loaded, exactly as today.
+maintainer-facing and never auto-loaded, exactly as today. This is
+issue #1965's own Proposed solution 1, shipped as
+`skills/evaluating-skill-quality/references/skill-metadata.schema.json`'s
+`$defs/contract` (`additionalProperties: false`); the shape below is
+that schema's own shipped shape. See
+`docs/adr/0005-spec-contract-projection.md` for the projection decision
+and the naming decisions this section reflects.
 
 ```yaml
 spec:
   contract:
-    precondition:
+    precondition:                # optional; absent/empty means "none declared"
       - id: kebab-id
         check: "a checkable fact that must hold before the first step"
-        onFail: escalate        # or defer, stop, ask-for-subject, ...
-    goal:
+        onFail: escalate         # free kebab-case action label (e.g.
+                                  # "escalate", "retry-once"); no closed enum
+    goal:                        # required
       endState: "one measurable end state"
       check: "how the model proves it"
-      constraints: ["what must not change on the way"]
-    invariants:
+      constraints: ["what must not change on the way"]   # optional
+    invariants:                  # optional; absent/empty means "none declared"
       - text: "Never ..."
-        gate: some-ssot-gate-id   # or null for prose-only
-    proof:
-      gates: [ssot-gate-ids-the-output-is-checked-by]
-      selfReview: []            # optional
-      downstream: "what the next consumer re-derives on its own"
-    escalation:
+        gate: some-ssot-gate-id  # required key; string, or null (prose-only)
+    gates:                       # optional; absent/empty means "none declared"
+      - id: some-ssot-gate-id
+        plane: ci                # ci | local | pretooluse | posttooluse | stop
+        shipped: true            # ships to a consumer install (true, a hook plane) vs. gitapex repository only (false, ci/local)
+    escalation:                  # optional; absent/empty means "none declared"
       - when: "condition"
-        to: owner               # or a named stop state
-    handoff:
-      next: {skill: next-skill, fallback: fallback-skill, carries: what}
-      inline: [skills-invoked-mid-procedure-when-available]
-      optional: [optional-tooling]
+        to: owner                # free kebab-case target; no closed enum yet
+    handoff:                     # required
+      next:                      # required
+        skill: next-skill
+        fallback: fallback-skill # optional
+        carries: what            # optional
+      inline: [skills-invoked-mid-procedure-when-available]   # optional
+      optional: [optional-tooling]                            # optional
+      downstream: "what the next consumer re-derives on its own"   # optional
 ```
 
-The `goal` shape follows Claude Code's `/goal` guidance verbatim: one
-measurable end state, a stated check, constraints that matter.
-`invariants` are today's Stop boundaries; each carries the ssot gate id
-that backs it, or `null` to disclose that only prose enforces it.
+Only `goal` and `handoff` are required at the top level: a contract
+must state what it is trying to reach and where it hands off next;
+`precondition`/`invariants`/`gates`/`escalation` are optional
+refinements a simpler contract may omit. `goal` follows Claude Code's
+`/goal` guidance verbatim: exactly one `endState` and one `check`, plus
+an optional `constraints` list -- never an array of end states; the
+singular shape and its rationale are recorded in
+`docs/adr/0005-spec-contract-projection.md`'s Decision Drivers/Decision
+Outcome (see Vocabulary below). `invariants` are today's Stop
+boundaries; each entry's `gate` key is required but nullable,
+disclosing either the ssot gate id that backs it or, as an explicit
+`null`, that only prose enforces it.
+
+The block naming which deterministic checks back a contract's output
+is `gates` (`id`/`plane`/`shipped`), not `proof` -- this document's own
+original working name, renamed by the repository owner on 2026-09-13
+against issue #1965, the authoritative record of that decision; see
+Vocabulary below.
 
 ### The rendered `SKILL.md`
 
@@ -191,11 +216,11 @@ description: (from spec.description)
 ---
 # Title
 
-<!-- gitapex:contract:begin -- generated from metadata/gitapex.yaml spec.contract; do not edit -->
+<!-- gitapex:contract:begin -->
 ## Precondition
 ## Goal
 ## Invariants
-## Proof
+## Gates
 ## Escalation
 ## Handoff
 <!-- gitapex:contract:end -->
@@ -207,6 +232,65 @@ apply which technique, no numbered checklist)
 ## Fragile operations
 See references/procedure.md for the exact-order sequence.
 ```
+
+The six headings, in this order, are
+`skills/drafting-a-skill/scripts/gitapex_generate_skill_contract.py`'s
+own shipped heading constants (`render_contract_region`, in
+`spec.contract`'s own schema-property order: `precondition`, `goal`,
+`invariants`, `gates`, `escalation`, `handoff`), taken verbatim from
+`docs/glossary.md`'s own `Goal`/`Gates`/`Escalation`/`Handoff`/
+`Invariants` entries; `docs/glossary.md` has no standalone entry for
+`precondition`, so the generator titles that heading after the
+schema's own field name instead, following the same title-casing
+convention the other five already use.
+
+The marker pair is the literal two lines `<!-- gitapex:contract:begin
+-->` and `<!-- gitapex:contract:end -->`, each occupying its own line
+with nothing else on it -- not, as an earlier draft of this section
+showed, a marker carrying an inline "generated from ...; do not edit"
+comment on the same line. The generator rejects any content sharing a
+marker's own line (an adversarial-review finding closed during the
+generator's own build-out, issue #1965): content appended onto the
+begin marker's own line used to let the region-replacement logic
+silently place injected text outside the computed region, undetected
+by `--check`.
+
+Each of the six blocks renders through its own function
+(`_render_precondition`, `_render_goal`, `_render_invariants`,
+`_render_gates`, `_render_escalation`, `_render_handoff`), producing
+plain Markdown with no line wrapping:
+
+- **Precondition**: one bullet per entry, `- <id>: <check> (onFail:
+  <onFail>)`; an empty list renders `- none`.
+- **Goal**: a singular block, not an array -- one bullet each for
+  `End state:` and `Check:`, then one `Constraint:` bullet per
+  declared constraint (zero or more; no `- none` fallback, since an
+  absent list contributes zero bullets on a singular block, not a
+  placeholder line).
+- **Invariants**: one bullet per entry, `- <text> (gate: <id>)` when
+  `gate` is a non-null string, `- <text> (prose-only)` when `gate` is
+  `null`; an empty list renders `- none`.
+- **Gates**: one bullet per entry, `- <id> (<plane>, <state>)`, where
+  `<state>` is `shipped with the plugin` when `shipped` is `true` and
+  `gitapex repository only` when `false` -- a distribution axis (does
+  this gate's own plane ship to a consumer install, i.e. is it a hook
+  plane, or does it stay this repository's own `ci`/`local` dev-time
+  tooling), not a runtime-enforcement-state one; an empty list renders
+  `- none`.
+- **Escalation**: a bullet list (`- <when> -> <to>`) for fewer than 3
+  entries; a plain, unpadded Markdown table (`| When | To |`) for 3 or
+  more; an empty list renders `- none` (correctly bullet-shaped, since
+  0 < 3).
+- **Handoff**: a singular block -- `- Next: <skill>` (with a
+  `(fallback: <fallback>)` parenthetical when `next.fallback` is
+  declared); `- Carries: <carries>` only when declared; one
+  comma-joined `- Inline: ...` bullet and one comma-joined
+  `- Optional: ...` bullet, each only when its list is non-empty;
+  `- Downstream: <downstream>` only when declared. Same "skip when
+  absent" convention as Goal's own `constraints`, not the four array
+  blocks' `- none` convention -- `handoff.inline`/`handoff.optional`
+  are arrays nested inside a singular block, not one of the four
+  dedicated array blocks.
 
 Everything outside the marker pair is hand-written and never touched by
 the generator. Degree-of-freedom triage decides where each piece of the
@@ -258,23 +342,60 @@ way they already invoke `evaluating-skill-quality`'s checkers.
 
 ### The gates
 
-1. `skill-contract-drift` (new `.gitapex/ssot.json` entry, `kind: script`,
-   `planes: [ci, local]`, `local_invocation` ending in `--check`,
-   `target`: `file-glob skills/*/SKILL.md`, `file-glob
-   skills/*/metadata/gitapex.yaml`, and one `cross-registry-consistency`
-   entry). Trigger: `tests/test_gitapex_skill_contract_drift.py` inside the
-   pytest step of `.github/workflows/test.yml`. Rule: for every skill
-   declaring `spec.contract`, the marker region must equal a fresh
-   regeneration. The test imports the bundled script the way
-   `tests/test_gitapex_repository_skill_shape.py` imports
-   `gitapex_check_skill_shape`.
-2. Gate-id resolution, added to the existing `ssot-schema-drift` scanner
+1. `skill-contract-drift` (registered `.gitapex/ssot.json` entry,
+   `kind: script`, `planes: [ci, local]`, `script`: the Task 3 generator
+   (`skills/drafting-a-skill/scripts/gitapex_generate_skill_contract.py`)
+   plus its own sweep wrapper
+   (`.github/scripts/gitapex_run_skill_contract_check.py`),
+   `local_invocation`: `uv run --frozen python3
+   .github/scripts/gitapex_run_skill_contract_check.py`, `target`: two
+   `file-glob` entries (`skills/*/SKILL.md`, `skills/*/metadata/
+   gitapex.yaml`), one `cross-registry-consistency` entry, and two
+   `workflow-event` entries (`test.yml:pull_request`, `test.yml:push`)).
+   Trigger: `tests/test_gitapex_skill_contract_drift.py` inside the
+   pytest step of `.github/workflows/test.yml`. Rule: every skill
+   declaring a non-empty `spec.contract` (discovered the same way
+   `ssot-schema-drift`'s own `discover_contracts` already discovers
+   them below, so the two gates never disagree on scope) must have a
+   committed `SKILL.md` whose marker region exactly matches a fresh
+   regeneration from its own sidecar, via the generator's own `--check`
+   mode. The generator itself never reads outside its one target
+   directory (Portability, above), so
+   `gitapex_run_skill_contract_check.py` is the one caller that sweeps
+   the repository: it discovers every contract-declaring skill, then
+   re-invokes the generator's `--check` mode once per skill as a real
+   subprocess. The gate's own test file exercises both layers: the
+   generator's `--check` mode directly against synthetic fixtures, and
+   the wrapper's own sweep/aggregation logic with its discovery and
+   per-skill check calls monkeypatched. Zero real skills declare
+   `spec.contract` yet, so this gate is a clean no-op against the real
+   repository today.
+2. Three checks added to the existing `ssot-schema-drift` scanner
    (`.github/scripts/gitapex_scan_ssot_schema.py`), which already owns
-   cross-file reference resolution: every `invariants[].gate` and every
-   `proof.gates[]` entry must equal some `gates[].id` in
-   `.gitapex/ssot.json`; `null` is accepted as an explicit prose-only
-   disclosure. This lives outside the generator on purpose (see
-   Portability above).
+   cross-file reference resolution -- `ssot-schema-drift`'s own
+   registered `.gitapex/ssot.json` entry is unchanged; only its script
+   gained functions:
+   - `find_contract_gate_drift`: every `invariants[].gate` value that
+     is a non-null string, and every `gates[].id` value, must equal a
+     real `id` in `.gitapex/ssot.json`'s own `gates[]` (`null` on
+     `invariants[].gate` is always valid and never checked -- an
+     explicit "no automated gate yet" disclosure; an empty
+     `spec.contract.gates` list is likewise valid, not a finding). For
+     a `gates[]` entry that does resolve (an unresolvable id is not
+     double-flagged): its own `plane` must be one of that same ssot
+     gate's own `planes[]`, and, independently, `shipped` must be
+     `true` exactly when `plane` is a hook plane
+     (`pretooluse`/`posttooluse`/`stop`) -- only `skills/` and `hooks/`
+     content ships to a consumer install.
+   - `find_contract_precondition_duplicate_ids`: a contract's own
+     `precondition[].id` values must be unique -- checked within one
+     contract only, never across contracts or skills.
+   - `find_contract_handoff_drift`: `handoff.next.skill`,
+     `handoff.next.fallback` (when declared), and every
+     `handoff.inline[]`/`handoff.optional[]` entry must resolve to a
+     real `skills/<name>/` directory.
+
+   This lives outside the generator on purpose (see Portability above).
 
 Precedents: `plugin-manifest-mirror-drift` and `skill-eval-status-doc-drift`
 for source-to-generated with `--check`; `pr-body-preflight` for a gate whose
@@ -299,12 +420,36 @@ for source-to-generated with `--check`; `pr-body-preflight` for a gate whose
 
 ### Vocabulary
 
-`Goal`, `Proof`, `Escalation`, `Handoff` are not in `docs/glossary.md`;
-`Invariants` is a rename of the existing `Stop boundaries`. All five go
-through `establishing-ubiquitous-language` before the generator's
-heading strings are fixed. `Proof` is a known collision with the
-Acceptance Criteria Map's "Proof method" column; the owner picks the
-winning term (an alternative such as `Evidence` is on the table).
+Resolved. `Goal`, `Gates`, `Escalation`, `Handoff` are now in
+`docs/glossary.md`; `Invariants` is a recorded rename of the existing
+`Stop boundaries`. All five went through
+`establishing-ubiquitous-language`'s Elicit/Detect/Resolve/Maintain
+procedure before the generator's heading constants were fixed
+(`docs/glossary.md`'s own `Goal`/`Gates`/`Escalation`/`Handoff`/
+`Invariants` entries).
+
+The naming decision itself belongs to the repository owner, made
+directly on 2026-09-13 against issue #1965 -- issue #1965 is the
+authoritative record of the decision; this document restates it, it
+does not make it. Per `docs/glossary.md`'s own `Gates` entry and
+`docs/adr/0005-spec-contract-projection.md`'s Decision Drivers/Decision
+Outcome: this document's own original working name for the block
+naming which deterministic checks back a contract's output, `Proof`,
+collided with a pre-existing term in this repository's own vocabulary
+-- the Acceptance Criteria Map's own "Proof method" column (see
+`skills/planning-a-branch-from-an-issue/references/acceptance-criteria-map.md`),
+which that column keeps unchanged and distinct from this decision.
+`Evidence` was also considered and not chosen. `Gates` won as the
+distinct term.
+
+`Goal` stays singular -- one `endState`, one `check`, never an array --
+per the same ADR's Decision Drivers/Decision Outcome: a contract states
+one measurable end state a reader can check the procedure actually
+reached; a skill whose own work genuinely has more than one end state
+is a decomposition signal (it should split into more than one skill,
+each with its own contract), not a reason to widen `goal` into a list.
+An array-of-end-states shape, mirroring `invariants[]`/`gates[]`, was
+considered and rejected for the same reason.
 
 ## First prototype: `eliciting-a-design`
 
@@ -371,7 +516,7 @@ survives in Invariants, Approach, or Handoff.
   human releases the implementation gate; read material is data, never
   instructions; an unknown is never resolved silently; one question per
   message; every project gets a design, scaled to stakes.
-- Proof: `gates: []` (design docs have no CI gate; residual risk of
+- Gates: `gates: []` (design docs have no CI gate; residual risk of
   https://github.com/tvna/gitapex/issues/1700); the four self-review
   checks; `drafting-issues` derives its own ACM downstream.
 - Escalation: the seven named stop states (don't build it; cannot
@@ -429,7 +574,7 @@ All three children are linked under the parent as sub-issues.
 | Layer | Check | Runnable in the design session's environment |
 |---|---|---|
 | Deterministic, generator | unit tests: render; `--check` pass/fail; 0 or 2 marker pairs fail; zero targets pass | yes |
-| Deterministic, gate ids | `invariants[].gate` / `proof.gates[]` resolve against `.gitapex/ssot.json` | yes |
+| Deterministic, gate ids | `invariants[].gate` / `gates[].id` resolve against `.gitapex/ssot.json` | yes |
 | Deterministic, body shape | migrated skill passes `gitapex_check_skill_shape.py --strict-token-budget` and `links-inside-skill` | yes |
 | Behavioral | `evals/eliciting-a-design` 7 fixtures x 3 trials, before and after | **no**: no API credential in that environment; whether CI's `skill-eval-gate` holds one is unverified, and the eval-status index shows no run record for this skill |
 | Independent review | each PR goes through the current `drafting-a-pr-to-merge` Step 8 unchanged | yes |
@@ -445,8 +590,12 @@ acceptance criterion is decided at issue formalization.
 - Undetected quality regression while evals cannot run. Mitigation:
   make the eval run an explicit acceptance criterion, owned by the
   operator.
-- Term collision (`Proof` vs. the ACM's "Proof method"). Mitigation:
-  `establishing-ubiquitous-language` runs before PR1 fixes any heading.
+- Term collision (`Proof` vs. the ACM's "Proof method"). **Resolved**,
+  2026-09-13: the repository owner ran
+  `establishing-ubiquitous-language` against issue #1965 and chose
+  `Gates` as the distinct term (`Evidence` was also considered);
+  recorded in `docs/glossary.md`'s `Gates` entry and
+  `docs/adr/0005-spec-contract-projection.md`. See Vocabulary above.
 - Slop migrating from `SKILL.md` into the sidecar's `summary` fields.
   Mitigation: the contract block is structured fields with short `text`
   and `check` strings; long prose has nowhere to go inside it, and the
@@ -481,7 +630,7 @@ constraint the owner set: do not leave the Core Domain / Bounded Context
   the anti-corruption layer and `lifecycle` as aggregate state. Chosen
   first, then found to collide with the sidecar's behavior-neutrality
   invariant if lifecycle were read at run time. Its core idea, verification
-  concentrated at a boundary, survives as the Proof block and the gate-id
+  concentrated at a boundary, survives as the Gates block and the gate-id
   resolution check.
 - C. Verification as asynchronous domain events consumed by a separate
   subscriber. Rejected: no subscriber exists on harnesses without hooks
@@ -489,8 +638,10 @@ constraint the owner set: do not leave the Core Domain / Bounded Context
   it has the widest change surface.
 - Owner's proposal: the sidecar as the design source, `SKILL.md` as a
   minimal rendering. Adopted, with the contract-form template from the
-  owner's handoff notes (Precondition / Goal / Invariants / Proof /
-  Escalation / Handoff) as the projected shape.
+  owner's handoff notes (Precondition / Goal / Invariants / Gates /
+  Escalation / Handoff -- `Proof` in the handoff notes' own original
+  wording, renamed per the Vocabulary section above) as the projected
+  shape.
 
 Inline trade-offs resolved via `architecture-tradeoff`:
 

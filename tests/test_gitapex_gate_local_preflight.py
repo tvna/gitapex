@@ -1376,7 +1376,7 @@ _COUNT_ASSERTING_PATHS = (
 # own summary line, a count it computes at runtime, asserted here against a
 # two-gate fixture registry. Pinning it to the live registry would be
 # wrong, not merely noisy.
-_COUNT_CLAIM_RE = re.compile(r"(\d+)\s+(wired|excluded|exclusions)\b(?!\s+gate\(s\))")
+_COUNT_CLAIM_RE = re.compile(r"(\d+)\s+(?:[a-z]+-)?(wired|excluded|exclusions)\b(?!\s+gate\(s\))")
 _SPELLED_OUT_COUNT_RE = re.compile(
     r"\b(?:thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+"
     r"(?:wired|excluded|exclusions|gates|broken)",

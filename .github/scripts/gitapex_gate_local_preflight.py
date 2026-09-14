@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """One consolidated local pre-push / pre-PR-open gate runner (issue #876).
 
-This repository enforces 49 registered deterministic gates. Before this
+This repository enforces 87 registered deterministic gates. Before this
 script existed, roughly half of them had a perfectly good working-tree-only
 invocation and yet ran *only* as separate CI jobs, so an agent preparing a
 PR discovered gaps one CI job at a time on an already-open PR -- push, wait,
@@ -29,7 +29,7 @@ required exactly when ``planes`` contains ``"local"``, and ``local_exclusion``
 it does not. A new gate therefore cannot land in the registry without one or
 the other, and ``gitapex_scan_ssot_schema.py`` (itself one of the gates this
 runner runs) fails the build if it does. That is the drift-test branch issue
-#876's third criterion explicitly allows, and it is what keeps the 24
+#876's third criterion explicitly allows, and it is what keeps the 37
 currently-excluded gates readable as deliberate exclusions rather than as
 coverage this runner silently lost.
 
@@ -207,15 +207,19 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # own _GROUP_TIMEOUT_SECONDS = 600 -- so that one gate's own theoretical
 # worst case is ~4200 s, not 600 s. A ceiling matching that would be useless
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
-# call in the other direction. For scale: a warm run of all 50 wired gates
-# combined measures roughly 49 s end to end (issue #1799's own
-# defeat-test-mutation-coverage gate roughly doubled this from its prior
-# ~24 s baseline: unlike every other wired gate, which is pure AST
-# inspection, it spawns a real pytest subprocess per graded element and
-# self-grades its own regex/dict/literal elements against its own paired
-# tests; different hardware than the figures
-# below in any case, see this paragraph's own closing parenthetical -- the
-# prior 49-gate set measured roughly 24 s, the
+# call in the other direction. For scale: a warm run of all 51 wired gates
+# combined measures roughly PLACEHOLDER s end to end (issue #1965's own
+# skill-contract-drift gate and issue #1799's own defeat-test-mutation-
+# coverage gate landed on parallel branches and both bumped the 49-gate
+# baseline to their own independent 50-gate counts before this merge
+# combined them into 51; different hardware than the figures below in any
+# case, see this paragraph's own closing parenthetical -- the prior
+# 50-gate set (defeat-test-mutation-coverage) measured roughly 49 s end to
+# end, unlike every other wired gate, which is pure AST inspection, it
+# spawns a real pytest subprocess per graded element and self-grades its
+# own regex/dict/literal elements against its own paired tests; the prior
+# 50-gate set (network-exception-set-drift, issue #1512) measured roughly
+# 24 s, the prior 49-gate set measured roughly 24 s, the
 # prior 48-gate set measured roughly 24 s, the
 # prior 47-gate set measured roughly 22 s, the
 # prior 45-gate set measured roughly 14 s, the
