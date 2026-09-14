@@ -599,6 +599,31 @@
       ]
     },
     {
+      "id": "skill-contract-drift",
+      "kind": "script",
+      "script": [
+        "skills/drafting-a-skill/scripts/gitapex_generate_skill_contract.py",
+        ".github/scripts/gitapex_run_skill_contract_check.py"
+      ],
+      "rule": "Every skills/<name>/metadata/gitapex.yaml sidecar that declares a non-empty spec.contract (discovered the same way ssot-schema-drift's own gitapex_scan_ssot_schema.discover_contracts already does, so the two gates never disagree on which skills are in scope) must have a committed SKILL.md whose <!-- gitapex:contract:begin/end --> marker region exactly matches a fresh regeneration from that sidecar, via gitapex_generate_skill_contract.py's own --check mode. Zero real skills declare spec.contract yet (ADR 0005's opt-in-per-skill migration), so this gate is a clean no-op against the real repository today, per issue #1965's own foundation-only scope.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_run_skill_contract_check.py"],
+      "trigger": "tests/test_gitapex_skill_contract_drift.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "skill-lifecycle",
+      "tracking_issue": 1965,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "skills/*/SKILL.md"},
+        {"kind": "file-glob", "ref": "skills/*/metadata/gitapex.yaml"},
+        {"kind": "cross-registry-consistency", "ref": "a contract-declaring skill's committed SKILL.md <!-- gitapex:contract:begin/end --> marker region <-> that same skill's own spec.contract in metadata/gitapex.yaml, via gitapex_generate_skill_contract.py's --check mode"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
+    },
+    {
       "id": "split-schema-drift",
       "kind": "script",
       "script": ".github/scripts/gitapex_scan_split_schema.py",
@@ -1028,13 +1053,16 @@
       "target": [
         {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
         {"kind": "file-glob", "ref": ".gitapex/ssot.schema.json"},
+        {"kind": "file-glob", "ref": "skills/*/metadata/gitapex.yaml"},
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:push"},
         {"kind": "cross-registry-consistency", "ref": "gates[].script <-> real files on disk"},
         {"kind": "cross-registry-consistency", "ref": "gates[].policy_refs[] <-> policy_sources[].id"},
         {"kind": "cross-registry-consistency", "ref": "gates[].cluster <-> clusters keys"},
         {"kind": "cross-registry-consistency", "ref": "gates[].local_invocation/local_stdin path tokens <-> real files on disk"},
-        {"kind": "cross-registry-consistency", "ref": "gates[].local_invocation <-> gates[].script (same gate)"}
+        {"kind": "cross-registry-consistency", "ref": "gates[].local_invocation <-> gates[].script (same gate)"},
+        {"kind": "cross-registry-consistency", "ref": "a contract-declaring skill's spec.contract.invariants[].gate and spec.contract.gates[].id <-> gates[].id (this same registry)"},
+        {"kind": "cross-registry-consistency", "ref": "a contract-declaring skill's spec.contract.gates[].plane/shipped <-> that same gates[].id entry's own planes[] (this same registry)"}
       ]
     },
     {

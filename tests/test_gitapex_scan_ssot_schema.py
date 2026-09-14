@@ -8,11 +8,16 @@ against the real schema file (there is only one schema to test against).
 
 from __future__ import annotations
 
+import builtins
 import copy
+import importlib
 import json
 import pathlib
+import runpy
+import sys
 import typing
 
+import gitapex_scan_skill_metadata_schema as sibling_scanner
 import gitapex_scan_ssot_schema as drift
 import pytest
 
@@ -984,3 +989,542 @@ def test_policy_source_format_literal_matches_schema_enum():
     schema_enum = set(schema["$defs"]["policySource"]["properties"]["format"]["enum"])
     literal_values = set(typing.get_args(drift.PolicySource.model_fields["format"].annotation))
     assert literal_values == schema_enum
+
+
+# ---------------------------------------------------------------------------
+# Issue #1965: skills/*/metadata/gitapex.yaml spec.contract gate ids resolve
+# against .gitapex/ssot.json's own gates[], plane/shipped consistency holds,
+# precondition ids are unique per contract, and handoff skill names resolve
+# to real skills/*/ directories.
+#
+# Fixtures write the sidecar as JSON text (json.dumps), not real YAML syntax
+# -- JSON is valid YAML, so yaml.safe_load parses it unmodified, and this
+# avoids adding a yaml import to this test module purely for fixture
+# construction. _write_skill_with_contract's own default contract always
+# carries a resolving handoff.next.skill (pointing at the fixture skill
+# itself) and a minimal valid goal, so a test targeting one specific check
+# does not also trip the handoff/goal checks incidentally.
+# ---------------------------------------------------------------------------
+
+
+def _skills_dir(tmp_path: pathlib.Path) -> pathlib.Path:
+    return tmp_path / "skills"
+
+
+def _write_skill_with_contract(skills_dir: pathlib.Path, skill_name: str, contract_overrides: dict) -> pathlib.Path:
+    skill_dir = skills_dir / skill_name
+    (skill_dir / "metadata").mkdir(parents=True, exist_ok=True)
+    (skill_dir / "SKILL.md").write_text("# fixture skill\n", encoding="utf-8")
+    contract = {
+        "goal": {"endState": "fixture end state", "check": "fixture check"},
+        "handoff": {"next": {"skill": skill_name}},
+    }
+    contract.update(contract_overrides)
+    sidecar = skill_dir / "metadata" / "gitapex.yaml"
+    sidecar.write_text(json.dumps({"spec": {"contract": contract}}), encoding="utf-8")
+    return skill_dir
+
+
+def test_find_drift_sweeps_sidecars_for_contracts_exactly_once(tmp_path, monkeypatch):
+    """Regression guard (issue #1965 Step 8 aggregate review): find_drift's
+    three contract-checking functions (find_contract_gate_drift,
+    find_contract_precondition_duplicate_ids, find_contract_handoff_drift)
+    must share one discover_contracts() call, not each independently
+    re-sweep and re-parse every skills/*/metadata/gitapex.yaml sidecar --
+    the exact redundant-rescan shape gitapex_scan_skill_metadata_schema.py's
+    own module docstring already documents fixing once for its sibling
+    _requires_graph helper."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(skills_dir, "fixture-skill", {})
+
+    calls = 0
+    real_discover_contracts = drift.discover_contracts
+
+    def counting_discover_contracts(skills_dir=drift.SKILLS_DIR):
+        nonlocal calls
+        calls += 1
+        return real_discover_contracts(skills_dir)
+
+    monkeypatch.setattr(drift, "discover_contracts", counting_discover_contracts)
+    drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert calls == 1, f"discover_contracts() called {calls} times in one find_drift() run, expected 1"
+
+
+def test_contract_gate_id_unknown_is_flagged(tmp_path):
+    """Issue #1965, case 1: a gates[].id naming an id not in
+    .gitapex/ssot.json fails."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(
+        skills_dir, "fixture-skill", {"gates": [{"id": "no-such-gate", "plane": "ci", "shipped": False}]}
+    )
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert any("contract-gate-id-drift" in f and "no-such-gate" in f for f in findings), findings
+
+
+def test_contract_invariant_gate_unknown_is_flagged(tmp_path):
+    """Companion to the above for the invariants[].gate half of case 1 --
+    a non-null invariants[].gate naming an unknown id fails the same way."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(
+        skills_dir, "fixture-skill", {"invariants": [{"text": "fixture invariant", "gate": "no-such-gate"}]}
+    )
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert any("contract-gate-id-drift" in f and "no-such-gate" in f for f in findings), findings
+
+
+def test_contract_gate_id_known_passes(tmp_path):
+    """Issue #1965, case 2: a gates[].id naming a real ssot gate id, with a
+    plane/shipped pair consistent with that gate, has no drift."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)  # example-gate, planes=["ci"]
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(
+        skills_dir, "fixture-skill", {"gates": [{"id": "example-gate", "plane": "ci", "shipped": False}]}
+    )
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert findings == [], findings
+
+
+def test_contract_invariant_null_gate_passes(tmp_path):
+    """Issue #1965, case 3: null on invariants[].gate is an explicit
+    prose-only disclosure, never checked against the registry."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(
+        skills_dir, "fixture-skill", {"invariants": [{"text": "fixture invariant", "gate": None}]}
+    )
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert findings == [], findings
+
+
+def test_contract_gates_empty_list_passes(tmp_path):
+    """An empty spec.contract.gates list is this block's own valid "no
+    gates yet" equivalent, not a finding."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(skills_dir, "fixture-skill", {"gates": []})
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert findings == [], findings
+
+
+def test_contract_gate_plane_not_declared_by_ssot_gate_is_flagged(tmp_path):
+    """Issue #1965, case 4: example-gate's own ssot planes are ["ci"]; a
+    contract gate resolving to example-gate but declaring "pretooluse"
+    (a plane that gate does not run on) is drift. shipped=True is
+    otherwise correct for the hook plane pretooluse, so only the
+    plane-drift finding should fire, not a shipped-drift one too."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(
+        skills_dir, "fixture-skill", {"gates": [{"id": "example-gate", "plane": "pretooluse", "shipped": True}]}
+    )
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert any("contract-gate-plane-drift" in f and "pretooluse" in f for f in findings), findings
+    assert not any("contract-gate-shipped-drift" in f for f in findings), findings
+
+
+def test_contract_gate_shipped_true_on_non_hook_plane_is_flagged(tmp_path):
+    """Issue #1965, case 5 (direction one): shipped=true on a ci-plane gate
+    is drift -- only skills/ and hooks/ ship to a consumer install."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)  # example-gate, planes=["ci"]
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(
+        skills_dir, "fixture-skill", {"gates": [{"id": "example-gate", "plane": "ci", "shipped": True}]}
+    )
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert any("contract-gate-shipped-drift" in f for f in findings), findings
+    assert not any("contract-gate-plane-drift" in f for f in findings), findings
+
+
+def test_contract_gate_shipped_false_on_hook_plane_is_flagged(tmp_path):
+    """Issue #1965, case 5 (direction two): shipped=false on a hook-plane
+    (pretooluse/posttooluse/stop) gate is drift the same way."""
+    instance = json.loads(json.dumps(_VALID_INSTANCE))
+    instance["gates"][0]["planes"] = ["pretooluse"]
+    instance_path = _write_instance(tmp_path, instance)
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(
+        skills_dir, "fixture-skill", {"gates": [{"id": "example-gate", "plane": "pretooluse", "shipped": False}]}
+    )
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert any("contract-gate-shipped-drift" in f for f in findings), findings
+    assert not any("contract-gate-plane-drift" in f for f in findings), findings
+
+
+def test_contract_duplicate_precondition_id_is_flagged(tmp_path):
+    """Issue #1965, case 6: a duplicated precondition[].id within one
+    contract is flagged."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(
+        skills_dir,
+        "fixture-skill",
+        {
+            "precondition": [
+                {"id": "dup-check", "check": "fixture check one", "onFail": "escalate"},
+                {"id": "dup-check", "check": "fixture check two", "onFail": "escalate"},
+            ]
+        },
+    )
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert any("contract-precondition-duplicate-id" in f and "dup-check" in f and "2 times" in f for f in findings), (
+        findings
+    )
+
+
+def test_contract_precondition_duplicate_id_is_scoped_to_one_contract(tmp_path):
+    """The same precondition id used once each in two different skills'
+    contracts is not a collision -- uniqueness is checked within one
+    contract only, never across contracts/skills."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    skills_dir = _skills_dir(tmp_path)
+    shared_precondition = [{"id": "shared-id", "check": "fixture check", "onFail": "escalate"}]
+    _write_skill_with_contract(skills_dir, "fixture-skill-a", {"precondition": shared_precondition})
+    _write_skill_with_contract(skills_dir, "fixture-skill-b", {"precondition": shared_precondition})
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert not any("contract-precondition-duplicate-id" in f for f in findings), findings
+
+
+@pytest.mark.parametrize(
+    "handoff_overrides,expected_bad_name",
+    [
+        pytest.param({"next": {"skill": "no-such-skill"}}, "no-such-skill", id="next-skill"),
+        pytest.param(
+            {"next": {"skill": "fixture-skill", "fallback": "no-such-fallback"}},
+            "no-such-fallback",
+            id="next-fallback",
+        ),
+        pytest.param(
+            {"next": {"skill": "fixture-skill"}, "inline": ["no-such-inline"]},
+            "no-such-inline",
+            id="inline",
+        ),
+        pytest.param(
+            {"next": {"skill": "fixture-skill"}, "optional": ["no-such-optional"]},
+            "no-such-optional",
+            id="optional",
+        ),
+    ],
+)
+def test_contract_handoff_unresolved_reference_is_flagged(tmp_path, handoff_overrides, expected_bad_name):
+    """Issue #1965, case 7: handoff.next.skill, handoff.next.fallback, and
+    every handoff.inline[]/optional[] entry must each resolve to a real
+    skills/*/ directory."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(skills_dir, "fixture-skill", {"handoff": handoff_overrides})
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert any("contract-handoff-unresolved" in f and expected_bad_name in f for f in findings), findings
+
+
+def test_contract_handoff_fallback_absent_is_not_checked(tmp_path):
+    """handoff.next.fallback is optional -- its absence is not a finding."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(skills_dir, "fixture-skill", {"handoff": {"next": {"skill": "fixture-skill"}}})
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert findings == [], findings
+
+
+def test_real_repository_has_no_contract_declaring_skills_yet():
+    """Foundation-only PR (issue #1965): confirmed no real skill declares
+    spec.contract yet, so the new contract checks are a clean no-op
+    against the real, current repository state -- pinned explicitly here
+    rather than relying only on test_repository_ssot_is_schema_valid_and_
+    drift_free above to notice a future change."""
+    assert drift.discover_contracts() == {}
+    real_registry = drift._parse_registry(json.loads(drift.SSOT_PATH.read_text(encoding="utf-8")))
+    assert drift.find_contract_gate_drift(real_registry) == []
+    assert drift.find_contract_precondition_duplicate_ids() == []
+    assert drift.find_contract_handoff_drift() == []
+
+
+def test_discover_contracts_skips_sidecar_with_no_contract_block(tmp_path):
+    skills_dir = _skills_dir(tmp_path)
+    skill_dir = skills_dir / "no-contract-skill"
+    (skill_dir / "metadata").mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# fixture\n", encoding="utf-8")
+    (skill_dir / "metadata" / "gitapex.yaml").write_text(
+        json.dumps({"spec": {"portability": "Portable", "capabilityAssumption": "Broad"}}), encoding="utf-8"
+    )
+    assert drift.discover_contracts(skills_dir) == {}
+
+
+def test_discover_contracts_skips_unreadable_yaml_without_crashing(tmp_path):
+    """A sidecar that fails to parse as YAML at all must not crash the
+    whole ssot drift scan -- that shape defect is skill-metadata-schema-
+    drift's own finding to report, not this scanner's."""
+    skills_dir = _skills_dir(tmp_path)
+    skill_dir = skills_dir / "broken-yaml-skill"
+    (skill_dir / "metadata").mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# fixture\n", encoding="utf-8")
+    (skill_dir / "metadata" / "gitapex.yaml").write_text("spec:\n  contract: [unterminated", encoding="utf-8")
+    assert drift.discover_contracts(skills_dir) == {}
+
+
+def test_contract_gate_drift_returns_empty_without_a_parsed_registry():
+    assert drift.find_contract_gate_drift(None) == []
+
+
+def test_resolves_to_sibling_skill_rejects_path_like_names(tmp_path):
+    skills_dir = _skills_dir(tmp_path)
+    (skills_dir / "real-skill" / "SKILL.md").parent.mkdir(parents=True)
+    (skills_dir / "real-skill" / "SKILL.md").write_text("# fixture\n", encoding="utf-8")
+    assert drift._resolves_to_sibling_skill("real-skill", skills_dir) is True
+    assert drift._resolves_to_sibling_skill("../real-skill", skills_dir) is False
+    assert drift._resolves_to_sibling_skill("/etc/passwd", skills_dir) is False
+    assert drift._resolves_to_sibling_skill("does-not-exist", skills_dir) is False
+
+
+def test_as_dict_list_filters_non_dict_entries():
+    assert drift._as_dict_list([{"id": "a"}, "not-a-dict", 1, None, {"id": "b"}]) == [{"id": "a"}, {"id": "b"}]
+    assert drift._as_dict_list(None) == []
+    assert drift._as_dict_list("not-a-list") == []
+
+
+def test_contract_of_returns_none_for_missing_or_empty():
+    assert drift._contract_of({"spec": {}}) is None
+    assert drift._contract_of({"spec": {"contract": {}}}) is None
+    assert drift._contract_of({"spec": {"contract": None}}) is None
+    assert drift._contract_of("not-a-dict") is None
+    assert drift._contract_of({"spec": {"contract": {"goal": {}}}}) == {"goal": {}}
+
+
+def test_contract_of_returns_none_for_non_dict_or_missing_spec():
+    """Companion to the above for the ``spec`` half of the guard: a missing
+    ``spec`` key or a non-dict ``spec`` value must also return None rather
+    than raising, distinct from the already-covered "spec present but
+    contract missing/empty" cases above."""
+    assert drift._contract_of({}) is None
+    assert drift._contract_of({"spec": "not-a-dict"}) is None
+    assert drift._contract_of({"spec": None}) is None
+
+
+def test_discover_skill_dirs_returns_empty_for_nonexistent_directory(tmp_path):
+    assert drift.discover_skill_dirs(tmp_path / "does-not-exist") == []
+
+
+def test_discover_skill_dirs_finds_only_directories_with_a_real_skill_md(tmp_path):
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(skills_dir, "fixture-skill", {})
+    (skills_dir / "no-skill-md").mkdir(parents=True)
+    assert drift.discover_skill_dirs(skills_dir) == [skills_dir / "fixture-skill"]
+
+
+def test_discover_contracts_skips_skill_with_no_sidecar_file(tmp_path):
+    """A skill directory with a real SKILL.md but no metadata/gitapex.yaml
+    sidecar file at all -- distinct from
+    test_discover_contracts_skips_sidecar_with_no_contract_block above,
+    which writes a sidecar that parses fine but declares no spec.contract
+    block. This exercises discover_contracts's own sidecar.is_file()
+    guard directly."""
+    skills_dir = _skills_dir(tmp_path)
+    skill_dir = skills_dir / "no-sidecar-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# fixture\n", encoding="utf-8")
+    assert drift.discover_contracts(skills_dir) == {}
+
+
+def test_discover_contracts_skips_sidecar_that_exhausts_memory_on_parse(tmp_path, monkeypatch):
+    """A hostile sidecar (a YAML alias-expansion "billion laughs" shape)
+    can make yaml.safe_load raise MemoryError instead of an ordinary
+    parse error -- simulated via monkeypatch rather than a real
+    memory-exhausting fixture. Asserts discover_contracts degrades the
+    same way it already does for every other malformed-sidecar shape:
+    silently skip, never crash the whole scan."""
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(skills_dir, "fixture-skill", {})
+
+    def _raise_memory_error(*args: object, **kwargs: object) -> None:
+        raise MemoryError("simulated alias-expansion exhaustion")
+
+    monkeypatch.setattr(drift.yaml, "safe_load", _raise_memory_error)
+    assert drift.discover_contracts(skills_dir) == {}
+
+
+def test_contract_gate_entry_with_non_string_id_is_skipped(tmp_path):
+    """A gates[] entry whose own id is not a string (schema-invalid --
+    skill-metadata-schema-drift's own finding to report, not this
+    scanner's) must not crash find_contract_gate_drift's dict-key lookup;
+    its own non-string guard just skips the entry silently."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(skills_dir, "fixture-skill", {"gates": [{"id": 123, "plane": "ci", "shipped": False}]})
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert not any("contract-gate" in f for f in findings), findings
+
+
+def test_contract_precondition_entry_with_non_string_id_is_skipped(tmp_path):
+    """A precondition[] entry whose own id is not a string is skipped by
+    find_contract_precondition_duplicate_ids's own non-string guard,
+    rather than being used as a dict key (which would still work for an
+    int, but not for an unhashable list/dict -- the same defensive
+    guard find_duplicate_ids already applies elsewhere in this module)."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(
+        skills_dir, "fixture-skill", {"precondition": [{"id": 1, "check": "fixture check", "onFail": "escalate"}]}
+    )
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert not any("contract-precondition-duplicate-id" in f for f in findings), findings
+
+
+def test_contract_handoff_non_dict_is_skipped(tmp_path):
+    """A schema-invalid non-dict spec.contract.handoff value must not
+    crash find_contract_handoff_drift's own .get() calls -- its own
+    isinstance guard skips the whole contract's handoff checks instead."""
+    instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(skills_dir, "fixture-skill", {"handoff": "not-a-dict"})
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, skills_dir)
+    assert not any("contract-handoff-unresolved" in f for f in findings), findings
+
+
+# ---------------------------------------------------------------------------
+# missing PyYAML dependency (issue #1076's own guard shape, ported onto this
+# module's own top-level `import yaml` under issue #1965). Mirrors
+# tests/test_gitapex_scan_skill_metadata_schema.py's own coverage for the
+# identical __name__-gated guard shape verbatim, retargeted at this module.
+# ---------------------------------------------------------------------------
+
+
+def test_missing_pyyaml_exits_with_clear_message_not_a_traceback(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """This module's own top-level `import yaml` is guarded the same way
+    gitapex_scan_skill_metadata_schema.py's own is (issue #1089): a
+    surface without the dev dependency group installed must exit 2 with
+    an actionable message, not a raw traceback. Simulated by setting
+    `sys.modules["yaml"] = None`, CPython's own documented mechanism for
+    making a subsequent `import yaml` raise ModuleNotFoundError. Runs the
+    script fresh via `runpy.run_path(..., run_name="__main__")` since the
+    guard's SystemExit(2) only fires under `__name__ == "__main__"`."""
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    script_path = str(pathlib.Path(drift.__file__))
+
+    with pytest.raises(SystemExit) as exc_info:
+        runpy.run_path(script_path, run_name="__main__")
+
+    assert exc_info.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "PyYAML" in stderr
+    assert "uv sync --group dev" in stderr
+
+
+def test_missing_pyyaml_on_plain_import_propagates_cleanly_not_systemexit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Converting a missing PyYAML into SystemExit(2) unconditionally --
+    including when this module is merely *imported* rather than run as a
+    script -- breaks pytest's own collection machinery (a bare SystemExit
+    is not a plain Exception). Asserts the guard's __name__ check: a plain
+    import with PyYAML missing must let ModuleNotFoundError itself
+    propagate, matching pre-guard behavior. Evicts the cached module first
+    to force a fresh top-level exec -- reusing the already-imported
+    `drift` object would skip the guard entirely and pass vacuously."""
+    module_name = "gitapex_scan_ssot_schema"
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    monkeypatch.delitem(sys.modules, module_name, raising=False)
+
+    with pytest.raises(ModuleNotFoundError) as exc_info:
+        importlib.import_module(module_name)
+
+    assert exc_info.value.name == "yaml"
+
+
+def test_broken_yaml_installation_error_propagates_unmodified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ModuleNotFoundError raised from INSIDE an already-found but
+    broken/partial PyYAML install carries error.name == "yaml.<submodule>",
+    not "yaml" -- this guard's own remediation ("install the dev
+    dependency group") would not fix a corrupted install, so misreporting
+    it as a plain missing-PyYAML case would send a reader chasing the
+    wrong problem. Simulated via builtins.__import__ patching, since there
+    is no single sys.modules entry representing "this package exists but
+    one of its own internal imports fails". Asserts the ORIGINAL
+    ModuleNotFoundError propagates uncaught, not converted to this
+    guard's SystemExit(2)."""
+    module_name = "gitapex_scan_ssot_schema"
+    real_import = builtins.__import__
+
+    def _fake_import(name: str, *args: object, **kwargs: object) -> object:
+        if name == "yaml":
+            raise ModuleNotFoundError("No module named 'yaml.tokens'", name="yaml.tokens")
+        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    monkeypatch.delitem(sys.modules, module_name, raising=False)
+
+    with pytest.raises(ModuleNotFoundError) as exc_info:
+        importlib.import_module(module_name)
+
+    assert exc_info.value.name == "yaml.tokens"
+
+
+def test_broken_yaml_installation_in_script_mode_propagates_unmodified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Isolates the intersection no other test above covers: a
+    broken/partial install (error.name == "yaml.tokens", not "yaml")
+    encountered via the CLI entry point itself (__name__ == "__main__",
+    via runpy.run_path the same way the script-mode test above does),
+    proving the error.name check still correctly re-raises rather than
+    being masked by the __name__ check alone."""
+    script_path = str(pathlib.Path(drift.__file__))
+    real_import = builtins.__import__
+
+    def _fake_import(name: str, *args: object, **kwargs: object) -> object:
+        if name == "yaml":
+            raise ModuleNotFoundError("No module named 'yaml.tokens'", name="yaml.tokens")
+        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+
+    with pytest.raises(ModuleNotFoundError) as exc_info:
+        runpy.run_path(script_path, run_name="__main__")
+
+    assert exc_info.value.name == "yaml.tokens"
+
+
+# ---------------------------------------------------------------------------
+# Parity with gitapex_scan_skill_metadata_schema.py's own sidecar-discovery
+# helpers, deliberately copied rather than imported here (this module's own
+# docstring). deterministic-gate-quality review (issue #1965) flagged this
+# duplication as disclosed in prose but not backed by any automated
+# synchronization check, unlike this exact file's own
+# test_policy_source_format_literal_matches_schema_enum for a different
+# duplicated-value pair -- this closes that gap the same way: run both
+# implementations against the same inputs and assert identical output,
+# rather than merely trusting the docstrings' own "mirrors ... own" claim.
+# ---------------------------------------------------------------------------
+
+
+def test_discover_skill_dirs_matches_sibling_scanners_own_implementation(tmp_path):
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(skills_dir, "fixture-skill-a", {})
+    _write_skill_with_contract(skills_dir, "fixture-skill-b", {})
+    (skills_dir / "no-skill-md-dir").mkdir(parents=True)
+    assert drift.discover_skill_dirs(skills_dir) == sibling_scanner.discover_skill_dirs(skills_dir)
+
+
+def test_resolves_to_sibling_skill_matches_sibling_scanners_own_implementation(tmp_path):
+    skills_dir = _skills_dir(tmp_path)
+    _write_skill_with_contract(skills_dir, "real-skill", {})
+    for name in (
+        "real-skill",
+        "does-not-exist",
+        "",
+        ".",
+        "..",
+        "../real-skill",
+        "/etc/passwd",
+        "a/b",
+        "a\\b",
+        "real-skill/",
+    ):
+        assert drift._resolves_to_sibling_skill(name, skills_dir) == sibling_scanner._resolves_to_sibling_skill(
+            name, skills_dir
+        ), name

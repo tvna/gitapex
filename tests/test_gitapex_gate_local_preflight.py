@@ -5,7 +5,7 @@ Two layers, kept apart on purpose:
 - **Fixture-registry tests** build their own tiny ``ssot.json`` pointing at
   purpose-built pass/fail scripts, so the runner's own aggregation,
   discovery, error handling and exit-code logic are exercised in under a
-  second with no dependence on this repository's real 49 wired gates. Issue
+  second with no dependence on this repository's real 50 wired gates. Issue
   #876's first acceptance criterion asks for an integration test running
   the consolidated command "with one deliberately-broken instance of each
   wired check, asserting all are reported in one run" --
@@ -1376,7 +1376,7 @@ _COUNT_ASSERTING_PATHS = (
 # own summary line, a count it computes at runtime, asserted here against a
 # two-gate fixture registry. Pinning it to the live registry would be
 # wrong, not merely noisy.
-_COUNT_CLAIM_RE = re.compile(r"(\d+)\s+(wired|excluded|exclusions)\b(?!\s+gate\(s\))")
+_COUNT_CLAIM_RE = re.compile(r"(\d+)\s+(?:[a-z]+-)?(wired|excluded|exclusions)\b(?!\s+gate\(s\))")
 _SPELLED_OUT_COUNT_RE = re.compile(
     r"\b(?:thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+"
     r"(?:wired|excluded|exclusions|gates|broken)",
