@@ -153,8 +153,14 @@ siblings (``_removal_span_for_item``) removes that element's own span plus
 one adjoining separator -- the one *before* it when it is last, the one
 *after* it otherwise -- so the remaining sequence stays syntactically valid
 with no dangling separator; removing the sole element of a one-item sequence
-leaves an empty literal (``{}``, a pattern with no alternatives, exact same
-technique), also valid.
+also consumes an explicit trailing comma in the real source, when one is
+present (found missing by an independent adversarial review, issue #1799):
+splicing out only the element's own span from a source written
+``("hidden",)``/``["hidden",]``/a multi-line ``{\n    "only": 1,\n}`` would
+otherwise leave a bare ``(,)``/``[,]``/``{,}`` -- a hard ``SyntaxError``, not
+"still valid" as an earlier revision of this paragraph claimed. A one-item
+sequence with no trailing comma in the source still leaves a syntactically
+valid empty literal exactly as before.
 
 Before any byte is written, ``_is_within_root`` re-checks that the target
 file's own absolute path actually resolves (symlinks and ``..`` components
@@ -547,20 +553,44 @@ def _node_byte_span(node: ast.expr, line_starts: list[int]) -> tuple[int, int]:
     return start, end
 
 
-def _removal_span_for_item(item_spans: list[tuple[int, int]], index: int) -> tuple[int, int]:
+_TRAILING_WHITESPACE = b" \t\n\r\f\v"
+
+
+def _removal_span_for_item(item_spans: list[tuple[int, int]], index: int, source: bytes) -> tuple[int, int]:
     """Given the `(start, end)` byte spans of every item in a comma- or
     `|`-separated sequence of `N >= 1` siblings, return the byte span to
     delete to remove item `index` alone while leaving the remaining items
     validly joined: the item's own span plus one adjoining separator -- the
     one before it when it is the last item (so removing the last item
     consumes the separator that used to precede it, not a nonexistent one
-    that used to follow it), the one after it otherwise. Removing the sole
-    item of a one-item sequence deletes just that item's own span, leaving
-    an empty container/alternation-less literal -- still syntactically
-    valid Python/regex. See the module docstring's own "Mutation mechanism"
-    section."""
+    that used to follow it), the one after it otherwise.
+
+    Removing the sole item of a one-item sequence deletes just that item's
+    own span *plus* an explicit trailing comma when the real source carries
+    one (skipping intervening whitespace to find it) -- `source` is the
+    full byte string `item_spans` was computed against (`body` for a
+    dict-entry/literal-display item, `content` for a regex alternative,
+    which this branch never actually reaches: a `|`-joined pattern with
+    only one alternative has no top-level `|` at all and is filtered out
+    before this function is ever called for it). Without consuming that
+    comma, splicing out the sole element of a source written with an
+    explicit trailing comma -- `("hidden",)`, `["hidden",]`, or a
+    multi-line `{\n    "only": 1,\n}` -- would leave a bare `(,)`/`[,]`/
+    `{,}` behind: syntactically invalid Python, not the "empty container,
+    still valid" result this docstring originally claimed for every shape
+    (found by an independent adversarial review: PR #2000, issue #1799).
+    A one-item sequence with no trailing comma in the source (`{"only": 1}`)
+    still yields an empty, syntactically valid literal exactly as before,
+    since no comma is found to extend the span over. See the module
+    docstring's own "Mutation mechanism" section."""
     if len(item_spans) == 1:
-        return item_spans[0]
+        start, end = item_spans[0]
+        cursor = end
+        while cursor < len(source) and source[cursor : cursor + 1] in _TRAILING_WHITESPACE:
+            cursor += 1
+        if cursor < len(source) and source[cursor : cursor + 1] == b",":
+            end = cursor + 1
+        return start, end
     if index < len(item_spans) - 1:
         return item_spans[index][0], item_spans[index + 1][0]
     return item_spans[index - 1][1], item_spans[index][1]
@@ -719,7 +749,7 @@ def _regex_alternation_elements(
             continue
         alt_spans = _alternative_spans(content, pipe_positions)
         for index, (alt_start, alt_end) in enumerate(alt_spans):
-            removal_content_span = _removal_span_for_item(alt_spans, index)
+            removal_content_span = _removal_span_for_item(alt_spans, index, content)
             removal_span = (
                 literal_start + content_start + removal_content_span[0],
                 literal_start + content_start + removal_content_span[1],
@@ -780,7 +810,7 @@ def _dict_entry_elements(
             entry_lines = set(range(key.lineno, (value.end_lineno or value.lineno) + 1))
             if not (entry_lines & added):
                 continue
-            removal_span = _removal_span_for_item(entry_spans, index)
+            removal_span = _removal_span_for_item(entry_spans, index, body)
             key_start, key_end = _node_byte_span(key, line_starts)
             key_text = body[key_start:key_end].decode("utf-8", errors="replace")
             elements.append(
@@ -852,7 +882,7 @@ def _literal_display_elements(
                     continue
                 if not (_span(item) & added):
                     continue
-                removal_span = _removal_span_for_item(item_spans, index)
+                removal_span = _removal_span_for_item(item_spans, index, body)
                 elements.append(
                     (
                         item.lineno,
@@ -882,7 +912,7 @@ def _literal_display_elements(
                 entry_lines = set(range(key.lineno, (value.end_lineno or value.lineno) + 1))
                 if not (entry_lines & added):
                     continue
-                removal_span = _removal_span_for_item(entry_spans, index)
+                removal_span = _removal_span_for_item(entry_spans, index, body)
                 elements.append(
                     (
                         key.lineno,

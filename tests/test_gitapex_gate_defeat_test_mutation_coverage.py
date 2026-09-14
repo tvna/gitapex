@@ -167,23 +167,62 @@ def test_node_byte_span_accounts_for_a_multibyte_character_earlier_on_the_line()
 # --- _removal_span_for_item ---------------------------------------------------
 
 
-def test_removal_span_for_item_sole_item_removes_only_its_own_span() -> None:
-    assert gate._removal_span_for_item([(3, 7)], 0) == (3, 7)
+def test_removal_span_for_item_sole_item_with_no_trailing_comma_removes_only_its_own_span() -> None:
+    source = b'{"only": 1}'
+    assert gate._removal_span_for_item([(1, 7)], 0, source) == (1, 7)
+
+
+def test_removal_span_for_item_sole_item_with_a_trailing_comma_consumes_it() -> None:
+    """Issue #1799 (PR #2000, found by an independent adversarial review):
+    a one-item sequence written with an explicit trailing comma --
+    `("hidden",)` -- must have that comma spliced out along with the
+    item itself, or the mutated source is a hard SyntaxError (`(,)`), not
+    the "still valid empty literal" the sole-item branch otherwise
+    produces."""
+    source = b'return ("hidden",)'
+    # b'"hidden"' spans [8, 16); the comma immediately follows at index 16.
+    assert gate._removal_span_for_item([(8, 16)], 0, source) == (8, 17)
+    mutated = source[:8] + source[17:]
+    assert mutated == b"return ()"
+    ast.parse(mutated)
+
+
+def test_removal_span_for_item_sole_item_trailing_comma_skips_intervening_whitespace() -> None:
+    source = b'{\n    "only": 1,\n}'
+    # b'"only": 1' spans [6, 15); whitespace before it is irrelevant here,
+    # only whitespace *between* the item's own end and the comma matters --
+    # this fixture has none, so also cover the case with some via a second
+    # assertion below.
+    assert gate._removal_span_for_item([(6, 15)], 0, source) == (6, 16)
+
+    source_with_gap = b'{"only": 1  ,}'
+    assert gate._removal_span_for_item([(1, 10)], 0, source_with_gap) == (1, 13)
+    mutated = source_with_gap[:1] + source_with_gap[13:]
+    assert mutated == b"{}"
+    ast.parse(mutated)
+
+
+def test_removal_span_for_item_sole_item_with_no_comma_at_all_leaves_an_empty_literal() -> None:
+    """A one-item sequence with nothing following the item at all (not even
+    a trailing comma) -- the removal span must not run past the end of
+    `source` while scanning for one."""
+    source = b'{"only": 1}'
+    assert gate._removal_span_for_item([(1, 10)], 0, source) == (1, 10)
 
 
 def test_removal_span_for_item_first_of_several_consumes_the_trailing_separator() -> None:
     spans = [(0, 1), (2, 3), (4, 5)]
-    assert gate._removal_span_for_item(spans, 0) == (0, 2)
+    assert gate._removal_span_for_item(spans, 0, b"a,b,c") == (0, 2)
 
 
 def test_removal_span_for_item_middle_consumes_the_trailing_separator() -> None:
     spans = [(0, 1), (2, 3), (4, 5)]
-    assert gate._removal_span_for_item(spans, 1) == (2, 4)
+    assert gate._removal_span_for_item(spans, 1, b"a,b,c") == (2, 4)
 
 
 def test_removal_span_for_item_last_consumes_the_leading_separator() -> None:
     spans = [(0, 1), (2, 3), (4, 5)]
-    assert gate._removal_span_for_item(spans, 2) == (3, 5)
+    assert gate._removal_span_for_item(spans, 2, b"a,b,c") == (3, 5)
 
 
 # --- category 1: regex alternation branch ------------------------------------
@@ -641,6 +680,51 @@ def test_end_to_end_category3_vacuous_test_leaves_a_finding_then_fixing_it_clear
     assert graded == 1
     assert waived == []
     assert len(violations) == 2
+
+    _write(tmp_path, test_path, fixed_test_src)
+    diff_text_fixed = _whole_file_diff(fixture_path, fixture_src) + _whole_file_diff(test_path, fixed_test_src)
+    violations_fixed, waived_fixed, graded_fixed = gate.find_violations(diff_text_fixed, tmp_path)
+    assert graded_fixed == 1
+    assert violations_fixed == []
+    assert waived_fixed == []
+
+
+def test_end_to_end_single_entry_dict_with_a_trailing_comma_does_not_crash_the_scan(
+    tmp_path: pathlib.Path,
+) -> None:
+    """Regression for the SyntaxError defect an independent adversarial
+    review found (issue #1799, PR #2000): a module-level dict with exactly
+    one entry, written with an explicit trailing comma (this repository's
+    own common multi-line formatting), used to leave `CONST = {\n}` after
+    the sole entry's own span alone was spliced out -- that was fine --
+    but the comma survived, so a source with the comma written on the
+    *item's own line* (`"only": 1,`) left a dangling `,` right after the
+    opening brace once the whole entry was removed together with a stray
+    comma the old code never accounted for consuming. Exercises the full
+    find_violations path (real mutation write + real pytest subprocess),
+    not just the unit-level _removal_span_for_item checks above, so a
+    regression in how this function's return value is actually spliced
+    into a file on disk would be caught here too."""
+    fixture_path = ".github/scripts/gitapex_check_fixture.py"
+    test_path = "tests/test_gitapex_check_fixture.py"
+    fixture_src = 'CONST = {\n    "only": 1,\n}\n'
+    vacuous_test_src = (
+        "import gitapex_check_fixture\n\n\n"
+        "def test_const():\n"
+        "    assert isinstance(gitapex_check_fixture.CONST, dict)\n"
+    )
+    fixed_test_src = (
+        'import gitapex_check_fixture\n\n\ndef test_const():\n    assert gitapex_check_fixture.CONST == {"only": 1}\n'
+    )
+
+    _write(tmp_path, fixture_path, fixture_src)
+    _write(tmp_path, test_path, vacuous_test_src)
+    diff_text = _whole_file_diff(fixture_path, fixture_src) + _whole_file_diff(test_path, vacuous_test_src)
+    violations, waived, graded = gate.find_violations(diff_text, tmp_path)
+    assert graded == 1
+    assert waived == []
+    assert len(violations) == 1
+    assert "only" in violations[0].message
 
     _write(tmp_path, test_path, fixed_test_src)
     diff_text_fixed = _whole_file_diff(fixture_path, fixture_src) + _whole_file_diff(test_path, fixed_test_src)
