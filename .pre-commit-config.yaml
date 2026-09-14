@@ -157,7 +157,7 @@ repos:
       # already-open PR. This runs all of them in one pass at pre-push --
       # the last local moment before a gap becomes a CI round-trip, and
       # deliberately not pre-commit: it grades committed state (HEAD vs
-      # origin/main), not a staged index, and at ~PLACEHOLDER s
+      # origin/main), not a staged index, and at ~47 s
       # warm end to end for all 51 wired gates (issue #1799's own
       # defeat-test-mutation-coverage gate roughly doubled the prior ~24 s
       # baseline on its own, being the first wired gate that spawns a real

@@ -126,7 +126,7 @@ used to be discovered one red check at a time on an already-open PR.
 The same `uv run prek install -t pre-commit -t pre-push -t commit-msg` above also installs
 a **pre-push** hook that runs every gate with a working-tree-only form in
 one pass, before the push leaves your machine. A warm run of all 51 wired
-gates measures roughly PLACEHOLDER seconds end to end (issue #1799's own
+gates measures roughly 47 seconds end to end (issue #1799's own
 defeat-test-mutation-coverage gate: unlike every other wired gate, which is
 pure AST inspection, it spawns a real `pytest` subprocess per graded
 element and self-grades its own regex/dict/literal elements against its own
@@ -177,7 +177,7 @@ it up, then confirm both shims with the check in the previous section.
 The runner itself also resolves through `uv` (issue #1485: it imports
 `_gitapex_schema_validation.py`, which needs `jsonschema` -- a real,
 non-stdlib dependency a bare system `python3` is not guaranteed to have),
-and so do all 50 wired gates (the same `uv run` pins CI uses). Without `uv`
+and so do all 51 wired gates (the same `uv run` pins CI uses). Without `uv`
 on PATH every one of them reports `FAIL ... failed to run` -- that is one
 missing tool, not a whole broken wired set.
 
