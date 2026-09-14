@@ -277,6 +277,18 @@ def test_orphaned_marker_skills_ignores_a_skill_with_no_markers_at_all(tmp_path:
     assert runner._orphaned_marker_skills(skills_dir, set()) == []
 
 
+def test_orphaned_marker_skills_silently_skips_a_skill_md_that_is_not_valid_utf8(tmp_path: pathlib.Path) -> None:
+    """A corrupted/non-UTF-8 SKILL.md is skill-metadata-schema-drift's own
+    finding to report, not this sweep's -- per _orphaned_marker_skills'
+    own docstring, a read failure here must not raise, and must not
+    itself flag the skill as orphaned."""
+    skills_dir = tmp_path / "skills"
+    bad_encoding_dir = skills_dir / "bad-encoding-skill"
+    bad_encoding_dir.mkdir(parents=True)
+    (bad_encoding_dir / "SKILL.md").write_bytes(b"\xff\xfe not valid utf-8")
+    assert runner._orphaned_marker_skills(skills_dir, set()) == []
+
+
 def test_check_skill_invokes_uv_run_frozen_python3_generator_with_check_flag(
     monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
 ) -> None:

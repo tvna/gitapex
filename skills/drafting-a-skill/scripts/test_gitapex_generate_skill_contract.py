@@ -13,8 +13,12 @@ diff to this file, not a silent drift.
 
 from __future__ import annotations
 
+import builtins
 import copy
+import importlib
 import pathlib
+import runpy
+import sys
 from typing import Any
 
 import gitapex_generate_skill_contract as generator
@@ -385,6 +389,65 @@ def test_contract_not_a_mapping_raises_generation_error(tmp_path: pathlib.Path) 
         generator.compute_rendered_skill_md(skill_dir)
 
 
+def test_sidecar_yaml_root_not_a_mapping_raises_generation_error(tmp_path: pathlib.Path) -> None:
+    """Distinct from test_contract_not_a_mapping_raises_generation_error
+    above (spec.contract itself malformed): here the whole parsed YAML
+    document is not a mapping at all -- a sidecar that is, e.g., a bare
+    YAML list at its root."""
+    skill_dir = tmp_path / "skills" / "bad-manifest-root"
+    metadata_dir = skill_dir / "metadata"
+    metadata_dir.mkdir(parents=True)
+    (metadata_dir / "gitapex.yaml").write_text(yaml.safe_dump(["not", "a", "mapping"]), encoding="utf-8")
+    _write_skill_md(skill_dir)
+    with pytest.raises(generator.GenerationError, match="must parse to a YAML mapping"):
+        generator.compute_rendered_skill_md(skill_dir)
+
+
+def test_sidecar_invalid_yaml_raises_generation_error(tmp_path: pathlib.Path) -> None:
+    skill_dir = tmp_path / "skills" / "bad-yaml-skill"
+    metadata_dir = skill_dir / "metadata"
+    metadata_dir.mkdir(parents=True)
+    # An unclosed flow mapping is a YAML syntax error, not a shape issue.
+    (metadata_dir / "gitapex.yaml").write_text("spec: {contract: [unterminated\n", encoding="utf-8")
+    _write_skill_md(skill_dir)
+    with pytest.raises(generator.GenerationError, match="is not valid YAML"):
+        generator.compute_rendered_skill_md(skill_dir)
+
+
+def test_sidecar_not_valid_utf8_raises_generation_error(tmp_path: pathlib.Path) -> None:
+    skill_dir = tmp_path / "skills" / "bad-encoding-skill"
+    metadata_dir = skill_dir / "metadata"
+    metadata_dir.mkdir(parents=True)
+    (metadata_dir / "gitapex.yaml").write_bytes(b"\xff\xfe not valid utf-8")
+    _write_skill_md(skill_dir)
+    with pytest.raises(generator.GenerationError, match="is not valid UTF-8"):
+        generator.compute_rendered_skill_md(skill_dir)
+
+
+def test_precondition_not_a_list_raises_generation_error(tmp_path: pathlib.Path) -> None:
+    contract = _copy_full_contract()
+    contract["precondition"] = "not a list"
+    skill_dir = _make_skill(tmp_path, "precondition-not-list-skill", contract)
+    with pytest.raises(generator.GenerationError, match=r"spec.contract.precondition must be a list"):
+        generator.compute_rendered_skill_md(skill_dir)
+
+
+def test_invariant_gate_wrong_type_raises_generation_error(tmp_path: pathlib.Path) -> None:
+    contract = _copy_full_contract()
+    contract["invariants"] = [{"text": "a real invariant", "gate": 42}]
+    skill_dir = _make_skill(tmp_path, "invariant-gate-wrong-type-skill", contract)
+    with pytest.raises(generator.GenerationError, match=r"invariants\[\].gate must be a string or null"):
+        generator.compute_rendered_skill_md(skill_dir)
+
+
+def test_gate_shipped_wrong_type_raises_generation_error(tmp_path: pathlib.Path) -> None:
+    contract = _copy_full_contract()
+    contract["gates"] = [{"id": "example-gate", "plane": "ci", "shipped": "yes"}]
+    skill_dir = _make_skill(tmp_path, "gate-shipped-wrong-type-skill", contract)
+    with pytest.raises(generator.GenerationError, match=r"gates\[\].shipped must be a boolean"):
+        generator.compute_rendered_skill_md(skill_dir)
+
+
 # ---------------------------------------------------------------------------
 # Not a target: no spec.contract declared
 # ---------------------------------------------------------------------------
@@ -675,3 +738,97 @@ def test_main_check_mode_flags_content_smuggled_onto_marker_line_as_drift(tmp_pa
         tmp_path, "smuggled-marker-skill", _copy_full_contract(), begin_line=f"{generator.BEGIN_MARKER}## Injected"
     )
     assert generator.main(["--check", str(skill_dir)]) == 1
+
+
+# ---------------------------------------------------------------------------
+# main() write-mode failure: an OSError writing the regenerated SKILL.md
+# (e.g. disk full, permission denied) must report FAIL and exit 1, never an
+# uncaught traceback.
+# ---------------------------------------------------------------------------
+
+
+def test_main_write_failure_reports_fail_not_traceback(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    skill_dir = _make_skill(tmp_path, "write-failure-skill", _copy_full_contract())
+
+    def _raise_os_error(self: pathlib.Path, *args: object, **kwargs: object) -> int:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(pathlib.Path, "write_text", _raise_os_error)
+    assert generator.main([str(skill_dir)]) == 1
+    err = capsys.readouterr().err
+    assert "FAIL" in err
+    assert "cannot be written" in err
+
+
+# ---------------------------------------------------------------------------
+# Missing PyYAML dependency (issue #1076 pattern) -- mirrors the identical
+# guard's own test suite in
+# skills/evaluating-skill-quality/scripts/test_gitapex_scan_execution_requirements_drift.py
+# (test_missing_pyyaml_exits_with_clear_message_not_a_traceback and its two
+# siblings), applied to this module's own copy of the same guard.
+# ---------------------------------------------------------------------------
+
+
+def test_missing_pyyaml_exits_with_clear_message_not_a_traceback(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Setting sys.modules["yaml"] = None is CPython's own documented
+    mechanism for making a subsequent `import yaml` raise
+    ModuleNotFoundError. Runs the script fresh via
+    `runpy.run_path(..., run_name="__main__")` so the guard's own
+    `__name__ == "__main__"` branch actually fires."""
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    script_path = str(pathlib.Path(generator.__file__))
+
+    with pytest.raises(SystemExit) as exc_info:
+        runpy.run_path(script_path, run_name="__main__")
+
+    assert exc_info.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "PyYAML" in stderr
+    assert "uv sync --group dev" in stderr
+
+
+def test_missing_pyyaml_on_plain_import_propagates_cleanly_not_systemexit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A plain import (this module merely being imported, not run as a
+    script) with PyYAML missing must let ModuleNotFoundError propagate
+    unmodified, never converted to SystemExit -- evicting the cached
+    module first forces a fresh top-level exec that actually re-runs the
+    guard."""
+    module_name = "gitapex_generate_skill_contract"
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    monkeypatch.delitem(sys.modules, module_name, raising=False)
+
+    with pytest.raises(ModuleNotFoundError) as exc_info:
+        importlib.import_module(module_name)
+
+    assert exc_info.value.name == "yaml"
+
+
+def test_broken_yaml_installation_error_propagates_unmodified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ModuleNotFoundError raised from inside an already-found but
+    broken/partial PyYAML install carries error.name == "yaml.<submodule>",
+    not "yaml" -- this guard's own remediation would not fix a corrupted
+    install, so the original error must propagate unmodified rather than
+    being misreported as a plain missing-PyYAML case."""
+    module_name = "gitapex_generate_skill_contract"
+    real_import = builtins.__import__
+
+    def _fake_import(name: str, *args: object, **kwargs: object) -> object:
+        if name == "yaml":
+            raise ModuleNotFoundError("No module named 'yaml.tokens'", name="yaml.tokens")
+        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    monkeypatch.delitem(sys.modules, module_name, raising=False)
+
+    with pytest.raises(ModuleNotFoundError) as exc_info:
+        importlib.import_module(module_name)
+
+    assert exc_info.value.name == "yaml.tokens"
