@@ -42,7 +42,22 @@ expected:
     - "dispatch multiplier"
     - "size times the dispatch count"
     - "A2"
+    # The prompt's second question ("what must be confirmed before the
+    # verdict stands?") needs its own positive assertion, and the axis
+    # verdict itself needs one: the contributor guide withholds the
+    # harness's dispatch behavior, so A3 resolves cannot-be-assessed
+    # rather than to either PASS or FAIL. Both strings are quoted from
+    # references/criteria.md's own A3 application note ("Confirm the
+    # harness's own actual dispatch behavior before applying the
+    # multiplier"), quoted as a contiguous span rather than across that
+    # note's own line wrap.
+    - "dispatch behavior"
+    - "cannot-be-assessed"
   output_not_contains:
     - "the line count alone settles it"
     - "PASS, because the file is under the 200-line target"
-    - "assume the harness re-charges the file on every dispatch"
+    # Replaces an earlier ban ("assume the harness re-charges the file on
+    # every dispatch") that a correct answer's own natural negation ("do
+    # not assume the harness re-charges...") contained as a substring and
+    # would have false-failed on.
+    - "no confirmation is needed"

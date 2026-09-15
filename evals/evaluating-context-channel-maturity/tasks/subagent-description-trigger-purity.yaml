@@ -42,7 +42,13 @@ expected:
     - "description trigger purity"
     - "are slop and are deleted"
     - "a character cap is not a substitute for it"
+    # Without a positive assertion on the verdict itself, an answer that
+    # merely echoes the B1 vocabulary and then concludes the description
+    # is fine as it stands satisfied every other assertion here.
+    - "FAIL"
   output_not_contains:
     - "rewrite the description to explain the rationale more concisely"
     - "shortening the description to fit a character limit is the fix"
     - "keep the decision numbers so the router can see the provenance"
+    - "the description is acceptable as written"
+    - "no change is required"

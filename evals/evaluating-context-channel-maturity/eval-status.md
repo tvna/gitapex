@@ -15,9 +15,16 @@ Thirteen of them are one per this skill's own Stop-boundary bullet --
 required by
 `.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py`, a deterministic
 CI gate added the same day as this skill's initial authoring that did not
-exist when the retired predecessor first shipped. Each fixture passed
-`evals/scripts/gitapex_lint_fixture_assertions.py` (0 warnings, scoped to this
-skill's own tasks and `references/criteria.md`) and the branch/fixture
+exist when the retired predecessor first shipped. All 15 fixtures --
+the 13 Stop-boundary ones and the two axis ones described below -- passed
+`evals/scripts/gitapex_lint_fixture_assertions.py` together, scoped to this
+skill's own tasks and `references/criteria.md`, on the run made after the
+axis fixtures' assertions were last edited: 0 blocking warnings, and 1
+non-blocking note, which is `secret-redaction.yaml`'s pre-existing
+`verbatim-anywhere` note on its redacted example token, not a finding
+against either axis fixture. That observed run is what this sentence
+reports, not a count carried forward from the 13-fixture era. The
+branch/fixture
 count itself was independently verified against
 `gitapex_gate_skill_branch_fixture_coverage.py` directly, not assumed from the
 fixture count alone. The remaining two --
@@ -30,6 +37,15 @@ no Stop-boundary bullet corresponds to either. Both establish that those
 axes exist and are exercisable; neither claims its FAIL verdict has been
 observed in a real eval run, since the suite has never been executed (see
 the open-follow-up note below, and issue #1989).
+
+Five of the eight channel-namespaced axes ship with no fixture at all:
+A1 (content derivability), A4 (over-specification), B2 (detail
+placement), B3 (roster size), and B4 (cross-runtime tool-boundary
+parity). Naming them here rather than leaving the count silent: two
+fixtures out of eight axes is the coverage this skill actually has, and
+authoring the remaining five was out of scope for issue #1986's own
+acceptance criteria, not an omission this file should let a reader
+mistake for coverage. Tracked alongside the unrun-suite gap above.
 
 No no-skill baseline and no model tier evaluated yet
 -- an ablation-capable, not-yet-run gap, not an absent-mechanism one,

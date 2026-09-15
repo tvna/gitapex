@@ -104,7 +104,10 @@ at all can still be small today and unbounded in trend.
 - **Subagent definitions / Output styles / system-prompt-append
   configuration**: usually not-applicable, per the same reasoning as
   criterion 1's channel notes -- report so explicitly rather than
-  omitting the criterion.
+  omitting the criterion. Growth of a subagent *roster*, as distinct from
+  a single definition's own size, is graded under axis B3 instead of
+  here; defer to B3 rather than re-deciding that question at this
+  criterion.
 
 ## 3. Placement and disclosure fit
 
@@ -254,13 +257,15 @@ Basis labels used throughout this section and the next: *primary-source-quotable
 means the axis's rule is covered by a passage already quoted verbatim
 elsewhere in this file, repeated here with its link reference;
 *gitapex-owned convention* means no such passage covers it and the axis
-was decided in this repository under
-<https://github.com/tvna/gitapex/issues/1963> (stage 1:
-<https://github.com/tvna/gitapex/issues/1986>), with no external primary
-source claimed for it. Every axis below labelled a gitapex-owned
-convention was decided there; the label alone carries that provenance and
-no axis repeats it. A gitapex-owned convention is not a weaker axis -- it
-is an honestly labelled one.
+was decided in this repository instead. The convention label records
+exactly that test and no more: it says this file quotes no passage
+covering the axis, not that no external primary source for one exists
+anywhere -- no such search was performed, and the label is not a
+grounding verdict. Where each such convention was decided is recorded
+once in this skill's own `metadata/gitapex.yaml` (`spec.references`),
+which the label defers to rather than any axis repeating it. A
+gitapex-owned convention is not a weaker axis -- it is an honestly
+labelled one.
 
 ### A1 content derivability
 
@@ -291,7 +296,10 @@ relevant to their task or not," and on what the channel is for:
 alternative is named by [The new rules of context engineering][context-eng]:
 "consider having a tree of files that can be loaded at the right time."
 Each of these three passages is quoted verbatim in criteria 2 and 3
-above; none is newly introduced here.
+above; none is newly introduced here. Disclosed precisely: what the
+quotes ground is the always-loaded cost and what the channel is for; the
+per-clause burden of proof this axis imposes is this repository's own
+procedural application built on top of them, not itself a quoted rule.
 
 ### A3 dispatch multiplier
 
@@ -300,8 +308,13 @@ harness re-loads the project-instruction file into each non-fork subagent
 dispatch, a session that dispatches ten subagents pays the file ten times
 over plus once for the main thread. Confirm the harness's own actual
 dispatch behavior before applying the multiplier -- a fork-style dispatch
-that inherits an already-loaded context does not re-charge, and assuming
-either behavior without checking is itself a finding.
+that inherits an already-loaded context does not re-charge. What this
+axis bars is the reviewer assuming a multiplier, not the target existing
+in a harness the reviewer cannot inspect: where the dispatch behavior
+cannot be confirmed from available evidence, this axis's own verdict is
+cannot-be-assessed, reported with what specifically could not be read,
+and the target collects no A3 failure for a limit in the reviewer's own
+access.
 
 *Basis:* **gitapex-owned convention.** No passage quoted in this file
 addresses subagent dispatch re-charging a project-instruction file; the
@@ -314,7 +327,12 @@ file does not make.
 *Application:* the fix is a shorter clause carrying the same rule, which
 is distinct from criterion 3's fix of moving the content to another
 channel entirely. Both can apply to one clause, and are reported
-separately.
+separately. The test is falsifiable and must actually be run, not
+asserted: write the shorter restatement out and show it in the report,
+then ask whether it steers identically. A clause passes this axis only
+when that attempt was made and the restatement demonstrably lost
+something the rule needs; claiming no shorter form exists without
+producing one is not a graded verdict.
 
 *Basis:* **gitapex-owned convention.** The nearest quoted passage,
 criterion 3's "A 30-line procedure in CLAUDE.md. Procedures belong in
@@ -327,7 +345,10 @@ retained content.
 These four axes apply only when the target is a subagent definition
 (`.claude/agents/*.md`, `agents/*.md`, or equivalent). The same split
 applies: `SKILL.md` carries each rule, this section the application note
-and the basis.
+and the basis. The two basis labels, and where a gitapex-owned
+convention's own provenance is recorded, are defined once under
+[Axis group A](#axis-group-a-project-instruction-channel) above and are
+not restated here.
 
 ### B1 description trigger purity
 
@@ -381,9 +402,16 @@ size; no quoted passage treats the roster as a bounded resource.
 every runtime it is actually distributed to and confirm the boundary is
 reproduced equivalently in each, not only in the runtime it was authored
 against. A boundary enforced structurally in one runtime and carried only
-as prose in another is a parity failure, and the honest report names
-which runtime lacks the structural backing rather than reporting the
-boundary as enforced.
+as prose in another is a parity failure where that runtime does offer a
+structural mechanism the definition did not use, and the honest report
+names which runtime lacks the structural backing rather than reporting
+the boundary as enforced. Where a runtime's own definition format offers
+no such mechanism at all, the definition passes this axis by disclosing
+that gap in its own text -- naming the runtime, what the format cannot
+back, and what carries the boundary there instead. The disclosure is what
+earns the pass: an undisclosed gap, or a definition presenting the
+boundary as enforced in a runtime where it is prose only, remains a
+failure.
 
 *Basis:* **gitapex-owned convention.** Criterion 4's channel note on
 subagents (a `disallowedTools` restriction or an embedded lifecycle hook
