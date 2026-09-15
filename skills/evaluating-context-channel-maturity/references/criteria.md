@@ -254,9 +254,13 @@ Basis labels used throughout this section and the next: *primary-source-quotable
 means the axis's rule is covered by a passage already quoted verbatim
 elsewhere in this file, repeated here with its link reference;
 *gitapex-owned convention* means no such passage covers it and the axis
-was decided in this repository, with no external primary source behind
-it. A gitapex-owned convention is not a weaker axis -- it is an honestly
-labelled one.
+was decided in this repository under
+<https://github.com/tvna/gitapex/issues/1963> (stage 1:
+<https://github.com/tvna/gitapex/issues/1986>), with no external primary
+source claimed for it. Every axis below labelled a gitapex-owned
+convention was decided there; the label alone carries that provenance and
+no axis repeats it. A gitapex-owned convention is not a weaker axis -- it
+is an honestly labelled one.
 
 ### A1 content derivability
 
@@ -269,9 +273,7 @@ conclusion without the clause; a clause that only *summarizes* the
 repository faster is still derivable.
 
 *Basis:* **gitapex-owned convention.** No passage quoted in this file
-distinguishes derivable from non-derivable content. Decided in this
-repository under <https://github.com/tvna/gitapex/issues/1963> (stage 1: <https://github.com/tvna/gitapex/issues/1986>); no external primary
-source is claimed for it.
+distinguishes derivable from non-derivable content.
 
 ### A2 always-loaded justification
 
@@ -305,22 +307,20 @@ either behavior without checking is itself a finding.
 addresses subagent dispatch re-charging a project-instruction file; the
 quoted cost passage under A2 counts sessions and engineers, not
 dispatches, and extending it to dispatches would be an extrapolation this
-file does not make. Decided in this repository under <https://github.com/tvna/gitapex/issues/1963> (stage 1: <https://github.com/tvna/gitapex/issues/1986>).
+file does not make.
 
 ### A4 over-specification
 
-*Application:* for each clause, ask whether a shorter statement of the
-same rule would steer identically. Procedural detail, worked mechanics,
-and enumerated sub-steps that a reader does not need in order to act are
-the failure; the fix is a shorter clause carrying the same rule, which is
-distinct from criterion 3's fix of moving the content to another channel
-entirely. Both can apply to one clause, and are reported separately.
+*Application:* the fix is a shorter clause carrying the same rule, which
+is distinct from criterion 3's fix of moving the content to another
+channel entirely. Both can apply to one clause, and are reported
+separately.
 
 *Basis:* **gitapex-owned convention.** The nearest quoted passage,
 criterion 3's "A 30-line procedure in CLAUDE.md. Procedures belong in
 skills," is about relocating procedural content, not about compressing a
 rule that correctly stays. No quoted passage covers over-specification of
-retained content. Decided in this repository under <https://github.com/tvna/gitapex/issues/1963> (stage 1: <https://github.com/tvna/gitapex/issues/1986>).
+retained content.
 
 ## Axis group B: subagent definitions
 
@@ -347,21 +347,20 @@ and a capped description full of rationale still fails.
 *Basis:* **gitapex-owned convention.** [Steering Claude Code][steering]'s
 quoted subagent passage under criterion 3 says when to use a subagent at
 all; no passage quoted in this file says what a subagent's description
-field may contain. Decided in this repository under <https://github.com/tvna/gitapex/issues/1963> (stage 1: <https://github.com/tvna/gitapex/issues/1986>).
+field may contain.
 
 ### B2 detail placement
 
 *Application:* for each piece of detail in the description, ask whether a
-router needs it to decide *whether* to dispatch. If it is needed only
-once the subagent is already running, it belongs in the body, which loads
-on dispatch rather than on every routing decision. B1 asks whether the
-description is pure; B2 asks whether the impure material was deleted
-outright or correctly relocated into the body.
+router needs it to decide *whether* to dispatch; detail needed only once
+the subagent is already running does not. B1 asks whether the description
+is pure; B2 asks whether the impure material was deleted outright or
+correctly relocated into the body.
 
 *Basis:* **gitapex-owned convention.** Criterion 3's quoted "where the
 body loads only when invoked" describes a skill's body, not a subagent
 definition's; treating the two as the same mechanism would be an
-extrapolation rather than a quote. Decided in this repository under <https://github.com/tvna/gitapex/issues/1963> (stage 1: <https://github.com/tvna/gitapex/issues/1986>).
+extrapolation rather than a quote.
 
 ### B3 roster size
 
@@ -374,8 +373,7 @@ all is a finding even when it is currently small, the same way criterion
 
 *Basis:* **gitapex-owned convention.** The quoted bounded-growth passages
 under criterion 2 bound CLAUDE.md's line count, not a subagent roster's
-size; no quoted passage treats the roster as a bounded resource. Decided
-in this repository under <https://github.com/tvna/gitapex/issues/1963> (stage 1: <https://github.com/tvna/gitapex/issues/1986>).
+size; no quoted passage treats the roster as a bounded resource.
 
 ### B4 cross-runtime tool-boundary parity
 
@@ -391,7 +389,6 @@ boundary as enforced.
 subagents (a `disallowedTools` restriction or an embedded lifecycle hook
 as structural backing) is this file's own prose, not a quoted passage,
 and no quoted passage addresses distribution across multiple runtimes.
-Decided in this repository under <https://github.com/tvna/gitapex/issues/1963> (stage 1: <https://github.com/tvna/gitapex/issues/1986>).
 
 ## Sources considered and not used
 
