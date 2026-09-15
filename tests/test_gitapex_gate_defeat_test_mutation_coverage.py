@@ -495,6 +495,21 @@ def test_enclosing_function_unconditional_treats_with_as_not_a_guard() -> None:
     assert func.name == "make"
 
 
+def test_enclosing_function_unconditional_returns_none_inside_a_match_case() -> None:
+    """Regression for an independent adversarial review finding (issue
+    #1799, PR #2000): a display built inside a single `case ...:` arm's
+    own body is conditional on which arm actually matched -- the same
+    shape `ast.If` already covers. `ast.Match` is never a statement's own
+    immediate ancestor inside one of its `case` arms; `ast.match_case` is,
+    which is what `_GUARD_NODE_TYPES` must actually carry for this to
+    work."""
+    source = 'def make(kind):\n    match kind:\n        case "a":\n            return ["hidden", "archived"]\n        case _:\n            return []\n'
+    tree = ast.parse(source)
+    parents = gate._parent_map(tree)
+    list_node = next(node for node in ast.walk(tree) if isinstance(node, ast.List) and node.elts)
+    assert gate._enclosing_function_unconditional(list_node, parents) is None
+
+
 def test_literal_display_elements_grades_list_items_in_a_function_body() -> None:
     source = 'def make():\n    return ["hidden", "archived"]\n'
     tree = ast.parse(source)
@@ -948,6 +963,32 @@ def test_find_violations_refuses_to_read_a_symlink_escaping_root(tmp_path: pathl
         gate.find_violations(diff_text, root)
 
 
+def test_find_violations_refuses_a_paired_test_symlink_escaping_root(tmp_path: pathlib.Path) -> None:
+    """Regression for an independent adversarial review finding (issue
+    #1799, PR #2000): the source-file read-side containment check above
+    covers the graded source file, but the paired test paths built from
+    it were never checked at all -- even though they are *executed* by
+    the pytest subprocess this gate spawns, a stronger exposure than
+    merely being read. A paired test path that is, on disk, a symlink
+    pointing outside `root` must be refused before it is ever handed to
+    pytest."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    outside = tmp_path / "outside_tests"
+    outside.mkdir()
+    (outside / "test_evil.py").write_text("def test_x():\n    pass\n", encoding="utf-8")
+    fixture_path = ".github/scripts/gitapex_check_fixture.py"
+    test_path = "tests/test_gitapex_check_fixture.py"
+    fixture_src = 'import re\n_RE = re.compile(r"a|b")\n'
+    _write(root, fixture_path, fixture_src)
+    link = root / test_path
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(outside / "test_evil.py")
+    diff_text = _whole_file_diff(fixture_path, fixture_src) + _whole_file_diff(test_path, "def test_x():\n    pass\n")
+    with pytest.raises(gate.ScanError, match="resolves outside"):
+        gate.find_violations(diff_text, root)
+
+
 def test_find_violations_raises_scan_error_for_an_unreadable_file(tmp_path: pathlib.Path) -> None:
     """A path the diff names as a source file that turns out to be a
     directory raises `IsADirectoryError` (an `OSError`, not
@@ -957,6 +998,102 @@ def test_find_violations_raises_scan_error_for_an_unreadable_file(tmp_path: path
     (tmp_path / fixture_path).mkdir(parents=True)
     diff_text = _whole_file_diff(fixture_path, "x = 1\n")
     with pytest.raises(gate.ScanError, match="cannot be read"):
+        gate.find_violations(diff_text, tmp_path)
+
+
+# --- _paired_suite_passes_unmutated -----------------------------------------
+
+
+@pytest.mark.slow
+def test_paired_suite_passes_unmutated_returns_true_for_a_green_suite(tmp_path: pathlib.Path) -> None:
+    fixture_path = ".github/scripts/gitapex_check_fixture.py"
+    test_path = "tests/test_gitapex_check_fixture.py"
+    fixture_absolute = _write(tmp_path, fixture_path, "def make():\n    return 1\n")
+    test_absolute = _write(tmp_path, test_path, "import gitapex_check_fixture\n\n\ndef test_x():\n    pass\n")
+    assert gate._paired_suite_passes_unmutated(fixture_absolute, [test_absolute], tmp_path) is True
+
+
+@pytest.mark.slow
+def test_paired_suite_passes_unmutated_returns_false_for_an_already_red_suite(tmp_path: pathlib.Path) -> None:
+    fixture_path = ".github/scripts/gitapex_check_fixture.py"
+    test_path = "tests/test_gitapex_check_fixture.py"
+    fixture_absolute = _write(tmp_path, fixture_path, "def make():\n    return 1\n")
+    test_absolute = _write(tmp_path, test_path, "import gitapex_check_fixture\n\n\ndef test_x():\n    assert False\n")
+    assert gate._paired_suite_passes_unmutated(fixture_absolute, [test_absolute], tmp_path) is False
+
+
+@pytest.mark.slow
+def test_paired_suite_passes_unmutated_puts_the_source_directory_on_pythonpath(tmp_path: pathlib.Path) -> None:
+    """Regression: without `PYTHONPATH` pointing at the graded source
+    file's own containing directory, the paired suite's bare `import
+    gitapex_check_fixture` fails to even collect -- a real green suite
+    then misreads as a collection error (returncode 2), not as passing.
+    Nests the fixture under a subdirectory with no `__init__.py`, the
+    same shape `_run_mutation`'s own regression test for this already
+    covers, so a bare `sys.path`-only lookup (no explicit PYTHONPATH)
+    would not find it either."""
+    fixture_path = "hooks/nested/gitapex_check_fixture.py"
+    test_path = "tests/test_gitapex_check_fixture.py"
+    fixture_absolute = _write(tmp_path, fixture_path, "def make():\n    return 1\n")
+    test_absolute = _write(tmp_path, test_path, "import gitapex_check_fixture\n\n\ndef test_x():\n    pass\n")
+    assert gate._paired_suite_passes_unmutated(fixture_absolute, [test_absolute], tmp_path) is True
+
+
+def test_paired_suite_passes_unmutated_raises_scan_error_on_subprocess_timeout(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture_path = ".github/scripts/gitapex_check_fixture.py"
+    test_path = "tests/test_gitapex_check_fixture.py"
+    fixture_absolute = _write(tmp_path, fixture_path, "def make():\n    return 1\n")
+    test_absolute = _write(tmp_path, test_path, "import gitapex_check_fixture\n\n\ndef test_x():\n    pass\n")
+
+    def _timing_out(*args: object, **kwargs: object) -> None:
+        raise gate.subprocess.TimeoutExpired(cmd=["pytest"], timeout=gate._PYTEST_TIMEOUT_SECONDS)
+
+    monkeypatch.setattr(gate.subprocess, "run", _timing_out)
+    with pytest.raises(gate.ScanError, match="timed out"):
+        gate._paired_suite_passes_unmutated(fixture_absolute, [test_absolute], tmp_path)
+
+
+def test_paired_suite_passes_unmutated_raises_scan_error_when_subprocess_run_itself_errors(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture_path = ".github/scripts/gitapex_check_fixture.py"
+    test_path = "tests/test_gitapex_check_fixture.py"
+    fixture_absolute = _write(tmp_path, fixture_path, "def make():\n    return 1\n")
+    test_absolute = _write(tmp_path, test_path, "import gitapex_check_fixture\n\n\ndef test_x():\n    pass\n")
+
+    def _raising(*args: object, **kwargs: object) -> None:
+        raise OSError("simulated spawn failure")
+
+    monkeypatch.setattr(gate.subprocess, "run", _raising)
+    with pytest.raises(gate.ScanError, match="pytest failed to run"):
+        gate._paired_suite_passes_unmutated(fixture_absolute, [test_absolute], tmp_path)
+
+
+@pytest.mark.slow
+def test_find_violations_raises_scan_error_when_the_paired_suite_is_already_red(tmp_path: pathlib.Path) -> None:
+    """Regression for an independent adversarial review finding (issue
+    #1799, PR #2000): without a baseline run against the real, unmutated
+    source, an already-failing paired suite makes `_run_mutation` read
+    returncode 1 for *every* mutation -- indistinguishable from a real
+    mutation being caught -- so the gate would report a clean `OK: N
+    graded` verdict having never actually exercised a real mutation,
+    silently defeating this gate's own entire purpose. A paired suite
+    that is already red before any mutation is attempted must instead
+    raise ScanError."""
+    fixture_path = ".github/scripts/gitapex_check_fixture.py"
+    test_path = "tests/test_gitapex_check_fixture.py"
+    fixture_src = 'import re\n_RE = re.compile(r"a|b")\n'
+    test_src = (
+        "import gitapex_check_fixture\n\n\n"
+        "def test_something_unrelated():\n"
+        "    assert False, 'this failure has nothing to do with any mutation'\n"
+    )
+    _write(tmp_path, fixture_path, fixture_src)
+    _write(tmp_path, test_path, test_src)
+    diff_text = _whole_file_diff(fixture_path, fixture_src) + _whole_file_diff(test_path, test_src)
+    with pytest.raises(gate.ScanError, match="already fails against the real, unmutated source"):
         gate.find_violations(diff_text, tmp_path)
 
 

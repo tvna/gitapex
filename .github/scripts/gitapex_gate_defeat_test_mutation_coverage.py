@@ -92,13 +92,17 @@ natural-language claims (see "Why not parse docstrings" below):
    pair in an ``ast.Dict`` display that is *not* already the module-level
    ``CONST = {...}`` shape category 2 owns -- in both cases, only when the
    display itself is built directly inside a function body with no
-   enclosing ``If``/``Try``/``TryStar``/``For``/``AsyncFor``/``While``
-   between the display and that function (an unconditionally-executed straight-line
+   enclosing ``If``/``Try``/``TryStar``/``For``/``AsyncFor``/``While``/
+   ``match_case`` between the display and that function (an unconditionally-executed straight-line
    emission, the same shape issue #1799's own #1991 row describes: "the
    generator appends both literals in one unconditional list construction").
    This category is necessarily the least mechanically crisp of the three
    (issue #1799's own #1991 row describes it by example, not by a closed
-   grammar) -- narrowed deliberately, not overclaimed:
+   grammar) -- narrowed deliberately, not overclaimed. The known-misses
+   list immediately below spans all three categories, not only this one
+   (several entries name category 1 or category 2 explicitly) -- placed
+   here because category 3's own narrower shape is what motivates most
+   of them, not because the other two categories have none of their own:
 
    **Known misses, disclosed rather than found later.**
 
@@ -116,6 +120,20 @@ natural-language claims (see "Why not parse docstrings" below):
      this today (a genuine ``re.compile(...)``-based pattern is always
      graded correctly regardless), so this is a disclosed latent gap, not
      an observed false finding.
+   * The top-level-``|`` scan tracks a literal backslash byte in the raw
+     source text and treats it as escaping the byte after it, which is
+     exactly correct for a raw string literal, where the source bytes and
+     the pattern value handed to ``re`` are identical byte-for-byte. It is
+     not correct for a non-raw string literal whose source spells a
+     backslash immediately followed by a pipe: those two source bytes
+     read, to this scan, as "an escaped backslash, so the pipe right
+     after it is unescaped and top-level" -- but Python's own string
+     decoding collapses that same two-byte source sequence down to a
+     single escaped-pipe pattern byte pair before ``re`` ever sees it, so
+     the *pattern value* actually handed to ``re`` has no top-level
+     alternation there at all. No in-scope file writes a non-raw
+     ``re.compile(...)`` pattern containing a backslash today, so this is
+     a disclosed latent gap, not an observed false finding.
    * A keyword argument's own value (``some_call(hidden=True)``) is not
      graded -- only a ``List``/``Tuple``/``Set`` element or a ``Dict``
      entry's value is, per the narrow shape above.
@@ -131,13 +149,19 @@ natural-language claims (see "Why not parse docstrings" below):
      (a nested container, a call, a name reference) is never graded under
      category 3 -- only the four scalar ``Constant`` types listed above are.
    * A display nested inside a ``with`` block still counts as unconditional
-     -- only ``If``/``Try``/``TryStar``/``For``/``AsyncFor``/``While`` are
-     treated as a guard, matching this category's own literal wording
-     (``TryStar`` -- ``try``/``except*``, Python 3.11+ -- is not an
-     ``ast.Try`` subclass, so it is added to the guard set explicitly
-     rather than falling out of an ``isinstance`` check on ``ast.Try``
-     alone; this repository's own ``requires-python = ">=3.12"`` means it
-     is always present).
+     -- only ``If``/``Try``/``TryStar``/``For``/``AsyncFor``/``While``/
+     ``match_case`` are treated as a guard, matching this category's own
+     literal wording (``TryStar`` -- ``try``/``except*``, Python 3.11+ --
+     is not an ``ast.Try`` subclass, so it is added to the guard set
+     explicitly rather than falling out of an ``isinstance`` check on
+     ``ast.Try`` alone; this repository's own ``requires-python =
+     ">=3.12"`` means it is always present. ``match_case`` -- a single
+     ``case ...:`` arm's own body, Python 3.10+ -- rather than ``Match``
+     itself: confirmed directly against a real parse that a statement
+     inside one ``case`` arm's own body has that arm's ``match_case`` node
+     as its immediate ancestor, never the enclosing ``Match``, so
+     ``match_case`` is what must sit in this set for a ``match``/``case``
+     to be caught at all).
    * A display sitting directly in a class body (a class attribute, not
      inside any method) has no enclosing function at all and is never
      graded under category 3.
@@ -292,10 +316,15 @@ Exit codes
 0 clean, 1 a vacuous-coverage finding, 2 the scan could not be trusted
 (malformed diff, an in-scope or paired-test file that cannot be
 read/parsed, a ``--root`` that is not a directory, a diff-derived path that
-does not resolve inside ``--root`` (``_is_within_root``), or a subprocess
-``pytest`` invocation that itself errors for a reason other than "tests ran
-and passed/failed" -- e.g. a collection error) -- the same fail-closed contract
-both sibling gates already state, dimension 15 of
+does not resolve inside ``--root`` (``_is_within_root``), a graded file's own
+paired suite already failing against the real, unmutated source before any
+mutation is attempted (``_paired_suite_passes_unmutated`` -- a returncode 1
+there is indistinguishable from a returncode 1 caused by a real mutation, so
+every element in that file would otherwise misread as CAUGHT and this gate
+would report a clean verdict having exercised no real mutation at all), or a
+subprocess ``pytest`` invocation that itself errors for a reason other than
+"tests ran and passed/failed" -- e.g. a collection error) -- the same
+fail-closed contract both sibling gates already state, dimension 15 of
 ``skills/evaluating-deterministic-gate-quality/references/dimensions.md``.
 
 Known, disclosed non-goals
@@ -374,8 +403,22 @@ _SUPPORTED_LITERAL_TYPES = (str, int, float, bool)
 # own `requires-python = ">=3.12"` (pyproject.toml) means it is always
 # present, matching how gitapex_gate_except_fail_open.py,
 # gitapex_gate_network_exception_set_drift.py, and
-# gitapex_gate_exception_handler_gaps.py already reference it.
-_GUARD_NODE_TYPES: tuple[type[ast.AST], ...] = (ast.If, ast.Try, ast.TryStar, ast.For, ast.AsyncFor, ast.While)
+# gitapex_gate_exception_handler_gaps.py already reference it. `ast.match_
+# case` (Python 3.10+) is a `case ...:` arm's own body, the node that
+# actually sits between a `match`-guarded display and its enclosing
+# function -- confirmed directly against a real parse: `ast.Match` itself
+# is never an ancestor of a statement inside one of its own `case` arms,
+# `match_case` is. Only one `case` arm out of possibly several ever runs,
+# the same conditional-construction shape `ast.If` already covers.
+_GUARD_NODE_TYPES: tuple[type[ast.AST], ...] = (
+    ast.If,
+    ast.Try,
+    ast.TryStar,
+    ast.For,
+    ast.AsyncFor,
+    ast.While,
+    ast.match_case,
+)
 
 _PYTEST_TIMEOUT_SECONDS = 120
 
@@ -883,11 +926,11 @@ def _enclosing_function_unconditional(
     node: ast.AST, parents: dict[int, ast.AST]
 ) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
     """Walk upward from `node` to its enclosing function, returning that
-    function iff no `If`/`Try`/`TryStar`/`For`/`AsyncFor`/`While` ancestor
-    sits between them (the display is built unconditionally in that function's
-    own body). None when no enclosing function exists at all (a module- or
-    class-body-level display) or when a guard sits between `node` and the
-    nearest enclosing function."""
+    function iff no `If`/`Try`/`TryStar`/`For`/`AsyncFor`/`While`/
+    `match_case` ancestor sits between them (the display is built
+    unconditionally in that function's own body). None when no enclosing
+    function exists at all (a module- or class-body-level display) or when
+    a guard sits between `node` and the nearest enclosing function."""
     current = parents.get(id(node))
     while current is not None:
         if isinstance(current, ast.FunctionDef | ast.AsyncFunctionDef):
@@ -1025,6 +1068,74 @@ def _is_within_root(candidate: pathlib.Path, root: pathlib.Path) -> bool:
     False`, which is this same falsy-default-on-exception shape
     `except-fail-open` (issue #1722) exists to catch."""
     return candidate.resolve().is_relative_to(root.resolve())
+
+
+def _paired_suite_passes_unmutated(
+    absolute_path: pathlib.Path, test_paths: list[pathlib.Path], root: pathlib.Path
+) -> bool:
+    """True iff `test_paths` all pass, right now, against the real
+    unmutated source already on disk. Run once per graded file, before
+    any of its elements are mutated -- an independent adversarial review
+    finding (issue #1799, PR #2000): `_run_mutation`'s own returncode
+    0-means-survived/1-means-caught reading cannot tell "this mutation
+    was caught" apart from "this paired suite was already red for an
+    unrelated reason" -- both produce exit 1. Without this check, a
+    paired suite that is already failing (a half-finished test file
+    mid-edit, an unrelated regression) makes every element in the file
+    read as CAUGHT (returncode 1 either way), so the gate reports a
+    clean `OK: N graded` verdict while never having exercised a single
+    real mutation -- silently defeating this gate's own entire purpose,
+    the same defect class it exists to catch in other tests' own
+    coverage claims. Real mutation-testing tools (`mutmut`, `cosmic-ray`,
+    cited in this gate's own header) always take this same baseline
+    run first, for the same reason.
+
+    Same three-way returncode reading as `_run_mutation` itself, not a
+    plain `== 0`: 0 means the baseline genuinely passes (True), 1 means a
+    real, ordinary test failure (False -- the caller raises `ScanError`
+    for this, since a red baseline makes every later mutation
+    unreadable), and anything else (a collection error from a paired
+    test file that fails to *import* at all, for instance -- confirmed
+    live to exit non-1/non-0 in this repository's own pytest
+    configuration) is routed to its own `ScanError` here rather than
+    misread as an ordinary red baseline. `absolute_path` is needed only to
+    put its own containing directory on ``PYTHONPATH`` -- the same reason
+    `_run_mutation` does, so a bare ``import <module>`` in the paired test
+    resolves regardless of whether ``--root`` carries a real
+    ``pyproject.toml`` ``pythonpath`` entry for that directory; without it
+    the paired suite fails to even *import* the graded module and this
+    baseline check misreads that as "already red" on every real green
+    suite."""
+    env = dict(os.environ)
+    extra_path = str(absolute_path.parent)
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = f"{extra_path}{os.pathsep}{existing}" if existing else extra_path
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    try:
+        completed = subprocess.run(  # noqa: S603
+            [sys.executable, "-m", "pytest", "--no-cov", "-n0", "-q", "-x", *(str(p) for p in test_paths)],
+            cwd=root,
+            env=env,
+            capture_output=True,
+            timeout=_PYTEST_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise ScanError(
+            f"pytest timed out after {_PYTEST_TIMEOUT_SECONDS}s running the unmutated baseline against "
+            f"{test_paths}: {error}"
+        ) from error
+    except OSError as error:
+        raise ScanError(f"pytest failed to run the unmutated baseline against {test_paths}: {error}") from error
+    if completed.returncode == 0:
+        return True
+    if completed.returncode == 1:
+        return False
+    raise ScanError(
+        f"pytest exited {completed.returncode} (neither 0 nor 1) running the unmutated baseline against "
+        f"{test_paths} -- this scan cannot trust the result. stderr tail: "
+        f"{completed.stderr.decode('utf-8', errors='replace')[-2000:]}"
+    )
 
 
 def _run_mutation(
@@ -1193,8 +1304,24 @@ def find_violations(diff_text: str, root: pathlib.Path) -> tuple[list[Finding], 
             graded += 1
             continue
 
-        waived_lines = _waived_lines(source_text)
         test_paths = [root / relative for relative in touched_tests]
+        for test_path in test_paths:
+            if not _is_within_root(test_path, root):
+                # Same defense-in-depth as the source-file read check above,
+                # applied to the paired test paths too: these are executed
+                # by the pytest subprocess below (`_paired_suite_passes_
+                # unmutated`, `_run_mutation`), not merely read, so a
+                # symlink escaping `root` here is at least as exposed as
+                # one on the source-file side.
+                raise ScanError(f"{test_path}: named by the diff, but resolves outside {root}")
+        if not _paired_suite_passes_unmutated(absolute, test_paths, root):
+            raise ScanError(
+                f"{' and '.join(touched_tests)}: already fails against the real, unmutated source on "
+                f"disk -- this scan cannot tell a mutation-defeating failure apart from a pre-existing "
+                "one (both exit 1), so the result cannot be trusted until the paired suite passes clean "
+                "on its own"
+            )
+        waived_lines = _waived_lines(source_text)
         for line, category, message, removal_span in elements:
             survived = _run_mutation(absolute, bom, body, removal_span, test_paths, root)
             if not survived:
