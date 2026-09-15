@@ -5,7 +5,10 @@ known to the reader; nothing below restates a criterion's own definition.
 What follows is per-channel application notes plus the primary-source
 grounding for why each criterion exists, matching the split
 `evaluating-skill-quality/references/rubric.md` uses for its own nine
-dimensions.
+dimensions. The two axis-group sections further below carry the same
+split for `SKILL.md`'s channel-namespaced axes, and additionally state,
+for each axis, whether its basis is a primary-source quote or a
+gitapex-owned convention.
 
 Both primary sources below were fetched directly and read in full before
 any passage was quoted; no quote here is from memory or a secondary
@@ -18,6 +21,16 @@ summary.
 - [3. Placement and disclosure fit](#3-placement-and-disclosure-fit)
 - [4. Enforcement-fit](#4-enforcement-fit)
 - [5. Provenance and adversarial independence](#5-provenance-and-adversarial-independence)
+- [Axis group A: project-instruction channel](#axis-group-a-project-instruction-channel)
+  - [A1 content derivability](#a1-content-derivability)
+  - [A2 always-loaded justification](#a2-always-loaded-justification)
+  - [A3 dispatch multiplier](#a3-dispatch-multiplier)
+  - [A4 over-specification](#a4-over-specification)
+- [Axis group B: subagent definitions](#axis-group-b-subagent-definitions)
+  - [B1 description trigger purity](#b1-description-trigger-purity)
+  - [B2 detail placement](#b2-detail-placement)
+  - [B3 roster size](#b3-roster-size)
+  - [B4 cross-runtime tool-boundary parity](#b4-cross-runtime-tool-boundary-parity)
 - [Sources considered and not used](#sources-considered-and-not-used)
 - [References](#references)
 
@@ -229,6 +242,153 @@ where this criterion bites hardest.
   content the subagent itself processes (for example, a subagent that
   writes back to its own definition file) rather than only by a human
   reviewer.
+
+## Axis group A: project-instruction channel
+
+These four axes apply only when the target is a CLAUDE.md, AGENTS.md, or
+equivalent always-loaded project-instruction file. `SKILL.md` carries
+each axis's one-sentence rule; what follows is the application note and
+the basis, and nothing below restates a rule already stated there.
+
+Basis labels used throughout this section and the next: *primary-source-quotable*
+means the axis's rule is covered by a passage already quoted verbatim
+elsewhere in this file, repeated here with its link reference;
+*gitapex-owned convention* means no such passage covers it and the axis
+was decided in this repository under
+<https://github.com/tvna/gitapex/issues/1963> (stage 1:
+<https://github.com/tvna/gitapex/issues/1986>), with no external primary
+source claimed for it. Every axis below labelled a gitapex-owned
+convention was decided there; the label alone carries that provenance and
+no axis repeats it. A gitapex-owned convention is not a weaker axis -- it
+is an honestly labelled one.
+
+### A1 content derivability
+
+*Application:* read each clause against what the repository already
+shows. A clause restating the directory layout, a README statement, a
+build command discoverable from the manifest, or behavior legible in the
+code is derivable and earns deletion, not rewording. The test is whether
+a competent reader with the repository open would reach the same
+conclusion without the clause; a clause that only *summarizes* the
+repository faster is still derivable.
+
+*Basis:* **gitapex-owned convention.** No passage quoted in this file
+distinguishes derivable from non-derivable content.
+
+### A2 always-loaded justification
+
+*Application:* for each retained clause, ask what breaks if it loaded on
+demand instead. A clause that steers only one workflow, one
+subdirectory, or one recurring task has an on-demand home and fails this
+axis; a clause the model must hold in every turn to avoid a wrong default
+passes. This axis grades the justification, not the clause's correctness.
+
+*Basis:* **primary-source-quotable.** [Steering Claude Code][steering] on
+the always-loaded cost: "The cost compounds at scale. Every line loads
+into every session for every engineer working in the repo, whether it's
+relevant to their task or not," and on what the channel is for:
+"CLAUDE.md is for facts Claude should hold all the time." The load-on-demand
+alternative is named by [The new rules of context engineering][context-eng]:
+"consider having a tree of files that can be loaded at the right time."
+Each of these three passages is quoted verbatim in criteria 2 and 3
+above; none is newly introduced here.
+
+### A3 dispatch multiplier
+
+*Application:* count the dispatches, not only the lines. Where the
+harness re-loads the project-instruction file into each non-fork subagent
+dispatch, a session that dispatches ten subagents pays the file ten times
+over plus once for the main thread. Confirm the harness's own actual
+dispatch behavior before applying the multiplier -- a fork-style dispatch
+that inherits an already-loaded context does not re-charge, and assuming
+either behavior without checking is itself a finding.
+
+*Basis:* **gitapex-owned convention.** No passage quoted in this file
+addresses subagent dispatch re-charging a project-instruction file; the
+quoted cost passage under A2 counts sessions and engineers, not
+dispatches, and extending it to dispatches would be an extrapolation this
+file does not make.
+
+### A4 over-specification
+
+*Application:* the fix is a shorter clause carrying the same rule, which
+is distinct from criterion 3's fix of moving the content to another
+channel entirely. Both can apply to one clause, and are reported
+separately.
+
+*Basis:* **gitapex-owned convention.** The nearest quoted passage,
+criterion 3's "A 30-line procedure in CLAUDE.md. Procedures belong in
+skills," is about relocating procedural content, not about compressing a
+rule that correctly stays. No quoted passage covers over-specification of
+retained content.
+
+## Axis group B: subagent definitions
+
+These four axes apply only when the target is a subagent definition
+(`.claude/agents/*.md`, `agents/*.md`, or equivalent). The same split
+applies: `SKILL.md` carries each rule, this section the application note
+and the basis.
+
+### B1 description trigger purity
+
+*Application:* read the description alone, as a router would. Every
+sentence that is not routing information -- decision numbers, issue
+references, authoring notes about why the file is written the way it is,
+rationale, and detail duplicated from the body -- is slop and is deleted,
+because the description rides in every routing request whether or not the
+subagent is dispatched. Where the real problem is that the triggers
+themselves do not cohere, the answer is that the caller takes
+responsibility for routing, or the subagent is split into two, never that
+the description explains itself at greater length. This axis is
+qualitative: a character cap is not a substitute for it, because a
+trigger-only description lands well below any cap a reviewer would set,
+and a capped description full of rationale still fails.
+
+*Basis:* **gitapex-owned convention.** [Steering Claude Code][steering]'s
+quoted subagent passage under criterion 3 says when to use a subagent at
+all; no passage quoted in this file says what a subagent's description
+field may contain.
+
+### B2 detail placement
+
+*Application:* for each piece of detail in the description, ask whether a
+router needs it to decide *whether* to dispatch; detail needed only once
+the subagent is already running does not. B1 asks whether the description
+is pure; B2 asks whether the impure material was deleted outright or
+correctly relocated into the body.
+
+*Basis:* **gitapex-owned convention.** Criterion 3's quoted "where the
+body loads only when invoked" describes a skill's body, not a subagent
+definition's; treating the two as the same mechanism would be an
+extrapolation rather than a quote.
+
+### B3 roster size
+
+*Application:* grade the roster, not only the file in hand. Count the
+definitions a routing context actually carries and ask whether each earns
+its permanent seat there; a definition dispatched rarely still costs its
+description on every routing decision. A roster with no declared bound at
+all is a finding even when it is currently small, the same way criterion
+2 grades trend rather than snapshot.
+
+*Basis:* **gitapex-owned convention.** The quoted bounded-growth passages
+under criterion 2 bound CLAUDE.md's line count, not a subagent roster's
+size; no quoted passage treats the roster as a bounded resource.
+
+### B4 cross-runtime tool-boundary parity
+
+*Application:* where a definition declares a tool boundary, enumerate
+every runtime it is actually distributed to and confirm the boundary is
+reproduced equivalently in each, not only in the runtime it was authored
+against. A boundary enforced structurally in one runtime and carried only
+as prose in another is a parity failure, and the honest report names
+which runtime lacks the structural backing rather than reporting the
+boundary as enforced.
+
+*Basis:* **gitapex-owned convention.** Criterion 4's channel note on
+subagents (a `disallowedTools` restriction or an embedded lifecycle hook
+as structural backing) is this file's own prose, not a quoted passage,
+and no quoted passage addresses distribution across multiple runtimes.
 
 ## Sources considered and not used
 

@@ -10,8 +10,9 @@ history rather than discarding it, since that history documents real,
 independently-verified findings against the predecessor skill's own prior
 form, not against this skill's current one.
 
-`evals/evaluating-context-channel-maturity/tasks/` carries 13 fixtures,
-one per this skill's own Stop-boundary bullet -- required by
+`evals/evaluating-context-channel-maturity/tasks/` carries 15 fixtures.
+Thirteen of them are one per this skill's own Stop-boundary bullet --
+required by
 `.github/scripts/gitapex_gate_skill_branch_fixture_coverage.py`, a deterministic
 CI gate added the same day as this skill's initial authoring that did not
 exist when the retired predecessor first shipped. Each fixture passed
@@ -19,7 +20,18 @@ exist when the retired predecessor first shipped. Each fixture passed
 skill's own tasks and `references/criteria.md`) and the branch/fixture
 count itself was independently verified against
 `gitapex_gate_skill_branch_fixture_coverage.py` directly, not assumed from the
-fixture count alone. No no-skill baseline and no model tier evaluated yet
+fixture count alone. The remaining two --
+`subagent-description-trigger-purity.yaml` and
+`always-loaded-dispatch-multiplier.yaml` -- are not Stop-boundary
+fixtures and break the one-per-bullet framing deliberately: they exercise
+the channel-namespaced axes added under issue #1986 (axis B1, and axis A3
+with A2 adjacent), which are rubric axes rather than Stop boundaries, so
+no Stop-boundary bullet corresponds to either. Both establish that those
+axes exist and are exercisable; neither claims its FAIL verdict has been
+observed in a real eval run, since the suite has never been executed (see
+the open-follow-up note below, and issue #1989).
+
+No no-skill baseline and no model tier evaluated yet
 -- an ablation-capable, not-yet-run gap, not an absent-mechanism one,
 matching the same disclosed pattern the retired skill's own history below
 already used.

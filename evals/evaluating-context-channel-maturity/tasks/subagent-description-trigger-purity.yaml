@@ -1,0 +1,48 @@
+id: evaluating-context-channel-maturity-subagent-description-trigger-purity
+name: Design archaeology in a subagent description is deleted, not reworded
+description: A synthetic subagent definition's description field carries
+  decision numbers, an issue reference, and an authoring note about why a
+  list is not re-enumerated, alongside its actual routing trigger. Axis
+  group B applies, and B1 is the axis that names the defect. The fix is
+  deletion of the non-routing material, not a shorter rewording of it and
+  not a longer description that explains itself; a character cap is not
+  what catches this.
+tags:
+  - axis-group-b
+  - quality
+  - channel-namespaced-axes
+inputs:
+  prompt: |
+    Use evaluating-context-channel-maturity. Review this subagent
+    definition, `agents/widget-migrator.md`, from a repository called
+    "acme-widgets." Its frontmatter description field reads, in full:
+
+    "Dispatch target for the widget-migration plan, scoped to the two
+    call sites the Sanctioned call sites section below enumerates (design
+    doc Decision 9/14, issue #402). Runs migration tasks per wave. The
+    call-site list is deliberately not re-enumerated here because it
+    would drift from the body's own list the moment a call site is added;
+    see Decision 17 for why that duplication was rejected during
+    authoring. Never attempts a package-manager install -- that is
+    main-thread-only per Decision 7."
+
+    The definition's body separately contains the full Sanctioned call
+    sites list, the decision rationale, and the install prohibition.
+
+    Which axis names the defect, and what is the fix?
+expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
+  # the target is a subagent definition, so answering this fixture requires
+  # selecting axis group B and grading B1 within it -- the axis-application
+  # step itself, not merely the common criteria.
+  exercises:
+    - "**Apply the matching channel's axis group**, when the target is one"
+  output_contains:
+    - "B1"
+    - "description trigger purity"
+    - "are slop and are deleted"
+    - "a character cap is not a substitute for it"
+  output_not_contains:
+    - "rewrite the description to explain the rationale more concisely"
+    - "shortening the description to fit a character limit is the fix"
+    - "keep the decision numbers so the router can see the provenance"
