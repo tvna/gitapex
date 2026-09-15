@@ -558,6 +558,36 @@ def test_literal_display_elements_skips_a_none_value() -> None:
     assert gate._literal_display_elements(tree, body, starts, {2}) == []
 
 
+def test_literal_display_elements_skips_an_unparenthesized_single_element_tuple() -> None:
+    """Regression for an independent adversarial review finding (issue
+    #1799, PR #2000): `return 1,` is a valid, unparenthesized one-element
+    tuple. Splicing out its sole item the way every other display's
+    sole-item branch does would leave a bare `return ` -- a SyntaxError,
+    not the valid empty display the same removal produces for `[1]`/`(1,)`/
+    `{1}`. Must not be graded at all."""
+    source = "def make():\n    return 1,\n"
+    tree = ast.parse(source)
+    body = source.encode("utf-8")
+    starts = _line_starts(source)
+    assert gate._literal_display_elements(tree, body, starts, {2}) == []
+
+
+def test_literal_display_elements_grades_a_parenthesized_single_element_tuple() -> None:
+    """The parenthesized sibling of the case above (`return (1,)`) has its
+    own brackets to leave behind, so it is graded exactly like a
+    single-element list or set -- the byte-level `(` check must not
+    over-exclude it."""
+    source = "def make():\n    return (1,)\n"
+    tree = ast.parse(source)
+    body = source.encode("utf-8")
+    starts = _line_starts(source)
+    elements = gate._literal_display_elements(tree, body, starts, {2})
+    assert len(elements) == 1
+    _line, _category, _message, (start, end) = elements[0]
+    mutated = body[:start] + body[end:]
+    ast.parse(mutated.decode("utf-8"))
+
+
 def test_literal_display_elements_skips_a_list_item_the_diff_never_touches() -> None:
     source = 'def make():\n    return ["a", "b"]\n'
     tree = ast.parse(source)
@@ -895,6 +925,27 @@ def test_run_mutation_restores_the_original_bytes_even_when_pytest_errors(tmp_pa
     with pytest.raises(gate.ScanError):
         gate._run_mutation(absolute, b"", original_bytes, (29, 30), [test_absolute], tmp_path)
     assert absolute.read_bytes() == original_bytes
+
+
+def test_find_violations_refuses_to_read_a_symlink_escaping_root(tmp_path: pathlib.Path) -> None:
+    """Regression for an independent adversarial review finding (issue
+    #1799, PR #2000): the containment check `_run_mutation` already runs
+    before writing a mutated byte did not also run on the read side --
+    `find_violations` resolved `root / path` and called `read_bytes()`
+    directly. A path the diff names that is, on disk, a symlink pointing
+    outside `root` must be refused before any of its bytes are read into
+    this process at all, not merely before this gate would write to it."""
+    root = tmp_path / "repo"
+    root.mkdir()
+    outside = tmp_path / "outside.py"
+    outside.write_text("def make():\n    return 1\n", encoding="utf-8")
+    fixture_path = ".github/scripts/gitapex_check_fixture.py"
+    link = root / fixture_path
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(outside)
+    diff_text = _whole_file_diff(fixture_path, "def make():\n    return 1\n")
+    with pytest.raises(gate.ScanError, match="resolves outside"):
+        gate.find_violations(diff_text, root)
 
 
 def test_find_violations_raises_scan_error_for_an_unreadable_file(tmp_path: pathlib.Path) -> None:

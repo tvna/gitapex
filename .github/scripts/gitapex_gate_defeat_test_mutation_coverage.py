@@ -59,10 +59,13 @@ natural-language claims (see "Why not parse docstrings" below):
    resolved through this file's own ``import re`` statements exactly like
    ``gitapex_gate_detection_logic_property_coverage.py``'s own
    ``_re_module_names``, and ``.match``/``.search``/``.fullmatch`` matched
-   receiver-agnostically on any receiver, exactly like that gate's own
-   ``_regex_trigger`` -- reused verbatim rather than re-derived. Only a call
-   whose first positional argument is itself a plain string literal (no
-   implicit string concatenation, no f-string) is graded: that argument is
+   receiver-agnostically on any receiver, the same call-site shape that
+   gate's own ``_regex_trigger`` flags -- reused verbatim, but not the same
+   guarantee: that gate only needs the call site to *exist* (a coverage
+   trigger, indifferent to what the arguments mean), while this one reads
+   ``args[0]`` as the pattern text itself. Only a call whose first
+   positional argument is itself a plain string literal (no implicit
+   string concatenation, no f-string) is graded: that argument is treated as
    the pattern text this category mutates. Splitting happens on the raw
    *source* text of that literal (not the ``ast``-evaluated string value),
    respecting byte-for-byte what a raw string (``r"..."``) feeds directly to
@@ -89,8 +92,8 @@ natural-language claims (see "Why not parse docstrings" below):
    pair in an ``ast.Dict`` display that is *not* already the module-level
    ``CONST = {...}`` shape category 2 owns -- in both cases, only when the
    display itself is built directly inside a function body with no
-   enclosing ``If``/``Try``/``For``/``AsyncFor``/``While`` between the
-   display and that function (an unconditionally-executed straight-line
+   enclosing ``If``/``Try``/``TryStar``/``For``/``AsyncFor``/``While``
+   between the display and that function (an unconditionally-executed straight-line
    emission, the same shape issue #1799's own #1991 row describes: "the
    generator appends both literals in one unconditional list construction").
    This category is necessarily the least mechanically crisp of the three
@@ -99,6 +102,20 @@ natural-language claims (see "Why not parse docstrings" below):
 
    **Known misses, disclosed rather than found later.**
 
+   * A receiver-agnostic ``.match``/``.search``/``.fullmatch`` call whose
+     receiver is not actually a compiled pattern -- this repository's own
+     dominant idiom compiles once as a module-level constant and calls a
+     bound method at the use site (``_PREFIX_RE.match(text)``), where
+     ``args[0]`` is the *subject* string being matched, not a pattern.
+     Category 1 has no way to tell that apart from the call site alone; the
+     "first positional argument must itself be a plain string literal"
+     restriction keeps this from misfiring on the common case (the subject
+     is normally a variable, not a literal) but does not close it -- a
+     bound-method call passing a literal string that happens to contain its
+     own ``|`` would still be misread as a pattern. No in-scope file does
+     this today (a genuine ``re.compile(...)``-based pattern is always
+     graded correctly regardless), so this is a disclosed latent gap, not
+     an observed false finding.
    * A keyword argument's own value (``some_call(hidden=True)``) is not
      graded -- only a ``List``/``Tuple``/``Set`` element or a ``Dict``
      entry's value is, per the narrow shape above.
@@ -124,6 +141,19 @@ natural-language claims (see "Why not parse docstrings" below):
    * A display sitting directly in a class body (a class attribute, not
      inside any method) has no enclosing function at all and is never
      graded under category 3.
+   * A module-level ``List``/``Tuple``/``Set`` constant (``CONST =
+     ["a", "b"]``, ``CONST = frozenset({"a", "b"})``) is graded under
+     neither category: category 2 is ``Dict``-only, and category 3
+     requires an enclosing function body, which a module-level statement
+     never has. This gap is not narrower than it looks -- this
+     repository's own ``frozenset({...})`` idiom for an allowed-value set
+     is exactly this shape, and a vacuous test on one of those constants
+     goes undetected by this gate entirely, not merely by one category.
+   * An unparenthesized single-element tuple (``x = 1,``) is deliberately
+     not graded under category 3, even when every other condition holds --
+     see ``_literal_display_elements``'s own inline comment for why
+     removing its sole item would splice a bare ``x = `` (a SyntaxError)
+     rather than a valid empty display.
 
 Why not parse docstrings
 -------------------------
@@ -167,16 +197,19 @@ otherwise leave a bare ``(,)``/``[,]``/``{,}`` -- a hard ``SyntaxError``, not
 sequence with no trailing comma in the source still leaves a syntactically
 valid empty literal exactly as before.
 
-Before any byte is written, ``_is_within_root`` re-checks that the target
-file's own absolute path actually resolves (symlinks and ``..`` components
-included) to somewhere inside ``--root`` -- defense in depth on top of, not
-a replacement for, ``in_scope``'s own fixed ``_IN_SCOPE_RE`` shape. This
-gate is the odd one out among its sibling gates precisely because it is the
-only one whose own detection mechanism actually writes to disk (its
-siblings only ever read and reason about the AST); a diff-derived path that
-somehow resolved outside the repository root would otherwise let this
-gate's own mutation engine overwrite an arbitrary file. A path failing this
-check raises :class:`ScanError` before ``write_bytes`` is ever called, the
+Before any byte is read *or* written, ``_is_within_root`` re-checks that the
+target file's own absolute path actually resolves (symlinks and ``..``
+components included) to somewhere inside ``--root`` -- defense in depth on
+top of, not a replacement for, ``in_scope``'s own fixed ``_IN_SCOPE_RE``
+shape. This gate is the odd one out among its sibling gates precisely
+because it is the only one whose own detection mechanism actually writes to
+disk (its siblings only ever read and reason about the AST); a diff-derived
+path that somehow resolved outside the repository root would otherwise let
+this gate's own mutation engine overwrite an arbitrary file, or -- the
+read-side half of the same check, in ``find_violations`` rather than
+``_run_mutation`` -- read one into this process's own memory before that
+write-side check is ever reached. A path failing either check raises
+:class:`ScanError` before ``read_bytes``/``write_bytes`` is ever called, the
 same fail-closed contract every other malformed-input case in this gate
 already gets.
 
@@ -336,10 +369,13 @@ _SUPPORTED_LITERAL_TYPES = (str, int, float, bool)
 
 # Category 3: the AST node types that make a display's own construction
 # conditional, disqualifying it from grading -- see the module docstring's
-# own category-3 paragraph.
-_GUARD_NODE_TYPES: tuple[type[ast.AST], ...] = (ast.If, ast.Try, ast.For, ast.AsyncFor, ast.While)
-if hasattr(ast, "TryStar"):
-    _GUARD_NODE_TYPES = (*_GUARD_NODE_TYPES, ast.TryStar)
+# own category-3 paragraph. `ast.TryStar` (`try`/`except*`, Python 3.11+)
+# is referenced directly, not behind a `hasattr` guard: this repository's
+# own `requires-python = ">=3.12"` (pyproject.toml) means it is always
+# present, matching how gitapex_gate_except_fail_open.py,
+# gitapex_gate_network_exception_set_drift.py, and
+# gitapex_gate_exception_handler_gaps.py already reference it.
+_GUARD_NODE_TYPES: tuple[type[ast.AST], ...] = (ast.If, ast.Try, ast.TryStar, ast.For, ast.AsyncFor, ast.While)
 
 _PYTEST_TIMEOUT_SECONDS = 120
 
@@ -847,8 +883,8 @@ def _enclosing_function_unconditional(
     node: ast.AST, parents: dict[int, ast.AST]
 ) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
     """Walk upward from `node` to its enclosing function, returning that
-    function iff no `If`/`Try`/`For`/`AsyncFor`/`While` ancestor sits
-    between them (the display is built unconditionally in that function's
+    function iff no `If`/`Try`/`TryStar`/`For`/`AsyncFor`/`While` ancestor
+    sits between them (the display is built unconditionally in that function's
     own body). None when no enclosing function exists at all (a module- or
     class-body-level display) or when a guard sits between `node` and the
     nearest enclosing function."""
@@ -881,6 +917,19 @@ def _literal_display_elements(
             func = _enclosing_function_unconditional(node, parents)
             if func is None or not node.elts:
                 continue
+            if isinstance(node, ast.Tuple) and len(node.elts) == 1:
+                # An unparenthesized single-element tuple (`x = 1,`) has no
+                # brackets of its own to leave behind once the sole item is
+                # spliced out -- `_removal_span_for_item`'s sole-item branch
+                # would remove the item plus its trailing comma, leaving a
+                # bare `x = ` (a SyntaxError), not the valid empty display
+                # that branch produces for every other display shape. Byte
+                # `(` at the tuple's own span start is how a parenthesized
+                # one-tuple (`x = (1,)`, safe to mutate) is told apart from
+                # this one -- `ast.Tuple` carries no boolean for it.
+                tuple_start, _ = _node_byte_span(node, line_starts)
+                if body[tuple_start : tuple_start + 1] != b"(":
+                    continue
             item_spans = [_node_byte_span(item, line_starts) for item in node.elts]
             for index, item in enumerate(node.elts):
                 if not (isinstance(item, ast.Constant) and _is_supported_literal(item.value)):
@@ -962,9 +1011,10 @@ def _invalidate_pycache(absolute_path: pathlib.Path) -> None:
 def _is_within_root(candidate: pathlib.Path, root: pathlib.Path) -> bool:
     """True iff `candidate` resolves (symlinks and `..` components
     included) to `root` itself or somewhere inside it -- the path-traversal
-    containment check `_run_mutation` runs immediately before writing a
-    single mutated byte to disk, on top of (never a replacement for)
-    `in_scope`'s own fixed `_IN_SCOPE_RE` shape. Real defect class this
+    containment check `find_violations` runs immediately before reading a
+    file's own bytes, and `_run_mutation` runs again immediately before
+    writing a single mutated byte to disk, on top of (never a replacement
+    for) `in_scope`'s own fixed `_IN_SCOPE_RE` shape. Real defect class this
     would catch that a plain string-prefix check would not: a same-prefixed
     sibling directory (`root=/repo`, `candidate=/repo-evil/x.py`) -- both
     sides are resolved to absolute, normalized paths before comparison, so
@@ -1107,6 +1157,15 @@ def find_violations(diff_text: str, root: pathlib.Path) -> tuple[list[Finding], 
         if not in_scope(path):
             continue
         absolute = root / path
+        if not _is_within_root(absolute, root):
+            # Defense-in-depth, matching `_run_mutation`'s own containment
+            # check before it writes: `in_scope`'s fixed `_IN_SCOPE_RE`
+            # already keeps a `..`-relative escape or a textual sibling
+            # from matching, but a real symlink inside `root` pointing
+            # outside it resolves past both -- caught here, on the read
+            # side, before any byte of a possibly-external file reaches
+            # this process at all (not merely before this gate writes one).
+            raise ScanError(f"{path}: named by the diff, but resolves outside {root}")
         try:
             original_bytes = absolute.read_bytes()
         except FileNotFoundError:
