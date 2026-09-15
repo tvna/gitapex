@@ -1,0 +1,48 @@
+id: evaluating-context-channel-maturity-always-loaded-dispatch-multiplier
+name: A short always-loaded file still pays its cost per dispatch
+description: A synthetic project-instruction file sits under the documented
+  200-line target yet is re-charged on every subagent dispatch in a
+  fan-out-heavy session. Axis group A applies. A3 is the axis that names
+  the cost, with A2 adjacent for the clauses that steer only one
+  workflow. The line count alone does not settle the verdict, and the
+  reviewer must confirm the harness's own dispatch behavior rather than
+  assuming re-charging happens.
+tags:
+  - axis-group-a
+  - quality
+  - channel-namespaced-axes
+inputs:
+  prompt: |
+    Use evaluating-context-channel-maturity. Review the root AGENTS.md of
+    a repository called "acme-widgets." It is 160 lines, under the
+    200-line target that repository's own contributor guide documents.
+
+    A typical session in that repository dispatches 12 subagents. Roughly
+    40 of those 160 lines steer one workflow only: the quarterly
+    inventory reconciliation task, which most sessions never touch.
+
+    The repository's contributor guide asserts the file is "cheap, it's
+    well under the line target," but the guide does not say whether the
+    harness re-loads the file into each subagent dispatch or whether
+    dispatches fork an already-loaded context.
+
+    Grade the applicable axis group. What is the cost, and what must be
+    confirmed before the verdict stands?
+expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
+  # the prompt asks for the applicable axis group to be graded (axis group
+  # A, for a project-instruction channel) and for what must hold before the
+  # verdict stands, so both the axis-application step and the per-axis
+  # verdict step are exercised.
+  exercises:
+    - "**Apply the matching channel's axis group**, when the target is one"
+    - "**Issue a verdict** per criterion and per applied axis, plus one"
+  output_contains:
+    - "A3"
+    - "dispatch multiplier"
+    - "size times the dispatch count"
+    - "A2"
+  output_not_contains:
+    - "the line count alone settles it"
+    - "PASS, because the file is under the 200-line target"
+    - "assume the harness re-charges the file on every dispatch"
