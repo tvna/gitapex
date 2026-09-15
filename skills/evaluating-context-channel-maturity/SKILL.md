@@ -144,6 +144,48 @@ Per-channel notes and primary-source grounding for each criterion, beyond
 what a common-case review needs from the definitions above:
 [references/criteria.md](references/criteria.md).
 
+## Channel-namespaced axes
+
+Criteria 1-5 above are common to every in-scope channel and stay five.
+Two of those channels additionally carry axes of their own, declared here
+as a separate per-channel namespace layered on top of the common five: an
+axis is never a sixth common criterion, and applies only when the target
+is that axis group's own channel. Per-axis application notes, and each
+axis's basis (a primary-source quote, or a gitapex-owned convention with
+no external primary source), are in
+[references/criteria.md](references/criteria.md).
+
+**Axis group A -- project-instruction channel** (CLAUDE.md, AGENTS.md, or
+an equivalent always-loaded project-instruction file):
+
+- **A1 content derivability.** Content a reader can derive from the
+  repository itself -- the README, the directory layout, the code --
+  does not earn a place in an always-loaded channel.
+- **A2 always-loaded justification.** Each retained clause must justify
+  why it has to sit in every turn's context rather than load on demand.
+- **A3 dispatch multiplier.** The channel's cost is not its line count
+  alone: a non-fork subagent dispatch re-charges the whole file, so the
+  real cost is its size times the dispatch count.
+- **A4 over-specification.** The channel specifies procedural detail
+  beyond what a reader needs in order to act, where a shorter statement
+  of the same rule would steer identically.
+
+**Axis group B -- subagent definitions** (`.claude/agents/*.md`,
+`agents/*.md`, or equivalent):
+
+- **B1 description trigger purity.** A subagent description states only
+  when the subagent should be called; design archaeology, rationale, and
+  body-duplicating detail are slop and are deleted.
+- **B2 detail placement.** Detail that is not routing information
+  belongs in the definition's body, which loads only on dispatch, not in
+  its description.
+- **B3 roster size.** The number of definitions in a roster is itself a
+  bounded resource, because every description rides in the routing
+  context whether or not it is dispatched.
+- **B4 cross-runtime tool-boundary parity.** A declared tool boundary
+  must be reproduced equivalently in every runtime the definition is
+  distributed to, not only the one it was authored against.
+
 ## Procedure
 
 1. **Confirm the precondition.** Read the target channel's actual
@@ -162,9 +204,17 @@ what a common-case review needs from the definitions above:
    file, a commit history) directly -- a channel's own docstring or
    comment asserting any of the three is not itself evidence, per the Stop
    boundaries below.
-3. **Issue a verdict** per criterion, plus one overall summary noting
-   which criteria were not-applicable and why. A criterion failing does
-   not automatically fail the others -- report each independently.
+3. **Apply the matching channel's axis group**, when the target is one
+   of the two channels that has one: axis group A for a
+   project-instruction channel, axis group B for a subagent definition.
+   Grade each axis of that group with the same verdict vocabulary and the
+   same evidence requirement as step 2, using `references/criteria.md`'s
+   own per-axis notes. A target in neither channel has no axis group;
+   report that rather than leaving the axes silently unmentioned.
+4. **Issue a verdict** per criterion and per applied axis, plus one
+   overall summary noting which criteria and axes were not-applicable and
+   why. A criterion or axis failing does not automatically fail the
+   others -- report each independently.
 
 ## Stop boundaries
 
@@ -283,8 +333,12 @@ examples and provenance live separately, in
 and `metadata/gitapex.yaml`; the five criteria's full definitions and
 primary-source grounding, in
 [references/criteria.md](references/criteria.md), are themselves fully
-portable -- that file cites no path or fact specific to this skill's own
-authoring repository, unlike the worked-examples file.
+portable. The channel-namespaced axes in that same file are not: each
+axis whose basis is a gitapex-owned convention cites this skill's own
+authoring repository's issue for where that convention was decided, so
+that file is portable across its criteria sections and
+repository-specific across its axis sections, unlike the wholly
+repository-specific worked-examples file.
 
 Lifecycle note: this skill replaces `evaluating-decision-state-discipline`
 (retired; its own five criteria presupposed gate material that none of
