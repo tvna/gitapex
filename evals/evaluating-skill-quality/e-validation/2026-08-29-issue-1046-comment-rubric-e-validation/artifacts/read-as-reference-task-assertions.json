@@ -1,0 +1,4 @@
+{
+  "output_contains": ["blank", "window"],
+  "output_not_contains": ["#628", "#858", "#618"]
+}
