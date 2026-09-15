@@ -333,12 +333,12 @@ examples and provenance live separately, in
 and `metadata/gitapex.yaml`; the five criteria's full definitions and
 primary-source grounding, in
 [references/criteria.md](references/criteria.md), are themselves fully
-portable. The channel-namespaced axes in that same file are not: each
-axis whose basis is a gitapex-owned convention cites this skill's own
-authoring repository's issue for where that convention was decided, so
-that file is portable across its criteria sections and
-repository-specific across its axis sections, unlike the wholly
-repository-specific worked-examples file.
+portable. The channel-namespaced axes in that same file are not: the
+gitapex-owned-convention basis label cites this skill's own authoring
+repository's issue for where those conventions were decided, so that file
+is portable across its criteria sections and repository-specific across
+its axis sections, unlike the wholly repository-specific worked-examples
+file.
 
 Lifecycle note: this skill replaces `evaluating-decision-state-discipline`
 (retired; its own five criteria presupposed gate material that none of
