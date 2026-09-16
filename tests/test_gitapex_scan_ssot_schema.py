@@ -1228,13 +1228,15 @@ def test_contract_handoff_fallback_absent_is_not_checked(tmp_path):
     assert findings == [], findings
 
 
-def test_real_repository_has_no_contract_declaring_skills_yet():
-    """Foundation-only PR (issue #1965): confirmed no real skill declares
-    spec.contract yet, so the new contract checks are a clean no-op
-    against the real, current repository state -- pinned explicitly here
-    rather than relying only on test_repository_ssot_is_schema_valid_and_
-    drift_free above to notice a future change."""
-    assert drift.discover_contracts() == {}
+def test_real_repository_contract_declaring_skills_have_no_drift():
+    """Issue #1966 (the first real migration) added `eliciting-a-design` as
+    this repository's first `spec.contract`-declaring skill, superseding
+    this test's own former "zero real skills declare spec.contract yet"
+    pin (issue #1965's foundation-only assumption) -- pinned explicitly
+    here, by name, rather than relying only on
+    test_repository_ssot_is_schema_valid_and_drift_free above to notice a
+    regression."""
+    assert set(drift.discover_contracts()) == {"eliciting-a-design"}
     real_registry = drift._parse_registry(json.loads(drift.SSOT_PATH.read_text(encoding="utf-8")))
     assert drift.find_contract_gate_drift(real_registry) == []
     assert drift.find_contract_precondition_duplicate_ids() == []
