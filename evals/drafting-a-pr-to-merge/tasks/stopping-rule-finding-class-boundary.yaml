@@ -31,7 +31,7 @@ expected:
   output_contains:
     - "loop back"
     - "unbounded recursion"
-    - "own"
+    - "separate count"
   output_not_contains:
     - "already escalated, so round 3 escalates too"
     - "no need to fix, a similar finding was already fixed"
