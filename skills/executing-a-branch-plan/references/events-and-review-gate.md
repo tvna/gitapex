@@ -456,12 +456,86 @@ wave-by-wave execution has already completed: a single reviewer needs the
 full accumulated diff to catch cross-task inconsistencies no one task's
 own context can see.
 
-**Full re-verification after any fix.** After every CONFIRMED finding's
-fix is applied, re-run every task's own Red-Green test above -- not only
-the one related to the fix -- before step 9. The last gate before
-hand-off does not rest on an unverified "the fix didn't break anything
-else" assumption. An outstanding CONFIRMED finding, or a re-verification
-failure, blocks step 9.
+**Blocking/Advisory severity vocabulary.** Every CONFIRMED finding
+reaching this gate's own fix loop -- whether a behavior-affecting item
+the refactor/simplify pass (sub-step 1) judges outside its own
+behavior-preserving scope and routes to the adversarial-review pass
+(sub-step 2) instead, or a finding the adversarial-review pass reports
+directly -- is additionally classified, by this gate's own reading of the
+finding's substance against the branch's own acceptance criteria and
+blast radius, inline, every round, as **Blocking** (must-fix; loops back
+within step 8 by default, subject to the Stopping rule below) or
+**Advisory** (disclosed in the PR body, but does not by itself trigger a
+further fix round). Both sub-steps' own findings are classified the same
+way -- the source (routed-onward refactor-pass item vs. direct
+adversarial-review finding) does not change which classification applies,
+only what substance is being classified. **Disclosed bias risk:** the
+thread making this classification is the same thread that authored or
+applied the fixes under review, not a fresh, no-stake-in-the-change
+reviewer, and the Stopping rule below gives it a concrete incentive --
+classifying a finding Advisory instead of Blocking is the one lever
+available to avoid a 2-consecutive-round escalation. Mitigation, not a
+fix for the underlying conflict of interest: when genuinely unsure,
+classify Blocking -- the same bias-toward-caution default the Stopping
+rule's own same-class judgment call also uses.
+
+**Stopping rule.** Reconstruct this gate's own round history before
+judging recurrence -- the current fix-round state plus every prior round
+this same Step 8 pass has already run, from this continuous session's own
+context. **Disclosed gap:** the closed event vocabulary above has no
+Step 8 round/finding-class event type, and Step 8's own procedure writes
+none -- unlike step 6, whose `TaskStarted`/`TaskCompleted`/`TaskFailed`/
+`NeedsInput` events durably resume across sessions. A session resuming
+mid-Step-8 therefore has no durable record to reconstruct round history
+from: treat that resumed history as unknown rather than assuming a prior
+round occurred, and restart every finding class's own count from round 1
+-- the same fail-closed-toward-caution-in-the-other-direction default
+this rule already applies when a finding's own class is genuinely
+ambiguous (below). This is a known limitation, not a fix: a future change
+adding a durable Step 8 round record (e.g. a new closed-set event, or a
+PR-body section analogous to `drafting-a-pr-to-merge`'s own recorded
+verdict) would close it; issue `#1946` scopes this change to the
+vocabulary and stopping rule only, not that recording mechanism. Track
+which finding class each
+Blocking finding belongs to -- a short, stable label naming the
+underlying defect (its root cause, the specific rule or code path it
+violates, or a near-verbatim finding description the adversarial-review
+pass repeats round over round) -- not a fresh, differently-worded finding
+that happens to also be Blocking; when genuinely unsure whether two
+rounds' findings share a class, treat them as different classes rather
+than guessing they recur, since the cost of a missed recurrence is one
+more ordinary fix round while the cost of a false recurrence is an
+escalation that stops progress on an otherwise-fixable diff. When the
+same finding class is still Blocking after 2 consecutive fix rounds (the
+round that first raised it, and the immediately following round's own
+re-review still confirms a Blocking finding of that same class), route to
+step 7 escalation instead of running a further round: state the finding
+class and cite both rounds' own findings, letting a human decide rather
+than re-attempting a third round automatically. A fresh, unrelated
+Blocking finding surfacing in a later round does not inherit an
+already-escalated class's own round count -- it starts its own, separate
+count. This tracking, and the classification paragraph above, apply
+identically regardless of which sub-step (refactor/simplify pass or
+adversarial review) produced the finding -- neither is exempt from either
+mechanism.
+
+**Full re-verification after any fix.** After every Blocking CONFIRMED
+finding's fix is applied, re-run every task's own Red-Green test above --
+not only the one related to the fix -- before step 9. The last gate
+before hand-off does not rest on an unverified "the fix didn't break
+anything else" assumption. Three outcomes: zero CONFIRMED findings, or
+every CONFIRMED finding is classified Advisory, and no re-verification
+failure -> continue to step 9, with every Advisory finding disclosed in
+the PR body -- it was judged non-blocking by this gate's own severity
+read, so fixing it on speculation alone is not warranted; a human reader
+decides whether it warrants a closer look. At least one Blocking
+CONFIRMED finding, and the Stopping rule has not triggered for its own
+finding class -> fix it, then re-run every task's own Red-Green test
+before this gate re-runs -- never carry forward a stale verdict against a
+diff that has since changed. The Stopping rule's own 2-consecutive-round
+same-finding-class condition triggers -> escalate per step 7 instead of
+running a further round. A re-verification failure blocks step 9
+unconditionally, regardless of which of the three above applies.
 
 **Push every fix commit as it lands, same as step 6's per-wave push.** A
 fix applied and verified only in the local working copy leaves the

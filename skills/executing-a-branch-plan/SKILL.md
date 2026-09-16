@@ -264,8 +264,9 @@ first, not skimmed.
    now already ran once, per its own fix above) only covers drift up to
    the point the waves finished, not drift accumulated during step 8's
    own review/fix work itself -- exactly the gap the motivating incident
-   above sits in. An outstanding CONFIRMED finding, or
-   a re-verification failure, blocks step 9. Detail: [refactor and review
+   above sits in. A Blocking finding or a re-verification failure blocks
+   step 9, unless the Stopping rule triggered (escalate per step 7); zero
+   findings, or all Advisory, clears step 9. Detail: [refactor and review
    gate reference](references/events-and-review-gate.md#refactor-and-review-gate).
 9. **On all tasks complete, step 8 clean, and the branch's remote state
    confirmed to match local** (a final `git status`/push-state check --
@@ -332,6 +333,9 @@ combined diff, then the draft PR converts to ready-for-review.
 - Never skip the Decision 12 refactor/adversarial-review stage under time
   pressure -- it is sequence-gated, not a step this skill can rationalize
   away.
+- Step 8 (stopping rule): never fold a fresh, unrelated Blocking finding
+  into an already-recurring class's own round count, and never skip a
+  loop-back because a similar finding was fixed earlier.
 - Never let step 8's adversarial review clear a diff that adds or extends
   a deterministic gate/check script using only happy-path tests --
   construct and run at least one case built to defeat its own detection
