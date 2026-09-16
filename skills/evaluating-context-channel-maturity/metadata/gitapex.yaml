@@ -44,6 +44,12 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/823"
       summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): reads the target channel's own content plus a hooks manifest/CODEOWNERS file when checking criteria 1/4/5 (read); commit-history inspection is declared shell: [git] since this skill's own text names no GitHub-API alternative -- an assumption flagged as residual risk in issue 823, not a resolved cross-runtime fact."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1963"
+      summary: "Where the channel-namespaced axes were decided: axis group A (project-instruction channel) and axis group B (subagent definitions), layered on top of the common five criteria rather than extending them. Every axis references/criteria.md labels a gitapex-owned convention was decided here, with no external primary source claimed for it; that file carries the label vocabulary only and defers to this entry for the provenance, keeping its criteria sections portable."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1986"
+      summary: "Stage 1 of issue 1963: the eight axes added to SKILL.md with per-axis application notes and basis labels in references/criteria.md, plus two evals/ fixtures (axis A3 with A2 adjacent, and axis B1). The remaining five axes ship unexercised by design, disclosed by name in evals/evaluating-context-channel-maturity/eval-status.md rather than left silent."
   skillDependencies:
     relatedTo:
       - evaluating-skill-quality
@@ -59,5 +65,5 @@ spec:
   lifecycle:
     renamedFrom: evaluating-decision-state-discipline
     experimental:
-      reason: "First version (replacing the retired evaluating-decision-state-discipline). One non-isolated audit round ran; findings fixed, see spec.references. A post-fix round is still needed. 13 evals/ fixtures ship (one per Stop-boundary bullet). Deferred: (1) a shape-checker for its own five criteria; (2) a no-skill-baseline/model-tier run; (3) a cross-agent-tool matrix; (4) upstream/branch-protection verification for examples 1-2; (5) a third worked example for Auto-memory."
+      reason: "First version (replacing the retired evaluating-decision-state-discipline). One non-isolated audit round ran; findings fixed, see spec.references. A post-fix round is still needed. 15 evals/ fixtures ship: 13 per Stop-boundary bullet, 2 per axis. Deferred: (1) a shape-checker for its five criteria and eight axes; (2) a no-skill-baseline/model-tier run; (3) a cross-agent-tool matrix; (4) upstream/branch-protection verification for examples 1-2; (5) a third worked example for Auto-memory."
       trackingIssue: "https://github.com/tvna/gitapex/issues/580"
