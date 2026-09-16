@@ -1206,8 +1206,9 @@ def test_run_mutation_raises_scan_error_when_the_mutation_write_fails(
         raise OSError("simulated write failure")
 
     monkeypatch.setattr(pathlib.Path, "write_bytes", _raising_write_bytes)
+    digit_index = original_bytes.index(b"1")
     with pytest.raises(gate.ScanError, match="could not write a mutated copy"):
-        gate._run_mutation(absolute, b"", original_bytes, (0, 1), [test_absolute], tmp_path)
+        gate._run_mutation(absolute, b"", original_bytes, (digit_index, digit_index + 1), [test_absolute], tmp_path)
 
 
 @pytest.mark.slow
@@ -1235,10 +1236,11 @@ def test_run_mutation_raises_scan_error_when_the_restore_write_fails(
         return original_write_bytes(self, data)
 
     monkeypatch.setattr(pathlib.Path, "write_bytes", _fail_on_second_call)
+    digit_index = original_bytes.index(b"1")
     with pytest.raises(
         gate.ScanError, match=r"could not restore.*git checkout -- .*gitapex_check_fixture\.py"
     ) as excinfo:
-        gate._run_mutation(absolute, b"", original_bytes, (0, 1), [test_absolute], tmp_path)
+        gate._run_mutation(absolute, b"", original_bytes, (digit_index, digit_index + 1), [test_absolute], tmp_path)
     assert str(absolute) in str(excinfo.value)
 
 
@@ -1257,8 +1259,9 @@ def test_run_mutation_raises_scan_error_on_subprocess_timeout(
         raise gate.subprocess.TimeoutExpired(cmd=["pytest"], timeout=gate._PYTEST_TIMEOUT_SECONDS)
 
     monkeypatch.setattr(gate.subprocess, "run", _timing_out)
+    digit_index = original_bytes.index(b"1")
     with pytest.raises(gate.ScanError, match="timed out"):
-        gate._run_mutation(absolute, b"", original_bytes, (0, 1), [test_absolute], tmp_path)
+        gate._run_mutation(absolute, b"", original_bytes, (digit_index, digit_index + 1), [test_absolute], tmp_path)
     assert absolute.read_bytes() == original_bytes
 
 
@@ -1277,8 +1280,9 @@ def test_run_mutation_raises_scan_error_when_subprocess_run_itself_errors(
         raise OSError("simulated spawn failure")
 
     monkeypatch.setattr(gate.subprocess, "run", _raising)
+    digit_index = original_bytes.index(b"1")
     with pytest.raises(gate.ScanError, match="pytest failed to run"):
-        gate._run_mutation(absolute, b"", original_bytes, (0, 1), [test_absolute], tmp_path)
+        gate._run_mutation(absolute, b"", original_bytes, (digit_index, digit_index + 1), [test_absolute], tmp_path)
     assert absolute.read_bytes() == original_bytes
 
 
@@ -1336,6 +1340,35 @@ def test_run_mutation_refuses_to_write_outside_root(tmp_path: pathlib.Path) -> N
     assert target.read_bytes() == original
 
 
+# --- _run_mutation: a removal span producing invalid Python is caught -------
+# --- before any write (issue #1799, PR #2000, "Why a mutation-syntax -------
+# --- self-check")                                                    -------
+
+
+def test_run_mutation_raises_scan_error_when_the_removal_span_produces_invalid_python(
+    tmp_path: pathlib.Path,
+) -> None:
+    """A `removal_span` that would leave invalid Python once applied (a bug
+    in some span computation this gate itself made, not a defect in the
+    file being graded) is caught by `ast.parse`-ing the mutated bytes before
+    `write_bytes` is ever called: the file on disk is never touched, and no
+    pytest subprocess is spawned -- the resulting `ScanError` names the
+    removal span directly rather than surfacing only as an opaque pytest
+    collection error indistinguishable from the graded file's own defect."""
+    fixture_path = ".github/scripts/gitapex_check_fixture.py"
+    test_path = "tests/test_gitapex_check_fixture.py"
+    fixture_src = "def make():\n    return 1\n"
+    test_src = "import gitapex_check_fixture\n\n\ndef test_x():\n    pass\n"
+    absolute = _write(tmp_path, fixture_path, fixture_src)
+    test_absolute = _write(tmp_path, test_path, test_src)
+    original_bytes = absolute.read_bytes()
+    colon_index = original_bytes.index(b":")
+    removal_span = (colon_index, colon_index + 1)  # removes the `:` after `def make()`
+    with pytest.raises(gate.ScanError, match="gate bug: the removal span"):
+        gate._run_mutation(absolute, b"", original_bytes, removal_span, [test_absolute], tmp_path)
+    assert absolute.read_bytes() == original_bytes
+
+
 # --- _run_mutation: the first mutated-bytes write is inside try/finally too -
 
 
@@ -1360,8 +1393,9 @@ def test_run_mutation_does_not_attempt_a_restore_write_when_the_initial_write_fa
         raise OSError("simulated write failure")
 
     monkeypatch.setattr(pathlib.Path, "write_bytes", _counting_raising_write_bytes)
+    digit_index = original_bytes.index(b"1")
     with pytest.raises(gate.ScanError, match="could not write a mutated copy"):
-        gate._run_mutation(absolute, b"", original_bytes, (0, 1), [test_absolute], tmp_path)
+        gate._run_mutation(absolute, b"", original_bytes, (digit_index, digit_index + 1), [test_absolute], tmp_path)
     assert calls["n"] == 1
 
 

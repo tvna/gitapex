@@ -341,6 +341,25 @@ every element as caught. Real mutation-testing tools (``mutmut``,
 ``cosmic-ray``, cited above) always take this same baseline-first
 approach, for the same reason.
 
+Why a mutation-syntax self-check
+--------------------------------
+Found by an independent adversarial review (issue #1799, PR #2000), as a
+generalization of a defect class an earlier round already fixed once for
+one specific shape (a single-item removal span not extending past a
+trailing comma, see the PR body's own Risk / blast radius section):
+`_removal_span_for_item` and its sibling span computations are hand-written
+against Python's grammar, so a future category or an edge case none of
+them anticipated could compute a `removal_span` that leaves invalid Python
+once applied. Before that ever reaches `write_bytes`, `_run_mutation` now
+parses the mutated bytes itself and raises `ScanError` on a `SyntaxError`
+-- turning what would otherwise surface only as an opaque pytest
+collection error (indistinguishable, from the caller's own vantage point,
+from a graded file's own genuine syntax defect) into a diagnosis that
+names the exact removal span and states plainly that the bug is in this
+gate's own span computation, not in the file being graded. This is a
+narrower, mechanical check, not a substitute for widening the grammar
+coverage of any one category's own span computation.
+
 Reused verbatim from sibling gates
 ------------------------------------
 ``parse_added_lines`` (and its ``_diff_target_path``/
@@ -374,10 +393,13 @@ paired suite already failing against the real, unmutated source before any
 mutation is attempted (``_paired_suite_passes_unmutated`` -- a returncode 1
 there is indistinguishable from a returncode 1 caused by a real mutation, so
 every element in that file would otherwise misread as CAUGHT and this gate
-would report a clean verdict having exercised no real mutation at all), or a
-subprocess ``pytest`` invocation that itself errors for a reason other than
-"tests ran and passed/failed" -- e.g. a collection error) -- the same
-fail-closed contract both sibling gates already state, dimension 15 of
+would report a clean verdict having exercised no real mutation at all), a
+``removal_span`` that would produce invalid Python once applied -- caught by
+``ast.parse``-ing the mutated bytes before any write, see "Why a
+mutation-syntax self-check" below -- or a subprocess ``pytest`` invocation
+that itself errors for a reason other than "tests ran and passed/failed" --
+e.g. a collection error) -- the same fail-closed contract both sibling gates
+already state, dimension 15 of
 ``skills/evaluating-deterministic-gate-quality/references/dimensions.md``.
 
 Known, disclosed non-goals
@@ -1242,9 +1264,10 @@ def _run_mutation(
     mutation SURVIVED (the paired suite still passed clean); False iff at
     least one paired test failed (the mutation was caught). Raises
     `ScanError` for anything else -- `absolute_path` resolving outside
-    `root`, a write/restore failure, a subprocess that could not be started
-    or timed out, or a pytest exit code that is neither 0 nor 1 -- per the
-    module docstring's own "Exit codes" section.
+    `root`, a mutated body that is not valid Python, a write/restore
+    failure, a subprocess that could not be started or timed out, or a
+    pytest exit code that is neither 0 nor 1 -- per the module docstring's
+    own "Exit codes" section.
     """
     if not _is_within_root(absolute_path, root):
         raise ScanError(
@@ -1256,6 +1279,15 @@ def _run_mutation(
 
     start, end = removal_span
     mutated = bom + original_body[:start] + original_body[end:]
+    try:
+        ast.parse(mutated, filename=str(absolute_path))
+    except SyntaxError as error:
+        raise ScanError(
+            f"gate bug: the removal span {removal_span} computed for {absolute_path} produces "
+            f"invalid Python once applied ({error}) -- this is a defect in this gate's own "
+            "removal-span computation, not in the file being graded. Nothing was written to "
+            'disk; see the module docstring\'s own "Why a mutation-syntax self-check" section.'
+        ) from error
     mutated_write_succeeded = False
     try:
         try:
