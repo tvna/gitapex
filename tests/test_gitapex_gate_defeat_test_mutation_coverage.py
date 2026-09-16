@@ -1075,6 +1075,23 @@ def test_find_violations_raises_scan_error_for_an_unreadable_file(tmp_path: path
         gate.find_violations(diff_text, tmp_path)
 
 
+# --- _run_paired_suite -------------------------------------------------------
+
+
+@pytest.mark.slow
+def test_run_paired_suite_returns_true_for_a_green_suite(tmp_path: pathlib.Path) -> None:
+    """Direct coverage of the shared helper `_paired_suite_passes_
+    unmutated` and `_run_mutation` both delegate to (issue #1799, PR
+    #2000 extraction) -- exercised through both callers already, but
+    named here too so a future change to this function's own body has
+    its own dedicated test, not only indirect coverage through them."""
+    fixture_path = ".github/scripts/gitapex_check_fixture.py"
+    test_path = "tests/test_gitapex_check_fixture.py"
+    fixture_absolute = _write(tmp_path, fixture_path, "def make():\n    return 1\n")
+    test_absolute = _write(tmp_path, test_path, "import gitapex_check_fixture\n\n\ndef test_x():\n    pass\n")
+    assert gate._run_paired_suite(fixture_absolute, [test_absolute], tmp_path, context="a direct test") is True
+
+
 # --- _paired_suite_passes_unmutated -----------------------------------------
 
 
