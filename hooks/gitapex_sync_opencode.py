@@ -79,6 +79,47 @@ REVIEW_PERSONA_PERMISSION = {
     "*mcp*": "deny",
 }
 
+# branch-plan-task.md's Claude-side boundary restated for OpenCode:
+# `disallowedTools: mcp__github` in its own frontmatter (both
+# agents/branch-plan-task.md and .claude/agents/branch-plan-task.md).
+# Unlike review-persona.md, this subagent's own body states a real need
+# for Edit, Write, Bash and dispatching Agent/Task, so none of
+# REVIEW_PERSONA_PERMISSION's other keys apply here -- only the MCP
+# surface is denied. The body (read in full) never names a need for ANY
+# MCP tool ("Edit, Write, Read, Grep, Glob, and Bash for non-excluded
+# commands", plus Agent/Task dispatch -- issue #1987 row 2), so denying
+# the whole MCP surface, not just a `github`-shaped one, matches what the
+# body actually needs rather than guessing a narrower pattern.
+#
+# Wildcard semantics confirmed against opencode.ai/docs/agents (fetched
+# 2026-09-16, the same page REVIEW_PERSONA_PERMISSION above already
+# cites): "Permission keys are matched as wildcard patterns against the
+# underlying tool name, so the same syntax works for built-ins, custom
+# tools, and MCP tools -- for example `mymcp_*: deny` denies every tool
+# from an MCP server", and "the last matching rule takes precedence" --
+# glob-style match against the whole tool name, not a substring-only or
+# prefix-only rule.
+#
+# Residual risk, NOT closed here (out of this task's own narrow scope --
+# "add a constant analogous to REVIEW_PERSONA_PERMISSION"):
+# opencode.ai/docs/mcp-servers (fetched 2026-09-16) states MCP tool names
+# are prefixed by the MCP server's own CONFIGURED name, not a literal
+# "mcp" substring -- its own examples register a server configured as
+# `sentry` or `context7` under a `sentry_`/`context7_` tool-name prefix,
+# neither containing "mcp". `*mcp*` therefore reliably denies only a
+# configured server whose own name happens to contain "mcp"; it is not a
+# guaranteed universal MCP-tool denial under an arbitrary server name --
+# the actual server name a given OpenCode installation configures for
+# GitHub (or any other MCP server) is outside this repository's own
+# control and not committed anywhere in this checkout. This is the same
+# limitation REVIEW_PERSONA_PERMISSION's own `*mcp*` key above already
+# carries; reused here as the established, precedented pattern -- issue
+# #1987 flags it for the owner rather than inventing an equally
+# unverifiable narrower key shape inside this task's own scope.
+BRANCH_PLAN_TASK_PERMISSION = {
+    "*mcp*": "deny",
+}
+
 # Keys meaningful only to Claude Code's own agent loader. Dropped from the
 # generated OpenCode copies (OpenCode ignores unknown frontmatter, but
 # carrying a Claude-only allow-list string next to the permission mapping
@@ -118,7 +159,7 @@ _YAML_TYPED_WORDS = frozenset({"y", "n", "yes", "no", "true", "false", "on", "of
 # leave a newly added agent covered by nothing, silently.
 AGENT_SPECS: tuple[tuple[str, dict[str, str] | None], ...] = (
     ("review-persona.md", REVIEW_PERSONA_PERMISSION),
-    ("branch-plan-task.md", None),
+    ("branch-plan-task.md", BRANCH_PLAN_TASK_PERMISSION),
 )
 
 # Refused outright rather than escaped. Written as a NEGATION of what a
