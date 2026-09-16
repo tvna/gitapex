@@ -125,10 +125,18 @@ used to be discovered one red check at a time on an already-open PR.
 
 The same `uv run prek install -t pre-commit -t pre-push -t commit-msg` above also installs
 a **pre-push** hook that runs every gate with a working-tree-only form in
-one pass, before the push leaves your machine. A warm run of all 50 wired
-gates measures roughly 24 seconds end to end (issue #1512's network-
-exception-set-drift gate; different hardware than the figures below --
-the prior 48-gate set measured roughly 24 seconds, the
+one pass, before the push leaves your machine. A warm run of all 51 wired
+gates measures roughly 47 seconds end to end (issue #1799's own
+defeat-test-mutation-coverage gate: unlike every other wired gate, which is
+pure AST inspection, it spawns a real `pytest` subprocess per graded
+element and self-grades its own regex/dict/literal elements against its own
+paired tests, roughly doubling the prior warm-run baseline on its own --
+different hardware than the figures below in any case; issue #1965's own
+skill-contract-drift gate landed on a parallel branch --
+the prior 50-gate set (defeat-test-mutation-coverage) measured roughly 49
+seconds, the prior 49-gate set (network-exception-set-drift, issue #1512)
+measured roughly 24 seconds, the
+prior 48-gate set measured roughly 24 seconds, the
 prior 47-gate set measured roughly 22 seconds, the
 prior 45-gate set measured roughly 14 seconds, the
 prior 44-gate set measured roughly 15 seconds, the 43-gate set before that
@@ -168,7 +176,7 @@ it up, then confirm both shims with the check in the previous section.
 The runner itself also resolves through `uv` (issue #1485: it imports
 `_gitapex_schema_validation.py`, which needs `jsonschema` -- a real,
 non-stdlib dependency a bare system `python3` is not guaranteed to have),
-and so do all 50 wired gates (the same `uv run` pins CI uses). Without `uv`
+and so do all 51 wired gates (the same `uv run` pins CI uses). Without `uv`
 on PATH every one of them reports `FAIL ... failed to run` -- that is one
 missing tool, not a whole broken wired set.
 

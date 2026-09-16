@@ -157,9 +157,14 @@ repos:
       # already-open PR. This runs all of them in one pass at pre-push --
       # the last local moment before a gap becomes a CI round-trip, and
       # deliberately not pre-commit: it grades committed state (HEAD vs
-      # origin/main), not a staged index, and at ~24 s
-      # warm end to end for all 50 wired gates it is too slow to sit on every
-      # single commit.
+      # origin/main), not a staged index, and at ~47 s
+      # warm end to end for all 51 wired gates (issue #1799's own
+      # defeat-test-mutation-coverage gate roughly doubled the prior ~24 s
+      # baseline on its own, being the first wired gate that spawns a real
+      # pytest subprocess per graded element (plus one baseline run per
+      # graded file) rather than pure AST
+      # inspection; issue #1965's own skill-contract-drift gate landed on a
+      # parallel branch) it is too slow to sit on every single commit.
       #
       # The wired set is not listed here: the runner discovers it from
       # .gitapex/ssot.json's `local` plane, so a newly wired gate needs no
@@ -173,6 +178,26 @@ repos:
       # authoritative merge gate; this makes the local pass real
       # enforcement for the ordinary path, not a command a contributor has
       # to remember to type.
+      #
+      # Issue #1799's own defeat-test-mutation-coverage gate is also the
+      # first wired gate whose own detection mechanism writes to disk --
+      # every other wired gate only reads and reasons about the AST. It
+      # temporarily overwrites an in-scope source file's own real bytes on
+      # this machine (not a copy) for the duration of one pytest subprocess
+      # per graded element, restoring the original bytes in a `finally`
+      # block regardless of outcome; found by an independent adversarial
+      # review (issue #1799, PR #2000). Gates run sequentially here (see
+      # gitapex_gate_local_preflight.py's own docstring), so no other wired
+      # gate ever reads a file mid-mutation. If the restore write itself
+      # fails (disk full, permissions), that gate's own raised ScanError
+      # names `git checkout -- <path>` as the recovery command -- which
+      # discards whatever uncommitted edit was sitting in that file at the
+      # time, including the very change you were about to push. If this
+      # process is instead killed before the restore write ever runs
+      # (SIGKILL, OOM), Python never executes the `finally` block that
+      # would raise that ScanError -- there is no error, no message, and
+      # no automatic notice at all; the file is silently left holding
+      # mutated bytes on disk until a `git status`/`git diff` catches it.
       #
       # `uv run --frozen python3`, not a bare `python3`: the runner imports
       # _gitapex_schema_validation.py, which needs jsonschema -- not
