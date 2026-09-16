@@ -32,10 +32,11 @@ jobs:
     runs-on: ubuntu-latest
     # Generous relative to the other AST-only gates' own 5-minute ceiling
     # (they spawn no subprocess at all): this gate spawns one real `pytest`
-    # subprocess per graded element -- see the gate script's own module
-    # docstring, "Invocation shape, runtime/CI cost disclosed rather than
-    # hidden" -- so its own job needs real headroom rather than a ceiling
-    # copied from a gate with a fundamentally different cost shape.
+    # subprocess per graded element, plus one baseline run per graded file
+    # -- see the gate script's own module docstring, "Invocation shape,
+    # runtime/CI cost disclosed rather than hidden" and "Why a baseline
+    # run first" -- so its own job needs real headroom rather than a
+    # ceiling copied from a gate with a fundamentally different cost shape.
     timeout-minutes: 20
     permissions:
       contents: read

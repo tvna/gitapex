@@ -421,6 +421,33 @@ def test_module_level_dict_assigns_ignores_a_non_dict_value() -> None:
     assert gate._module_level_dict_assigns(tree) == []
 
 
+def test_module_level_dict_assigns_finds_an_annotated_const_dict() -> None:
+    """Regression for an independent adversarial review finding (issue
+    #1799, PR #2000): a type-annotated module-level dict constant
+    (`CONST: dict[str, str] = {...}`) is an `ast.AnnAssign`, not an
+    `ast.Assign` -- this repository's own idiom in several in-scope
+    files (e.g. `gitapex_gate_dependency_allowlist.py`'s own
+    `ALLOWED_PACKAGES`) was previously invisible to this function
+    entirely."""
+    tree = ast.parse('CONST: dict[str, str] = {"a": "1", "b": "2"}\n')
+    result = gate._module_level_dict_assigns(tree)
+    assert len(result) == 1
+    assert result[0][0] == "CONST"
+
+
+def test_module_level_dict_assigns_ignores_a_bare_annotation_with_no_value() -> None:
+    """A bare `NAME: T` declaration (no `=`) has `AnnAssign.value is
+    None` -- must not be mistaken for a dict constant with no value to
+    grade."""
+    tree = ast.parse("CONST: dict[str, str]\n")
+    assert gate._module_level_dict_assigns(tree) == []
+
+
+def test_module_level_dict_assigns_ignores_an_annotated_non_dict_value() -> None:
+    tree = ast.parse("CONST: list[int] = [1, 2]\n")
+    assert gate._module_level_dict_assigns(tree) == []
+
+
 def test_dict_entry_elements_grades_each_touched_entry() -> None:
     source = 'CONST = {\n    "a": 1,\n    "b": 2,\n}\n'
     tree = ast.parse(source)
@@ -507,6 +534,32 @@ def test_enclosing_function_unconditional_returns_none_inside_a_match_case() -> 
     tree = ast.parse(source)
     parents = gate._parent_map(tree)
     list_node = next(node for node in ast.walk(tree) if isinstance(node, ast.List) and node.elts)
+    assert gate._enclosing_function_unconditional(list_node, parents) is None
+
+
+def test_enclosing_function_unconditional_returns_none_inside_a_ternary_arm() -> None:
+    """Regression for an independent adversarial review finding (issue
+    #1799, PR #2000): a display written as one arm of a ternary
+    (`x if cond else y`) is conditional on which arm is actually
+    selected -- only one side ever evaluates, the same shape `ast.If`
+    already covers. Confirmed directly against a real parse that the
+    `List` node's own immediate parent is the `IfExp`, not the enclosing
+    function."""
+    source = "def make(flag):\n    return [1, 2] if flag else [3]\n"
+    tree = ast.parse(source)
+    parents = gate._parent_map(tree)
+    list_node = next(node for node in ast.walk(tree) if isinstance(node, ast.List) and len(node.elts) == 2)
+    assert gate._enclosing_function_unconditional(list_node, parents) is None
+
+
+def test_enclosing_function_unconditional_returns_none_inside_a_bool_op() -> None:
+    """Same shape as the ternary case above, for a short-circuit
+    `and`/`or`: `flag and [1, 2]` only builds the list when `flag` is
+    truthy."""
+    source = "def make(flag):\n    return flag and [1, 2]\n"
+    tree = ast.parse(source)
+    parents = gate._parent_map(tree)
+    list_node = next(node for node in ast.walk(tree) if isinstance(node, ast.List))
     assert gate._enclosing_function_unconditional(list_node, parents) is None
 
 
@@ -922,6 +975,27 @@ def test_find_violations_raises_scan_error_on_a_collection_error_mutation(tmp_pa
     diff_text = _whole_file_diff(fixture_path, fixture_src) + _whole_file_diff(test_path, test_src)
     with pytest.raises(gate.ScanError, match="pytest exited"):
         gate.find_violations(diff_text, tmp_path)
+
+
+@pytest.mark.slow
+def test_run_mutation_puts_the_source_directorys_own_parent_on_pythonpath(tmp_path: pathlib.Path) -> None:
+    """`_run_mutation` itself (not just the baseline check, which had no
+    direct regression test for this either -- an independent adversarial
+    review finding, issue #1799, PR #2000) must put the graded source
+    file's own containing directory on `PYTHONPATH`, or a paired suite's
+    bare `import <module>` fails to even collect against a nested source
+    file with no `__init__.py`. A zero-length removal span (`(0, 0)`)
+    mutates nothing, so a `ScanError` here can only mean the import
+    itself failed to resolve, not a real mutation being caught."""
+    fixture_path = "hooks/nested/gitapex_check_fixture.py"
+    test_path = "tests/test_gitapex_check_fixture.py"
+    fixture_src = "def make():\n    return 1\n"
+    test_src = "import gitapex_check_fixture\n\n\ndef test_x():\n    assert gitapex_check_fixture.make() == 1\n"
+    absolute = _write(tmp_path, fixture_path, fixture_src)
+    test_absolute = _write(tmp_path, test_path, test_src)
+    original_bytes = absolute.read_bytes()
+    survived = gate._run_mutation(absolute, b"", original_bytes, (0, 0), [test_absolute], tmp_path)
+    assert survived is True
 
 
 @pytest.mark.slow

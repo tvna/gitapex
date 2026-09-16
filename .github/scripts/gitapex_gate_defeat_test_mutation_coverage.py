@@ -78,13 +78,17 @@ natural-language claims (see "Why not parse docstrings" below):
    top-level alternatives has nothing to remove and is not graded.
 
 2. **Module-level dict/mapping-literal entry.** A key of an ``ast.Dict``
-   assigned to a module-level ``ast.Name`` target (``CONST = {...}``, this
-   repository's own pervasive constant-table idiom, e.g.
-   ``REVIEW_PERSONA_PERMISSION``). Every entry is graded regardless of its
-   own value's shape (a plain literal, a tuple, a nested dict) -- the element
-   under test is the whole key/value pair, and the mutation is its removal.
-   A dict carrying a ``**``-unpacking entry (a ``None`` key) is skipped
-   entirely, narrow scope disclosed rather than handled.
+   assigned to a module-level ``ast.Name`` target, either plain
+   (``CONST = {...}``) or type-annotated (``CONST: dict[str, str] =
+   {...}``, an ``ast.AnnAssign`` rather than an ``ast.Assign`` but the
+   same target/value shape) -- this repository's own pervasive
+   constant-table idiom, both spellings, e.g. ``REVIEW_PERSONA_
+   PERMISSION`` (plain) and ``ALLOWED_PACKAGES`` (annotated). Every entry
+   is graded regardless of its own value's shape (a plain literal, a
+   tuple, a nested dict) -- the element under test is the whole key/value
+   pair, and the mutation is its removal. A dict carrying a
+   ``**``-unpacking entry (a ``None`` key) is skipped entirely, narrow
+   scope disclosed rather than handled.
 
 3. **Unconditionally emitted literal.** A ``str``/``int``/``float``/``bool``
    ``ast.Constant`` that is either (a) a direct element of a
@@ -93,7 +97,8 @@ natural-language claims (see "Why not parse docstrings" below):
    ``CONST = {...}`` shape category 2 owns -- in both cases, only when the
    display itself is built directly inside a function body with no
    enclosing ``If``/``Try``/``TryStar``/``For``/``AsyncFor``/``While``/
-   ``match_case`` between the display and that function (an unconditionally-executed straight-line
+   ``match_case``/``IfExp``/``BoolOp`` between the display and that
+   function (an unconditionally-executed straight-line
    emission, the same shape issue #1799's own #1991 row describes: "the
    generator appends both literals in one unconditional list construction").
    This category is necessarily the least mechanically crisp of the three
@@ -150,18 +155,23 @@ natural-language claims (see "Why not parse docstrings" below):
      category 3 -- only the four scalar ``Constant`` types listed above are.
    * A display nested inside a ``with`` block still counts as unconditional
      -- only ``If``/``Try``/``TryStar``/``For``/``AsyncFor``/``While``/
-     ``match_case`` are treated as a guard, matching this category's own
-     literal wording (``TryStar`` -- ``try``/``except*``, Python 3.11+ --
-     is not an ``ast.Try`` subclass, so it is added to the guard set
-     explicitly rather than falling out of an ``isinstance`` check on
-     ``ast.Try`` alone; this repository's own ``requires-python =
-     ">=3.12"`` means it is always present. ``match_case`` -- a single
-     ``case ...:`` arm's own body, Python 3.10+ -- rather than ``Match``
-     itself: confirmed directly against a real parse that a statement
-     inside one ``case`` arm's own body has that arm's ``match_case`` node
-     as its immediate ancestor, never the enclosing ``Match``, so
-     ``match_case`` is what must sit in this set for a ``match``/``case``
-     to be caught at all).
+     ``match_case``/``IfExp``/``BoolOp`` are treated as a guard, matching
+     this category's own literal wording (``TryStar`` -- ``try``/
+     ``except*``, Python 3.11+ -- is not an ``ast.Try`` subclass, so it is
+     added to the guard set explicitly rather than falling out of an
+     ``isinstance`` check on ``ast.Try`` alone; this repository's own
+     ``requires-python = ">=3.12"`` means it is always present.
+     ``match_case`` -- a single ``case ...:`` arm's own body, Python
+     3.10+ -- rather than ``Match`` itself: confirmed directly against a
+     real parse that a statement inside one ``case`` arm's own body has
+     that arm's ``match_case`` node as its immediate ancestor, never the
+     enclosing ``Match``, so ``match_case`` is what must sit in this set
+     for a ``match``/``case`` to be caught at all. ``IfExp`` (a ternary
+     ``x if cond else y``) and ``BoolOp`` (a short-circuit ``and``/``or``)
+     are guards for the identical reason: only one side of either ever
+     actually evaluates, confirmed directly against a real parse that a
+     display written as one side has that ``IfExp``/``BoolOp`` node as
+     its own immediate parent).
    * A display sitting directly in a class body (a class attribute, not
      inside any method) has no enclosing function at all and is never
      graded under category 3.
@@ -178,6 +188,26 @@ natural-language claims (see "Why not parse docstrings" below):
      see ``_literal_display_elements``'s own inline comment for why
      removing its sole item would splice a bare ``x = `` (a SyntaxError)
      rather than a valid empty display.
+   * A single-element display's own removal mutation is a *type*-changing
+     mutation for ``Set``/``Dict`` (``{"a"}`` -> ``{}`` is a dict literal,
+     not an empty set; ``{"a": 1}`` -> ``{}`` likewise), not merely an
+     emptiness-changing one -- so a vacuous test asserting only
+     ``isinstance(x, set)`` or ``isinstance(x, dict)`` (rather than the
+     element's own value) kills that mutation for the wrong reason and
+     this gate reports a clean verdict. A ``List``/``Tuple`` mutation
+     (``[1]`` -> ``[]``) does not have this gap -- the type is unchanged,
+     only emptiness is -- so only ``Set``/``Dict`` single-element displays
+     carry it.
+   * ``re.VERBOSE``/``re.X`` patterns are not specially handled: category
+     1's top-level-``|`` scan walks the pattern's own comment and
+     whitespace bytes the same as any other byte, so a ``|`` written
+     inside a verbose-mode comment (``# alt1 | alt2``) is read as a
+     top-level alternative even though ``re`` itself ignores everything
+     from ``#`` to end-of-line in that mode. Removing it changes nothing
+     ``re`` actually matches, so the mutation survives regardless of test
+     quality -- an over-report, not a missed detection. No in-scope file
+     uses ``re.VERBOSE``/``re.X`` today, so this is a disclosed latent
+     gap, not an observed false finding.
 
 Why not parse docstrings
 -------------------------
@@ -269,10 +299,13 @@ see "Exit codes" below.
 Invocation shape, runtime/CI cost disclosed rather than hidden
 -----------------------------------------------------------------
 Unlike either sibling gate (pure AST inspection, no subprocess at all), this
-gate spawns one real ``pytest`` subprocess per graded element -- its own CI
-job carries a generous timeout for exactly that reason, and this cost is
-stated here plainly rather than solved by artificially capping the element
-count. Each subprocess pytest invocation runs as
+gate spawns one real ``pytest`` subprocess per graded element, plus one more
+per graded file for the unmutated-baseline run ``_paired_suite_passes_
+unmutated`` makes before any of that file's elements are ever mutated (see
+"Why a baseline run first" below) -- its own CI job carries a generous
+timeout for exactly that reason, and this cost is stated here plainly
+rather than solved by artificially capping the element count. Each
+subprocess pytest invocation, baseline or mutated, runs as
 ``[sys.executable, "-m", "pytest", "--no-cov", "-n0", "-q", "-x", ...paired
 test paths]`` against a ``PYTHONPATH`` env var pointing at the graded source
 file's own containing directory (so a bare ``import <module>`` in the paired
@@ -287,6 +320,26 @@ unrecognised and fails every invocation with a usage error. ``-x`` stops at
 the first failure, sufficient since only "did at least one paired test fail"
 is asked. ``--no-cov`` disables this repository's own coverage plugin
 wiring for these short-lived, single-file runs.
+
+Why a baseline run first
+--------------------------
+Found by an independent adversarial review (issue #1799, PR #2000):
+``_run_mutation``'s own returncode reading (0 survived, 1 caught) cannot
+tell "this mutation was caught" apart from "this paired suite was already
+red before any mutation, for a reason that has nothing to do with this
+gate" -- both produce the same exit 1. Without a check for the second
+case, a paired suite that is already failing (a half-finished test file
+mid-edit, an unrelated regression) makes every element in that file read
+as CAUGHT, so this gate would report a clean ``OK: N graded`` verdict
+having never actually exercised a single real mutation -- silently
+defeating this gate's own entire purpose, the same defect class it exists
+to catch in other tests' own coverage claims. ``_paired_suite_passes_
+unmutated`` runs once per graded file, against the real, unmutated source
+already on disk, before any of that file's elements are mutated; a red or
+untrustworthy baseline raises ``ScanError`` rather than silently grading
+every element as caught. Real mutation-testing tools (``mutmut``,
+``cosmic-ray``, cited above) always take this same baseline-first
+approach, for the same reason.
 
 Reused verbatim from sibling gates
 ------------------------------------
@@ -410,6 +463,13 @@ _SUPPORTED_LITERAL_TYPES = (str, int, float, bool)
 # is never an ancestor of a statement inside one of its own `case` arms,
 # `match_case` is. Only one `case` arm out of possibly several ever runs,
 # the same conditional-construction shape `ast.If` already covers.
+# `ast.IfExp` (a ternary `x if cond else y`) and `ast.BoolOp` (a
+# short-circuit `and`/`or`) are guards for the identical reason: an
+# independent adversarial review finding (issue #1799, PR #2000) --
+# confirmed directly against a real parse that a display written as one
+# arm of either (`return [1, 2] if flag else [3]`, `return flag and [1,
+# 2]`) has that `IfExp`/`BoolOp` node as its own immediate parent, not the
+# enclosing function -- only one side of either ever actually evaluates.
 _GUARD_NODE_TYPES: tuple[type[ast.AST], ...] = (
     ast.If,
     ast.Try,
@@ -418,6 +478,8 @@ _GUARD_NODE_TYPES: tuple[type[ast.AST], ...] = (
     ast.AsyncFor,
     ast.While,
     ast.match_case,
+    ast.IfExp,
+    ast.BoolOp,
 )
 
 _PYTEST_TIMEOUT_SECONDS = 120
@@ -855,8 +917,19 @@ def _regex_alternation_elements(
 
 
 def _module_level_dict_assigns(tree: ast.Module) -> list[tuple[str, ast.Dict]]:
-    """Every `NAME = {...}` assignment directly in the module body -- the
-    category-2 shape, and the set category 3 must not double-grade."""
+    """Every `NAME = {...}` or annotated `NAME: <type> = {...}` assignment
+    directly in the module body -- the category-2 shape, and the set
+    category 3 must not double-grade. An independent adversarial review
+    finding (issue #1799, PR #2000): an annotated module-level dict
+    constant (`ALLOWED: dict[str, str] = {...}`, this repository's own
+    idiom in several in-scope files) is an `ast.AnnAssign`, not an
+    `ast.Assign` -- its `target` is still a plain `ast.Name`, so it is the
+    same category-2 shape this function's own docstring already promises
+    to cover, just missed by an `isinstance` check that named only the
+    unannotated form. `AnnAssign.value` is `None` for a bare `NAME: T`
+    declaration with no assignment at all; the `isinstance(node.value,
+    ast.Dict)` check below already excludes that case without a separate
+    `is not None` guard, since `isinstance(None, ast.Dict)` is False."""
     result: list[tuple[str, ast.Dict]] = []
     for node in tree.body:
         if (
@@ -866,6 +939,8 @@ def _module_level_dict_assigns(tree: ast.Module) -> list[tuple[str, ast.Dict]]:
             and isinstance(node.value, ast.Dict)
         ):
             result.append((node.targets[0].id, node.value))
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and isinstance(node.value, ast.Dict):
+            result.append((node.target.id, node.value))
     return result
 
 
@@ -927,10 +1002,11 @@ def _enclosing_function_unconditional(
 ) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
     """Walk upward from `node` to its enclosing function, returning that
     function iff no `If`/`Try`/`TryStar`/`For`/`AsyncFor`/`While`/
-    `match_case` ancestor sits between them (the display is built
-    unconditionally in that function's own body). None when no enclosing
-    function exists at all (a module- or class-body-level display) or when
-    a guard sits between `node` and the nearest enclosing function."""
+    `match_case`/`IfExp`/`BoolOp` ancestor sits between them (the display
+    is built unconditionally in that function's own body). None when no
+    enclosing function exists at all (a module- or class-body-level
+    display) or when a guard sits between `node` and the nearest
+    enclosing function."""
     current = parents.get(id(node))
     while current is not None:
         if isinstance(current, ast.FunctionDef | ast.AsyncFunctionDef):
@@ -1070,6 +1146,63 @@ def _is_within_root(candidate: pathlib.Path, root: pathlib.Path) -> bool:
     return candidate.resolve().is_relative_to(root.resolve())
 
 
+def _run_paired_suite(
+    absolute_path: pathlib.Path, test_paths: list[pathlib.Path], root: pathlib.Path, *, context: str
+) -> bool:
+    """Run pytest against `test_paths`, `cwd=root`, with `PYTHONPATH`
+    pointing at `absolute_path`'s own containing directory (so a bare
+    `import <module>` in the paired test resolves regardless of whether
+    `root` carries a real `pyproject.toml` `pythonpath` entry for that
+    directory). Shared by `_paired_suite_passes_unmutated` (baseline,
+    before any mutation) and `_run_mutation` (against a mutated copy
+    already written to disk) -- an independent adversarial review finding
+    (issue #1799, PR #2000) flagged the two as near-verbatim duplicates
+    before this extraction; they differ only in what `absolute_path`
+    holds on disk when this runs and in what each caller does with the
+    result, never in how the subprocess itself is invoked or its
+    returncode read, so keeping one copy of that shared machinery in sync
+    is strictly safer than keeping two.
+
+    Returns True (returncode 0, every paired test passed) or False
+    (returncode 1, a real, ordinary test failure). Raises `ScanError` for
+    a subprocess timeout, a failure to even start pytest, or a returncode
+    that is neither 0 nor 1 (a collection error from a paired test file
+    that fails to *import* at all, for instance -- confirmed live to exit
+    non-1/non-0 in this repository's own pytest configuration).
+    `context` names what was being graded, folded into that `ScanError`
+    message (e.g. "the unmutated baseline" or "a mutated copy of
+    {absolute_path}")."""
+    env = dict(os.environ)
+    extra_path = str(absolute_path.parent)
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = f"{extra_path}{os.pathsep}{existing}" if existing else extra_path
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    try:
+        completed = subprocess.run(  # noqa: S603
+            [sys.executable, "-m", "pytest", "--no-cov", "-n0", "-q", "-x", *(str(p) for p in test_paths)],
+            cwd=root,
+            env=env,
+            capture_output=True,
+            timeout=_PYTEST_TIMEOUT_SECONDS,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise ScanError(
+            f"pytest timed out after {_PYTEST_TIMEOUT_SECONDS}s running {context} against {test_paths}: {error}"
+        ) from error
+    except OSError as error:
+        raise ScanError(f"pytest failed to run {context} against {test_paths}: {error}") from error
+    if completed.returncode == 0:
+        return True
+    if completed.returncode == 1:
+        return False
+    raise ScanError(
+        f"pytest exited {completed.returncode} (neither 0 nor 1) running {context} against "
+        f"{test_paths} -- this scan cannot trust the result. stderr tail: "
+        f"{completed.stderr.decode('utf-8', errors='replace')[-2000:]}"
+    )
+
+
 def _paired_suite_passes_unmutated(
     absolute_path: pathlib.Path, test_paths: list[pathlib.Path], root: pathlib.Path
 ) -> bool:
@@ -1090,52 +1223,9 @@ def _paired_suite_passes_unmutated(
     cited in this gate's own header) always take this same baseline
     run first, for the same reason.
 
-    Same three-way returncode reading as `_run_mutation` itself, not a
-    plain `== 0`: 0 means the baseline genuinely passes (True), 1 means a
-    real, ordinary test failure (False -- the caller raises `ScanError`
-    for this, since a red baseline makes every later mutation
-    unreadable), and anything else (a collection error from a paired
-    test file that fails to *import* at all, for instance -- confirmed
-    live to exit non-1/non-0 in this repository's own pytest
-    configuration) is routed to its own `ScanError` here rather than
-    misread as an ordinary red baseline. `absolute_path` is needed only to
-    put its own containing directory on ``PYTHONPATH`` -- the same reason
-    `_run_mutation` does, so a bare ``import <module>`` in the paired test
-    resolves regardless of whether ``--root`` carries a real
-    ``pyproject.toml`` ``pythonpath`` entry for that directory; without it
-    the paired suite fails to even *import* the graded module and this
-    baseline check misreads that as "already red" on every real green
-    suite."""
-    env = dict(os.environ)
-    extra_path = str(absolute_path.parent)
-    existing = env.get("PYTHONPATH", "")
-    env["PYTHONPATH"] = f"{extra_path}{os.pathsep}{existing}" if existing else extra_path
-    env["PYTHONDONTWRITEBYTECODE"] = "1"
-    try:
-        completed = subprocess.run(  # noqa: S603
-            [sys.executable, "-m", "pytest", "--no-cov", "-n0", "-q", "-x", *(str(p) for p in test_paths)],
-            cwd=root,
-            env=env,
-            capture_output=True,
-            timeout=_PYTEST_TIMEOUT_SECONDS,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as error:
-        raise ScanError(
-            f"pytest timed out after {_PYTEST_TIMEOUT_SECONDS}s running the unmutated baseline against "
-            f"{test_paths}: {error}"
-        ) from error
-    except OSError as error:
-        raise ScanError(f"pytest failed to run the unmutated baseline against {test_paths}: {error}") from error
-    if completed.returncode == 0:
-        return True
-    if completed.returncode == 1:
-        return False
-    raise ScanError(
-        f"pytest exited {completed.returncode} (neither 0 nor 1) running the unmutated baseline against "
-        f"{test_paths} -- this scan cannot trust the result. stderr tail: "
-        f"{completed.stderr.decode('utf-8', errors='replace')[-2000:]}"
-    )
+    `_run_paired_suite`'s own docstring covers the returncode reading and
+    the `absolute_path`/`PYTHONPATH` relationship -- not repeated here."""
+    return _run_paired_suite(absolute_path, test_paths, root, context="the unmutated baseline")
 
 
 def _run_mutation(
@@ -1173,38 +1263,14 @@ def _run_mutation(
             mutated_write_succeeded = True
         except OSError as error:
             raise ScanError(f"could not write a mutated copy of {absolute_path}: {error}") from error
+        # Defense in depth: never let a stale `__pycache__` entry from
+        # before this mutation (or a later, unrelated import of the
+        # restored original) get read back instead of what is actually on
+        # disk right now. `_run_paired_suite`'s own `PYTHONDONTWRITEBYTECODE`
+        # stops the subprocess it spawns from writing a *new* stale entry;
+        # this clears whatever was already there before that subprocess runs.
         _invalidate_pycache(absolute_path)
-
-        env = dict(os.environ)
-        extra_path = str(absolute_path.parent)
-        existing = env.get("PYTHONPATH", "")
-        env["PYTHONPATH"] = f"{extra_path}{os.pathsep}{existing}" if existing else extra_path
-        # Defense in depth alongside `_invalidate_pycache`: never let the
-        # subprocess itself write a new cache entry that a later mutation (or
-        # a later, unrelated import of the restored original) could read back
-        # as stale. `_invalidate_pycache` alone already prevents a stale read
-        # by clearing the directory before every run; this just stops a new
-        # one from being created in the first place.
-        env["PYTHONDONTWRITEBYTECODE"] = "1"
-
-        try:
-            completed = subprocess.run(  # noqa: S603
-                [sys.executable, "-m", "pytest", "--no-cov", "-n0", "-q", "-x", *(str(p) for p in test_paths)],
-                cwd=root,
-                env=env,
-                capture_output=True,
-                timeout=_PYTEST_TIMEOUT_SECONDS,
-                check=False,
-            )
-        except subprocess.TimeoutExpired as error:
-            raise ScanError(
-                f"pytest timed out after {_PYTEST_TIMEOUT_SECONDS}s grading a mutated copy of "
-                f"{absolute_path} against {test_paths}: {error}"
-            ) from error
-        except OSError as error:
-            raise ScanError(
-                f"pytest failed to run grading a mutated copy of {absolute_path} against {test_paths}: {error}"
-            ) from error
+        survived = _run_paired_suite(absolute_path, test_paths, root, context=f"a mutated copy of {absolute_path}")
     finally:
         # The initial mutated-bytes write above is inside this same
         # try/finally (not a bare write before it): an `OSError` there is
@@ -1225,15 +1291,7 @@ def _run_mutation(
                 ) from error
             _invalidate_pycache(absolute_path)
 
-    if completed.returncode == 0:
-        return True
-    if completed.returncode == 1:
-        return False
-    raise ScanError(
-        f"pytest exited {completed.returncode} (neither 0 nor 1) grading a mutated copy of "
-        f"{absolute_path} against {test_paths} -- this scan cannot trust the result. stderr tail: "
-        f"{completed.stderr.decode('utf-8', errors='replace')[-2000:]}"
-    )
+    return survived
 
 
 def _graded_elements(path: str, source_text: str, added: set[int]) -> list[tuple[int, str, str, tuple[int, int]]]:

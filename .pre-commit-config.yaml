@@ -161,7 +161,8 @@ repos:
       # warm end to end for all 51 wired gates (issue #1799's own
       # defeat-test-mutation-coverage gate roughly doubled the prior ~24 s
       # baseline on its own, being the first wired gate that spawns a real
-      # pytest subprocess per graded element rather than pure AST
+      # pytest subprocess per graded element (plus one baseline run per
+      # graded file) rather than pure AST
       # inspection; issue #1965's own skill-contract-drift gate landed on a
       # parallel branch) it is too slow to sit on every single commit.
       #

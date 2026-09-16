@@ -216,8 +216,9 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # case, see this paragraph's own closing parenthetical -- the prior
 # 50-gate set (defeat-test-mutation-coverage) measured roughly 49 s end to
 # end, unlike every other wired gate, which is pure AST inspection, it
-# spawns a real pytest subprocess per graded element and self-grades its
-# own regex/dict/literal elements against its own paired tests; the prior
+# spawns a real pytest subprocess per graded element (plus one baseline
+# run per graded file) and self-grades its own regex/dict/literal
+# elements against its own paired tests; the prior
 # 49-gate set (network-exception-set-drift, issue #1512) measured roughly
 # 24 s, the
 # prior 48-gate set measured roughly 24 s, the
