@@ -598,3 +598,43 @@ entries:
     - Established automatically by gitapex_run_verified_isolated_dispatch.py. Per adversarial-self-audit.md's
       Trust class rule, this entry must not be read back as established until it has
       merged through this repository's own review gate.
+
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: 'true'
+      CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
+      claude_version: 2.1.273 (Claude Code)
+    mechanism: claude -p subprocess, isolated cwd + isolated $HOME (script-established
+      baseline recipe)
+    leak_vector: claude_md_agents_md
+    result: isolated
+    verified_alternative: isolated cwd with no CLAUDE.md/AGENTS.md in its ancestry;
+      the target snapshot itself is used as that cwd for the real dispatch
+    companion_flags:
+    - --allowedTools Read,Glob,Grep
+    methodology_pitfalls: []
+    trust_class: same-run-unreviewed
+    date: '2026-09-16'
+    notes:
+    - Established automatically by gitapex_run_verified_isolated_dispatch.py. Per adversarial-self-audit.md's
+      Trust class rule, this entry must not be read back as established until it has
+      merged through this repository's own review gate.
+
+  - identifying_signals:
+      CLAUDE_CODE_REMOTE: 'true'
+      CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE: cloud_default
+      claude_version: 2.1.273 (Claude Code)
+    mechanism: claude -p subprocess, isolated cwd + isolated $HOME (script-established
+      baseline recipe)
+    leak_vector: claude_md_agents_md
+    result: isolated
+    verified_alternative: isolated cwd with no CLAUDE.md/AGENTS.md in its ancestry;
+      the target snapshot itself is used as that cwd for the real dispatch
+    companion_flags:
+    - --allowedTools Read,Glob,Grep
+    methodology_pitfalls: []
+    trust_class: same-run-unreviewed
+    date: '2026-09-16'
+    notes:
+    - Established automatically by gitapex_run_verified_isolated_dispatch.py. Per adversarial-self-audit.md's
+      Trust class rule, this entry must not be read back as established until it has
+      merged through this repository's own review gate.
