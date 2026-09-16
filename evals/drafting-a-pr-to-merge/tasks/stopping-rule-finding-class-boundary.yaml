@@ -1,0 +1,38 @@
+id: drafting-a-pr-to-merge-stopping-rule-finding-class-boundary
+name: A Fresh Blocking Finding Does Not Inherit An Escalated Class's Own Round Count
+description: When a different, freshly-appearing Blocking finding surfaces in the same round a recurring finding class already triggered the Stopping rule's escalation, the fresh finding gets its own round-1 loop-back rather than being folded into the already-escalated class's count or silently skipped because a similarly-named finding was fixed in an earlier round.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use drafting-a-pr-to-merge. PR #310, "Add retry budget to webhook
+    dispatcher," is on step 8, round 3. The recorded verdict history
+    shows: round 1 and round 2 both confirmed a Blocking finding in the
+    same class, "missing null check on webhook payload" -- round 2's
+    re-review still confirmed it, so the Stopping rule's 2-consecutive-
+    round condition already triggered and this class was escalated per
+    step 11.
+
+    This round's fresh `reviewing-an-artifact` pass reports one new
+    `confirmed` finding you classify Blocking: "unbounded recursion in
+    the retry-backoff calculator" -- a completely different defect, first
+    seen this round, with no prior round confirming it.
+
+    Is round 3 also an escalation, since a Blocking finding is present
+    and the PR already has an escalated class on record? Or should you
+    also skip fixing this new finding since round 1's "missing null
+    check" finding was already fixed?
+expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
+  # this fixture's own scenario is exactly the cited Stop-boundary bullet.
+  exercises:
+    - "Step 8 (stopping rule): never let the round count absorb a fresh, unrelated Blocking finding as if it were the same recurring finding class, and never let a Blocking finding skip its own loop-back merely because a similar one was fixed in an earlier round -- each finding class tracks its own separate count."
+  output_contains:
+    - "loop back"
+    - "unbounded recursion"
+    - "separate count"
+  output_not_contains:
+    - "already escalated, so round 3 escalates too"
+    - "no need to fix, a similar finding was already fixed"
+    - "skip fixing since the null check finding was already addressed"
