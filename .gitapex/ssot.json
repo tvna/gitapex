@@ -83,6 +83,12 @@
       "path": "skills/grounding-in-primary-sources/SKILL.md",
       "format": "markdown",
       "authority": "The authoring-time discipline for grounding a durable claim (a version number, a feature's support status, a specific count, \"always\"/\"never\"/\"the only cause\") in a primary source before stating it as Fact rather than Speculation -- for an external tool/library/API/platform claim, and (since issue #1890) for a durable claim about this repository's own code. No gate script consumes this entry: it is read directly by an agent following merge-retrospective's Repair record format section or drafting-issues's own Facts step (issue #1890), which each point here rather than duplicating the procedure. The first policy_sources entry with no consuming gate at all -- format's markdown value (added this same change) exists for exactly this case, a prose policy an agent reads rather than a script parses."
+    },
+    {
+      "id": "blocking-advisory-severity-drafting-a-pr-to-merge",
+      "path": "skills/drafting-a-pr-to-merge/SKILL.md",
+      "format": "markdown",
+      "authority": "The Blocking/Advisory finding-severity vocabulary and stopping rule drafting-a-pr-to-merge's own Step 8 applies to a confirmed finding from either of its two review layers (issue #1943): Blocking (must-fix, loops back to step 3 unconditionally, subject to the stopping rule) versus Advisory (worth-noting, disclosed only, does not by itself trigger a loop-back). No gate script consumes this entry: the classification is judged inline, by drafting-a-pr-to-merge's own thread reading a finding's substance, never a structured field either review layer's own report carries. Follows the same no-consuming-gate precedent issue #1890 already established for the grounding-in-primary-sources-skill entry above, rather than duplicating the procedure."
     }
   ],
   "gates": [
