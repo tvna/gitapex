@@ -2196,6 +2196,34 @@
         {"kind": "file-glob", "ref": "docs/gitapex/plans/*.md"},
         {"kind": "workflow-event", "ref": "plans-traceability-gate.yml:pull_request"}
       ]
+    },
+    {
+      "id": "channel-shape-index-drift",
+      "kind": "script",
+      "script": [
+        "skills/evaluating-context-channel-maturity/scripts/gitapex_check_channel_shape.py",
+        "tests/test_gitapex_repository_channel_shape.py"
+      ],
+      "rule": "The real AGENTS.md, every real agents/*.md, and every real .claude/agents/*.md file in this repository must pass every check gitapex_check_channel_shape.py's own check_shape() runs against it: channel-file-readable, frontmatter-parsable, description-length (<=500 chars), yaml-plain-scalar-safety, and the three tool-boundary checks (tool-boundary-declared -- a Claude Code disallowedTools:/tools: boundary is stated at all; tool-boundary-mapping-present -- hooks/gitapex_sync_opencode.py's own AGENT_SPECS carries a non-None permission mapping for that same filename; tool-boundary-mapping-equivalent -- that mapping actually denies an OpenCode-permission-key equivalent of the declared boundary, not merely exists). Issue #1987's own row 3 'index drift gate': the checker module (its own row 1) proves these rules only against synthetic fixtures in its co-located test_gitapex_check_channel_shape.py; this gate is what actually applies them to the repository's real channel files in CI and on the local plane, so a newly added or edited AGENTS.md/agents/*.md/.claude/agents/*.md file, or a hooks/gitapex_sync_opencode.py mapping that drifts out of sync with a declared boundary, fails closed here rather than passing silently.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", "-m", "pytest", "tests/test_gitapex_repository_channel_shape.py", "--no-cov", "-q"],
+      "trigger": "tests/test_gitapex_repository_channel_shape.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "self-governance",
+      "tracking_issue": 1987,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "AGENTS.md"},
+        {"kind": "file-glob", "ref": "agents/*.md"},
+        {"kind": "file-glob", "ref": ".claude/agents/*.md"},
+        {"kind": "file-glob", "ref": "skills/evaluating-context-channel-maturity/scripts/gitapex_check_channel_shape.py"},
+        {"kind": "file-glob", "ref": "hooks/gitapex_sync_opencode.py"},
+        {"kind": "cross-registry-consistency", "ref": "AGENTS.md + agents/*.md + .claude/agents/*.md frontmatter (description, disallowedTools/tools) <-> gitapex_check_channel_shape.py's check_shape() rules <-> hooks/gitapex_sync_opencode.py's own AGENT_SPECS permission mappings (tool-boundary-mapping-present, tool-boundary-mapping-equivalent)"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     }
   ],
   "clusters": {
