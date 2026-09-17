@@ -167,8 +167,15 @@ def test_agents_sync_rewrites_review_persona_for_opencode(tmp_path: pathlib.Path
     assert "disallowedTools" not in task
     # Pinned here, by filename, because both tests that check a permission
     # block now iterate `AGENT_SPECS` -- so a mis-pairing inside that
-    # constant would be invisible to them.
-    assert "permission" not in yaml.safe_load(_frontmatter_block(task))
+    # constant would be invisible to them. Issue #1987 row 2: the OpenCode
+    # copy must carry a `permission:` block denying an `mcp__github__*`-
+    # equivalent surface -- OpenCode allows every tool by default (module
+    # docstring), so a `None` entry in `AGENT_SPECS` left this boundary
+    # unenforced there.
+    task_permission = yaml.safe_load(_frontmatter_block(task))["permission"]
+    assert task_permission == sync.BRANCH_PLAN_TASK_PERMISSION
+    assert task_permission["*mcp*"] == "deny"
+    assert '"*mcp*": deny' in task
     assert "mode: subagent" in task
 
     # Idempotent.

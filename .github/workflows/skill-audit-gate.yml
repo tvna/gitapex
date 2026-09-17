@@ -33,6 +33,14 @@ on:
       - ".github/workflows/*.yml"
       - ".github/workflows/*.yaml"
       - ".gitapex/ssot.json"
+      # Issue #1987: channel-shape-index-drift is the first gate to register
+      # a tests/*.py path (alongside its checker module) as one of its own
+      # cooperating gates[].script files -- none of the directory-scoped
+      # globs above (.github/scripts/*.py, skills/*/scripts/*.py,
+      # evals/scripts/*.py) matches anything under tests/, so without this
+      # entry a PR touching only this one test file would silently skip the
+      # deterministic-gate-quality check.
+      - "tests/test_gitapex_repository_channel_shape.py"
 
 permissions:
   contents: read
