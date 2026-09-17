@@ -97,3 +97,6 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1593"
       summary: "Per an explicit user request (broader than this anchor's own issue asked, which wanted the 'supersedes brainstorming' sentence reordered and kept, not removed), the frontmatter description's trailing supersedes-obra/superpowers sentence is deleted outright. The elision entry above's own claim that this line 'stays accurate' is now stale for the current frontmatter -- disclosed here, that append-only entry is left unedited."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1593"
+      summary: "After battle-testing-a-skill confirmed the deletion above caused a real Dimension 3 (trigger/scope) regression -- a Portable-vendored consumer repository running this skill alongside a broader ideation skill lost all disambiguation guidance -- the operator reversed the accept-the-risk call and restored equivalent guidance, generalized rather than naming an external skill, per this PR's own anti-hardcoding principle. See the description's new priority sentence."
