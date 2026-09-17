@@ -334,6 +334,82 @@ def test_agent_specs_load_error_fails_both_mapping_checks(tmp_path):
     assert results["tool-boundary-mapping-equivalent"].passed is False
 
 
+def test_untranslatable_deny_token_fails_closed_on_mapping_equivalent(tmp_path):
+    """Defeat test: a `disallowedTools:` token this module's own small,
+    deliberately narrow Claude-tool-name -> OpenCode-permission-key table
+    (_CLAUDE_TOOL_TO_OPENCODE_KEY) has no translation for must fail
+    mapping-equivalent closed, never silently pass it as though the
+    (unverifiable) boundary were satisfied."""
+    target = _write(
+        tmp_path,
+        "agents/unknown-token.md",
+        "---\nname: unknown-token\ndescription: Declares an untranslatable deny token.\n"
+        "disallowedTools: some_unrecognized_tool_xyz\n---\n\nBody.\n",
+    )
+    # A generous mapping that denies everything this module knows how to
+    # translate -- if the untranslatable token were silently ignored
+    # rather than failing closed, this mapping would wrongly pass.
+    mapping = {"edit": "deny", "bash": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny", "*mcp*": "deny"}
+    results = _by_name(ccs.check_shape(target, agent_specs=(("unknown-token.md", mapping),)))
+    assert results["tool-boundary-mapping-present"].passed is True
+    assert results["tool-boundary-mapping-equivalent"].passed is False
+    assert "no known OpenCode-permission-key translation" in results["tool-boundary-mapping-equivalent"].evidence
+
+
+def test_empty_disallowed_tools_value_declares_a_vacuous_boundary(tmp_path):
+    """Edge case surfaced while defeat-testing: `disallowedTools:` with
+    nothing after the colon is syntactically present (tool-boundary-declared
+    still PASSes) but tokenizes to zero tokens, so mapping-equivalent has
+    nothing to require and PASSes vacuously even with an empty mapping.
+    This is the checker's own documented "declared key present" contract
+    (frontmatter-shape only, per tool-boundary-declared's own rule text),
+    not a silent bypass of a real boundary -- a human/AGENTS.md-authoring
+    convention question, not this checker's own defect, and is captured
+    here as a pinned, disclosed behavior rather than left unobserved."""
+    target = _write(
+        tmp_path,
+        "agents/empty-boundary.md",
+        "---\nname: empty-boundary\ndescription: Declares an empty deny-list value.\ndisallowedTools:\n---\n\nBody.\n",
+    )
+    results = _by_name(ccs.check_shape(target, agent_specs=(("empty-boundary.md", {}),)))
+    assert results["tool-boundary-declared"].passed is True
+    assert results["tool-boundary-mapping-equivalent"].passed is True
+    assert "all required keys denied" in results["tool-boundary-mapping-equivalent"].evidence
+
+
+# -- frontmatter body parsing edge cases (blank/comment lines, non-key lines) -
+
+
+def test_frontmatter_body_tolerates_blank_and_comment_lines_around_fields(tmp_path):
+    target = _write(
+        tmp_path,
+        "agents/spaced-out.md",
+        "---\n"
+        "name: spaced-out\n"
+        "\n"
+        "# a full-line comment between fields\n"
+        "not a key-shaped line at all\n"
+        "description: Still parses the real fields correctly.\n"
+        "---\n\nBody.\n",
+    )
+    results = _by_name(ccs.check_shape(target, agent_specs=None))
+    assert results["frontmatter-parsable"].passed is True
+    assert results["description-length"].passed is True
+    assert results["yaml-plain-scalar-safety"].passed is True
+
+
+def test_block_scalar_tolerates_a_blank_continuation_line(tmp_path):
+    target = _write(
+        tmp_path,
+        "agents/block-with-blank.md",
+        "---\nname: block-with-blank\ndescription: >\n  First line.\n\n  Second line after a blank one.\n---\n\nBody.\n",
+    )
+    results = _by_name(ccs.check_shape(target, agent_specs=None))
+    assert results["frontmatter-parsable"].passed is True
+    assert results["yaml-plain-scalar-safety"].passed is True
+    assert "exempt" in results["yaml-plain-scalar-safety"].evidence
+
+
 # -- main() -------------------------------------------------------------
 
 
