@@ -32,3 +32,5 @@ section for the Trust class rule this `trust_class` column encodes.
 | 2026-09-16 | claude_md_agents_md | claude -p subprocess, isolated cwd + isolated $HOME (script-established baseline recipe) | isolated | same-run-unreviewed |
 | 2026-09-16 | claude_md_agents_md | claude -p subprocess, isolated cwd + isolated $HOME (script-established baseline recipe) | isolated | same-run-unreviewed |
 | 2026-09-16 | claude_md_agents_md | claude -p subprocess, isolated cwd + isolated $HOME (script-established baseline recipe) | isolated | same-run-unreviewed |
+| 2026-09-17 | claude_md_agents_md | claude -p subprocess, isolated cwd + isolated $HOME (script-established baseline recipe) | isolated | same-run-unreviewed |
+| 2026-09-17 | claude_md_agents_md | claude -p subprocess, isolated cwd + isolated $HOME (script-established baseline recipe) | isolated | same-run-unreviewed |
