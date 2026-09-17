@@ -29,6 +29,28 @@ def _by_name(results):
     return {r.name: r for r in results}
 
 
+def _deny_mode_target(tmp_path):
+    """`agents/deny-mode.md`, declaring `disallowedTools: mcp__github` --
+    the one fixture every deny-mode tool-boundary/mapping test below
+    shares verbatim."""
+    return _write(
+        tmp_path,
+        "agents/deny-mode.md",
+        "---\nname: deny-mode\ndescription: Declares a deny-list boundary.\ndisallowedTools: mcp__github\n---\n\nBody.\n",
+    )
+
+
+def _allow_mode_target(tmp_path):
+    """`agents/allow-mode.md`, declaring `tools: Read, Grep, Glob` -- the
+    one fixture every allow-mode tool-boundary/mapping test below shares
+    verbatim."""
+    return _write(
+        tmp_path,
+        "agents/allow-mode.md",
+        "---\nname: allow-mode\ndescription: Declares an allow-list boundary.\ntools: Read, Grep, Glob\n---\n\nBody.\n",
+    )
+
+
 # -- channel-file-readable / frontmatter-parsable (fail-closed) -------------
 
 
@@ -194,21 +216,13 @@ def test_frontmatter_with_no_boundary_key_fails_tool_boundary_declared(tmp_path)
 
 
 def test_disallowed_tools_present_passes_tool_boundary_declared(tmp_path):
-    target = _write(
-        tmp_path,
-        "agents/deny-mode.md",
-        "---\nname: deny-mode\ndescription: Declares a deny-list boundary.\ndisallowedTools: mcp__github\n---\n\nBody.\n",
-    )
+    target = _deny_mode_target(tmp_path)
     results = _by_name(ccs.check_shape(target, agent_specs=None))
     assert results["tool-boundary-declared"].passed is True
 
 
 def test_tools_present_passes_tool_boundary_declared(tmp_path):
-    target = _write(
-        tmp_path,
-        "agents/allow-mode.md",
-        "---\nname: allow-mode\ndescription: Declares an allow-list boundary.\ntools: Read, Grep, Glob\n---\n\nBody.\n",
-    )
+    target = _allow_mode_target(tmp_path)
     results = _by_name(ccs.check_shape(target, agent_specs=None))
     assert results["tool-boundary-declared"].passed is True
 
@@ -217,33 +231,21 @@ def test_tools_present_passes_tool_boundary_declared(tmp_path):
 
 
 def test_missing_agent_specs_entry_fails_mapping_present(tmp_path):
-    target = _write(
-        tmp_path,
-        "agents/deny-mode.md",
-        "---\nname: deny-mode\ndescription: Declares a deny-list boundary.\ndisallowedTools: mcp__github\n---\n\nBody.\n",
-    )
+    target = _deny_mode_target(tmp_path)
     results = _by_name(ccs.check_shape(target, agent_specs=(("some-other-file.md", {"bash": "deny"}),)))
     assert results["tool-boundary-mapping-present"].passed is False
     assert "not found" in results["tool-boundary-mapping-present"].evidence
 
 
 def test_none_agent_specs_entry_fails_mapping_present(tmp_path):
-    target = _write(
-        tmp_path,
-        "agents/deny-mode.md",
-        "---\nname: deny-mode\ndescription: Declares a deny-list boundary.\ndisallowedTools: mcp__github\n---\n\nBody.\n",
-    )
+    target = _deny_mode_target(tmp_path)
     results = _by_name(ccs.check_shape(target, agent_specs=(("deny-mode.md", None),)))
     assert results["tool-boundary-mapping-present"].passed is False
     assert "None" in results["tool-boundary-mapping-present"].evidence
 
 
 def test_present_mapping_passes_mapping_present(tmp_path):
-    target = _write(
-        tmp_path,
-        "agents/deny-mode.md",
-        "---\nname: deny-mode\ndescription: Declares a deny-list boundary.\ndisallowedTools: mcp__github\n---\n\nBody.\n",
-    )
+    target = _deny_mode_target(tmp_path)
     results = _by_name(ccs.check_shape(target, agent_specs=(("deny-mode.md", {"*mcp*": "deny"}),)))
     assert results["tool-boundary-mapping-present"].passed is True
 
@@ -261,11 +263,7 @@ def test_no_declared_boundary_reports_mapping_checks_not_applicable(tmp_path):
 
 
 def test_mapping_unrelated_denial_fails_mapping_equivalent_deny_mode(tmp_path):
-    target = _write(
-        tmp_path,
-        "agents/deny-mode.md",
-        "---\nname: deny-mode\ndescription: Declares a deny-list boundary.\ndisallowedTools: mcp__github\n---\n\nBody.\n",
-    )
+    target = _deny_mode_target(tmp_path)
     # Denies something unrelated to the declared mcp__github boundary.
     results = _by_name(ccs.check_shape(target, agent_specs=(("deny-mode.md", {"edit": "deny"}),)))
     assert results["tool-boundary-mapping-equivalent"].passed is False
@@ -273,31 +271,19 @@ def test_mapping_unrelated_denial_fails_mapping_equivalent_deny_mode(tmp_path):
 
 
 def test_mapping_empty_dict_fails_mapping_equivalent(tmp_path):
-    target = _write(
-        tmp_path,
-        "agents/deny-mode.md",
-        "---\nname: deny-mode\ndescription: Declares a deny-list boundary.\ndisallowedTools: mcp__github\n---\n\nBody.\n",
-    )
+    target = _deny_mode_target(tmp_path)
     results = _by_name(ccs.check_shape(target, agent_specs=(("deny-mode.md", {}),)))
     assert results["tool-boundary-mapping-equivalent"].passed is False
 
 
 def test_mapping_denies_wildcard_mcp_passes_mapping_equivalent_deny_mode(tmp_path):
-    target = _write(
-        tmp_path,
-        "agents/deny-mode.md",
-        "---\nname: deny-mode\ndescription: Declares a deny-list boundary.\ndisallowedTools: mcp__github\n---\n\nBody.\n",
-    )
+    target = _deny_mode_target(tmp_path)
     results = _by_name(ccs.check_shape(target, agent_specs=(("deny-mode.md", {"*mcp*": "deny"}),)))
     assert results["tool-boundary-mapping-equivalent"].passed is True
 
 
 def test_mapping_missing_one_key_fails_mapping_equivalent_allow_mode(tmp_path):
-    target = _write(
-        tmp_path,
-        "agents/allow-mode.md",
-        "---\nname: allow-mode\ndescription: Declares an allow-list boundary.\ntools: Read, Grep, Glob\n---\n\nBody.\n",
-    )
+    target = _allow_mode_target(tmp_path)
     # Missing "bash" from an otherwise-complete denial set.
     mapping = {"edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny", "*mcp*": "deny"}
     results = _by_name(ccs.check_shape(target, agent_specs=(("allow-mode.md", mapping),)))
@@ -306,11 +292,7 @@ def test_mapping_missing_one_key_fails_mapping_equivalent_allow_mode(tmp_path):
 
 
 def test_mapping_full_surface_denied_passes_mapping_equivalent_allow_mode(tmp_path):
-    target = _write(
-        tmp_path,
-        "agents/allow-mode.md",
-        "---\nname: allow-mode\ndescription: Declares an allow-list boundary.\ntools: Read, Grep, Glob\n---\n\nBody.\n",
-    )
+    target = _allow_mode_target(tmp_path)
     mapping = {
         "edit": "deny",
         "bash": "deny",
@@ -324,11 +306,7 @@ def test_mapping_full_surface_denied_passes_mapping_equivalent_allow_mode(tmp_pa
 
 
 def test_agent_specs_load_error_fails_both_mapping_checks(tmp_path):
-    target = _write(
-        tmp_path,
-        "agents/deny-mode.md",
-        "---\nname: deny-mode\ndescription: Declares a deny-list boundary.\ndisallowedTools: mcp__github\n---\n\nBody.\n",
-    )
+    target = _deny_mode_target(tmp_path)
     results = _by_name(ccs.check_shape(target, agent_specs=None))
     assert results["tool-boundary-mapping-present"].passed is False
     assert results["tool-boundary-mapping-equivalent"].passed is False
