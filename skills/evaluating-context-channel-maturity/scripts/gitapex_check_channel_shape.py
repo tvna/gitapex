@@ -269,7 +269,19 @@ def _parse_frontmatter_fields(text: str) -> tuple[dict[str, _Field] | None, bool
                     block_lines.append(lines[i].strip())
                 i += 1
             fields[key] = _Field(style="block", value=" ".join(block_lines))
-        elif rest[:1] in ("'", '"'):
+        elif len(rest) >= 2 and rest[0] == rest[-1] and rest[0] in ("'", '"'):
+            # A genuinely closed quote pair only -- `rest[:1] in ("'", '"')`
+            # alone (the check this replaces) misclassified an OPENED-BUT-
+            # NEVER-CLOSED quote (e.g. `"unsafe: value` with no matching
+            # trailing quote) as "quoted" and therefore exempt from
+            # yaml-plain-scalar-safety below, even though a real YAML
+            # parser would not treat it as a valid, safely-quoted scalar
+            # either -- a fail-open bypass a crafted description could
+            # exploit to smuggle a colon-space/trailing-colon/hash pattern
+            # straight past this checker. Caught by a defeat test
+            # constructed specifically against this classification branch
+            # (issue #1987's own defeat-test-disclosure obligation), not by
+            # this module's own original happy-path test suite.
             fields[key] = _Field(style="quoted", value=_unquote(rest))
         elif rest == "":
             fields[key] = _Field(style="empty", value="")

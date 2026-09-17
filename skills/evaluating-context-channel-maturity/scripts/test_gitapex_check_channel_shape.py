@@ -139,6 +139,25 @@ def test_quoted_scalar_with_unsafe_substrings_passes_yaml_safety(tmp_path):
     assert "exempt" in results["yaml-plain-scalar-safety"].evidence
 
 
+def test_unclosed_leading_quote_is_not_exempt_and_still_fails_yaml_safety(tmp_path):
+    """Defeat test (issue #1987's own defeat-test-disclosure obligation):
+    a description that OPENS with a quote character but never closes it is
+    not a validly-quoted YAML scalar -- classifying it as "quoted" (exempt
+    from the safety scan below) would let a crafted value smuggle a
+    colon-space/trailing-colon pattern straight past this checker, exactly
+    the truncation-hazard class issue #1982 already recorded once for a
+    different generator. Confirmed to genuinely defeat a naive
+    `rest[:1] in ("'", '"')`-only classification before the fix landed."""
+    target = _write(
+        tmp_path,
+        "agents/unclosed-quote.md",
+        '---\nname: unclosed-quote\ndescription: "unsafe value with a colon: and a trailing colon:\n---\n\nBody.\n',
+    )
+    results = _by_name(ccs.check_shape(target, agent_specs=None))
+    assert results["yaml-plain-scalar-safety"].passed is False
+    assert "colon" in results["yaml-plain-scalar-safety"].evidence
+
+
 def test_block_scalar_with_unsafe_substrings_passes_yaml_safety(tmp_path):
     target = _write(
         tmp_path,
