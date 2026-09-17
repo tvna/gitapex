@@ -282,6 +282,19 @@ def test_mapping_denies_wildcard_mcp_passes_mapping_equivalent_deny_mode(tmp_pat
     assert results["tool-boundary-mapping-equivalent"].passed is True
 
 
+def test_mapping_key_matches_but_value_is_allow_fails_mapping_equivalent_deny_mode(tmp_path):
+    target = _deny_mode_target(tmp_path)
+    # Same key pattern as the wildcard-mcp denial above, but declares
+    # "allow" instead of "deny" -- a mapping entry whose KEY matches the
+    # required OpenCode surface but whose VALUE is not itself a denial
+    # must not be treated as equivalent to denying it. Distinct from
+    # test_mapping_unrelated_denial_fails_mapping_equivalent_deny_mode
+    # above, which covers a "deny"-valued entry whose key does not match.
+    results = _by_name(ccs.check_shape(target, agent_specs=(("deny-mode.md", {"*mcp*": "allow"}),)))
+    assert results["tool-boundary-mapping-equivalent"].passed is False
+    assert "*mcp*" in results["tool-boundary-mapping-equivalent"].evidence
+
+
 def test_mapping_missing_one_key_fails_mapping_equivalent_allow_mode(tmp_path):
     target = _allow_mode_target(tmp_path)
     # Missing "bash" from an otherwise-complete denial set.
