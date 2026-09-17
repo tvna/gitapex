@@ -125,6 +125,7 @@ mypy_path = [
     "skills/auditing-agent-product-scope/scripts",
     "skills/executing-a-branch-plan/scripts",
     "skills/drafting-a-skill/scripts",
+    "skills/evaluating-context-channel-maturity/scripts",
     "evals/scripts",
     "hooks",
 ]
@@ -239,6 +240,7 @@ module = [
     "test_gitapex_check_adr_shape",
     "test_gitapex_check_axis_shape",
     "test_gitapex_check_canonical_governance_paths",
+    "test_gitapex_check_channel_shape",
     "test_gitapex_check_dimension_coverage",
     "test_gitapex_check_dispatch_trace",
     "test_gitapex_check_file_ownership_conflicts",
