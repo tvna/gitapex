@@ -142,6 +142,57 @@ def test_unterminated_block_is_malformed_with_no_fields(value: str) -> None:
     assert fields is None
 
 
+# --- _quote_is_genuinely_closed --------------------------------------------
+
+
+@_PROPERTIES
+@given(inner=_SAFE_TEXT)
+def test_plain_double_quoted_scalar_is_genuinely_closed(inner: str) -> None:
+    assert ccs._quote_is_genuinely_closed(f'"{inner}"') is True
+
+
+@_PROPERTIES
+@given(inner=_SAFE_TEXT)
+def test_plain_single_quoted_scalar_is_genuinely_closed(inner: str) -> None:
+    assert ccs._quote_is_genuinely_closed(f"'{inner}'") is True
+
+
+@_PROPERTIES
+@given(inner=_SAFE_TEXT, pairs=st.integers(min_value=0, max_value=5))
+def test_double_quote_closure_tracks_backslash_parity(inner: str, pairs: int) -> None:
+    # `pairs` complete `\\` (escaped-literal-backslash) pairs before the
+    # presumed closing quote leave an EVEN run of backslashes -- that
+    # quote is unescaped, genuinely closed. One further single backslash
+    # makes the run ODD -- the presumed closing quote is itself escaped,
+    # genuinely unclosed (issue #1987's own Step 8 defeat-test shape).
+    closed = f'"{inner}' + "\\\\" * pairs + '"'
+    assert ccs._quote_is_genuinely_closed(closed) is True
+    unclosed = f'"{inner}' + "\\\\" * pairs + '\\"'
+    assert ccs._quote_is_genuinely_closed(unclosed) is False
+
+
+@_PROPERTIES
+@given(inner=_SAFE_TEXT, escaped_pairs=st.integers(min_value=0, max_value=5))
+def test_single_quote_closure_tracks_total_quote_parity(inner: str, escaped_pairs: int) -> None:
+    # `escaped_pairs` complete `''` (escaped-literal-quote) pairs before
+    # the real closing quote keep the total quote count EVEN -- genuinely
+    # closed. One further trailing `'` makes the total ODD -- the last
+    # quote is the un-paired half of an escape, genuinely unclosed.
+    closed = f"'{inner}" + "''" * escaped_pairs + "'"
+    assert ccs._quote_is_genuinely_closed(closed) is True
+    unclosed = f"'{inner}" + "''" * escaped_pairs + "''"
+    assert ccs._quote_is_genuinely_closed(unclosed) is False
+
+
+@_PROPERTIES
+@given(text=_SAFE_TEXT)
+def test_non_quote_opening_is_never_genuinely_closed(text: str) -> None:
+    # _SAFE_ALPHABET carries neither quote character, so this can never
+    # open with one -- the function's own first guard must reject it
+    # regardless of content.
+    assert ccs._quote_is_genuinely_closed(text) is False
+
+
 # --- _description_checks -------------------------------------------------
 
 

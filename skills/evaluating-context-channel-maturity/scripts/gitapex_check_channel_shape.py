@@ -197,6 +197,48 @@ _FRONTMATTER_BLOCK_RE = re.compile(r"\A---[ \t]*\n(?P<body>.*?)\n---[ \t]*\n", r
 _TOP_LEVEL_KEY_RE = re.compile(r"^(?P<key>[A-Za-z0-9_-]+):(?P<rest>.*)$")
 
 
+def _quote_is_genuinely_closed(rest: str) -> bool:
+    """True when `rest` is a single-line YAML quoted scalar whose
+    presumed closing quote (`rest[-1]`) is a real, unescaped terminator --
+    not a backslash-escaped `\\"` inside a double-quoted scalar, and not
+    the un-paired half of a doubled `''` escape inside a single-quoted
+    scalar. Both are real YAML escape syntax; a real parser raises
+    ScannerError (unterminated scalar) on either shape, so `rest[0] ==
+    rest[-1]` alone (matching-first/last-character, the check this
+    replaces) would misclassify genuinely broken frontmatter as a validly
+    closed, safety-exempt quoted scalar -- issue #1987's own Step 8
+    adversarial review found this as a second instance of the same
+    fail-open bypass class `_parse_frontmatter_fields` below already
+    documents fixing once (an opened-but-never-closed leading quote with
+    no trailing quote at all); this is the "looks closed but is actually
+    escaped" sibling case, not caught by that first fix.
+    """
+    # function-body-test-coverage: WAIVED: this diff's own co-located
+    # test_gitapex_check_channel_shape.py's
+    # test_escaped_trailing_double_quote_is_not_exempt_and_still_fails_yaml_safety
+    # and test_doubled_trailing_single_quote_is_not_exempt_and_still_fails_yaml_safety
+    # exercise both the double-quote-backslash and single-quote-doubling
+    # unclosed branches; the closed/genuinely-safe path is exercised by
+    # every other quoted-scalar test in the same file. Same disclosed
+    # gate-side co-located-test gap as this module's other WAIVED
+    # comments, not a real coverage hole.
+    if len(rest) < 2 or rest[0] != rest[-1] or rest[0] not in ("'", '"'):
+        return False
+    if rest[0] == '"':
+        backslashes = 0
+        i = len(rest) - 2
+        while i >= 0 and rest[i] == "\\":
+            backslashes += 1
+            i -= 1
+        return backslashes % 2 == 0
+    # Single-quote: YAML escapes a literal `'` by doubling it (`''`), so
+    # the scalar is genuinely closed only when `rest` carries an even
+    # total count of `'` characters (the outer pair plus zero or more
+    # complete escaped-quote pairs in between); an odd count leaves one
+    # quote un-paired and the scalar unterminated on this line.
+    return rest.count("'") % 2 == 0
+
+
 def _unquote(raw: str) -> str:
     """Strip one matching pair of leading/trailing quote characters. Not a
     full YAML unescape (no backslash-escape decoding) -- sufficient for a
@@ -269,19 +311,21 @@ def _parse_frontmatter_fields(text: str) -> tuple[dict[str, _Field] | None, bool
                     block_lines.append(lines[i].strip())
                 i += 1
             fields[key] = _Field(style="block", value=" ".join(block_lines))
-        elif len(rest) >= 2 and rest[0] == rest[-1] and rest[0] in ("'", '"'):
+        elif _quote_is_genuinely_closed(rest):
             # A genuinely closed quote pair only -- `rest[:1] in ("'", '"')`
-            # alone (the check this replaces) misclassified an OPENED-BUT-
-            # NEVER-CLOSED quote (e.g. `"unsafe: value` with no matching
-            # trailing quote) as "quoted" and therefore exempt from
-            # yaml-plain-scalar-safety below, even though a real YAML
+            # alone (an earlier check this replaced) misclassified an
+            # OPENED-BUT-NEVER-CLOSED quote (e.g. `"unsafe: value` with no
+            # matching trailing quote) as "quoted" and therefore exempt
+            # from yaml-plain-scalar-safety below, even though a real YAML
             # parser would not treat it as a valid, safely-quoted scalar
             # either -- a fail-open bypass a crafted description could
             # exploit to smuggle a colon-space/trailing-colon/hash pattern
-            # straight past this checker. Caught by a defeat test
-            # constructed specifically against this classification branch
-            # (issue #1987's own defeat-test-disclosure obligation), not by
-            # this module's own original happy-path test suite.
+            # straight past this checker. `_quote_is_genuinely_closed`
+            # additionally rejects a *escaped* trailing quote (see its own
+            # docstring) -- a second instance of the same bypass class
+            # found by issue #1987's own Step 8 adversarial review, not by
+            # this module's original happy-path or first-defeat-test
+            # suite.
             fields[key] = _Field(style="quoted", value=_unquote(rest))
         elif rest == "":
             fields[key] = _Field(style="empty", value="")

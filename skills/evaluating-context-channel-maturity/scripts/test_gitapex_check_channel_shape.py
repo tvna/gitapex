@@ -161,6 +161,38 @@ def test_quoted_scalar_with_unsafe_substrings_passes_yaml_safety(tmp_path):
     assert "exempt" in results["yaml-plain-scalar-safety"].evidence
 
 
+def test_double_quoted_scalar_with_escaped_backslash_then_real_close_passes_yaml_safety(tmp_path):
+    """A double-quoted scalar ending in an escaped backslash (`\\\\`, a
+    literal single backslash) followed by a real closing quote IS
+    genuinely closed -- confirmed against PyYAML. The escape-awareness fix
+    for the sibling defeat test below must not start rejecting this
+    still-valid, still-safe shape."""
+    target = _write(
+        tmp_path,
+        "agents/escaped-backslash-then-closed.md",
+        '---\nname: t\ndescription: "a path C:\\\\\\\\"\n---\n\nBody.\n',
+    )
+    results = _by_name(ccs.check_shape(target, agent_specs=None))
+    assert results["yaml-plain-scalar-safety"].passed is True
+    assert "exempt" in results["yaml-plain-scalar-safety"].evidence
+
+
+def test_single_quoted_scalar_with_doubled_quote_then_real_close_passes_yaml_safety(tmp_path):
+    """A single-quoted scalar containing a doubled `''` (one embedded
+    literal quote) followed by a real closing quote IS genuinely closed --
+    confirmed against PyYAML. The escape-awareness fix for the sibling
+    defeat test below must not start rejecting this still-valid,
+    still-safe shape."""
+    target = _write(
+        tmp_path,
+        "agents/doubled-quote-then-closed.md",
+        "---\nname: t\ndescription: 'it''s fine'\n---\n\nBody.\n",
+    )
+    results = _by_name(ccs.check_shape(target, agent_specs=None))
+    assert results["yaml-plain-scalar-safety"].passed is True
+    assert "exempt" in results["yaml-plain-scalar-safety"].evidence
+
+
 def test_unclosed_leading_quote_is_not_exempt_and_still_fails_yaml_safety(tmp_path):
     """Defeat test (issue #1987's own defeat-test-disclosure obligation):
     a description that OPENS with a quote character but never closes it is
@@ -174,6 +206,47 @@ def test_unclosed_leading_quote_is_not_exempt_and_still_fails_yaml_safety(tmp_pa
         tmp_path,
         "agents/unclosed-quote.md",
         '---\nname: unclosed-quote\ndescription: "unsafe value with a colon: and a trailing colon:\n---\n\nBody.\n',
+    )
+    results = _by_name(ccs.check_shape(target, agent_specs=None))
+    assert results["yaml-plain-scalar-safety"].passed is False
+    assert "colon" in results["yaml-plain-scalar-safety"].evidence
+
+
+def test_escaped_trailing_double_quote_is_not_exempt_and_still_fails_yaml_safety(tmp_path):
+    """Defeat test (issue #1987's own Step 8 adversarial review): a
+    double-quoted description whose trailing quote is backslash-escaped
+    (`\\"`) is NOT a real closing quote in YAML -- a real parser (confirmed
+    against PyYAML) raises ScannerError "found unexpected end of stream"
+    on this exact shape, it does not parse it as a safely-quoted scalar.
+    Classifying it as "quoted" (exempt from the safety scan below) would
+    both hide a colon-space pattern from the scan AND wrongly claim
+    "already safe under a real YAML parser" for a value a real parser
+    cannot parse at all -- confirmed to genuinely defeat the
+    `rest[0] == rest[-1]`-only classification (the check this test's own
+    fix replaced) before that fix landed."""
+    target = _write(
+        tmp_path,
+        "agents/escaped-quote.md",
+        '---\nname: escaped-quote\ndescription: "unsafe: value\\"\n---\n\nBody.\n',
+    )
+    results = _by_name(ccs.check_shape(target, agent_specs=None))
+    assert results["yaml-plain-scalar-safety"].passed is False
+    assert "colon" in results["yaml-plain-scalar-safety"].evidence
+
+
+def test_doubled_trailing_single_quote_is_not_exempt_and_still_fails_yaml_safety(tmp_path):
+    """Defeat test (issue #1987's own Step 8 adversarial review): a
+    single-quoted description ending in a doubled `''` (YAML's own
+    literal-quote escape) with no further closing quote is NOT a real
+    closing quote either -- a real parser (confirmed against PyYAML)
+    raises the same ScannerError as the double-quote case above. The
+    naive `rest[0] == rest[-1]` classification this test's own fix
+    replaced would misread the trailing `''` as a plain closing quote and
+    exempt this value from the safety scan below."""
+    target = _write(
+        tmp_path,
+        "agents/doubled-quote.md",
+        "---\nname: doubled-quote\ndescription: 'unsafe: value''\n---\n\nBody.\n",
     )
     results = _by_name(ccs.check_shape(target, agent_specs=None))
     assert results["yaml-plain-scalar-safety"].passed is False
