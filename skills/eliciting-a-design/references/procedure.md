@@ -272,12 +272,9 @@ forward (see Issue formalization handoff below).
 
 - Invoke `drafting-issues` if it is available in this repository, to
   formalize the approved design into a GitHub issue with its own
-  Acceptance Criteria Map. `drafting-issues` is this rename's own current
-  name (formerly `drafting-an-acm-issue`, per
-  <https://github.com/tvna/gitapex/issues/1275>) - there is no separate
-  fallback skill to name any more. If `drafting-issues` genuinely is not
-  available (checked on disk, never assumed), name that finding to the
-  user rather than guessing at a substitute.
+  Acceptance Criteria Map. If it genuinely is not available (checked on
+  disk, never assumed), name that finding to the user rather than
+  guessing at a substitute.
 - If this design converged a sub-project of a recorded decomposition, pass
   that decomposition's captured parent tracking-issue number into the
   invoked skill's optional parent tracking-issue-number input, so the
