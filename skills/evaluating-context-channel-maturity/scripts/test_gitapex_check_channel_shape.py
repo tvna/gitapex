@@ -649,3 +649,31 @@ def test_validate_read_scope_rejects_symlinked_intermediate_directory(tmp_path):
     linked_dir.symlink_to(real_dir)
     with pytest.raises(ValueError, match="symlink"):
         ccs._validate_read_scope(linked_dir / "AGENTS.md", tmp_path)
+
+
+def test_validate_read_scope_rejects_dot_dot_symlink_traversal(tmp_path):
+    """Defeat test (a second round of issue #1987's own Step 8 adversarial
+    review, against this function's own first symlink-walk fix): a target
+    combining one symlinked component with a ".." segment that lexically
+    cancels it out defeated that first fix. `os.path.abspath`'s own
+    `os.path.normpath` collapses ".." PURELY LEXICALLY, with no
+    filesystem awareness -- `<allowed_root>/link/../secret.md`, where
+    `link` is a symlink to a directory OUTSIDE allowed_root, collapses as
+    a STRING to `<allowed_root>/secret.md` before either the per-component
+    symlink walk or the final resolved-containment check ever sees the
+    original `link` component -- both then operate on the already-mangled,
+    symlink-erased path and accept it, even though the real filesystem
+    (confirmed via `os.path.realpath` on the same original target)
+    resolves it to a location genuinely outside `allowed_root`. Confirmed
+    by direct reproduction before this test's own fix landed."""
+    allowed_root = tmp_path / "allowed" / "root"
+    allowed_root.mkdir(parents=True)
+    outside = tmp_path / "allowed" / "outside"
+    outside.mkdir(parents=True)
+    secret = tmp_path / "allowed" / "secret.md"
+    secret.write_text("TOP SECRET", encoding="utf-8")
+    link = allowed_root / "link"
+    link.symlink_to(outside)
+    target = allowed_root / "link" / ".." / "secret.md"
+    with pytest.raises(ValueError, match="'\\.\\.'"):
+        ccs._validate_read_scope(target, allowed_root)

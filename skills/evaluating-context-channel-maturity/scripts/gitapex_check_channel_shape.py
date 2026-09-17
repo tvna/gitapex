@@ -874,15 +874,39 @@ def _validate_read_scope(target: Path, allowed_root: Path) -> None:
     still see -- and reject -- each symlinked component along the way;
     resolving first would collapse the very links this check exists to
     catch, the same reasoning gitapex_check_skill_shape.py's own
-    equivalent guard states for its own identical PTH100-waived calls."""
+    equivalent guard states for its own identical PTH100-waived calls.
+
+    Rejects a literal ".." path segment in either argument before any of
+    that, for a reason `os.path.abspath`'s own reliance on `os.path.
+    normpath` creates: `normpath` collapses ".." PURELY LEXICALLY, with
+    no filesystem awareness of whether the component it cancels is a real
+    directory or a symlink. A target shaped `<root>/link/../secret` where
+    `link` is a symlink to a sibling of `root` collapses, as a STRING,
+    to `<root>/secret` -- silently erasing the symlinked component before
+    the walk above ever runs, and before the final resolved-containment
+    check below too (which resolves this same already-collapsed string,
+    never the original). Confirmed by direct reproduction (a second round
+    of issue #1987's own Step 8 adversarial review, against this fix's
+    own first attempt): the checker accepted such a target as in-scope
+    while `os.path.realpath` on the SAME original target resolved to a
+    real location outside `allowed_root` -- the exact divergence between
+    what this guard certifies and what `target.read_text()` later
+    actually reads. A legitimate --allowed-root CLI target has no
+    reason to carry ".."; rejecting it outright closes the class rather
+    than attempting a symlink-aware ".." resolution this function does
+    not otherwise need."""
     # function-body-test-coverage: WAIVED: this diff's own co-located
     # test_gitapex_check_channel_shape.py's
     # test_main_allowed_root_rejects_outside_target,
-    # test_validate_read_scope_accepts_inside_target, and
-    # test_validate_read_scope_rejects_symlinked_intermediate_directory
-    # call this function (directly, and through main()'s own
-    # --allowed-root path). Same disclosed gate-side co-located-test gap
-    # as above, not a real coverage hole.
+    # test_validate_read_scope_accepts_inside_target,
+    # test_validate_read_scope_rejects_symlinked_intermediate_directory,
+    # and test_validate_read_scope_rejects_dot_dot_symlink_traversal call
+    # this function (directly, and through main()'s own --allowed-root
+    # path). Same disclosed gate-side co-located-test gap as above, not a
+    # real coverage hole.
+    if ".." in target.parts or ".." in allowed_root.parts:
+        raise ValueError(f"{target}: a '..' path segment is not allowed under --allowed-root {allowed_root}")
+
     root = Path(os.path.abspath(allowed_root))  # noqa: PTH100
     candidate = Path(os.path.abspath(target))  # noqa: PTH100
     try:
