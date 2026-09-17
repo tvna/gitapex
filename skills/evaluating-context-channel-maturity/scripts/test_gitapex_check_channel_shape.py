@@ -253,6 +253,48 @@ def test_doubled_trailing_single_quote_is_not_exempt_and_still_fails_yaml_safety
     assert "colon" in results["yaml-plain-scalar-safety"].evidence
 
 
+def test_two_adjacent_quoted_segments_is_not_exempt_and_still_fails_yaml_safety(tmp_path):
+    """Defeat test (issue #1987's own Step 8 adversarial review): two
+    adjacent single-quoted segments on one line (e.g. `'foo' 'bar'`) is
+    not one validly closed quoted scalar -- a real parser rejects trailing
+    content after a scalar's own close that is neither whitespace nor a
+    comment. The old total-quote-count-parity check this test's own fix
+    replaced saw an even total (4) and accepted this as closed; the
+    left-to-right closing-quote scan this fix introduced instead finds
+    the *first* real closing quote and correctly rejects the non-comment,
+    non-whitespace `'bar'` that follows it."""
+    target = _write(
+        tmp_path,
+        "agents/adjacent-quotes.md",
+        "---\nname: adjacent-quotes\ndescription: 'unsafe: value' 'trailer'\n---\n\nBody.\n",
+    )
+    results = _by_name(ccs.check_shape(target, agent_specs=None))
+    assert results["yaml-plain-scalar-safety"].passed is False
+    assert "colon" in results["yaml-plain-scalar-safety"].evidence
+
+
+def test_quoted_scalar_with_trailing_comment_passes_yaml_safety(tmp_path):
+    """A genuinely closed quoted scalar followed by a real same-line YAML
+    comment is valid, safe YAML (confirmed against PyYAML: `"Safe value" #
+    trailing comment` parses to `Safe value`, comment discarded). The
+    matching-first/last-character check this test's own fix replaced
+    treated the comment text as part of the scalar's own last character,
+    misclassifying it as unclosed/plain and producing a false FAIL on
+    legitimate content -- found by issue #1987's own Step 8 adversarial
+    review. Also confirms the comment itself is excluded from the parsed
+    value, not retained as unsafe content."""
+    target = _write(
+        tmp_path,
+        "agents/trailing-comment.md",
+        '---\nname: t\ndescription: "Safe value" # trailing real YAML comment\n---\n\nBody.\n',
+    )
+    results = _by_name(ccs.check_shape(target, agent_specs=None))
+    assert results["yaml-plain-scalar-safety"].passed is True
+    assert "exempt" in results["yaml-plain-scalar-safety"].evidence
+    assert results["description-length"].passed is True
+    assert results["description-length"].evidence == "10 chars"
+
+
 def test_block_scalar_with_unsafe_substrings_passes_yaml_safety(tmp_path):
     target = _write(
         tmp_path,
@@ -389,6 +431,49 @@ def test_mapping_full_surface_denied_passes_mapping_equivalent_allow_mode(tmp_pa
     }
     results = _by_name(ccs.check_shape(target, agent_specs=(("allow-mode.md", mapping),)))
     assert results["tool-boundary-mapping-equivalent"].passed is True
+
+
+def test_trailing_comment_on_tools_line_is_not_tokenized_as_declared_tools(tmp_path):
+    """Defeat test (issue #1987's own Step 8 adversarial review, a
+    security-tier finding): a real YAML trailing comment on a `tools:`
+    line must never be tokenized as if it were part of the declared
+    value. Before the fix, `tools: Read, Grep, Glob  # not bash here`
+    tokenized the comment prose too, and "bash" -- appearing only in the
+    COMMENT, never actually declared -- got silently counted as an
+    allowed tool, shrinking the required-denied OpenCode surface. A
+    mapping that denies every real allow-mode-required key EXCEPT "bash"
+    (this fixture's own `tools:` line never mentions bash as an allowed
+    tool) must still correctly report mapping-equivalent as FAILED,
+    naming "bash" as the missing denial -- not silently pass because a
+    comment word happened to match a real Claude tool name."""
+    target = _write(
+        tmp_path,
+        "agents/comment-injection.md",
+        "---\nname: comment-injection\ntools: Read, Grep, Glob  # not bash, no edit here\n---\n\nBody.\n",
+    )
+    mapping = {"edit": "deny", "task": "deny", "webfetch": "deny", "websearch": "deny", "*mcp*": "deny"}
+    results = _by_name(ccs.check_shape(target, agent_specs=(("comment-injection.md", mapping),)))
+    assert results["tool-boundary-mapping-equivalent"].passed is False
+    assert "bash" in results["tool-boundary-mapping-equivalent"].evidence
+
+
+def test_trailing_comment_on_disallowed_tools_line_is_not_tokenized(tmp_path):
+    """Same defeat shape as the allow-mode test above, applied to
+    deny-mode: a comment word on a `disallowedTools:` line must not be
+    tokenized as a real denied-tool declaration either. Deny-mode already
+    fails closed on any untranslatable token (see
+    test_untranslatable_deny_token_fails_closed_on_mapping_equivalent
+    below), so this pins that the comment's own stray words (which
+    translate to nothing) do not silently pass as though they were the
+    real declared tokens."""
+    target = _write(
+        tmp_path,
+        "agents/deny-comment-injection.md",
+        "---\nname: deny-comment-injection\ndisallowedTools: mcp__github  # do not allow bash either\n---\n\nBody.\n",
+    )
+    results = _by_name(ccs.check_shape(target, agent_specs=(("deny-comment-injection.md", {"*mcp*": "deny"}),)))
+    assert results["tool-boundary-mapping-equivalent"].passed is True
+    assert results["tool-boundary-declared"].passed is True
 
 
 def test_agent_specs_load_error_fails_both_mapping_checks(tmp_path):
@@ -547,3 +632,20 @@ def test_validate_read_scope_rejects_symlink(tmp_path):
     link.symlink_to(real)
     with pytest.raises(ValueError, match="symlink"):
         ccs._validate_read_scope(link, tmp_path)
+
+
+def test_validate_read_scope_rejects_symlinked_intermediate_directory(tmp_path):
+    """Defeat test (issue #1987's own Step 8 adversarial review): a
+    symlinked directory component between `allowed_root` and the target
+    leaf must be rejected too, not only a symlinked leaf file. Before the
+    fix, only `target.is_symlink()` was checked, contradicting this
+    function's own docstring claim of rejecting "a symlink anywhere in
+    its own path" -- an intermediate symlinked directory sailed through
+    unchecked."""
+    real_dir = tmp_path / "real-dir"
+    real_dir.mkdir()
+    _write(real_dir, "AGENTS.md", "# AGENTS.md\n")
+    linked_dir = tmp_path / "linked-dir"
+    linked_dir.symlink_to(real_dir)
+    with pytest.raises(ValueError, match="symlink"):
+        ccs._validate_read_scope(linked_dir / "AGENTS.md", tmp_path)

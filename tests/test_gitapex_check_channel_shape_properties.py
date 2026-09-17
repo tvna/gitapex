@@ -193,6 +193,51 @@ def test_non_quote_opening_is_never_genuinely_closed(text: str) -> None:
     assert ccs._quote_is_genuinely_closed(text) is False
 
 
+# --- _closing_quote_index / _quoted_scalar_value ---------------------------
+
+
+@_PROPERTIES
+@given(inner=_SAFE_TEXT)
+def test_closing_quote_index_finds_the_real_closing_double_quote(inner: str) -> None:
+    rest = f'"{inner}"'
+    assert ccs._closing_quote_index(rest) == len(rest) - 1
+
+
+@_PROPERTIES
+@given(inner=_SAFE_TEXT)
+def test_closing_quote_index_finds_the_real_closing_single_quote(inner: str) -> None:
+    rest = f"'{inner}'"
+    assert ccs._closing_quote_index(rest) == len(rest) - 1
+
+
+@_PROPERTIES
+@given(inner=_SAFE_TEXT)
+def test_quoted_scalar_value_extracts_inner_text_with_no_trailing_content(inner: str) -> None:
+    assert ccs._quoted_scalar_value(f'"{inner}"') == inner
+
+
+@_PROPERTIES
+@given(inner=_SAFE_TEXT, comment=_SAFE_TEXT)
+def test_quoted_scalar_value_discards_a_real_trailing_comment(inner: str, comment: str) -> None:
+    # issue #1987's own Step 8 adversarial review: a genuinely closed
+    # quoted scalar followed by a real same-line YAML comment must parse
+    # to just the quoted content -- the comment is discarded, never
+    # retained as part of the value (confirmed against PyYAML).
+    assert ccs._quoted_scalar_value(f'"{inner}" # {comment}') == inner
+
+
+@_PROPERTIES
+@given(
+    inner=_SAFE_TEXT,
+    garbage=st.text(alphabet=_SAFE_ALPHABET, min_size=1, max_size=10).filter(lambda s: s.strip() != ""),
+)
+def test_quoted_scalar_value_rejects_non_comment_trailing_content(inner: str, garbage: str) -> None:
+    # Non-whitespace, non-"#" content after the closing quote is not a
+    # real YAML comment -- a real parser rejects the whole line, so this
+    # must not be accepted as a validly closed quoted scalar either.
+    assert ccs._quoted_scalar_value(f'"{inner}" {garbage}') is None
+
+
 # --- _description_checks -------------------------------------------------
 
 
@@ -240,6 +285,46 @@ def test_tools_field_declares_allow_mode_with_exact_tokens(tokens: list[str]) ->
 
 def test_no_fields_declares_no_boundary() -> None:
     assert ccs._declared_boundary(None) is None
+
+
+# --- _strip_trailing_comment / _boundary_field_tokens -----------------------
+
+
+@_PROPERTIES
+@given(value=st.text(alphabet=_SAFE_ALPHABET, max_size=60))
+def test_strip_trailing_comment_is_a_no_op_without_a_comment_marker(value: str) -> None:
+    # _SAFE_ALPHABET carries no "#", so no comment-start can ever occur.
+    assert ccs._strip_trailing_comment(value) == value
+
+
+@_PROPERTIES
+@given(prefix=_SAFE_TEXT, comment=_SAFE_TEXT)
+def test_strip_trailing_comment_discards_everything_from_the_first_marker(prefix: str, comment: str) -> None:
+    stripped = ccs._strip_trailing_comment(f"{prefix} #{comment}")
+    assert "#" not in stripped
+
+
+@_PROPERTIES
+@given(tokens=st.lists(_TOKEN, min_size=0, max_size=5))
+def test_boundary_field_tokens_strips_plain_style_trailing_comment(tokens: list[str]) -> None:
+    # issue #1987's own Step 8 adversarial review (a security-tier
+    # finding): a real YAML comment on a tools:/disallowedTools: line
+    # must never be tokenized as if it were part of the declared value --
+    # "bash" appearing only in a trailing comment must not silently
+    # become a declared token.
+    field = ccs._Field(style="plain", value=" ".join(tokens) + " # a comment naming bash")
+    assert ccs._boundary_field_tokens(field) == tuple(tokens)
+
+
+@_PROPERTIES
+@given(inner=_TOKEN)
+def test_boundary_field_tokens_does_not_strip_non_plain_style_value(inner: str) -> None:
+    # A "#" is only stripped as a comment for style=="plain" -- a quoted
+    # or block-style value has already had any real comment resolved (or
+    # excluded) by the parser itself, so re-stripping here would wrongly
+    # truncate genuine content containing a literal "#".
+    field = ccs._Field(style="quoted", value=f"{inner}#tail")
+    assert ccs._boundary_field_tokens(field) == (f"{inner}#tail",)
 
 
 # --- _opencode_key_for_token ----------------------------------------------

@@ -147,6 +147,7 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import importlib.util
+import os
 import re
 import sys
 from pathlib import Path
@@ -197,46 +198,88 @@ _FRONTMATTER_BLOCK_RE = re.compile(r"\A---[ \t]*\n(?P<body>.*?)\n---[ \t]*\n", r
 _TOP_LEVEL_KEY_RE = re.compile(r"^(?P<key>[A-Za-z0-9_-]+):(?P<rest>.*)$")
 
 
-def _quote_is_genuinely_closed(rest: str) -> bool:
-    """True when `rest` is a single-line YAML quoted scalar whose
-    presumed closing quote (`rest[-1]`) is a real, unescaped terminator --
-    not a backslash-escaped `\\"` inside a double-quoted scalar, and not
-    the un-paired half of a doubled `''` escape inside a single-quoted
-    scalar. Both are real YAML escape syntax; a real parser raises
-    ScannerError (unterminated scalar) on either shape, so `rest[0] ==
-    rest[-1]` alone (matching-first/last-character, the check this
-    replaces) would misclassify genuinely broken frontmatter as a validly
-    closed, safety-exempt quoted scalar -- issue #1987's own Step 8
-    adversarial review found this as a second instance of the same
-    fail-open bypass class `_parse_frontmatter_fields` below already
-    documents fixing once (an opened-but-never-closed leading quote with
-    no trailing quote at all); this is the "looks closed but is actually
-    escaped" sibling case, not caught by that first fix.
+def _closing_quote_index(rest: str) -> int | None:
+    """The index within `rest` (which must open with a quote character at
+    index 0) of its real, unescaped closing quote -- honoring YAML's own
+    per-style escape rule: a double-quoted scalar escapes via a backslash
+    (`\\"` is a literal `"`, never a terminator); a single-quoted scalar
+    escapes via doubling (`''` is a literal `'`, never a terminator).
+    None when no real closing quote exists on this line (an unterminated
+    scalar)."""
+    quote = rest[0]
+    n = len(rest)
+    i = 1
+    if quote == '"':
+        while i < n:
+            if rest[i] == "\\":
+                i += 2
+                continue
+            if rest[i] == '"':
+                return i
+            i += 1
+        return None
+    while i < n:
+        if rest[i] == "'":
+            if i + 1 < n and rest[i + 1] == "'":
+                i += 2
+                continue
+            return i
+        i += 1
+    return None
+
+
+def _quoted_scalar_value(rest: str) -> str | None:
+    """The unescaped value of `rest` when it is a genuinely closed,
+    single-line YAML quoted scalar, optionally followed by nothing but
+    whitespace and/or a real trailing comment -- None otherwise (an
+    unclosed scalar, or one followed by other same-line content a real
+    YAML parser would reject as trailing garbage rather than accept as a
+    validly-closed scalar).
+
+    Two defeat classes this closes, both confirmed against PyYAML raising
+    `ScannerError: found unexpected end of stream` on the exact input --
+    issue #1987's own Step 8 adversarial review found both as instances
+    of the same fail-open bypass class `_parse_frontmatter_fields` below
+    already documents fixing once (an opened-but-never-closed leading
+    quote with no trailing quote at all): a backslash-escaped trailing
+    `"` inside a double-quoted scalar, and an un-paired trailing `''`
+    inside a single-quoted scalar. `rest[0] == rest[-1]` alone (matching-
+    first/last-character, the check this replaces) misclassifies both as
+    closed. A third, correctness-only (not security-tier) defect this
+    also closes: the matching-first/last-character check also
+    misclassified a genuinely closed quoted scalar followed by a real
+    same-line YAML comment (e.g. `"value" # note`) as UNclosed, since the
+    comment text, not the closing quote, was the actual last character --
+    a false FAIL on legitimate, safe frontmatter (confirmed against
+    PyYAML: both `"value" # note` and `"value"#note`, no separating
+    space, parse to `value` with the comment discarded).
     """
+    if len(rest) < 2 or rest[0] not in ("'", '"'):
+        return None
+    closing = _closing_quote_index(rest)
+    if closing is None:
+        return None
+    trailing = rest[closing + 1 :].lstrip()
+    if trailing and not trailing.startswith("#"):
+        return None
+    return _unquote(rest[: closing + 1])
+
+
+def _quote_is_genuinely_closed(rest: str) -> bool:
+    """True when `rest` is a genuinely closed, single-line YAML quoted
+    scalar (optionally followed only by whitespace/a real trailing
+    comment) -- see `_quoted_scalar_value`'s own docstring for the full
+    rationale and defeat cases this closes."""
     # function-body-test-coverage: WAIVED: this diff's own co-located
     # test_gitapex_check_channel_shape.py's
     # test_escaped_trailing_double_quote_is_not_exempt_and_still_fails_yaml_safety
     # and test_doubled_trailing_single_quote_is_not_exempt_and_still_fails_yaml_safety
     # exercise both the double-quote-backslash and single-quote-doubling
-    # unclosed branches; the closed/genuinely-safe path is exercised by
-    # every other quoted-scalar test in the same file. Same disclosed
-    # gate-side co-located-test gap as this module's other WAIVED
-    # comments, not a real coverage hole.
-    if len(rest) < 2 or rest[0] != rest[-1] or rest[0] not in ("'", '"'):
-        return False
-    if rest[0] == '"':
-        backslashes = 0
-        i = len(rest) - 2
-        while i >= 0 and rest[i] == "\\":
-            backslashes += 1
-            i -= 1
-        return backslashes % 2 == 0
-    # Single-quote: YAML escapes a literal `'` by doubling it (`''`), so
-    # the scalar is genuinely closed only when `rest` carries an even
-    # total count of `'` characters (the outer pair plus zero or more
-    # complete escaped-quote pairs in between); an odd count leaves one
-    # quote un-paired and the scalar unterminated on this line.
-    return rest.count("'") % 2 == 0
+    # unclosed branches; the closed/genuinely-safe path (trailing-comment
+    # included) is exercised by every other quoted-scalar test in the
+    # same file. Same disclosed gate-side co-located-test gap as this
+    # module's other WAIVED comments, not a real coverage hole.
+    return _quoted_scalar_value(rest) is not None
 
 
 def _unquote(raw: str) -> str:
@@ -311,7 +354,7 @@ def _parse_frontmatter_fields(text: str) -> tuple[dict[str, _Field] | None, bool
                     block_lines.append(lines[i].strip())
                 i += 1
             fields[key] = _Field(style="block", value=" ".join(block_lines))
-        elif _quote_is_genuinely_closed(rest):
+        elif (quoted_value := _quoted_scalar_value(rest)) is not None:
             # A genuinely closed quote pair only -- `rest[:1] in ("'", '"')`
             # alone (an earlier check this replaced) misclassified an
             # OPENED-BUT-NEVER-CLOSED quote (e.g. `"unsafe: value` with no
@@ -320,13 +363,15 @@ def _parse_frontmatter_fields(text: str) -> tuple[dict[str, _Field] | None, bool
             # parser would not treat it as a valid, safely-quoted scalar
             # either -- a fail-open bypass a crafted description could
             # exploit to smuggle a colon-space/trailing-colon/hash pattern
-            # straight past this checker. `_quote_is_genuinely_closed`
-            # additionally rejects a *escaped* trailing quote (see its own
-            # docstring) -- a second instance of the same bypass class
-            # found by issue #1987's own Step 8 adversarial review, not by
-            # this module's original happy-path or first-defeat-test
-            # suite.
-            fields[key] = _Field(style="quoted", value=_unquote(rest))
+            # straight past this checker. `_quoted_scalar_value` also
+            # rejects an *escaped* trailing quote (see its own docstring)
+            # -- a second instance of the same bypass class found by
+            # issue #1987's own Step 8 adversarial review -- and, unlike
+            # the boolean check this replaced, extracts the value up to
+            # the real closing quote only, so a legitimate trailing
+            # same-line comment after that quote is discarded rather than
+            # retained as (incorrectly) part of the scalar's own value.
+            fields[key] = _Field(style="quoted", value=quoted_value)
         elif rest == "":
             fields[key] = _Field(style="empty", value="")
         else:
@@ -421,6 +466,43 @@ class _DeclaredBoundary(NamedTuple):
     tokens: tuple[str, ...]
 
 
+_COMMENT_START_RE = re.compile(r"(?:^|\s)#")
+
+
+def _strip_trailing_comment(value: str) -> str:
+    """Strip a real YAML plain-scalar trailing comment from `value` -- a
+    `#` that is either the first character or immediately preceded by
+    whitespace, through end of line. Confirmed against PyYAML: both
+    'a, b # comment' and 'a,b#nothash' (no preceding whitespace) parse as
+    expected -- the latter keeps '#nothash' as literal content, never a
+    comment. Only meaningful for a PLAIN-style field's raw value; a
+    quoted or block-scalar value has already had any real comment
+    resolved (or excluded) by the parser itself."""
+    match = _COMMENT_START_RE.search(value)
+    if match is None:
+        return value
+    return value[: match.start()].rstrip()
+
+
+def _boundary_field_tokens(field: _Field) -> tuple[str, ...]:
+    """Tokenize a `tools:`/`disallowedTools:` field's own declared value
+    into individual tool-name tokens, discarding a real trailing YAML
+    comment first for a plain-style value. Without this, comment prose
+    (e.g. `tools: Read, Grep  # not bash here`) tokenizes indistinguishably
+    from real tool names -- a comment word that happens to match a real
+    Claude tool name (`bash`, `edit`, ...) is then silently counted as
+    declared-allowed, shrinking the required-denied OpenCode surface
+    below what the frontmatter actually declares. Issue #1987's own
+    Step 8 adversarial review found this as a live false-PASS on
+    `tool-boundary-mapping-equivalent` -- the exact deterministic gate
+    this module exists to keep honest -- confirmed by independently
+    reproducing it: an allow-mode `tools:` value with a comment naming an
+    otherwise-still-allowed tool passed the equivalence check even though
+    the real `AGENT_SPECS` mapping never denied that tool."""
+    value = _strip_trailing_comment(field.value) if field.style == "plain" else field.value
+    return tuple(t for t in re.split(r"[,\s]+", value) if t)
+
+
 def _declared_boundary(fields: dict[str, _Field] | None) -> _DeclaredBoundary | None:
     # function-body-test-coverage: WAIVED: this diff's own co-located
     # test_gitapex_check_channel_shape.py's test_*_tool_boundary_declared*
@@ -432,11 +514,9 @@ def _declared_boundary(fields: dict[str, _Field] | None) -> _DeclaredBoundary | 
     if fields is None:
         return None
     if "disallowedTools" in fields:
-        tokens = tuple(t for t in re.split(r"[,\s]+", fields["disallowedTools"].value) if t)
-        return _DeclaredBoundary(mode="deny", tokens=tokens)
+        return _DeclaredBoundary(mode="deny", tokens=_boundary_field_tokens(fields["disallowedTools"]))
     if "tools" in fields:
-        tokens = tuple(t for t in re.split(r"[,\s]+", fields["tools"].value) if t)
-        return _DeclaredBoundary(mode="allow", tokens=tokens)
+        return _DeclaredBoundary(mode="allow", tokens=_boundary_field_tokens(fields["tools"]))
     return None
 
 
@@ -782,18 +862,42 @@ def _validate_read_scope(target: Path, allowed_root: Path) -> None:
     """Reject a target outside `allowed_root`, or a symlink anywhere in its
     own path -- the same caller-approved-root/no-symlinks contract
     gitapex_check_skill_shape.py's own --allowed-root guard states, applied
-    here to a single file target rather than a skill directory tree."""
+    here to a single file target rather than a skill directory tree.
+
+    Walks every path component between `allowed_root` and `target`, not
+    only `target` itself: issue #1987's own Step 8 adversarial review
+    found that checking only `target.is_symlink()` did not match this
+    function's own stated "symlink anywhere in its own path" contract --
+    an intermediate symlinked directory component was never inspected.
+    `os.path.abspath` (not `Path.resolve()`) absolutizes both paths
+    first, deliberately WITHOUT following symlinks, so the loop below can
+    still see -- and reject -- each symlinked component along the way;
+    resolving first would collapse the very links this check exists to
+    catch, the same reasoning gitapex_check_skill_shape.py's own
+    equivalent guard states for its own identical PTH100-waived calls."""
     # function-body-test-coverage: WAIVED: this diff's own co-located
     # test_gitapex_check_channel_shape.py's
-    # test_main_allowed_root_rejects_outside_target and
-    # test_validate_read_scope_accepts_inside_target call this function
-    # (directly, and through main()'s own --allowed-root path). Same
-    # disclosed gate-side co-located-test gap as above, not a real
-    # coverage hole.
-    if target.is_symlink():
-        raise ValueError(f"{target} is a symlink, which --allowed-root refuses to read")
-    resolved_root = allowed_root.resolve()
-    resolved_target = target.resolve()
+    # test_main_allowed_root_rejects_outside_target,
+    # test_validate_read_scope_accepts_inside_target, and
+    # test_validate_read_scope_rejects_symlinked_intermediate_directory
+    # call this function (directly, and through main()'s own
+    # --allowed-root path). Same disclosed gate-side co-located-test gap
+    # as above, not a real coverage hole.
+    root = Path(os.path.abspath(allowed_root))  # noqa: PTH100
+    candidate = Path(os.path.abspath(target))  # noqa: PTH100
+    try:
+        relative = candidate.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"{target} resolves outside --allowed-root {allowed_root}") from exc
+
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise ValueError(f"{current} is a symlink, which --allowed-root refuses to read")
+
+    resolved_root = root.resolve()
+    resolved_target = candidate.resolve()
     if resolved_target != resolved_root and resolved_root not in resolved_target.parents:
         raise ValueError(f"{target} resolves outside --allowed-root {allowed_root}")
 
