@@ -147,11 +147,11 @@ flowchart TD
 project that goes ahead, the terminal state is issue formalization: do
 NOT invoke `writing-plans`, `frontend-design`, `mcp-builder`, or any other
 implementation skill directly from here. The only handoff after this
-skill is `drafting-issues` (or its fallback, `drafting-an-acm-issue`) -
-detailed plan authoring now happens downstream of that, once an issue
-exists. The other terminal, "Name the state and stop", is where every
-route in the generated contract's Escalation block lands; reaching it is
-a completed run, not an abandoned one.
+skill is `drafting-issues` - detailed plan authoring now happens
+downstream of that, once an issue exists. The other terminal, "Name the
+state and stop", is where every route in the generated contract's
+Escalation block lands; reaching it is a completed run, not an abandoned
+one.
 
 ## Four-axis elicitation
 
@@ -272,9 +272,12 @@ forward (see Issue formalization handoff below).
 
 - Invoke `drafting-issues` if it is available in this repository, to
   formalize the approved design into a GitHub issue with its own
-  Acceptance Criteria Map.
-- If `drafting-issues` is not available, fall back to
-  `drafting-an-acm-issue`.
+  Acceptance Criteria Map. `drafting-issues` is this rename's own current
+  name (formerly `drafting-an-acm-issue`, per
+  <https://github.com/tvna/gitapex/issues/1275>) - there is no separate
+  fallback skill to name any more. If `drafting-issues` genuinely is not
+  available (checked on disk, never assumed), name that finding to the
+  user rather than guessing at a substitute.
 - If this design converged a sub-project of a recorded decomposition, pass
   that decomposition's captured parent tracking-issue number into the
   invoked skill's optional parent tracking-issue-number input, so the
