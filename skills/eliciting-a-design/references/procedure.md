@@ -145,8 +145,8 @@ flowchart TD
 
 **The graph has two terminals, and both are successful ends.** For a
 project that goes ahead, the terminal state is issue formalization: do
-NOT invoke `writing-plans`, `frontend-design`, `mcp-builder`, or any other
-implementation skill directly from here. The only handoff after this
+NOT invoke any implementation-planning, code-authoring, or design-tooling
+skill directly from here. The only handoff after this
 skill is `drafting-issues` - detailed plan authoring now happens
 downstream of that, once an issue exists. The other terminal, "Name the
 state and stop", is where every route in the generated contract's
@@ -280,9 +280,8 @@ forward (see Issue formalization handoff below).
   invoked skill's optional parent tracking-issue-number input, so the
   newly drafted sub-project issue links under the parent tracking issue
   rather than standing unrelated to its siblings.
-- Do NOT invoke `writing-plans` or any other implementation skill
-  directly. Detailed plan authoring happens downstream of issue
-  formalization.
+- Do NOT invoke any implementation-planning skill directly. Detailed plan
+  authoring happens downstream of issue formalization.
 - Once that invocation has created the issue, commit the design document:
   stage that one path explicitly, never `git add -A` or `git commit -a`.
   Whatever else is in the working tree is not yours to sweep in.
