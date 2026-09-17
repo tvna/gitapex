@@ -246,8 +246,8 @@ first, not skimmed.
    pass's own behavior-preserving scope. Both dispatches carry a
    model/effort pin; see [refactor and review gate
    reference](references/events-and-review-gate.md#mandatory-aggregate-refactor--adversarial-review-step-8)
-   for the rationale. After every CONFIRMED finding's fix, re-run every
-   task's own Red-Green test, not only the one related to the fix.
+   for the rationale. After every Blocking CONFIRMED finding's fix,
+   re-run every task's own Red-Green test, not only the one related to the fix.
    **Push every fix commit to the remote branch as it lands**
    -- same reasoning as step 6's per-wave push: a fix applied only
    locally would leave the ready-for-review PR (step 9) not actually

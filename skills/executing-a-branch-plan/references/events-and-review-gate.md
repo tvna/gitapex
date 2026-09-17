@@ -524,11 +524,11 @@ finding's fix is applied, re-run every task's own Red-Green test above --
 not only the one related to the fix -- before step 9. The last gate
 before hand-off does not rest on an unverified "the fix didn't break
 anything else" assumption. Three outcomes: zero CONFIRMED findings, or
-every CONFIRMED finding is classified Advisory, and no re-verification
-failure -> continue to step 9, with every Advisory finding disclosed in
-the PR body -- it was judged non-blocking by this gate's own severity
-read, so fixing it on speculation alone is not warranted; a human reader
-decides whether it warrants a closer look. At least one Blocking
+every CONFIRMED finding is classified Advisory -> continue to step 9,
+with every Advisory finding disclosed in the PR body -- it was judged
+non-blocking by this gate's own severity read, so fixing it on
+speculation alone is not warranted; a human reader decides whether it
+warrants a closer look. At least one Blocking
 CONFIRMED finding, and the Stopping rule has not triggered for its own
 finding class -> fix it, then re-run every task's own Red-Green test
 before this gate re-runs -- never carry forward a stale verdict against a
