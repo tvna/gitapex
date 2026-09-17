@@ -668,6 +668,15 @@ def _load_agent_specs(repo_root: Path) -> tuple[tuple[tuple[str, dict[str, str] 
     mapping checks as a clear FAIL (per this module's own fail-closed
     contract), never an unhandled exception escaping check_shape().
     """
+    # function-body-test-coverage: WAIVED: this diff's own co-located
+    # test_gitapex_check_channel_shape.py's test_load_agent_specs_reports_*
+    # tests call this function directly (a synthetic repo_root fixture,
+    # never the real hooks/gitapex_sync_opencode.py) and exercise every
+    # fail-closed branch below -- missing hooks_path, a failed importlib
+    # spec build, an import-time exception, and a missing AGENT_SPECS
+    # attribute. Same disclosed gate-side co-located-test gap as above (the
+    # gate only resolves a covering test under tests/, not this skill's own
+    # co-located scripts/ directory), not a real coverage hole.
     hooks_path = repo_root / _HOOKS_RELATIVE_PATH
     if not hooks_path.is_file():
         return None, f"{hooks_path} not found (vendored without gitapex's own hooks/ directory?)"
