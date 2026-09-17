@@ -20,10 +20,11 @@ exact module):
 
 Every fixture skill lives under `tmp_path`, never a real `skills/*`
 directory -- the real-repository sanity test below pins, separately, that
-no real skill declares `spec.contract` yet (a foundation-only PR, zero
-production targets by design, mirroring
+the one real skill declaring `spec.contract` today (`eliciting-a-design`,
+issue #1966 -- the first real migration off issue #1965's foundation-only,
+zero-production-targets baseline) matches a fresh regeneration, mirroring
 `tests/test_gitapex_scan_ssot_schema.py`'s own
-`test_real_repository_has_no_contract_declaring_skills_yet`). Fixture
+`test_real_repository_contract_declaring_skills_have_no_drift`. Fixture
 construction is self-contained rather than imported from
 `skills/drafting-a-skill/scripts/test_gitapex_generate_skill_contract.py`
 (Task 3's own test module) -- this repository has no existing convention
@@ -125,18 +126,18 @@ def test_check_fails_when_committed_skill_md_has_drifted(tmp_path: pathlib.Path)
 # ---------------------------------------------------------------------------
 # Real-repository sanity test (mirrors
 # tests/test_gitapex_scan_ssot_schema.py's own
-# test_real_repository_has_no_contract_declaring_skills_yet): confirmed no
-# real skill declares spec.contract yet, so this gate is a clean no-op
-# against the real, current repository -- pinned explicitly here rather
-# than relying only on the synthetic fixtures above to notice a future
-# change.
+# test_real_repository_contract_declaring_skills_have_no_drift): confirmed
+# eliciting-a-design (issue #1966) is the real repository's one
+# contract-declaring skill today and its committed SKILL.md matches a
+# fresh regeneration -- pinned explicitly here rather than relying only on
+# the synthetic fixtures above to notice a future change.
 # ---------------------------------------------------------------------------
 
 
-def test_real_repository_has_no_contract_declaring_skills_yet(capsys: pytest.CaptureFixture[str]) -> None:
-    assert runner.ssot_schema.discover_contracts() == {}
+def test_real_repository_contract_declaring_skill_matches_regeneration(capsys: pytest.CaptureFixture[str]) -> None:
+    assert set(runner.ssot_schema.discover_contracts()) == {"eliciting-a-design"}
     assert runner.main() == 0
-    assert "nothing to check" in capsys.readouterr().out
+    assert "1 contract-declaring skill(s) match a fresh regeneration" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------
