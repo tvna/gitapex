@@ -5,14 +5,20 @@ issue #1987's own Task 2 scope: proving the three tool-boundary checks
 against this repository's real agents/*.md/.claude/agents/*.md files (and
 the real hooks/gitapex_sync_opencode.py) is Task 4's own separate,
 sequenced scope, once Task 1 (the OpenCode mapping fix) and Task 3 (the
-description rewrites) are also merged. Every mapping-related test below
-injects a synthetic `agent_specs` tuple directly into check_shape() instead
-of touching the real hooks/gitapex_sync_opencode.py, so this suite never
-depends on that file's real content or on repository layout beyond its own
-tmp_path fixtures.
+description rewrites) are also merged. Most mapping-related tests below
+inject a synthetic `agent_specs` tuple directly into check_shape(), never
+touching the real hooks/gitapex_sync_opencode.py; the `_load_agent_specs`
+section further down instead passes a synthetic `repo_root` (a tmp_path of
+its own, carrying a synthetic hooks/gitapex_sync_opencode.py file or
+deliberately not) so `_load_agent_specs`'s own fail-closed branches get
+exercised directly -- still never touching the real repository's hooks/
+directory or its real content, so this suite never depends on that file's
+real content or on repository layout beyond its own tmp_path fixtures.
 """
 
 from __future__ import annotations
+
+import importlib.util
 
 import gitapex_check_channel_shape as ccs
 import pytest
@@ -481,6 +487,56 @@ def test_agent_specs_load_error_fails_both_mapping_checks(tmp_path):
     results = _by_name(ccs.check_shape(target, agent_specs=None))
     assert results["tool-boundary-mapping-present"].passed is False
     assert results["tool-boundary-mapping-equivalent"].passed is False
+
+
+# -- _load_agent_specs's own fail-closed branches (called directly, never
+# against the real repository's hooks/gitapex_sync_opencode.py -- always a
+# synthetic repo_root/hooks/gitapex_sync_opencode.py fixture of this
+# test's own) ----------------------------------------------------------
+
+
+def test_load_agent_specs_reports_missing_hooks_file(tmp_path):
+    """No hooks/gitapex_sync_opencode.py at all under repo_root -- the
+    vendored-without-hooks/ case this function's own docstring names."""
+    agent_specs, error = ccs._load_agent_specs(tmp_path)
+    assert agent_specs is None
+    assert error is not None
+    assert "not found" in error
+
+
+def test_load_agent_specs_reports_spec_build_failure(tmp_path, monkeypatch):
+    """`importlib.util.spec_from_file_location` returning None (or a spec
+    with no loader) is a real, if rare, import-machinery failure mode this
+    function's own fail-closed contract must still cover -- not
+    reproducible via a real file's content alone, so mocked directly."""
+    _write(tmp_path, "hooks/gitapex_sync_opencode.py", "AGENT_SPECS = ()\n")
+    monkeypatch.setattr(importlib.util, "spec_from_file_location", lambda *args, **kwargs: None)
+    agent_specs, error = ccs._load_agent_specs(tmp_path)
+    assert agent_specs is None
+    assert error is not None
+    assert "could not build an import spec" in error
+
+
+def test_load_agent_specs_reports_exec_module_exception(tmp_path):
+    """hooks/gitapex_sync_opencode.py exists but raises at import time --
+    the function's own docstring promises this fails closed as a
+    (None, reason) tuple, never an unhandled exception escaping the
+    caller."""
+    _write(tmp_path, "hooks/gitapex_sync_opencode.py", "raise RuntimeError('synthetic import-time failure')\n")
+    agent_specs, error = ccs._load_agent_specs(tmp_path)
+    assert agent_specs is None
+    assert error is not None
+    assert "RuntimeError" in error
+
+
+def test_load_agent_specs_reports_missing_agent_specs_attribute(tmp_path):
+    """hooks/gitapex_sync_opencode.py imports cleanly but never defines
+    AGENT_SPECS at all."""
+    _write(tmp_path, "hooks/gitapex_sync_opencode.py", "NOT_AGENT_SPECS = ()\n")
+    agent_specs, error = ccs._load_agent_specs(tmp_path)
+    assert agent_specs is None
+    assert error is not None
+    assert "carries no AGENT_SPECS" in error
 
 
 def test_untranslatable_deny_token_fails_closed_on_mapping_equivalent(tmp_path):

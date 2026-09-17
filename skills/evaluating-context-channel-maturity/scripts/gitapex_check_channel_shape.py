@@ -668,17 +668,6 @@ def _load_agent_specs(repo_root: Path) -> tuple[tuple[tuple[str, dict[str, str] 
     mapping checks as a clear FAIL (per this module's own fail-closed
     contract), never an unhandled exception escaping check_shape().
     """
-    # function-body-test-coverage: WAIVED: unlike this module's other
-    # helpers, this one genuinely has NO direct test in this diff -- every
-    # test in the co-located test_gitapex_check_channel_shape.py injects a
-    # synthetic `agent_specs` tuple into check_shape() instead, bypassing
-    # this function entirely, by this module's own explicit design (issue
-    # #1987's own Task 2 scope is synthetic-fixture-only; proving this
-    # loader against the real hooks/gitapex_sync_opencode.py -- and
-    # against a vendored deployment missing it -- is left to Task 4 or a
-    # follow-up, not silently claimed covered here). Disclosed as a real,
-    # deliberate gap, not the co-located-test-convention gate-side blind
-    # spot this module's other WAIVED comments name.
     hooks_path = repo_root / _HOOKS_RELATIVE_PATH
     if not hooks_path.is_file():
         return None, f"{hooks_path} not found (vendored without gitapex's own hooks/ directory?)"
