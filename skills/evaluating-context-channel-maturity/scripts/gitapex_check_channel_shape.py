@@ -920,6 +920,18 @@ def _validate_read_scope(target: Path, allowed_root: Path) -> None:
         if current.is_symlink():
             raise ValueError(f"{current} is a symlink, which --allowed-root refuses to read")
 
+    # function-body-test-coverage: WAIVED: defense-in-depth, deliberately
+    # kept rather than removed for being hard to reach (see AGENTS.md's
+    # own "do not collapse defense-in-depth layers" rule) -- once the ".."
+    # rejection above and the per-component symlink walk above that both
+    # hold, `resolved_target` and `candidate` are already identical (no
+    # ".." to collapse, no symlink anywhere in the path to follow), so
+    # this branch cannot currently fire from any input the two guards
+    # above didn't already reject first. It stays as the same belt-and-
+    # suspenders check gitapex_check_skill_shape.py's own equivalent
+    # guard keeps for an identical reason -- a future change narrowing
+    # either guard above should still fail closed here rather than
+    # silently regaining the gap either one currently closes.
     resolved_root = root.resolve()
     resolved_target = candidate.resolve()
     if resolved_target != resolved_root and resolved_root not in resolved_target.parents:
