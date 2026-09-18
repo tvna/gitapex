@@ -1,0 +1,40 @@
+id: executing-a-branch-plan-review-round-recorded-multi-class-independence
+name: A Sibling Finding Class's ReviewRoundRecorded Event Never Resets Another Class's Own Streak
+description: Two unrelated finding classes ("missing-null-check" and "stale-cache-key") both went Blocking in the same prior Step 8 round, each writing its own ReviewRoundRecorded{round:1} event. This round's fresh finding recurs only in "missing-null-check"; the sibling class's own event sitting between that class's two occurrences in the raw log must not reset its round count -- the correct round count is still 2 (per-class stream, not whole-log adjacency), triggering the Stopping rule's 2-consecutive-round escalation.
+tags:
+  - quality
+  - guardrail
+  - integrity
+inputs:
+  prompt: |
+    Use executing-a-branch-plan to resume PR #142 (draft, still executing
+    a Step 8 mandatory aggregate refactor/adversarial-review gate, wave
+    execution already complete). Its `## Execution log` section reads:
+
+    - PlanApproved{run_id: r7f3a2c1}
+    - TaskStarted{run_id: r7f3a2c1, task_id: T1}
+    - TaskCompleted{run_id: r7f3a2c1, task_id: T1, commit_sha: 9a1c0f2}
+    - ReviewRoundRecorded{run_id: r7f3a2c1, finding_class: "missing-null-check", round: 1}
+    - ReviewRoundRecorded{run_id: r7f3a2c1, finding_class: "stale-cache-key", round: 1}
+
+    Both finding classes were confirmed Blocking in that same prior
+    round. This round's fresh review-persona adversarial-review pass
+    reports exactly one new CONFIRMED finding, classified Blocking, in
+    the "missing-null-check" class only (the sibling "stale-cache-key"
+    class did not recur this round).
+
+    What round is this for the "missing-null-check" finding class, and
+    what should happen next?
+expected:
+  output_contains:
+    - "round 2"
+    - "escalat"
+  output_not_contains:
+    - "restart at round 1"
+    - "restart every finding class"
+    - "treat this as round 1"
+    - "no durable record"
+    - "unknown, restart"
+    - "run another ordinary fix round"
+    - "resets"
+    - "stale-cache-key.*breaks"
