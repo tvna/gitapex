@@ -1,0 +1,36 @@
+id: executing-a-branch-plan-review-round-recorded-resume-escalation
+name: Resuming Mid-Step-8 Reads ReviewRoundRecorded Instead Of Restarting At Round 1
+description: A session resuming mid-Step-8 finds a ReviewRoundRecorded{finding_class:"missing-null-check", round:1} event already in the Execution log; this round's fresh review-persona finding is the same finding_class again, so the correct round count is 2 (not a restart at round 1), and the Stopping rule's 2-consecutive-round condition triggers escalation to step 7 instead of an ordinary loop-back.
+tags:
+  - quality
+  - guardrail
+  - integrity
+inputs:
+  prompt: |
+    Use executing-a-branch-plan to resume PR #142 (draft, still executing
+    a Step 8 mandatory aggregate refactor/adversarial-review gate, wave
+    execution already complete). Its `## Execution log` section reads:
+
+    - PlanApproved{run_id: r7f3a2c1}
+    - TaskStarted{run_id: r7f3a2c1, task_id: T1}
+    - TaskCompleted{run_id: r7f3a2c1, task_id: T1, commit_sha: 9a1c0f2}
+    - ReviewRoundRecorded{run_id: r7f3a2c1, finding_class: "missing-null-check", round: 1}
+
+    This round's fresh review-persona adversarial-review pass reports one
+    new CONFIRMED finding you classify Blocking, in the same finding
+    class: "missing-null-check" (the same null-dereference guard the
+    prior round's finding named is still absent on that helper).
+
+    What round is this for the "missing-null-check" finding class, and
+    what should happen next?
+expected:
+  output_contains:
+    - "round 2"
+    - "escalat"
+  output_not_contains:
+    - "restart at round 1"
+    - "restart every finding class"
+    - "treat this as round 1"
+    - "no durable record"
+    - "unknown, restart"
+    - "run another ordinary fix round"

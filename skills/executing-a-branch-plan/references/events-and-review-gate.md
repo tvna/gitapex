@@ -245,6 +245,29 @@ mistaken for an earlier run's.
   that gap would require a second check in `drafting-a-pr-to-merge`
   beyond its own single label-presence check, which is out of scope here;
   it is named as a residual risk, not solved.
+- `ReviewRoundRecorded{run_id, finding_class, round}` -- written once per
+  step-8 round for each distinct finding class that round's own
+  classification confirms Blocking (a round confirming two unrelated
+  Blocking finding classes at once writes one event per class, each
+  carrying that class's own `round` count below; a round with zero
+  Blocking findings writes exactly one `none` event instead), in the main
+  thread, immediately after that round's Blocking/Advisory classification
+  is judged and before any loop-back or step-9 continuation (the same
+  "write the record, then act on it" ordering `TaskCompleted`/
+  `StageDeviated` above already use).
+  `finding_class` is the same short, stable label the Stopping rule below
+  already tracks (a root cause, a violated rule/code path, or a
+  near-verbatim repeated finding description) -- `none` when the round
+  closed with zero confirmed Blocking findings (zero CONFIRMED, or every
+  CONFIRMED finding classified Advisory). `round` is that finding class's
+  own consecutive-round count at the time this event is written: 1 the
+  round a class first goes Blocking, incrementing only when the
+  immediately preceding recorded `ReviewRoundRecorded` for the SAME
+  `finding_class` was also Blocking (no intervening `none` or
+  different-class event in between); `0` when `finding_class` is `none`.
+  See the Stopping rule below for how a resumed session reconstructs
+  round history from this event -- reading it, not assuming round 1, is
+  mandatory before that session acts on a fresh round's own findings.
 
 **Escape before interpolating.** Every event's free-text fields
 (`TaskFailed.reason`, `NeedsInput.question`, `StageDeviated.reason`), the
@@ -481,22 +504,24 @@ rule's own same-class judgment call also uses.
 
 **Stopping rule.** Reconstruct this gate's own round history before
 judging recurrence -- the current fix-round state plus every prior round
-this same Step 8 pass has already run, from this continuous session's own
-context. **Disclosed gap:** the closed event vocabulary above has no
-Step 8 round/finding-class event type, and Step 8's own procedure writes
-none -- unlike step 6, whose `TaskStarted`/`TaskCompleted`/`TaskFailed`/
-`NeedsInput` events durably resume across sessions. A session resuming
-mid-Step-8 therefore has no durable record to reconstruct round history
-from: treat that resumed history as unknown rather than assuming a prior
-round occurred, and restart every finding class's own count from round 1
--- the same fail-closed-toward-caution-in-the-other-direction default
-this rule already applies when a finding's own class is genuinely
-ambiguous (below). This is a known limitation, not a fix: a future change
-adding a durable Step 8 round record (e.g. a new closed-set event, or a
-PR-body section analogous to `drafting-a-pr-to-merge`'s own recorded
-verdict) would close it; issue `#1946` scopes this change to the
-vocabulary and stopping rule only, not that recording mechanism. Track
-which finding class each
+this same Step 8 pass has already run. Within a single continuous
+session, this-session's own context already carries that history. **On
+resuming mid-Step-8 (a fresh session, or this same session after a
+compaction/restart), reconstruct it instead from the durable record: read
+every `ReviewRoundRecorded{run_id, ...}` event for the current `run_id`
+from the Execution log, in order, before doing anything else with this
+round's own fresh findings.** A resumed session MUST read that history
+first -- this is the entire point of the durable record; defaulting to
+"unknown, restart every finding class at round 1" without reading it
+first defeats the fix and silently discards a real, already-recorded
+escalation. For whichever finding class(es) this round's fresh findings
+belong to, the correct round count is 1 plus however many *immediately
+preceding* recorded `ReviewRoundRecorded` events (with no intervening
+`none` or different-`finding_class` event) share that same
+`finding_class` -- this exactly mirrors this rule's own natural-language
+same-class/2-consecutive-round logic below, now read from a durable
+record instead of only this-session's own memory. Track which finding
+class each
 Blocking finding belongs to -- a short, stable label naming the
 underlying defect (its root cause, the specific rule or code path it
 violates, or a near-verbatim finding description the adversarial-review
