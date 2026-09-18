@@ -262,13 +262,14 @@ mistaken for an earlier run's.
   CONFIRMED finding classified Advisory). `round` is that finding class's
   own consecutive-round count at the time this event is written: 1 the
   round a class first goes Blocking, incrementing only when the
-  immediately preceding `ReviewRoundRecorded` entry **filtered to that
-  same `finding_class`** (a per-class stream, ignoring every other
-  class's own entries entirely -- a sibling class's own concurrently-
+  immediately preceding `ReviewRoundRecorded` entry **filtered to
+  entries whose `finding_class` is this same class or `none`** (a
+  per-class-plus-clean-rounds stream, discarding only every other
+  REAL class's own entries -- a sibling class's own concurrently-
   written event, whether that round or any other, never breaks this
-  class's own streak) was also Blocking; only an intervening `none`
-  event resets a class's own count back to 1 on its next Blocking round.
-  `0` when `finding_class` is `none`.
+  class's own streak) was also Blocking; an intervening `none` entry
+  in that same filtered stream resets a class's own count back to 1 on
+  its next Blocking round. `0` when `finding_class` is `none`.
   See the Stopping rule below for how a resumed session reconstructs
   round history from this event -- reading it, not assuming round 1, is
   mandatory before that session acts on a fresh round's own findings.
@@ -519,14 +520,14 @@ first -- this is the entire point of the durable record; defaulting to
 "unknown, restart every finding class at round 1" without reading it
 first defeats the fix and silently discards a real, already-recorded
 escalation. For whichever finding class(es) this round's fresh findings
-belong to, filter the Execution log to that one class's own
-`ReviewRoundRecorded` entries (ignoring every other class's own
-entries entirely -- a sibling class's own concurrently-written event
-never breaks this class's own streak, even when both were written in
-the same round); the correct round count is 1 plus however many
-*immediately preceding* entries in that filtered, same-class stream
-were also Blocking, stopping at the first intervening `none` -- this
-exactly mirrors this rule's own natural-language same-class/2-
+belong to, filter the Execution log to entries whose `finding_class` is
+that one class or `none` (discarding only every other REAL class's own
+entries -- a sibling class's own concurrently-written event never
+breaks this class's own streak, even when both were written in the
+same round); the correct round count is 1 plus however many
+*immediately preceding* entries in that filtered stream were also
+Blocking for this class, stopping at the first intervening `none` --
+this exactly mirrors this rule's own natural-language same-class/2-
 consecutive-round logic below, now read from a durable record instead
 of only this-session's own memory. Track which finding class each
 Blocking finding belongs to -- a short, stable label naming the

@@ -37,4 +37,3 @@ expected:
     - "unknown, restart"
     - "run another ordinary fix round"
     - "resets"
-    - "stale-cache-key.*breaks"
