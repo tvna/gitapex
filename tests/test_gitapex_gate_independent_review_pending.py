@@ -478,6 +478,242 @@ def test_malformed_heading_variant_does_not_pass(heading_line: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Round-cap parsing/enforcement (issue #2013): the three optional fields
+# issue #2035/PR #2036 previously only documented -- `- Finding class:`,
+# `- Round:`, `- Owner decision:` -- are now actually parsed and gated on.
+# ---------------------------------------------------------------------------
+
+_OWNER_DECISION_URL = "https://github.com/tvna/gitapex/issues/2013#issuecomment-123456"
+
+
+def test_parse_verdict_extracts_new_optional_fields_when_present() -> None:
+    body = f"""## Independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+- Finding class: test-coverage-gap
+- Round: 3
+- Owner decision: {_OWNER_DECISION_URL}
+"""
+    verdict = gate.parse_verdict(body)
+    assert verdict.error is None
+    assert verdict.finding_class == "test-coverage-gap"
+    assert verdict.round == 3
+    assert verdict.owner_decision == _OWNER_DECISION_URL
+
+
+def test_verdict_init_accepts_new_optional_fields_with_none_defaults() -> None:
+    # Calls Verdict.__init__ directly (not routed through parse_verdict):
+    # every pre-existing call site that only ever passed (status, commit,
+    # error) still works unchanged, since the three new issue #2013
+    # parameters (finding_class, round_count, owner_decision) default to
+    # None and round_count is exposed back as `.round`.
+    legacy = gate.Verdict.__new__(gate.Verdict)
+    gate.Verdict.__init__(legacy, "CLEAN", "a" * 40, None)
+    assert legacy.finding_class is None
+    assert legacy.round is None
+    assert legacy.owner_decision is None
+
+    full = gate.Verdict.__new__(gate.Verdict)
+    gate.Verdict.__init__(full, "CLEAN", "a" * 40, None, "some-class", 3, _OWNER_DECISION_URL)
+    assert full.finding_class == "some-class"
+    assert full.round == 3
+    assert full.owner_decision == _OWNER_DECISION_URL
+
+
+def test_parse_verdict_new_optional_fields_absent_entirely_is_not_a_parse_error() -> None:
+    # Fail-open (design resolution 2): a pre-#2035 verdict section, with
+    # none of the three new lines at all, still parses to a usable Verdict
+    # -- only the pre-existing Verdict:/Verified commit: lines keep the
+    # "absence is a parse error" behavior.
+    verdict = gate.parse_verdict(_CLEAN_BODY)
+    assert verdict.error is None
+    assert verdict.finding_class is None
+    assert verdict.round is None
+    assert verdict.owner_decision is None
+
+
+def test_parse_verdict_finding_class_none_value_stored_verbatim() -> None:
+    # "none" is a valid, meaningful value here, not a parse failure or a
+    # sentinel this parser special-cases.
+    body = f"""## Independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+- Finding class: none
+- Round: 1
+"""
+    verdict = gate.parse_verdict(body)
+    assert verdict.finding_class == "none"
+    assert verdict.round == 1
+
+
+def test_parse_verdict_round_non_integer_value_is_absent_not_an_error() -> None:
+    body = f"""## Independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+- Round: not-a-number
+"""
+    verdict = gate.parse_verdict(body)
+    assert verdict.error is None
+    assert verdict.round is None
+
+
+def test_parse_verdict_tolerates_emphasis_markup_on_new_fields() -> None:
+    body = f"""## Independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+- Finding class: **test-coverage-gap**
+- Round: `3`
+- Owner decision: _{_OWNER_DECISION_URL}_
+"""
+    verdict = gate.parse_verdict(body)
+    assert verdict.finding_class == "test-coverage-gap"
+    assert verdict.round == 3
+    assert verdict.owner_decision == _OWNER_DECISION_URL
+
+
+def test_check_passes_round_below_cap_without_finding_class_line() -> None:
+    body = f"""## Independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+- Round: {gate._ROUND_CAP - 1}
+"""
+    passed, message = gate.check(body, _SHA)
+    assert passed is True, message
+
+
+def test_check_fails_round_at_cap_without_owner_decision() -> None:
+    # The boundary itself: `drafting-a-pr-to-merge/SKILL.md`'s own Stopping
+    # rule fires exactly at `Round: _ROUND_CAP` ("2 consecutive rounds"),
+    # not `_ROUND_CAP + 1` -- confirmed against that skill's own worked
+    # example, which records `Round: 2` at the trigger point and
+    # `_ROUND_CAP` is `2`. An earlier revision of this gate compared with
+    # `>` instead of `>=` and let exactly this state pass; this is the
+    # regression test for that fix.
+    body = f"""## Independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+- Finding class: test-coverage-gap
+- Round: {gate._ROUND_CAP}
+"""
+    passed, message = gate.check(body, _SHA)
+    assert passed is False, "Round reaching _ROUND_CAP with no Owner decision must fail, not pass"
+    assert str(gate._ROUND_CAP) in message
+    assert "test-coverage-gap" in message
+
+
+def test_check_passes_round_below_cap_with_finding_class_line() -> None:
+    body = f"""## Independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+- Finding class: test-coverage-gap
+- Round: 1
+"""
+    passed, message = gate.check(body, _SHA)
+    assert passed is True, message
+
+
+def test_check_passes_round_over_cap_with_owner_decision_present() -> None:
+    body = f"""## Independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+- Finding class: test-coverage-gap
+- Round: {gate._ROUND_CAP + 1}
+- Owner decision: {_OWNER_DECISION_URL}
+"""
+    passed, message = gate.check(body, _SHA)
+    assert passed is True, message
+
+
+def test_check_passes_round_over_cap_with_non_url_owner_decision_value() -> None:
+    # Presence-only: owner_decision's raw value is never validated for URL
+    # shape (required edit shape item 2's own explicit scope note).
+    body = f"""## Independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+- Round: {gate._ROUND_CAP + 1}
+- Owner decision: see the linked discussion above
+"""
+    passed, message = gate.check(body, _SHA)
+    assert passed is True, message
+
+
+def test_check_fails_round_over_cap_without_owner_decision() -> None:
+    body = f"""## Independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+- Finding class: test-coverage-gap
+- Round: {gate._ROUND_CAP + 1}
+"""
+    passed, message = gate.check(body, _SHA)
+    assert passed is False
+    # Distinct wording from the pre-existing failure messages, so a human
+    # reading CI output can tell which condition actually failed.
+    assert "not CLEAN" not in message
+    assert "stale verdict" not in message
+    assert "test-coverage-gap" in message
+    assert str(gate._ROUND_CAP + 1) in message
+    assert str(gate._ROUND_CAP) in message
+    assert "Owner decision" in message
+
+
+def test_check_passes_when_all_three_new_fields_absent_entirely() -> None:
+    # Fail-open (design resolution 2): the pre-#2035 shape must still
+    # govern pass/fail exactly as before this change.
+    passed, message = gate.check(_CLEAN_BODY, _SHA)
+    assert passed is True, message
+
+
+def test_defeat_attempt_fenced_round_line_does_not_count_toward_cap() -> None:
+    # A `- Round: <big number>` line hidden inside a fenced code block must
+    # not be read as a live value -- an explicit test, not an assumption
+    # that strip_fenced_code_blocks/strip_html_comments cover the three new
+    # fields for free just because they already run before every regex
+    # (including the new ones) on the same stripped `section` string.
+    body = f"""## Independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+- Finding class: test-coverage-gap
+
+Example of an over-cap round, quoted for illustration only:
+
+```
+- Round: 99
+```
+"""
+    verdict = gate.parse_verdict(body)
+    assert verdict.round is None
+    passed, message = gate.check(body, _SHA)
+    assert passed is True, message
+
+
+def test_defeat_attempt_html_comment_round_line_does_not_count_toward_cap() -> None:
+    body = f"""## Independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+- Finding class: test-coverage-gap
+<!--
+- Round: 99
+-->
+"""
+    verdict = gate.parse_verdict(body)
+    assert verdict.round is None
+    passed, message = gate.check(body, _SHA)
+    assert passed is True, message
+
+
+# ---------------------------------------------------------------------------
 # Trusted-bot exemption (issue #1858, design:
 # docs/gitapex/specs/2026-09-06-dependabot-trusted-bot-gate-exemption-design.md).
 # Everything above this point is the pre-existing 42-test suite, run

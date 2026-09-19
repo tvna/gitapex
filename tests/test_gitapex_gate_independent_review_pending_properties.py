@@ -58,6 +58,11 @@ def test_arbitrary_text_never_raises_and_is_deterministic(text: str) -> None:
     assert first.status == second.status
     assert first.commit == second.commit
     assert first.error == second.error
+    # Issue #2013: the three new optional fields must be just as
+    # deterministic as the two pre-existing ones.
+    assert first.finding_class == second.finding_class
+    assert first.round == second.round
+    assert first.owner_decision == second.owner_decision
 
     passed_first, message_first = gate.check(text, "abc123")
     passed_second, message_second = gate.check(text, "abc123")
@@ -327,3 +332,143 @@ def test_email_matches_pattern_never_raises_and_is_deterministic(email: str, ope
     second = gate._email_matches_pattern(email, operator, pattern)
     assert first == second
     assert isinstance(first, bool)
+
+
+# ---------------------------------------------------------------------------
+# Round-cap parsing/enforcement (issue #2013): the three fields issue
+# #2035/PR #2036 previously only documented -- `- Finding class:`,
+# `- Round:`, `- Owner decision:` -- are now actually parsed and gated on.
+# Model-based coverage of the same four-case matrix
+# test_gitapex_gate_independent_review_pending.py's own hand-picked
+# examples establish, generated across many finding-class/round/SHA
+# combinations rather than the one hand-picked value each.
+# ---------------------------------------------------------------------------
+
+# Deliberately excludes `*`/`_`/backtick (this module's own emphasis-wrap
+# markers -- a generated value ending in one of these would be stripped by
+# `_FINDING_CLASS_RE`/`_OWNER_DECISION_RE` themselves, an artifact of the
+# tolerant-emphasis parsing this property is not testing, not a real
+# mismatch) and leading/trailing whitespace (already stripped by every
+# field's own trailing `[ \t]*$`, so a generated value carrying it could
+# never round-trip unchanged either).
+_FIELD_VALUE_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/.:#() "
+_FINDING_CLASSES = st.text(alphabet=_FIELD_VALUE_ALPHABET, min_size=1, max_size=30).filter(lambda s: s.strip() == s)
+_OWNER_DECISIONS = st.text(alphabet=_FIELD_VALUE_ALPHABET, min_size=1, max_size=60).filter(lambda s: s.strip() == s)
+# `_ROUND_CAP` itself is the trigger point (`check()` compares with `>=`,
+# not `>`) -- `drafting-a-pr-to-merge/SKILL.md`'s own Stopping rule fires
+# at exactly `Round: 2` ("2 consecutive rounds"), the same value
+# `_ROUND_CAP` holds, not `_ROUND_CAP + 1`. An earlier revision of both
+# `check()` and these two ranges shared an off-by-one that never generated
+# the actual trigger state at all; fixed together with `check()` itself.
+_AT_OR_OVER_CAP_ROUNDS = st.integers(min_value=gate._ROUND_CAP, max_value=gate._ROUND_CAP + 50)
+_BELOW_CAP_ROUNDS = st.integers(min_value=0, max_value=gate._ROUND_CAP - 1)
+
+
+@_PROPERTIES
+@given(sha=_SHAS, round_value=_BELOW_CAP_ROUNDS, finding_class=st.one_of(st.none(), _FINDING_CLASSES))
+def test_round_below_cap_always_passes_with_or_without_finding_class(
+    sha: str, round_value: int, finding_class: str | None
+) -> None:
+    """PASS case of the four-case matrix: `Round < _ROUND_CAP`, generated
+    both with and without a `Finding class` line present."""
+    finding_class_line = f"- Finding class: {finding_class}\n" if finding_class is not None else ""
+    body = f"## Independent review verdict\n\n- Verdict: CLEAN\n- Verified commit: {sha}\n{finding_class_line}- Round: {round_value}\n"
+    passed, message = gate.check(body, sha)
+    assert passed is True, f"expected PASS for body={body!r}, got: {message}"
+
+
+@_PROPERTIES
+@given(sha=_SHAS, round_value=_AT_OR_OVER_CAP_ROUNDS, owner_decision=_OWNER_DECISIONS)
+def test_round_at_or_over_cap_with_owner_decision_always_passes(
+    sha: str, round_value: int, owner_decision: str
+) -> None:
+    """PASS case: `Round >= _ROUND_CAP` with an `- Owner decision: <url>`
+    line present in the same section."""
+    body = (
+        f"## Independent review verdict\n\n- Verdict: CLEAN\n- Verified commit: {sha}\n"
+        f"- Round: {round_value}\n- Owner decision: {owner_decision}\n"
+    )
+    passed, message = gate.check(body, sha)
+    assert passed is True, f"expected PASS for body={body!r}, got: {message}"
+
+
+@_PROPERTIES
+@given(sha=_SHAS, round_value=_AT_OR_OVER_CAP_ROUNDS, finding_class=_FINDING_CLASSES)
+def test_round_at_or_over_cap_without_owner_decision_always_fails_with_round_cap_message(
+    sha: str, round_value: int, finding_class: str
+) -> None:
+    """FAIL case: `Round >= _ROUND_CAP` with no `- Owner decision:` line --
+    the failure message must be the new round-cap message (naming the
+    finding class and the recorded round), not a generic one."""
+    body = (
+        f"## Independent review verdict\n\n- Verdict: CLEAN\n- Verified commit: {sha}\n"
+        f"- Finding class: {finding_class}\n- Round: {round_value}\n"
+    )
+    passed, message = gate.check(body, sha)
+    assert passed is False, f"expected FAIL for body={body!r}, got PASS: {message}"
+    assert "not CLEAN" not in message
+    assert "stale verdict" not in message
+    assert finding_class in message
+    assert str(round_value) in message
+
+
+@_PROPERTIES
+@given(sha=_SHAS, round_value=_AT_OR_OVER_CAP_ROUNDS, fence=st.sampled_from(("```", "~~~", "````", "~~~~")))
+def test_fenced_round_line_is_never_counted_toward_the_cap(sha: str, round_value: int, fence: str) -> None:
+    """Containment (same defeat class as
+    `test_a_verdict_inside_a_fenced_code_block_is_never_detected` above,
+    applied to the new `Round` field): a `- Round: N` line fenced off as an
+    illustrative example is never read as a live value, across generated
+    over-cap round values and fence styles/lengths -- confirmed explicitly
+    rather than assumed to follow for free from the pre-existing
+    `strip_fenced_code_blocks` stripping."""
+    body = (
+        f"## Independent review verdict\n\n- Verdict: CLEAN\n- Verified commit: {sha}\n"
+        f"{fence}\n- Round: {round_value}\n{fence}\n"
+    )
+    verdict = gate.parse_verdict(body)
+    assert verdict.round is None
+    passed, message = gate.check(body, sha)
+    assert passed is True, f"expected PASS (fenced Round ignored) for body={body!r}, got: {message}"
+
+
+# Deliberately ASCII letters only, mirroring the field labels this module's
+# own five callers of `_field_line_re` actually pass ("Verdict", "Finding
+# class", ...) -- this factory's own `re.escape(name)` already makes an
+# arbitrary label safe to embed, but a label is never itself Markdown-
+# emphasis-wrapped or regex-special in this module's real usage, so testing
+# with realistic label shapes (plus a defeat-style regex-metacharacter case
+# below) is more informative than an unconstrained alphabet.
+_FIELD_NAMES = st.text(alphabet="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ", min_size=1, max_size=20)
+_BULLET_VALUES = st.text(alphabet=_FIELD_VALUE_ALPHABET, min_size=1, max_size=30).filter(lambda s: s.strip() == s)
+
+
+@_PROPERTIES
+@given(name=_FIELD_NAMES, value=_BULLET_VALUES, bullet=st.sampled_from(("-", "*")), emphasis=st.sampled_from(_EMPHASIS))
+def test_field_line_re_matches_its_own_constructed_bullet_line(
+    name: str, value: str, bullet: str, emphasis: str
+) -> None:
+    """`_field_line_re(name, value_pattern)` (the shared factory the
+    refactor pass introduced to de-duplicate `_VERDICT_RE`/`_COMMIT_RE`/
+    `_FINDING_CLASS_RE`/`_ROUND_RE`/`_OWNER_DECISION_RE`) matches a
+    `- <name>: <value>` bullet line it was built to match, across generated
+    labels, values, bullet markers, and optional emphasis wrapping --
+    confirmed to have teeth: a label typo (`name + "x"`) never matches."""
+    pattern = gate._field_line_re(name, r".+?")
+    line = f"{bullet} {name}: {emphasis}{value}{emphasis}\n"
+    match = pattern.search(line)
+    assert match is not None, f"expected a match for line={line!r}"
+    assert match.group(1) == value
+    assert pattern.search(f"{bullet} {name}x: {value}\n") is None
+
+
+@_PROPERTIES
+@given(name=_FIELD_NAMES)
+def test_field_line_re_escapes_regex_metacharacters_in_name(name: str) -> None:
+    """A label containing a regex metacharacter (here, appending `.*` --
+    matches "anything" if `re.escape` were dropped) is treated literally,
+    not as a pattern fragment: only the exact literal label matches."""
+    literal_name = f"{name}.*"
+    pattern = gate._field_line_re(literal_name, r".+?")
+    assert pattern.search(f"- {literal_name}: value\n") is not None
+    assert pattern.search(f"- {name}xyz: value\n") is None

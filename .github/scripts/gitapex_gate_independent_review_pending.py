@@ -33,21 +33,25 @@ tolerance skill-audit-disclosure's own parsing already extends to its
 own bullet lines -- so a value a human or agent renders as `**CLEAN**` or
 `` `CLEAN` `` still matches.
 
-Issue #2035 (drafting-a-pr-to-merge/SKILL.md Step 8/Step 11, amended
-concurrently with this docstring) adds three more optional lines to
-that same recorded section -- `- Finding class: <label>`, `- Round:
-N`, and `- Owner decision: <url>` -- structurally encoding, rather
-than changing, that Step's own already-agreed Stopping rule
-(same-finding-class recurrence, its 2-consecutive-round escalation
-threshold) and its Step 11 owner-resolution record. `parse_verdict`/
-`check()` below are UNMODIFIED by issue #2035, the same "unmodified"
-guarantee this docstring already states further below for issue
-#1858's own addition: neither function reads any of these three
-fields, so a verdict carrying only the original two lines and a
-verdict carrying all five parse and gate identically here. Actually
-parsing `Finding class`/`Round`/`Owner decision`, and gating on what
-they say, is issue #2013's own scope -- a distinct, future issue this
-diff does not attempt.
+Issue #2035 (drafting-a-pr-to-merge/SKILL.md Step 8/Step 11) added three
+more optional lines to that same recorded section -- `- Finding class:
+<label>`, `- Round: N`, and `- Owner decision: <url>` -- structurally
+encoding, rather than changing, that Step's own already-agreed Stopping
+rule (same-finding-class recurrence, its 2-consecutive-round escalation
+threshold) and its Step 11 owner-resolution record. At that point
+`parse_verdict`/`check()` were left UNMODIFIED: neither function read
+any of these three fields yet, so a verdict carrying only the original
+two lines and a verdict carrying all five parsed and gated identically.
+
+Issue #2013 (this docstring's own current revision) lands the actual
+parsing and gating: `parse_verdict` now extracts all three fields
+(each independently optional -- their absence never turns a parse into
+an error, unlike the pre-existing `Verdict:`/`Verified commit:` lines),
+and `check()` gains one more failure condition once its existing
+Verdict/Verified-commit checks already pass: a recorded `Round` reaching
+the agreed cap for its own `Finding class`, with no `Owner decision`
+cited, now fails this required check -- see `check()`'s own docstring
+for the exact rule and its `_ROUND_CAP` threshold.
 
 This is a structural presence/shape check, mirroring the
 `skill-audit-disclosure` gate's own precedent -- not a cryptographic
@@ -344,30 +348,87 @@ def strip_html_comments(text: str) -> str:
     return "".join(pieces)
 
 
-# Tolerates optional `*`/`_`/backtick emphasis around the value (e.g.
-# `- Verdict: **CLEAN**`), the same latitude skill-audit-disclosure's own
-# bullet-line parsing already extends to its own verdict values.
-_VERDICT_RE = re.compile(
-    r"^[ \t]*[-*][ \t]*`?Verdict`?[ \t]*:[ \t]*[*_`]*([A-Za-z-]+)[*_`]*[ \t]*$", re.IGNORECASE | re.MULTILINE
-)
-_COMMIT_RE = re.compile(
-    r"^[ \t]*[-*][ \t]*`?Verified commit`?[ \t]*:[ \t]*[*_`]*([0-9A-Fa-f]{7,40})[*_`]*[ \t]*$",
-    re.IGNORECASE | re.MULTILINE,
-)
+def _field_line_re(name: str, value_pattern: str) -> re.Pattern[str]:
+    """Compile a `- <name>: <value>` bullet-line matcher (case-insensitive,
+    `re.MULTILINE`), tolerant of optional `*`/`_`/backtick Markdown
+    emphasis wrapping either the label or the captured value (e.g.
+    `- Verdict: **CLEAN**`) -- the same latitude skill-audit-disclosure's
+    own bullet-line parsing (`_name_prefix`/`_line_pattern`) already
+    extends to its own verdict values. `value_pattern` is the one thing
+    that actually distinguishes each of this module's five field patterns
+    below (`_VERDICT_RE` through `_OWNER_DECISION_RE`): a plain label, a
+    bounded hex SHA, a bare `\\d+` for the one field where a malformed
+    value (e.g. "Round: two") must fail to match at all -- and therefore
+    fall open to `None`, see `parse_verdict`'s own docstring -- rather than
+    parse via a separate try/except, or a lazy `.+?` for a free-text value
+    neither validated nor constrained in shape here."""
+    return re.compile(
+        rf"^[ \t]*[-*][ \t]*`?{re.escape(name)}`?[ \t]*:[ \t]*[*_`]*({value_pattern})[*_`]*[ \t]*$",
+        re.IGNORECASE | re.MULTILINE,
+    )
+
+
+_VERDICT_RE = _field_line_re("Verdict", r"[A-Za-z-]+")
+_COMMIT_RE = _field_line_re("Verified commit", r"[0-9A-Fa-f]{7,40}")
+
+# Issue #2013: the three optional fields issue #2035/PR #2036 added to the
+# recorded section's own shape (`drafting-a-pr-to-merge/SKILL.md` Step 8/
+# Step 11), now actually parsed via the same `_field_line_re` factory as
+# `_VERDICT_RE`/`_COMMIT_RE` above. Unlike those two, a value that does not
+# match here (missing entirely, or -- for `_ROUND_RE` -- not a plain
+# non-negative integer) simply leaves the corresponding `Verdict` field
+# `None`, never a parse error (see `parse_verdict`'s own docstring): these
+# three fields are optional layers on top of the pre-existing `Verdict:`/
+# `Verified commit:` requirement, not a new requirement of their own.
+_FINDING_CLASS_RE = _field_line_re("Finding class", r".+?")
+_ROUND_RE = _field_line_re("Round", r"\d+")
+_OWNER_DECISION_RE = _field_line_re("Owner decision", r".+?")
 
 _CLEAN = "clean"
 _MIN_SHA_COMPARE_LEN = 7
+
+#: Issue #2013's own agreed cap value (matching the Stopping rule
+#: `drafting-a-pr-to-merge/SKILL.md` Step 8 already documents): a same-
+#: finding-class `Round` recorded at or past this many rounds requires a
+#: cited `- Owner decision: <url>` line to pass `check()` below --
+#: `check()` compares with `>=`, not `>`, since the Stopping rule's own
+#: worked example fires exactly at `Round: 2` (this value), not 3. Named
+#: here so `check()` never hardcodes the literal `2` inline.
+_ROUND_CAP = 2
 
 
 class Verdict:
     """The parsed contents of the last `## Independent review verdict`
     section in a PR body, or the specific reason none usable was
-    found."""
+    found.
 
-    def __init__(self, status: str | None, commit: str | None, error: str | None) -> None:
+    `finding_class`/`round`/`owner_decision` (issue #2013) are always
+    optional: their absence never turns a parse into an `error` result --
+    only the pre-existing `status`/`commit` fields (the `Verdict:`/
+    `Verified commit:` lines) keep that "absence is a parse error"
+    behavior. A verdict section carrying only those original two lines
+    still parses to a usable `Verdict` here, with all three new fields
+    `None`."""
+
+    def __init__(
+        self,
+        status: str | None,
+        commit: str | None,
+        error: str | None,
+        finding_class: str | None = None,
+        round_count: int | None = None,
+        owner_decision: str | None = None,
+    ) -> None:
         self.status = status
         self.commit = commit
         self.error = error
+        self.finding_class = finding_class
+        # Named `round_count` at the parameter level -- `round` alone would
+        # shadow the builtin (ruff's own flake8-builtins `A002`) -- but
+        # still exposed as `self.round`, the exact field name issue #2013's
+        # own required edit shape names.
+        self.round = round_count
+        self.owner_decision = owner_decision
 
 
 def _last_section_from(text: str, start: int) -> str:
@@ -385,8 +446,9 @@ def _last_section_from(text: str, start: int) -> str:
 
 def parse_verdict(body: str) -> Verdict:
     """Parse the last `## Independent review verdict` section out
-    of `body`. Returns a `Verdict` carrying either both fields, or an
-    `error` describing exactly what is missing/malformed.
+    of `body`. Returns a `Verdict` carrying either both required fields
+    (`status`/`commit`), or an `error` describing exactly what is
+    missing/malformed.
 
     CRLF/CR line endings are normalized to LF first -- every regex below is
     line-anchored (`$`/`^` under `re.MULTILINE`), and a stray `\\r` sitting
@@ -396,7 +458,16 @@ def parse_verdict(body: str) -> Verdict:
     blocks, are stripped next (see `strip_html_comments` and
     `strip_fenced_code_blocks`): a verdict quoted inside either -- e.g. as
     illustrative example text, or hidden where GitHub renders nothing at
-    all -- is not live disclosure and must not parse as a real verdict."""
+    all -- is not live disclosure and must not parse as a real verdict.
+
+    Once `status`/`commit` are both present, `finding_class`/`round`/
+    `owner_decision` (issue #2013) are read from that same, already-
+    stripped `section` string via `_FINDING_CLASS_RE`/`_ROUND_RE`/
+    `_OWNER_DECISION_RE` -- so a value fenced off or hidden in an HTML
+    comment is exactly as inert for these three fields as it already is
+    for `Verdict:`/`Verified commit:`. Each is independently optional:
+    a missing or (for `Round`) non-integer value simply leaves that one
+    field `None` on the returned `Verdict`, never its own parse error."""
     body = body.replace("\r\n", "\n").replace("\r", "\n")
     body = strip_html_comments(body)
     body = strip_fenced_code_blocks(body)
@@ -416,7 +487,18 @@ def parse_verdict(body: str) -> Verdict:
     if not commit_match:
         return Verdict(None, None, "verdict section found but has no 'Verified commit:' line")
 
-    return Verdict(verdict_match.group(1), commit_match.group(1), None)
+    finding_class_match = _FINDING_CLASS_RE.search(section)
+    round_match = _ROUND_RE.search(section)
+    owner_decision_match = _OWNER_DECISION_RE.search(section)
+
+    return Verdict(
+        verdict_match.group(1),
+        commit_match.group(1),
+        None,
+        finding_class_match.group(1) if finding_class_match else None,
+        int(round_match.group(1)) if round_match else None,
+        owner_decision_match.group(1) if owner_decision_match else None,
+    )
 
 
 def check(body: str, head_sha: str) -> tuple[bool, str]:
@@ -432,7 +514,30 @@ def check(body: str, head_sha: str) -> tuple[bool, str]:
     one character -- not reachable through the actual wired trigger today
     (GitHub Actions always supplies the full 40-character SHA), but this
     floor removes the latent risk from a future caller or refactor rather
-    than relying on that alone."""
+    than relying on that alone.
+
+    Issue #2013: evaluated only AFTER the Verdict/Verified-commit/stale-
+    commit checks above all already pass -- never reordered ahead of them
+    and never masking one of their own distinct failure messages -- one
+    more failure condition: a recorded `Round` reaching `_ROUND_CAP` for
+    its own `Finding class`, with no `Owner decision` cited, fails this
+    check the same way `drafting-a-pr-to-merge/SKILL.md` Step 8's own
+    Stopping rule already requires. That Step's own worked example
+    records the trigger state itself as `Round: 2` (not 3) alongside the
+    same `_ROUND_CAP = 2` value -- "the round that first raised it, and
+    the immediately following round's own re-review still confirms" is
+    two rounds total, so the comparison below is `round >= _ROUND_CAP`,
+    not `round > _ROUND_CAP` (an earlier off-by-one revision of this
+    branch compared with `>`, which never actually fired at the
+    documented trigger state -- live-confirmed and fixed the same
+    session that introduced it, before this PR's own independent review
+    completed). `verdict.round`/`verdict.owner_decision` being absent
+    entirely (a verdict recorded before issue #2035/PR #2036 landed
+    these fields, or a `Round` value that failed to parse as an integer)
+    never triggers this branch -- fail-open, per this issue's own design
+    resolution, since these three fields are an additional pass-path
+    condition layered on the pre-existing Verdict/Verified-commit check,
+    not a new requirement of their own."""
     verdict = parse_verdict(body)
     if verdict.error is not None:
         return False, verdict.error
@@ -448,6 +553,13 @@ def check(body: str, head_sha: str) -> tuple[bool, str]:
     compare_len = min(len(recorded), len(current))
     if compare_len < _MIN_SHA_COMPARE_LEN or recorded[:compare_len] != current[:compare_len]:
         return False, f"stale verdict: recorded commit '{verdict.commit}' does not match current head '{head_sha}'"
+
+    if verdict.round is not None and verdict.round >= _ROUND_CAP and not verdict.owner_decision:
+        return False, (
+            f"round cap reached: finding class '{verdict.finding_class}' is recorded at Round "
+            f"{verdict.round}, at or past the {_ROUND_CAP}-round cap, with no '- Owner decision: <url>' "
+            "line present in the verdict section -- record one (Step 11) to pass"
+        )
 
     return True, f"CLEAN verdict recorded against current head {head_sha}"
 
