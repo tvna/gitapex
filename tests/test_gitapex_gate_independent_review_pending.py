@@ -575,15 +575,36 @@ def test_parse_verdict_tolerates_emphasis_markup_on_new_fields() -> None:
     assert verdict.owner_decision == _OWNER_DECISION_URL
 
 
-def test_check_passes_round_at_cap_without_finding_class_line() -> None:
+def test_check_passes_round_below_cap_without_finding_class_line() -> None:
     body = f"""## Independent review verdict
 
 - Verdict: CLEAN
 - Verified commit: {_SHA}
-- Round: {gate._ROUND_CAP}
+- Round: {gate._ROUND_CAP - 1}
 """
     passed, message = gate.check(body, _SHA)
     assert passed is True, message
+
+
+def test_check_fails_round_at_cap_without_owner_decision() -> None:
+    # The boundary itself: `drafting-a-pr-to-merge/SKILL.md`'s own Stopping
+    # rule fires exactly at `Round: _ROUND_CAP` ("2 consecutive rounds"),
+    # not `_ROUND_CAP + 1` -- confirmed against that skill's own worked
+    # example, which records `Round: 2` at the trigger point and
+    # `_ROUND_CAP` is `2`. An earlier revision of this gate compared with
+    # `>` instead of `>=` and let exactly this state pass; this is the
+    # regression test for that fix.
+    body = f"""## Independent review verdict
+
+- Verdict: CLEAN
+- Verified commit: {_SHA}
+- Finding class: test-coverage-gap
+- Round: {gate._ROUND_CAP}
+"""
+    passed, message = gate.check(body, _SHA)
+    assert passed is False, "Round reaching _ROUND_CAP with no Owner decision must fail, not pass"
+    assert str(gate._ROUND_CAP) in message
+    assert "test-coverage-gap" in message
 
 
 def test_check_passes_round_below_cap_with_finding_class_line() -> None:

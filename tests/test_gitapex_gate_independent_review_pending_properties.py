@@ -354,16 +354,22 @@ def test_email_matches_pattern_never_raises_and_is_deterministic(email: str, ope
 _FIELD_VALUE_ALPHABET = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-/.:#() "
 _FINDING_CLASSES = st.text(alphabet=_FIELD_VALUE_ALPHABET, min_size=1, max_size=30).filter(lambda s: s.strip() == s)
 _OWNER_DECISIONS = st.text(alphabet=_FIELD_VALUE_ALPHABET, min_size=1, max_size=60).filter(lambda s: s.strip() == s)
-_OVER_CAP_ROUNDS = st.integers(min_value=gate._ROUND_CAP + 1, max_value=gate._ROUND_CAP + 50)
-_WITHIN_CAP_ROUNDS = st.integers(min_value=0, max_value=gate._ROUND_CAP)
+# `_ROUND_CAP` itself is the trigger point (`check()` compares with `>=`,
+# not `>`) -- `drafting-a-pr-to-merge/SKILL.md`'s own Stopping rule fires
+# at exactly `Round: 2` ("2 consecutive rounds"), the same value
+# `_ROUND_CAP` holds, not `_ROUND_CAP + 1`. An earlier revision of both
+# `check()` and these two ranges shared an off-by-one that never generated
+# the actual trigger state at all; fixed together with `check()` itself.
+_AT_OR_OVER_CAP_ROUNDS = st.integers(min_value=gate._ROUND_CAP, max_value=gate._ROUND_CAP + 50)
+_BELOW_CAP_ROUNDS = st.integers(min_value=0, max_value=gate._ROUND_CAP - 1)
 
 
 @_PROPERTIES
-@given(sha=_SHAS, round_value=_WITHIN_CAP_ROUNDS, finding_class=st.one_of(st.none(), _FINDING_CLASSES))
-def test_round_within_cap_always_passes_with_or_without_finding_class(
+@given(sha=_SHAS, round_value=_BELOW_CAP_ROUNDS, finding_class=st.one_of(st.none(), _FINDING_CLASSES))
+def test_round_below_cap_always_passes_with_or_without_finding_class(
     sha: str, round_value: int, finding_class: str | None
 ) -> None:
-    """PASS case of the four-case matrix: `Round <= _ROUND_CAP`, generated
+    """PASS case of the four-case matrix: `Round < _ROUND_CAP`, generated
     both with and without a `Finding class` line present."""
     finding_class_line = f"- Finding class: {finding_class}\n" if finding_class is not None else ""
     body = f"## Independent review verdict\n\n- Verdict: CLEAN\n- Verified commit: {sha}\n{finding_class_line}- Round: {round_value}\n"
@@ -372,9 +378,11 @@ def test_round_within_cap_always_passes_with_or_without_finding_class(
 
 
 @_PROPERTIES
-@given(sha=_SHAS, round_value=_OVER_CAP_ROUNDS, owner_decision=_OWNER_DECISIONS)
-def test_round_over_cap_with_owner_decision_always_passes(sha: str, round_value: int, owner_decision: str) -> None:
-    """PASS case: `Round > _ROUND_CAP` with an `- Owner decision: <url>`
+@given(sha=_SHAS, round_value=_AT_OR_OVER_CAP_ROUNDS, owner_decision=_OWNER_DECISIONS)
+def test_round_at_or_over_cap_with_owner_decision_always_passes(
+    sha: str, round_value: int, owner_decision: str
+) -> None:
+    """PASS case: `Round >= _ROUND_CAP` with an `- Owner decision: <url>`
     line present in the same section."""
     body = (
         f"## Independent review verdict\n\n- Verdict: CLEAN\n- Verified commit: {sha}\n"
@@ -385,11 +393,11 @@ def test_round_over_cap_with_owner_decision_always_passes(sha: str, round_value:
 
 
 @_PROPERTIES
-@given(sha=_SHAS, round_value=_OVER_CAP_ROUNDS, finding_class=_FINDING_CLASSES)
-def test_round_over_cap_without_owner_decision_always_fails_with_round_cap_message(
+@given(sha=_SHAS, round_value=_AT_OR_OVER_CAP_ROUNDS, finding_class=_FINDING_CLASSES)
+def test_round_at_or_over_cap_without_owner_decision_always_fails_with_round_cap_message(
     sha: str, round_value: int, finding_class: str
 ) -> None:
-    """FAIL case: `Round > _ROUND_CAP` with no `- Owner decision:` line --
+    """FAIL case: `Round >= _ROUND_CAP` with no `- Owner decision:` line --
     the failure message must be the new round-cap message (naming the
     finding class and the recorded round), not a generic one."""
     body = (
@@ -405,7 +413,7 @@ def test_round_over_cap_without_owner_decision_always_fails_with_round_cap_messa
 
 
 @_PROPERTIES
-@given(sha=_SHAS, round_value=_OVER_CAP_ROUNDS, fence=st.sampled_from(("```", "~~~", "````", "~~~~")))
+@given(sha=_SHAS, round_value=_AT_OR_OVER_CAP_ROUNDS, fence=st.sampled_from(("```", "~~~", "````", "~~~~")))
 def test_fenced_round_line_is_never_counted_toward_the_cap(sha: str, round_value: int, fence: str) -> None:
     """Containment (same defeat class as
     `test_a_verdict_inside_a_fenced_code_block_is_never_detected` above,

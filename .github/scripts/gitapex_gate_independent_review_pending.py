@@ -48,7 +48,7 @@ parsing and gating: `parse_verdict` now extracts all three fields
 (each independently optional -- their absence never turns a parse into
 an error, unlike the pre-existing `Verdict:`/`Verified commit:` lines),
 and `check()` gains one more failure condition once its existing
-Verdict/Verified-commit checks already pass: a recorded `Round` past
+Verdict/Verified-commit checks already pass: a recorded `Round` reaching
 the agreed cap for its own `Finding class`, with no `Owner decision`
 cited, now fails this required check -- see `check()`'s own docstring
 for the exact rule and its `_ROUND_CAP` threshold.
@@ -389,9 +389,11 @@ _MIN_SHA_COMPARE_LEN = 7
 
 #: Issue #2013's own agreed cap value (matching the Stopping rule
 #: `drafting-a-pr-to-merge/SKILL.md` Step 8 already documents): a same-
-#: finding-class `Round` recorded past this many rounds requires a cited
-#: `- Owner decision: <url>` line to pass `check()` below. Named here so
-#: `check()` never hardcodes the literal `2` inline.
+#: finding-class `Round` recorded at or past this many rounds requires a
+#: cited `- Owner decision: <url>` line to pass `check()` below --
+#: `check()` compares with `>=`, not `>`, since the Stopping rule's own
+#: worked example fires exactly at `Round: 2` (this value), not 3. Named
+#: here so `check()` never hardcodes the literal `2` inline.
 _ROUND_CAP = 2
 
 
@@ -517,18 +519,25 @@ def check(body: str, head_sha: str) -> tuple[bool, str]:
     Issue #2013: evaluated only AFTER the Verdict/Verified-commit/stale-
     commit checks above all already pass -- never reordered ahead of them
     and never masking one of their own distinct failure messages -- one
-    more failure condition: a recorded `Round` past `_ROUND_CAP` for its
-    own `Finding class`, with no `Owner decision` cited, fails this check
-    the same way `drafting-a-pr-to-merge/SKILL.md` Step 8's own Stopping
-    rule already requires (its 2-consecutive-round escalation threshold,
-    resolved at Step 11 by an owner decision). `verdict.round`/
-    `verdict.owner_decision` being absent entirely (a verdict recorded
-    before issue #2035/PR #2036 landed these fields, or a `Round` value
-    that failed to parse as an integer) never triggers this branch --
-    fail-open, per this issue's own design resolution, since these three
-    fields are an additional pass-path condition layered on the
-    pre-existing Verdict/Verified-commit check, not a new requirement of
-    their own."""
+    more failure condition: a recorded `Round` reaching `_ROUND_CAP` for
+    its own `Finding class`, with no `Owner decision` cited, fails this
+    check the same way `drafting-a-pr-to-merge/SKILL.md` Step 8's own
+    Stopping rule already requires. That Step's own worked example
+    records the trigger state itself as `Round: 2` (not 3) alongside the
+    same `_ROUND_CAP = 2` value -- "the round that first raised it, and
+    the immediately following round's own re-review still confirms" is
+    two rounds total, so the comparison below is `round >= _ROUND_CAP`,
+    not `round > _ROUND_CAP` (an earlier off-by-one revision of this
+    branch compared with `>`, which never actually fired at the
+    documented trigger state -- live-confirmed and fixed the same
+    session that introduced it, before this PR's own independent review
+    completed). `verdict.round`/`verdict.owner_decision` being absent
+    entirely (a verdict recorded before issue #2035/PR #2036 landed
+    these fields, or a `Round` value that failed to parse as an integer)
+    never triggers this branch -- fail-open, per this issue's own design
+    resolution, since these three fields are an additional pass-path
+    condition layered on the pre-existing Verdict/Verified-commit check,
+    not a new requirement of their own."""
     verdict = parse_verdict(body)
     if verdict.error is not None:
         return False, verdict.error
@@ -545,10 +554,10 @@ def check(body: str, head_sha: str) -> tuple[bool, str]:
     if compare_len < _MIN_SHA_COMPARE_LEN or recorded[:compare_len] != current[:compare_len]:
         return False, f"stale verdict: recorded commit '{verdict.commit}' does not match current head '{head_sha}'"
 
-    if verdict.round is not None and verdict.round > _ROUND_CAP and not verdict.owner_decision:
+    if verdict.round is not None and verdict.round >= _ROUND_CAP and not verdict.owner_decision:
         return False, (
-            f"round cap exceeded: finding class '{verdict.finding_class}' is recorded at Round "
-            f"{verdict.round}, past the {_ROUND_CAP}-round cap, with no '- Owner decision: <url>' "
+            f"round cap reached: finding class '{verdict.finding_class}' is recorded at Round "
+            f"{verdict.round}, at or past the {_ROUND_CAP}-round cap, with no '- Owner decision: <url>' "
             "line present in the verdict section -- record one (Step 11) to pass"
         )
 
