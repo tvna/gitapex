@@ -33,6 +33,22 @@ tolerance skill-audit-disclosure's own parsing already extends to its
 own bullet lines -- so a value a human or agent renders as `**CLEAN**` or
 `` `CLEAN` `` still matches.
 
+Issue #2035 (drafting-a-pr-to-merge/SKILL.md Step 8/Step 11, amended
+concurrently with this docstring) adds three more optional lines to
+that same recorded section -- `- Finding class: <label>`, `- Round:
+N`, and `- Owner decision: <url>` -- structurally encoding, rather
+than changing, that Step's own already-agreed Stopping rule
+(same-finding-class recurrence, its 2-consecutive-round escalation
+threshold) and its Step 11 owner-resolution record. `parse_verdict`/
+`check()` below are UNMODIFIED by issue #2035, the same "unmodified"
+guarantee this docstring already states further below for issue
+#1858's own addition: neither function reads any of these three
+fields, so a verdict carrying only the original two lines and a
+verdict carrying all five parse and gate identically here. Actually
+parsing `Finding class`/`Round`/`Owner decision`, and gating on what
+they say, is issue #2013's own scope -- a distinct, future issue this
+diff does not attempt.
+
 This is a structural presence/shape check, mirroring the
 `skill-audit-disclosure` gate's own precedent -- not a cryptographic
 signature. `drafting-a-pr-to-merge/SKILL.md` Step 8 itself already warns
