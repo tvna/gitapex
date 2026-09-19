@@ -422,3 +422,45 @@ def test_fenced_round_line_is_never_counted_toward_the_cap(sha: str, round_value
     assert verdict.round is None
     passed, message = gate.check(body, sha)
     assert passed is True, f"expected PASS (fenced Round ignored) for body={body!r}, got: {message}"
+
+
+# Deliberately ASCII letters only, mirroring the field labels this module's
+# own five callers of `_field_line_re` actually pass ("Verdict", "Finding
+# class", ...) -- this factory's own `re.escape(name)` already makes an
+# arbitrary label safe to embed, but a label is never itself Markdown-
+# emphasis-wrapped or regex-special in this module's real usage, so testing
+# with realistic label shapes (plus a defeat-style regex-metacharacter case
+# below) is more informative than an unconstrained alphabet.
+_FIELD_NAMES = st.text(alphabet="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ ", min_size=1, max_size=20)
+_BULLET_VALUES = st.text(alphabet=_FIELD_VALUE_ALPHABET, min_size=1, max_size=30).filter(lambda s: s.strip() == s)
+
+
+@_PROPERTIES
+@given(name=_FIELD_NAMES, value=_BULLET_VALUES, bullet=st.sampled_from(("-", "*")), emphasis=st.sampled_from(_EMPHASIS))
+def test_field_line_re_matches_its_own_constructed_bullet_line(
+    name: str, value: str, bullet: str, emphasis: str
+) -> None:
+    """`_field_line_re(name, value_pattern)` (the shared factory the
+    refactor pass introduced to de-duplicate `_VERDICT_RE`/`_COMMIT_RE`/
+    `_FINDING_CLASS_RE`/`_ROUND_RE`/`_OWNER_DECISION_RE`) matches a
+    `- <name>: <value>` bullet line it was built to match, across generated
+    labels, values, bullet markers, and optional emphasis wrapping --
+    confirmed to have teeth: a label typo (`name + "x"`) never matches."""
+    pattern = gate._field_line_re(name, r".+?")
+    line = f"{bullet} {name}: {emphasis}{value}{emphasis}\n"
+    match = pattern.search(line)
+    assert match is not None, f"expected a match for line={line!r}"
+    assert match.group(1) == value
+    assert pattern.search(f"{bullet} {name}x: {value}\n") is None
+
+
+@_PROPERTIES
+@given(name=_FIELD_NAMES)
+def test_field_line_re_escapes_regex_metacharacters_in_name(name: str) -> None:
+    """A label containing a regex metacharacter (here, appending `.*` --
+    matches "anything" if `re.escape` were dropped) is treated literally,
+    not as a pattern fragment: only the exact literal label matches."""
+    literal_name = f"{name}.*"
+    pattern = gate._field_line_re(literal_name, r".+?")
+    assert pattern.search(f"- {literal_name}: value\n") is not None
+    assert pattern.search(f"- {name}xyz: value\n") is None

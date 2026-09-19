@@ -348,41 +348,41 @@ def strip_html_comments(text: str) -> str:
     return "".join(pieces)
 
 
-# Tolerates optional `*`/`_`/backtick emphasis around the value (e.g.
-# `- Verdict: **CLEAN**`), the same latitude skill-audit-disclosure's own
-# bullet-line parsing already extends to its own verdict values.
-_VERDICT_RE = re.compile(
-    r"^[ \t]*[-*][ \t]*`?Verdict`?[ \t]*:[ \t]*[*_`]*([A-Za-z-]+)[*_`]*[ \t]*$", re.IGNORECASE | re.MULTILINE
-)
-_COMMIT_RE = re.compile(
-    r"^[ \t]*[-*][ \t]*`?Verified commit`?[ \t]*:[ \t]*[*_`]*([0-9A-Fa-f]{7,40})[*_`]*[ \t]*$",
-    re.IGNORECASE | re.MULTILINE,
-)
+def _field_line_re(name: str, value_pattern: str) -> re.Pattern[str]:
+    """Compile a `- <name>: <value>` bullet-line matcher (case-insensitive,
+    `re.MULTILINE`), tolerant of optional `*`/`_`/backtick Markdown
+    emphasis wrapping either the label or the captured value (e.g.
+    `- Verdict: **CLEAN**`) -- the same latitude skill-audit-disclosure's
+    own bullet-line parsing (`_name_prefix`/`_line_pattern`) already
+    extends to its own verdict values. `value_pattern` is the one thing
+    that actually distinguishes each of this module's five field patterns
+    below (`_VERDICT_RE` through `_OWNER_DECISION_RE`): a plain label, a
+    bounded hex SHA, a bare `\\d+` for the one field where a malformed
+    value (e.g. "Round: two") must fail to match at all -- and therefore
+    fall open to `None`, see `parse_verdict`'s own docstring -- rather than
+    parse via a separate try/except, or a lazy `.+?` for a free-text value
+    neither validated nor constrained in shape here."""
+    return re.compile(
+        rf"^[ \t]*[-*][ \t]*`?{re.escape(name)}`?[ \t]*:[ \t]*[*_`]*({value_pattern})[*_`]*[ \t]*$",
+        re.IGNORECASE | re.MULTILINE,
+    )
+
+
+_VERDICT_RE = _field_line_re("Verdict", r"[A-Za-z-]+")
+_COMMIT_RE = _field_line_re("Verified commit", r"[0-9A-Fa-f]{7,40}")
 
 # Issue #2013: the three optional fields issue #2035/PR #2036 added to the
 # recorded section's own shape (`drafting-a-pr-to-merge/SKILL.md` Step 8/
-# Step 11), now actually parsed. Same tolerant-to-`*`/`_`/backtick-emphasis
-# style as `_VERDICT_RE`/`_COMMIT_RE` above; unlike those two, a value that
-# does not match here (missing entirely, or -- for `_ROUND_RE` -- not a
-# plain non-negative integer) simply leaves the corresponding `Verdict`
-# field `None`, never a parse error (see `parse_verdict`'s own docstring):
-# these three fields are optional layers on top of the pre-existing
-# `Verdict:`/`Verified commit:` requirement, not a new requirement of their
-# own. `_FINDING_CLASS_RE`/`_OWNER_DECISION_RE` capture the value verbatim
-# (a free-text label and a URL respectively; neither is validated for
-# shape here) via a lazy `.+?` so the trailing `[*_`]*[ \t]*$` still strips
-# emphasis markup and trailing whitespace the same way the two pre-existing
-# patterns do; `_ROUND_RE` restricts its own captured group to `\d+`
-# instead, since that restriction alone is what makes a malformed value
-# (e.g. "Round: two") fail to match at all -- and therefore fall open to
-# `None` -- with no separate try/except needed.
-_FINDING_CLASS_RE = re.compile(
-    r"^[ \t]*[-*][ \t]*`?Finding class`?[ \t]*:[ \t]*[*_`]*(.+?)[*_`]*[ \t]*$", re.IGNORECASE | re.MULTILINE
-)
-_ROUND_RE = re.compile(r"^[ \t]*[-*][ \t]*`?Round`?[ \t]*:[ \t]*[*_`]*(\d+)[*_`]*[ \t]*$", re.IGNORECASE | re.MULTILINE)
-_OWNER_DECISION_RE = re.compile(
-    r"^[ \t]*[-*][ \t]*`?Owner decision`?[ \t]*:[ \t]*[*_`]*(.+?)[*_`]*[ \t]*$", re.IGNORECASE | re.MULTILINE
-)
+# Step 11), now actually parsed via the same `_field_line_re` factory as
+# `_VERDICT_RE`/`_COMMIT_RE` above. Unlike those two, a value that does not
+# match here (missing entirely, or -- for `_ROUND_RE` -- not a plain
+# non-negative integer) simply leaves the corresponding `Verdict` field
+# `None`, never a parse error (see `parse_verdict`'s own docstring): these
+# three fields are optional layers on top of the pre-existing `Verdict:`/
+# `Verified commit:` requirement, not a new requirement of their own.
+_FINDING_CLASS_RE = _field_line_re("Finding class", r".+?")
+_ROUND_RE = _field_line_re("Round", r"\d+")
+_OWNER_DECISION_RE = _field_line_re("Owner decision", r".+?")
 
 _CLEAN = "clean"
 _MIN_SHA_COMPARE_LEN = 7
