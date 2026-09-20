@@ -1,7 +1,7 @@
 """Provision gitapex's flake.nix-pinned Class B toolchain binaries (apm,
-rtk, betterleaks) for a Claude Code web (ephemeral) session, without
-Nix. See SKILL.md for the full description; see the module-level CLI at
-the bottom of this file for the entry point.
+rtk, betterleaks, actionlint, zizmor) for a Claude Code web (ephemeral)
+session, without Nix. See SKILL.md for the full description; see the
+module-level CLI at the bottom of this file for the entry point.
 
 flake.nix is the single source of truth for tool versions, per-system
 asset names, and SHA256 pins -- this module parses it at runtime rather
@@ -33,9 +33,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-# The three Class B toolchain binaries this module provisions -- see the
+# The five Class B toolchain binaries this module provisions -- see the
 # module docstring's own list, kept in sync with flake.nix's inventory.
-CLASS_B_TOOL_NAMES: tuple[str, ...] = ("apm", "rtk", "betterleaks")
+# actionlint/zizmor (issue #2051) are passive Class B metadata only:
+# flake.nix's own devShell still resolves both from nixpkgs (Class A) on a
+# Nix-capable host, unchanged by this module's own addition of them here.
+CLASS_B_TOOL_NAMES: tuple[str, ...] = ("apm", "rtk", "betterleaks", "actionlint", "zizmor")
 
 _NIX_SYSTEMS: tuple[str, ...] = (
     "aarch64-linux",
