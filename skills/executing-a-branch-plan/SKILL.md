@@ -246,8 +246,8 @@ first, not skimmed.
    pass's own behavior-preserving scope. Both dispatches carry a
    model/effort pin; see [refactor and review gate
    reference](references/events-and-review-gate.md#mandatory-aggregate-refactor--adversarial-review-step-8)
-   for the rationale. After every CONFIRMED finding's fix, re-run every
-   task's own Red-Green test, not only the one related to the fix.
+   for the rationale. After every Blocking CONFIRMED finding's fix,
+   re-run every task's own Red-Green test, not only the one related to the fix.
    **Push every fix commit to the remote branch as it lands**
    -- same reasoning as step 6's per-wave push: a fix applied only
    locally would leave the ready-for-review PR (step 9) not actually
@@ -264,9 +264,10 @@ first, not skimmed.
    now already ran once, per its own fix above) only covers drift up to
    the point the waves finished, not drift accumulated during step 8's
    own review/fix work itself -- exactly the gap the motivating incident
-   above sits in. An outstanding CONFIRMED finding, or
-   a re-verification failure, blocks step 9. Detail: [refactor and review
-   gate reference](references/events-and-review-gate.md#refactor-and-review-gate).
+   above sits in. A re-verification failure blocks step 9 regardless of
+   findings; otherwise a Blocking finding blocks step 9 unless the
+   Stopping rule triggered (escalate per step 7), and zero or all-Advisory
+   findings clear step 9. Detail: [refactor and review gate reference](references/events-and-review-gate.md#refactor-and-review-gate).
 9. **On all tasks complete, step 8 clean, and the branch's remote state
    confirmed to match local** (a final `git status`/push-state check --
    not assumed from step 6/8's own per-step pushes alone), remove the
@@ -332,6 +333,9 @@ combined diff, then the draft PR converts to ready-for-review.
 - Never skip the Decision 12 refactor/adversarial-review stage under time
   pressure -- it is sequence-gated, not a step this skill can rationalize
   away.
+- Step 8 (stopping rule): never fold a fresh, unrelated Blocking finding
+  into an already-recurring class's own round count, and never skip a
+  loop-back because a similar finding was fixed earlier.
 - Never let step 8's adversarial review clear a diff that adds or extends
   a deterministic gate/check script using only happy-path tests --
   construct and run at least one case built to defeat its own detection

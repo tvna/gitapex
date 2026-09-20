@@ -245,6 +245,34 @@ mistaken for an earlier run's.
   that gap would require a second check in `drafting-a-pr-to-merge`
   beyond its own single label-presence check, which is out of scope here;
   it is named as a residual risk, not solved.
+- `ReviewRoundRecorded{run_id, finding_class, round}` -- written once per
+  step-8 round for each distinct finding class that round's own
+  classification confirms Blocking (a round confirming two unrelated
+  Blocking finding classes at once writes one event per class, each
+  carrying that class's own `round` count below; a round with zero
+  Blocking findings writes exactly one `none` event instead), in the main
+  thread, immediately after that round's Blocking/Advisory classification
+  is judged and before any loop-back or step-9 continuation (the same
+  "write the record, then act on it" ordering `TaskCompleted`/
+  `StageDeviated` above already use).
+  `finding_class` is the same short, stable label the Stopping rule below
+  already tracks (a root cause, a violated rule/code path, or a
+  near-verbatim repeated finding description) -- `none` when the round
+  closed with zero confirmed Blocking findings (zero CONFIRMED, or every
+  CONFIRMED finding classified Advisory). `round` is that finding class's
+  own consecutive-round count at the time this event is written: 1 the
+  round a class first goes Blocking, incrementing only when the
+  immediately preceding `ReviewRoundRecorded` entry **filtered to
+  entries whose `finding_class` is this same class or `none`** (a
+  per-class-plus-clean-rounds stream, discarding only every other
+  REAL class's own entries -- a sibling class's own concurrently-
+  written event, whether that round or any other, never breaks this
+  class's own streak) was also Blocking; an intervening `none` entry
+  in that same filtered stream resets a class's own count back to 1 on
+  its next Blocking round. `0` when `finding_class` is `none`.
+  See the Stopping rule below for how a resumed session reconstructs
+  round history from this event -- reading it, not assuming round 1, is
+  mandatory before that session acts on a fresh round's own findings.
 
 **Escape before interpolating.** Every event's free-text fields
 (`TaskFailed.reason`, `NeedsInput.question`, `StageDeviated.reason`), the
@@ -456,12 +484,91 @@ wave-by-wave execution has already completed: a single reviewer needs the
 full accumulated diff to catch cross-task inconsistencies no one task's
 own context can see.
 
-**Full re-verification after any fix.** After every CONFIRMED finding's
-fix is applied, re-run every task's own Red-Green test above -- not only
-the one related to the fix -- before step 9. The last gate before
-hand-off does not rest on an unverified "the fix didn't break anything
-else" assumption. An outstanding CONFIRMED finding, or a re-verification
-failure, blocks step 9.
+**Blocking/Advisory severity vocabulary.** Every CONFIRMED finding
+reaching this gate's own fix loop -- whether a behavior-affecting item
+the refactor/simplify pass (sub-step 1) judges outside its own
+behavior-preserving scope and routes to the adversarial-review pass
+(sub-step 2) instead, or a finding the adversarial-review pass reports
+directly -- is additionally classified, by this gate's own reading of the
+finding's substance against the branch's own acceptance criteria and
+blast radius, inline, every round, as **Blocking** (must-fix; loops back
+within step 8 by default, subject to the Stopping rule below) or
+**Advisory** (disclosed in the PR body, but does not by itself trigger a
+further fix round). Both sub-steps' own findings are classified the same
+way -- the source (routed-onward refactor-pass item vs. direct
+adversarial-review finding) does not change which classification applies,
+only what substance is being classified. **Disclosed bias risk:** the
+thread making this classification is the same thread that authored or
+applied the fixes under review, not a fresh, no-stake-in-the-change
+reviewer, and the Stopping rule below gives it a concrete incentive --
+classifying a finding Advisory instead of Blocking is the one lever
+available to avoid a 2-consecutive-round escalation. Mitigation, not a
+fix for the underlying conflict of interest: when genuinely unsure,
+classify Blocking -- the same bias-toward-caution default the Stopping
+rule's own same-class judgment call also uses.
+
+**Stopping rule.** Reconstruct this gate's own round history before
+judging recurrence -- the current fix-round state plus every prior round
+this same Step 8 pass has already run. Within a single continuous
+session, this-session's own context already carries that history. **On
+resuming mid-Step-8 (a fresh session, or this same session after a
+compaction/restart), reconstruct it instead from the durable record: read
+every `ReviewRoundRecorded{run_id, ...}` event for the current `run_id`
+from the Execution log, in order, before doing anything else with this
+round's own fresh findings.** A resumed session MUST read that history
+first -- this is the entire point of the durable record; defaulting to
+"unknown, restart every finding class at round 1" without reading it
+first defeats the fix and silently discards a real, already-recorded
+escalation. For whichever finding class(es) this round's fresh findings
+belong to, filter the Execution log to entries whose `finding_class` is
+that one class or `none` (discarding only every other REAL class's own
+entries -- a sibling class's own concurrently-written event never
+breaks this class's own streak, even when both were written in the
+same round); the correct round count is 1 plus however many
+*immediately preceding* entries in that filtered stream were also
+Blocking for this class, stopping at the first intervening `none` --
+this exactly mirrors this rule's own natural-language same-class/2-
+consecutive-round logic below, now read from a durable record instead
+of only this-session's own memory. Track which finding class each
+Blocking finding belongs to -- a short, stable label naming the
+underlying defect (its root cause, the specific rule or code path it
+violates, or a near-verbatim finding description the adversarial-review
+pass repeats round over round) -- not a fresh, differently-worded finding
+that happens to also be Blocking; when genuinely unsure whether two
+rounds' findings share a class, treat them as different classes rather
+than guessing they recur, since the cost of a missed recurrence is one
+more ordinary fix round while the cost of a false recurrence is an
+escalation that stops progress on an otherwise-fixable diff. When the
+same finding class is still Blocking after 2 consecutive fix rounds (the
+round that first raised it, and the immediately following round's own
+re-review still confirms a Blocking finding of that same class), route to
+step 7 escalation instead of running a further round: state the finding
+class and cite both rounds' own findings, letting a human decide rather
+than re-attempting a third round automatically. A fresh, unrelated
+Blocking finding surfacing in a later round does not inherit an
+already-escalated class's own round count -- it starts its own, separate
+count. This tracking, and the classification paragraph above, apply
+identically regardless of which sub-step (refactor/simplify pass or
+adversarial review) produced the finding -- neither is exempt from either
+mechanism.
+
+**Full re-verification after any fix.** After every Blocking CONFIRMED
+finding's fix is applied, re-run every task's own Red-Green test above --
+not only the one related to the fix -- before step 9. The last gate
+before hand-off does not rest on an unverified "the fix didn't break
+anything else" assumption. Three outcomes: zero CONFIRMED findings, or
+every CONFIRMED finding is classified Advisory -> continue to step 9,
+with every Advisory finding disclosed in the PR body -- it was judged
+non-blocking by this gate's own severity read, so fixing it on
+speculation alone is not warranted; a human reader decides whether it
+warrants a closer look. At least one Blocking
+CONFIRMED finding, and the Stopping rule has not triggered for its own
+finding class -> fix it, then re-run every task's own Red-Green test
+before this gate re-runs -- never carry forward a stale verdict against a
+diff that has since changed. The Stopping rule's own 2-consecutive-round
+same-finding-class condition triggers -> escalate per step 7 instead of
+running a further round. A re-verification failure blocks step 9
+unconditionally, regardless of which of the three above applies.
 
 **Push every fix commit as it lands, same as step 6's per-wave push.** A
 fix applied and verified only in the local working copy leaves the

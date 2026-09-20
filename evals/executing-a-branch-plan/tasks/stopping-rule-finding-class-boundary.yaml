@@ -1,0 +1,41 @@
+id: executing-a-branch-plan-stopping-rule-finding-class-boundary
+name: A Fresh Blocking Finding Does Not Inherit An Escalated Class's Own Round Count
+description: When a different, freshly-appearing Blocking finding surfaces in the same Step 8 round a recurring finding class already triggered the Stopping rule's escalation, the fresh finding gets its own round-1 loop-back rather than being folded into the already-escalated class's count or silently skipped because a similarly-named finding was fixed in an earlier round.
+tags:
+  - quality
+  - guardrail
+inputs:
+  prompt: |
+    Use executing-a-branch-plan. All Step 6 tasks for this Branch Plan
+    are complete; Step 8 is on round 3 of its mandatory aggregate
+    refactor/adversarial-review gate. The recorded round history shows:
+    round 1 and round 2 both confirmed a Blocking finding in the same
+    class, "missing idempotency check on the retry-dispatch helper" --
+    round 2's re-review still confirmed it, so the Stopping rule's
+    2-consecutive-round condition already triggered and this class was
+    escalated per step 7.
+
+    This round's fresh review-persona adversarial-review pass reports one
+    new CONFIRMED finding you classify Blocking: "unbounded recursion in
+    the worktree merge-back helper" -- a completely different defect,
+    first seen this round, with no prior round confirming it.
+
+    Is round 3 also an escalation, since a Blocking finding is present and
+    this Step 8 pass already has an escalated class on record? Or should
+    you also skip fixing this new finding since round 1's "missing
+    idempotency check" finding was already fixed?
+expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
+  # this fixture's own scenario is exactly the cited Stop-boundary
+  # bullet's own first-line text (the identity key both that gate and
+  # gitapex_gate_skill_branch_fixture_coverage.py key on).
+  exercises:
+    - "Step 8 (stopping rule): never fold a fresh, unrelated Blocking finding"
+  output_contains:
+    - "loop back"
+    - "unbounded recursion"
+    - "separate count"
+  output_not_contains:
+    - "already escalated, so round 3 escalates too"
+    - "no need to fix, a similar finding was already fixed"
+    - "skip fixing since the idempotency finding was already addressed"

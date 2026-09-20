@@ -1,6 +1,6 @@
 ---
 name: branch-plan-task
-description: Task-level, project-local subagent type for a fixed, enumerated set of call sites -- see this file's own "Sanctioned call sites" section for the exact, current list (executing-a-branch-plan Step 6's per-task dispatch, Step 8's refactor/simplify pass). Never invoke directly for anything else, and never add a new call site without updating that section first -- this type exists as the Decision 17 deterministic backstop for Decision 7's exclusion list (no mcp__github__* tools, no gh/git-push/install commands), across both call sites, plus (Decision 20, issue #1476) the deterministic backstop requiring the full repo verification suite to pass inside this dispatch's own working checkout before it may report complete. Project-local variant (this repository checked out directly, .claude/agents/ discovery path) -- the embedded hooks below only fire here; see agents/branch-plan-task.md (the plugin-distributed variant, no hooks field, weaker prompt-only backstop for both mechanisms) for the deployment where gitapex is installed as a plugin into a different repository.
+description: Task-level, project-local subagent type for a fixed, enumerated set of call sites -- see this file's own "Sanctioned call sites" section for the exact, current list (executing-a-branch-plan Step 6's per-task dispatch, Step 8's refactor/simplify pass).
 disallowedTools: mcp__github
 hooks:
   PreToolUse:
@@ -84,3 +84,12 @@ callback hooks on `PreToolUse`, do) -- so a `timeout` here set too low
 would let a legitimately slow (not failing) verification run silently
 fail OPEN instead of denying, defeating this whole gate. Keep the two
 values in sync if either changes.
+
+This is the project-local variant of this subagent type (this repository
+checked out directly, the `.claude/agents/` discovery path) -- the
+embedded `PreToolUse` and `SubagentStop` hooks above only fire in this
+deployment mode. See `agents/branch-plan-task.md` for the
+plugin-distributed variant: it carries no `hooks` field at all (Claude
+Code's plugin-agent frontmatter does not support one) and so relies on a
+weaker, prompt-only backstop for both the Bash-level exclusion list and
+the full-verification-suite exit condition.
