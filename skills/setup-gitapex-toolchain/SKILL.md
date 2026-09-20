@@ -15,9 +15,8 @@ per-system asset names, and SHA256 pins; this skill's script
 holding its own copy, so there is never a second pin table that could
 silently drift from the flake.
 
-`actionlint` and `zizmor` (issue `#2051`) are provisioned the same way as
-every other Class B tool here, but for a narrower reason than the other
-four: `flake.nix`'s own `devShell` still resolves both from the pinned
+`actionlint` and `zizmor` are provisioned the same way as every other
+Class B tool here, but for a narrower reason than the other four: `flake.nix`'s own `devShell` still resolves both from the pinned
 `nixpkgs` input (Class A) on a Nix-capable host, unchanged -- their
 `classBData`/`mkClassB` entries exist only so this script can reach them
 on a session with no `nix` on PATH at all, which is exactly the gap
