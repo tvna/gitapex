@@ -71,14 +71,15 @@ def test_release_url_matches_flake_ghrelease_pattern() -> None:
 
 
 def test_parse_raises_on_missing_tool() -> None:
-    """Both classBData and mkClassB are structurally well-formed (real
-    let-in shape, brace-balanced) so parsing gets past the header/shape
-    regexes -- but only "waza" is defined in either table, leaving apm,
-    rtk, betterleaks, actionlint, and zizmor genuinely missing. This exercises the
-    missing_from_data/missing_from_meta check in parse_flake_class_b_pins,
-    not a structural-shape failure in _extract_mk_class_b_meta's header
-    regex (see the module docstring / task review for the bug this
-    guards against: a malformed fixture that raises the *wrong* error)."""
+    """Both classBData and mkClassB are structurally well-formed (real let-in
+    shape, brace-balanced) so parsing gets past the header/shape regexes
+    -- but only "waza" is defined in either table, leaving apm, rtk,
+    betterleaks, actionlint, and zizmor genuinely missing. This exercises
+    the missing_from_data/missing_from_meta check in
+    parse_flake_class_b_pins, not a structural-shape failure in
+    _extract_mk_class_b_meta's header regex (see the module docstring /
+    task review for the bug this guards against: a malformed fixture that
+    raises the *wrong* error)."""
     partial = """
     classBData = {
       waza = {
