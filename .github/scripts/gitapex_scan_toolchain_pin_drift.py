@@ -32,6 +32,26 @@ CLASS_B_REPOS = (
     "microsoft/apm",
     "rtk-ai/rtk",
     "betterleaks/betterleaks",
+    # Issue #2051: zizmor's new passive Class B pin (a Nix-free provisioning
+    # path only -- flake.nix's devShell still resolves it from nixpkgs/
+    # Class A, unchanged) brings its upstream repo under this same
+    # single-source-of-truth invariant too: a workflow must not re-install
+    # it by hand outside the flake.
+    #
+    # actionlint's own equally-new Class B pin is deliberately NOT added
+    # here, unlike zizmor's: this repo's .github/workflows/lint.yml already
+    # references rhysd/actionlint legitimately, via actionlint's own
+    # official Docker-based GitHub Action
+    # (`uses: docker://rhysd/actionlint:1.7.12@sha256:...`), a completely
+    # separate, pre-existing, digest-pinned sourcing path unrelated to
+    # either Class A or Class B -- confirmed live: adding "rhysd/actionlint"
+    # here makes find_drift()'s own line-substring match flag that legitimate
+    # Action reference as drift, since this scanner has no way to
+    # distinguish "reinstalling the CLI outside the flake" from "using the
+    # tool's own official Action for a lint step." Teaching this scanner
+    # that distinction is a real, disclosed gap, but a redesign of its
+    # matching logic, not something this issue's own narrow scope covers.
+    "zizmorcore/zizmor",
 )
 
 WORKFLOWS_DIR = pathlib.Path(".github/workflows")

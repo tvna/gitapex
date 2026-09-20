@@ -48,6 +48,37 @@ def test_release_download_url_of_class_b_tool_is_drift(tmp_path):
     assert len(drift.find_drift(tmp_path)) == 1
 
 
+def test_release_download_url_of_zizmor_is_drift(tmp_path):
+    # Issue #2051: zizmor's new passive Class B pin brings it under this
+    # same invariant -- mirrors test_release_download_url_of_class_b_tool_is_drift
+    # above, for the new tool.
+    _write(
+        tmp_path,
+        "install.yml",
+        "      - run: curl -L https://github.com/zizmorcore/zizmor/releases/download/v1.25.2/zizmor-x86_64-unknown-linux-gnu.tar.gz\n",
+    )
+    assert len(drift.find_drift(tmp_path)) == 1
+
+
+def test_actionlint_docker_action_reference_is_not_tracked(tmp_path):
+    # Issue #2051: actionlint's own new Class B pin is deliberately NOT
+    # added to CLASS_B_REPOS (see that constant's own comment) because this
+    # repo's real .github/workflows/lint.yml legitimately references
+    # rhysd/actionlint via its official Docker Action, not a flake bypass --
+    # this locks that exclusion in as a regression test rather than only a
+    # comment, so a future edit accidentally adding "rhysd/actionlint" back
+    # to CLASS_B_REPOS is caught by test_repository_workflows_are_drift_free
+    # failing against the real workflow file, not silently reintroducing a
+    # false positive.
+    assert "rhysd/actionlint" not in drift.CLASS_B_REPOS
+    _write(
+        tmp_path,
+        "lint.yml",
+        "      - uses: docker://rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667\n",
+    )
+    assert drift.find_drift(tmp_path) == []
+
+
 def test_plain_mention_of_tool_name_is_not_drift(tmp_path):
     # A step named "Run apm check" mentions the tool but not its owner/repo,
     # so it must NOT trip the scan.
