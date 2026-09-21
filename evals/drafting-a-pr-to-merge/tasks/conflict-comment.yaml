@@ -17,10 +17,11 @@ inputs:
     Is there anything else required before re-checking mergeable_state, or
     is the pushed fix itself the complete deliverable?
 expected:
-  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
-  # this fixture's own scenario is exactly the cited Stop-boundary bullet.
+  # exercises: this fixture's own scenario is exactly the cited Invariants
+  # entry (generated from metadata/gitapex.yaml's spec.contract.invariants
+  # -- see issue #1967).
   exercises:
-    - "Never resolve a merge conflict without posting a PR comment documenting the resolution — unconditional, regardless of how mechanical the conflict looked."
+    - "Never resolve a merge conflict without posting a PR comment documenting the resolution, however mechanical it looked (prose-only)"
   output_contains:
     - "comment"
     - "resolution"

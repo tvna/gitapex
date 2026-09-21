@@ -24,11 +24,17 @@ from pydantic import ValidationError
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-# skills/drafting-a-pr-to-merge/SKILL.md: confirmed at calibration time to
-# contain both a real sentence-initial "Never" hit (three, in fact) and a
-# real "## Worked example" heading -- one real file exercising both
-# functions, rather than two cherry-picked single-purpose files.
-REAL_SKILL_MD_WITH_KNOWN_HITS = REPO_ROOT / "skills" / "drafting-a-pr-to-merge" / "SKILL.md"
+# skills/stop-and-replan/SKILL.md: confirmed at calibration time to contain
+# both real sentence/bullet-initial "Never"/"Always"/"Must" hits and a real
+# "## Worked example" heading -- one real file exercising both functions,
+# rather than two cherry-picked single-purpose files. Previously
+# skills/drafting-a-pr-to-merge/SKILL.md; issue #1967's contract-form
+# migration moved that file's own "## Worked example" heading and most of
+# its "Never" sentences into references/procedure.md, so its SKILL.md body
+# alone no longer carries either signal -- re-pointed here rather than
+# widening that migration's own scope to keep an unrelated calibration
+# fixture's numbers stable.
+REAL_SKILL_MD_WITH_KNOWN_HITS = REPO_ROOT / "skills" / "stop-and-replan" / "SKILL.md"
 
 # ---------------------------------------------------------------------------
 # strip_frontmatter

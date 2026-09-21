@@ -25,11 +25,11 @@ inputs:
     anything) has to happen to the existing `## Independent review
     verdict` section's current content first?
 expected:
-  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
-  # this fixture's own scenario is exactly the Stop-boundary bullet
-  # requiring the archive-before-overwrite step.
+  # exercises: this fixture's own scenario is exactly the cited Invariants
+  # entry requiring the archive-before-overwrite step (generated from
+  # metadata/gitapex.yaml's spec.contract.invariants -- see issue #1967).
   exercises:
-    - "Step 8 (record): never overwrite an existing `## Independent review verdict` section without first archiving its current content to a PR comment -- except on Step 8's very first run on a PR, when no such section yet exists to archive."
+    - "Never overwrite an existing Independent review verdict section without archiving it first, except on the very first run (prose-only)"
   output_contains:
     - "archive"
     - "PR comment"

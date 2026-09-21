@@ -24,10 +24,11 @@ inputs:
     also skip fixing this new finding since round 1's "missing null
     check" finding was already fixed?
 expected:
-  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
-  # this fixture's own scenario is exactly the cited Stop-boundary bullet.
+  # exercises: this fixture's own scenario is exactly the cited Invariants
+  # entry (generated from metadata/gitapex.yaml's spec.contract.invariants
+  # -- see issue #1967).
   exercises:
-    - "Step 8 (stopping rule): never let the round count absorb a fresh, unrelated Blocking finding as if it were the same recurring finding class, and never let a Blocking finding skip its own loop-back merely because a similar one was fixed in an earlier round -- each finding class tracks its own separate count."
+    - "Never merge an unrelated Blocking finding into an existing finding class's round count, or skip its own loop-back (prose-only)"
   output_contains:
     - "loop back"
     - "unbounded recursion"
