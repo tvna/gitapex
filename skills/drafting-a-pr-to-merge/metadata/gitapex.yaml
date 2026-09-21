@@ -16,6 +16,7 @@ spec:
       - outward-artifact-preflight
       - planning-a-branch-from-an-issue
       - merge-retrospective
+      - executing-a-branch-plan
   executionRequirements:
     tools:
       read:

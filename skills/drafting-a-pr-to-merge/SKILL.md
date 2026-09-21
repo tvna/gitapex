@@ -14,11 +14,10 @@ judgment below, not prose alone -- see
 [references/procedure.md](references/procedure.md) for the exact order;
 do not reorder or skip a step there.
 
-Tool names below are written as `Server:tool` (portable shorthand). In
-Claude Code, translate to the literal double-underscore form:
-`Server:tool` -> `mcp__Server__tool` -- e.g. `github:resolve_review_thread`
-is `mcp__github__resolve_review_thread`. Other platforms may use a
-different literal form for the same pair.
+Tool names below are written as `Server:tool` (portable shorthand) -- see
+[references/procedure.md](references/procedure.md) for the literal
+Claude Code translation and the other-platform note; that file is the
+source of truth for this convention.
 
 <!-- gitapex:contract:begin -->
 
