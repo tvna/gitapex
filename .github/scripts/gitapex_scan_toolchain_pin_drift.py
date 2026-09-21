@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Guard the toolchain single-source-of-truth invariant.
 
-The external toolchain's Class B tools (apm, rtk, betterleaks) are pinned
-and provisioned exactly once, in ``flake.nix``. A CI workflow must therefore
+The external toolchain's Class B tools (apm, rtk, betterleaks, zizmor) are
+pinned and provisioned exactly once, in ``flake.nix``. A CI workflow must therefore
 obtain them from the flake (``nix run``/``nix develop``), never re-install them
 by hand -- a second install path would recreate the version drift that PR-2 of
 issue #57 removed (waza, since retired per issue #1130, used to be pinned both
