@@ -55,7 +55,7 @@ jobs:
         run: nix flake check
 
       - name: build Class B
-        run: nix build .#apm .#rtk .#betterleaks
+        run: nix build .#apm .#rtk .#betterleaks .#actionlint .#zizmor
 
       - name: devShell smoke
         run: |

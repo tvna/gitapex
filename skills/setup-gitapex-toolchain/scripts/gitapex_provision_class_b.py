@@ -1,7 +1,7 @@
 """Provision gitapex's flake.nix-pinned Class B toolchain binaries (apm,
-rtk, betterleaks) for a Claude Code web (ephemeral) session, without
-Nix. See SKILL.md for the full description; see the module-level CLI at
-the bottom of this file for the entry point.
+rtk, betterleaks, actionlint, zizmor) for a Claude Code web (ephemeral)
+session, without Nix. See SKILL.md for the full description; see the
+module-level CLI at the bottom of this file for the entry point.
 
 flake.nix is the single source of truth for tool versions, per-system
 asset names, and SHA256 pins -- this module parses it at runtime rather
@@ -10,6 +10,21 @@ fields "STATIC string literals so a regex updater can bump them in
 place."
 """
 
+# patch-coverage: WAIVED: this whole file is exercised via the co-located
+# test_gitapex_provision_class_b.py in this same directory
+# (skills/setup-gitapex-toolchain/scripts/), not tests/test_gitapex_provision_class_b.py --
+# pyproject.toml's [tool.coverage.run] source list puts this directory
+# in scope, but gitapex_gate_patch_coverage.py's own file-discovery only
+# recognizes a source file's stem-matched tests/test_<stem>.py
+# (_properties.py) under the top-level tests/ directory, with no
+# fallback for a co-located, differently-rooted test file -- the same
+# disclosed limitation gitapex_run_skill_contract_check.py's own waiver
+# comment already names for a different manifestation of it. Confirmed
+# directly this session: running only test_gitapex_provision_class_b.py
+# with coverage shows 94% on this module, and the diff added here is a
+# module docstring plus a widened CLASS_B_TOOL_NAMES tuple literal -- no
+# new branch, and the tuple assignment executes on import in every test
+# in that file.
 from __future__ import annotations
 
 import argparse
@@ -33,9 +48,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-# The three Class B toolchain binaries this module provisions -- see the
+# The five Class B toolchain binaries this module provisions -- see the
 # module docstring's own list, kept in sync with flake.nix's inventory.
-CLASS_B_TOOL_NAMES: tuple[str, ...] = ("apm", "rtk", "betterleaks")
+# actionlint/zizmor (issue #2051) are passive Class B metadata only:
+# flake.nix's own devShell still resolves both from nixpkgs (Class A) on a
+# Nix-capable host, unchanged by this module's own addition of them here.
+CLASS_B_TOOL_NAMES: tuple[str, ...] = ("apm", "rtk", "betterleaks", "actionlint", "zizmor")
 
 _NIX_SYSTEMS: tuple[str, ...] = (
     "aarch64-linux",

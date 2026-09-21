@@ -51,6 +51,11 @@ def test_apm_is_wrapper_dir_kind() -> None:
     pins = pcb.parse_flake_class_b_pins(flake_text)
     assert pins["apm"].kind == "wrapperDir"
     assert pins["rtk"].kind == "binary"
+    # Issue #2051: actionlint/zizmor are passive Class B metadata, kind
+    # "binary" like rtk/betterleaks -- a bare in-archive binary, no
+    # PyInstaller-style support tree to keep intact.
+    assert pins["actionlint"].kind == "binary"
+    assert pins["zizmor"].kind == "binary"
 
 
 def test_release_url_matches_flake_ghrelease_pattern() -> None:
@@ -66,14 +71,15 @@ def test_release_url_matches_flake_ghrelease_pattern() -> None:
 
 
 def test_parse_raises_on_missing_tool() -> None:
-    """Both classBData and mkClassB are structurally well-formed (real
-    let-in shape, brace-balanced) so parsing gets past the header/shape
-    regexes -- but only "waza" is defined in either table, leaving apm,
-    rtk, and betterleaks genuinely missing. This exercises the
-    missing_from_data/missing_from_meta check in parse_flake_class_b_pins,
-    not a structural-shape failure in _extract_mk_class_b_meta's header
-    regex (see the module docstring / task review for the bug this
-    guards against: a malformed fixture that raises the *wrong* error)."""
+    """Both classBData and mkClassB are structurally well-formed (real let-in
+    shape, brace-balanced) so parsing gets past the header/shape regexes
+    -- but only "waza" is defined in either table, leaving apm, rtk,
+    betterleaks, actionlint, and zizmor genuinely missing. This exercises
+    the missing_from_data/missing_from_meta check in
+    parse_flake_class_b_pins, not a structural-shape failure in
+    _extract_mk_class_b_meta's header regex (see the module docstring /
+    task review for the bug this guards against: a malformed fixture that
+    raises the *wrong* error)."""
     partial = """
     classBData = {
       waza = {
@@ -102,7 +108,7 @@ def test_parse_raises_on_missing_tool() -> None:
     with pytest.raises(pcb.FlakePinParseError, match="missing tools") as exc_info:
         pcb.parse_flake_class_b_pins(partial)
     message = str(exc_info.value)
-    for missing_tool in ("apm", "rtk", "betterleaks"):
+    for missing_tool in ("apm", "rtk", "betterleaks", "actionlint", "zizmor"):
         assert missing_tool in message, f"expected {missing_tool!r} to be named as missing in: {message!r}"
     assert "waza" not in message, f"waza is defined in both tables and should not be reported missing: {message!r}"
 

@@ -1,6 +1,6 @@
 ---
 name: setup-gitapex-toolchain
-description: Provisions gitapex's flake.nix-pinned Class B toolchain binaries (waza, apm, rtk, betterleaks) and runs apm install, without Nix, for a fresh Claude Code web (ephemeral) session. Use when a session needs these tools and they are not yet on PATH, or to manually re-run/verify provisioning (--verify). Distinct from `nix develop`, which remains the provisioner for persistent surfaces (local CLI, CI) and is not invoked here.
+description: Provisions gitapex's flake.nix-pinned Class B toolchain binaries (apm, rtk, betterleaks, actionlint, zizmor) and runs apm install, without Nix, for a fresh Claude Code web (ephemeral) session. Use when a session needs these tools and they are not yet on PATH, or to manually re-run/verify provisioning (--verify). Distinct from `nix develop`, which remains the provisioner for persistent surfaces (local CLI, CI) and is not invoked here.
 compatibility: "Designed for Claude Code cloud (web) sessions; requires python3 >= 3.12, outbound network access to github.com release assets, and the SessionStart hook environment variables CLAUDE_CODE_REMOTE, CLAUDE_PROJECT_DIR, and CLAUDE_ENV_FILE."
 ---
 
@@ -14,6 +14,14 @@ per-system asset names, and SHA256 pins; this skill's script
 (`scripts/gitapex_provision_class_b.py`) parses them at runtime rather than
 holding its own copy, so there is never a second pin table that could
 silently drift from the flake.
+
+`actionlint` and `zizmor` are provisioned the same way as every other
+Class B tool here, but for a narrower reason than the other four: `flake.nix`'s own `devShell` still resolves both from the pinned
+`nixpkgs` input (Class A) on a Nix-capable host, unchanged -- their
+`classBData`/`mkClassB` entries exist only so this script can reach them
+on a session with no `nix` on PATH at all, which is exactly the gap
+`skills/scanning-ci-workflows` hits when it needs both binaries and finds
+neither.
 
 This skill's own SHA256 verification covers only the **downloaded Class B
 release archives** against `flake.nix`'s pins -- it says nothing about

@@ -90,6 +90,34 @@
           aarch64-darwin = { asset = "betterleaks_1.6.1_darwin_arm64.tar.gz"; sha256 = "sha256-mZa/zJP9KuaXbHkC47IXd2bsGWDB4woVOYYJ1Rd+8/g="; };
           x86_64-darwin  = { asset = "betterleaks_1.6.1_darwin_x64.tar.gz";   sha256 = "sha256-B924XEssVdprZxpq9mfInYnGjFKv+P1zoRGKktNz24w="; };
         };
+        # actionlint 1.7.12 -- tag v1.7.12. Bare binary `actionlint` at root,
+        # beside README.md/LICENSE.txt/docs/man (installPhase installs only
+        # the binary). Issue #2051: a Claude Code web session has no `nix`
+        # on PATH, so `pkgs.actionlint` below (Class A, from the pinned
+        # nixpkgs input) is unreachable there; this SHA-pinned release
+        # download is a Nix-free stand-in for that surface specifically, not
+        # a replacement for the Class A package -- version 1.7.12 matches
+        # what nixpkgs @ this flake's own locked rev (flake.lock's
+        # nixpkgs.locked.rev) actually builds, checked directly against
+        # nixpkgs' own pkgs/by-name/ac/actionlint/package.nix at that rev.
+        actionlint = {
+          aarch64-linux  = { asset = "actionlint_1.7.12_linux_arm64.tar.gz";  sha256 = "sha256-Ml6XG2upv6UEZy4pvpPCSYHuscB1dtcw6ffIgFr/8MY="; };
+          x86_64-linux   = { asset = "actionlint_1.7.12_linux_amd64.tar.gz";  sha256 = "sha256-isqNuW8blHcPGw1ytt3cseu4EjyzcSUwsIzDh7NJo9g="; };
+          aarch64-darwin = { asset = "actionlint_1.7.12_darwin_arm64.tar.gz"; sha256 = "sha256-q6nO0t7o0n/syj3H/rGn+aUsrvoetG8ycepmtuDmlT8="; };
+          x86_64-darwin  = { asset = "actionlint_1.7.12_darwin_amd64.tar.gz"; sha256 = "sha256-W0TDvCJVEVybaeMO/A/s30mP22PF1Y4XCE/V8WMkxkQ="; };
+        };
+        # zizmor 1.25.2 -- tag v1.25.2. Bare binary `zizmor` at root, no
+        # other archive members. Same issue #2051 rationale as actionlint
+        # above: a Nix-free stand-in for `pkgs.zizmor` below (Class A) on a
+        # session without `nix`, not a replacement for it -- version 1.25.2
+        # matches nixpkgs' own pkgs/by-name/zi/zizmor/package.nix at this
+        # flake's locked nixpkgs rev.
+        zizmor = {
+          aarch64-linux  = { asset = "zizmor-aarch64-unknown-linux-gnu.tar.gz"; sha256 = "sha256-S0uUkREsKgmzGBAcDTNJtzrxxPUy4JfdbQFk8qvadg0="; };
+          x86_64-linux   = { asset = "zizmor-x86_64-unknown-linux-gnu.tar.gz";  sha256 = "sha256-qh+s0QXw2D/lxVsa3NnXQX3l2DqidHH5HcC2bPOANXc="; };
+          aarch64-darwin = { asset = "zizmor-aarch64-apple-darwin.tar.gz";      sha256 = "sha256-Yk7w4JUhrs2GISa+D213VGaa8mRnUNaKxIoRS+M8MUY="; };
+          x86_64-darwin  = { asset = "zizmor-x86_64-apple-darwin.tar.gz";       sha256 = "sha256-NTJxuewwHdS6FYr0gTI8gxxum0lNWsP1qljPSyB2mcw="; };
+        };
       };
 
       ghRelease = owner: repo: tag: asset:
@@ -122,6 +150,24 @@
             url = ghRelease "betterleaks" "betterleaks" "v1.6.1" d.betterleaks.${sys}.asset;
             sha256 = d.betterleaks.${sys}.sha256;
           };
+          # Issue #2051: passive Class B metadata alongside `pkgs.actionlint`/
+          # `pkgs.zizmor` (Class A, unchanged below) -- not wired into the
+          # devShell's own package list, so `nix develop` still resolves
+          # both tools from nixpkgs exactly as before this change.
+          actionlint = mkReleaseBinary pkgs {
+            pname = "actionlint";
+            version = "1.7.12";
+            kind = "binary";
+            url = ghRelease "rhysd" "actionlint" "v1.7.12" d.actionlint.${sys}.asset;
+            sha256 = d.actionlint.${sys}.sha256;
+          };
+          zizmor = mkReleaseBinary pkgs {
+            pname = "zizmor";
+            version = "1.25.2";
+            kind = "binary";
+            url = ghRelease "zizmorcore" "zizmor" "v1.25.2" d.zizmor.${sys}.asset;
+            sha256 = d.zizmor.${sys}.sha256;
+          };
         };
 
       # Evaluate nixpkgs + the Class B set once per system; both outputs reuse it.
@@ -132,7 +178,7 @@
     {
       packages = forAllSystems (system:
         let inherit (perSystem.${system}) classB; in {
-          inherit (classB) apm rtk betterleaks;
+          inherit (classB) apm rtk betterleaks actionlint zizmor;
         });
 
       devShells = forAllSystems (system:
@@ -142,11 +188,17 @@
               pkgs.uv
               pkgs.gh
               pkgs.actionlint
-              # Class A, deliberately: the pinned nixpkgs input carries
-              # zizmor, so no SHA-pin table entry is needed beside
-              # betterleaks'. Paired with actionlint rather than standing
-              # alone -- skills/scanning-ci-workflows runs both, and each
-              # catches what the other does not.
+              # Class A, deliberately, on this Nix-capable path: the pinned
+              # nixpkgs input already carries zizmor, so `nix develop` needs
+              # no SHA-pin table entry here. Issue #2051 added a passive
+              # Class B pin for zizmor anyway (see classBData/mkClassB
+              # above), but only for the Nix-free provisioning script this
+              # devShell has no part in -- classB is deliberately not
+              # appended to this package list, so this line keeps resolving
+              # zizmor from nixpkgs exactly as before. Paired with
+              # actionlint rather than standing alone -- skills/scanning-ci-
+              # workflows runs both, and each catches what the other does
+              # not.
               pkgs.zizmor
               pkgs.python312
               pkgs.bun
