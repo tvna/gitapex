@@ -1,11 +1,11 @@
 # AGENTS.md
 
-gitapex is a Claude Code / Codex plugin. See `docs/repository-layout.md`
+gitapex is a distributable agentic-skills plugin. See `docs/repository-layout.md`
 for what deploys to a consumer and the full directory-path-and-purpose map.
 
 ## 1. Plan First, Verify Live
 
-- Enter plan mode for any 3+ step or architectural task. If something goes sideways, stop and re-plan rather than push through; a self-correcting phrase in your own PR body or commit message is that STOP signal (`stop-and-replan`).
+- Check for and invoke the skill matching the current situation before any action, no exception for a task that looks simple (`invoking-gitapex`). If something goes sideways, stop and re-plan rather than push through; a self-correcting phrase in your own PR body or commit message is that STOP signal (`stop-and-replan`).
 - Design verification into the plan itself: each step gets its own completion check, execution runs in a separate agent, and a type check or linter verifies shape, not behavior.
 - Before treating a drafted multi-step procedure as complete, walk every step against three failure modes: an unstated precondition not holding, the step's own action failing, and its postcondition not matching.
 - Gate completion on live proof against real artifacts and the real service path, never a proxy or plan-time intent alone; waive only on the owner's explicit, recorded approval.
