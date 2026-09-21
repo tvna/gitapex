@@ -127,17 +127,18 @@ def test_check_fails_when_committed_skill_md_has_drifted(tmp_path: pathlib.Path)
 # Real-repository sanity test (mirrors
 # tests/test_gitapex_scan_ssot_schema.py's own
 # test_real_repository_contract_declaring_skills_have_no_drift): confirmed
-# eliciting-a-design (issue #1966) is the real repository's one
-# contract-declaring skill today and its committed SKILL.md matches a
-# fresh regeneration -- pinned explicitly here rather than relying only on
-# the synthetic fixtures above to notice a future change.
+# eliciting-a-design (issue #1966) and drafting-a-pr-to-merge (issue #1967)
+# are the real repository's two contract-declaring skills today and each
+# committed SKILL.md matches a fresh regeneration -- pinned explicitly here
+# rather than relying only on the synthetic fixtures above to notice a
+# future change.
 # ---------------------------------------------------------------------------
 
 
 def test_real_repository_contract_declaring_skill_matches_regeneration(capsys: pytest.CaptureFixture[str]) -> None:
-    assert set(runner.ssot_schema.discover_contracts()) == {"eliciting-a-design"}
+    assert set(runner.ssot_schema.discover_contracts()) == {"eliciting-a-design", "drafting-a-pr-to-merge"}
     assert runner.main() == 0
-    assert "1 contract-declaring skill(s) match a fresh regeneration" in capsys.readouterr().out
+    assert "2 contract-declaring skill(s) match a fresh regeneration" in capsys.readouterr().out
 
 
 # ---------------------------------------------------------------------------

@@ -19,10 +19,12 @@ inputs:
     code (e.g. "the retry loop has no backoff and can hot-loop on a
     persistent failure"), what should happen next?
 expected:
-  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
-  # this fixture's own scenario is exactly the cited Stop-boundary bullet.
+  # exercises: this fixture's own scenario is exactly the cited Invariants
+  # entries (formerly one combined Stop-boundary bullet, now generated from
+  # metadata/gitapex.yaml's spec.contract.invariants -- see issue #1967).
   exercises:
-    - "Step 6-8: don't mark a PR done from a green badge, resolved threads, or clean `mergeable_state` alone -- outer-layer absence must be disclosed. Step 10: not a reason to stop monitoring; re-check the label before looping back on a new blocker, not step 3 directly."
+    - "Never mark a PR done from a green badge, resolved threads, or clean mergeable_state alone -- outer-layer absence must be disclosed (prose-only)"
+    - "Reaching DRAFT never stops monitoring -- re-check the ownership label before looping back on a new blocker (prose-only)"
   output_contains:
     - "independent"
     - "backoff"

@@ -66,8 +66,14 @@ def _write_instance(tmp_path: pathlib.Path, instance: dict) -> pathlib.Path:
 
 
 def test_valid_instance_has_no_drift(tmp_path):
+    # Issue #1967: skills_dir is pinned to an empty (non-existent)
+    # directory, not the real repository's skills/ -- this is a
+    # schema/registry-only fixture check, and a real contract-declaring
+    # skill's own gate-id references (e.g. drafting-a-pr-to-merge's
+    # merge-pull-request-block) must never leak into this synthetic
+    # _VALID_INSTANCE, which declares no such gate.
     instance_path = _write_instance(tmp_path, _VALID_INSTANCE)
-    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, _skills_dir(tmp_path)) == []
 
 
 def test_missing_required_field_is_flagged(tmp_path):
@@ -116,7 +122,8 @@ def test_native_kind_has_no_script_requirement(tmp_path):
     del native["gates"][0]["script"]
     native["gates"][0]["native_rule"] = "a GitHub-native rule with no repo file"
     instance_path = _write_instance(tmp_path, native)
-    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT)
+    # Issue #1967: pin skills_dir to empty, see test_valid_instance_has_no_drift.
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, _skills_dir(tmp_path))
     assert findings == []
 
 
@@ -259,7 +266,8 @@ def test_a_gate_carrying_preconditions_validates_against_both_layers(tmp_path):
         "requires_python_packages": ["pydantic"],
     }
     instance_path = _write_instance(tmp_path, instance)
-    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+    # Issue #1967: pin skills_dir to empty, see test_valid_instance_has_no_drift.
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, _skills_dir(tmp_path)) == []
     registry = drift._parse_registry(instance)
     assert registry is not None
     gate = registry.gates[0]
@@ -412,7 +420,8 @@ def test_runtime_resolved_reference_is_a_valid_target_kind(tmp_path):
     good = json.loads(json.dumps(_VALID_INSTANCE))
     good["gates"][0]["target"] = [{"kind": "runtime-resolved-reference", "ref": "test fixture"}]
     instance_path = _write_instance(tmp_path, good)
-    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+    # Issue #1967: pin skills_dir to empty, see test_valid_instance_has_no_drift.
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, _skills_dir(tmp_path)) == []
     registry = drift._parse_registry(good)
     assert registry is not None
     assert registry.gates[0].target[0].kind == "runtime-resolved-reference"
@@ -529,7 +538,8 @@ def _local_gate(**overrides):
 
 def test_local_plane_gate_with_a_real_invocation_has_no_drift(tmp_path):
     instance_path = _write_instance(tmp_path, _local_gate())
-    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+    # Issue #1967: pin skills_dir to empty, see test_valid_instance_has_no_drift.
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, _skills_dir(tmp_path)) == []
 
 
 def test_local_invocation_referencing_a_missing_file_is_flagged(tmp_path):
@@ -658,7 +668,8 @@ def test_a_config_flag_before_any_interpreter_is_not_inline_code(tmp_path):
         local_stdin=["git", "-c", "core.quotePath=false", "diff", "--merge-base", "origin/main", "HEAD"]
     )
     instance_path = _write_instance(tmp_path, instance)
-    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+    # Issue #1967: pin skills_dir to empty, see test_valid_instance_has_no_drift.
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, _skills_dir(tmp_path)) == []
 
 
 def test_local_invocation_naming_no_script_of_its_own_is_flagged(tmp_path):
@@ -687,7 +698,8 @@ def test_a_workflow_only_gate_is_exempt_from_the_identity_rule(tmp_path):
     allowlist."""
     instance = _local_gate(script=".github/workflows/lint.yml", local_invocation=["uv", "run", "ruff", "check", "."])
     instance_path = _write_instance(tmp_path, instance)
-    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+    # Issue #1967: pin skills_dir to empty, see test_valid_instance_has_no_drift.
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, _skills_dir(tmp_path)) == []
 
 
 def test_a_mixed_workflow_and_script_gate_is_not_exempt(tmp_path):
@@ -736,7 +748,8 @@ def test_a_real_path_inside_a_comma_delimited_token_passes(tmp_path):
         ]
     )
     instance_path = _write_instance(tmp_path, instance)
-    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+    # Issue #1967: pin skills_dir to empty, see test_valid_instance_has_no_drift.
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, _skills_dir(tmp_path)) == []
 
 
 def test_iter_path_tokens_splits_on_commas_and_filters():
@@ -914,21 +927,24 @@ def test_tracking_issue_accepts_a_single_integer(tmp_path):
     instance = json.loads(json.dumps(_VALID_INSTANCE))
     instance["gates"][0]["tracking_issue"] = 344
     instance_path = _write_instance(tmp_path, instance)
-    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+    # Issue #1967: pin skills_dir to empty, see test_valid_instance_has_no_drift.
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, _skills_dir(tmp_path)) == []
 
 
 def test_tracking_issue_accepts_null(tmp_path):
     instance = json.loads(json.dumps(_VALID_INSTANCE))
     instance["gates"][0]["tracking_issue"] = None
     instance_path = _write_instance(tmp_path, instance)
-    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+    # Issue #1967: pin skills_dir to empty, see test_valid_instance_has_no_drift.
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, _skills_dir(tmp_path)) == []
 
 
 def test_tracking_issue_accepts_a_list_of_at_least_two_issue_numbers(tmp_path):
     instance = json.loads(json.dumps(_VALID_INSTANCE))
     instance["gates"][0]["tracking_issue"] = [520, 344]
     instance_path = _write_instance(tmp_path, instance)
-    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT) == []
+    # Issue #1967: pin skills_dir to empty, see test_valid_instance_has_no_drift.
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, _skills_dir(tmp_path)) == []
 
 
 def test_tracking_issue_rejects_a_single_element_array(tmp_path):
@@ -1235,8 +1251,15 @@ def test_real_repository_contract_declaring_skills_have_no_drift():
     pin (issue #1965's foundation-only assumption) -- pinned explicitly
     here, by name, rather than relying only on
     test_repository_ssot_is_schema_valid_and_drift_free above to notice a
-    regression."""
-    assert set(drift.discover_contracts()) == {"eliciting-a-design"}
+    regression. Issue #1967 (the second real migration) added
+    `drafting-a-pr-to-merge`, the low-freedom-control prototype -- the
+    first contract to reference a non-empty gates[] list, which is why
+    every other test in this file that calls find_drift() against a
+    synthetic _VALID_INSTANCE now pins skills_dir to an empty directory:
+    without that pin, this skill's own real gate-id references (e.g.
+    merge-pull-request-block) would otherwise leak into those unrelated
+    schema/registry-only fixture checks."""
+    assert set(drift.discover_contracts()) == {"eliciting-a-design", "drafting-a-pr-to-merge"}
     real_registry = drift._parse_registry(json.loads(drift.SSOT_PATH.read_text(encoding="utf-8")))
     assert drift.find_contract_gate_drift(real_registry) == []
     assert drift.find_contract_precondition_duplicate_ids() == []
