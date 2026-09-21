@@ -1,9 +1,7 @@
 # AGENTS.md
 
-gitapex is a Claude Code / Codex plugin. Only `skills/` (and, in the
-future, `hooks/`) deploys to a consumer; everything else here -- this
-file, `docs/`, `tests/`, `.github/` -- is development-only. See
-`docs/repository-layout.md` for the full directory-path-and-purpose map.
+gitapex is a Claude Code / Codex plugin. See `docs/repository-layout.md`
+for what deploys to a consumer and the full directory-path-and-purpose map.
 
 ## 1. Plan First, Verify Live
 
