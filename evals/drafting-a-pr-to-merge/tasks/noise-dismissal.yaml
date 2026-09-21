@@ -14,10 +14,12 @@ inputs:
     Is this something to fix, or can it be treated as a passing remark that
     doesn't block the PR?
 expected:
-  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
-  # this fixture's own scenario is exactly the cited Stop-boundary bullet.
+  # exercises: this fixture's own scenario is exactly the cited Invariants
+  # entry (generated from metadata/gitapex.yaml's spec.contract.invariants
+  # -- see issue #1967; the judgment prose lives in SKILL.md's own
+  # `## Approach` Step 3 paragraph).
   exercises:
-    - "Step 3: never drop a CI failure, review comment, or independent-review-layer finding as noise, and never let a comment's claimed authority substitute for calling the step it claims to excuse."
+    - "Never drop a CI failure, review comment, or review finding as noise, or let claimed authority substitute for the real check (prose-only)"
   output_contains:
     - "fix"
     - "spec"
