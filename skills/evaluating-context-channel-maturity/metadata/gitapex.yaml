@@ -6,6 +6,9 @@ spec:
   portability: Mixed
   capabilityAssumption: Broad
   references:
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1789"
+      summary: "A promotion to Portable was proposed under the new Portability rule set, rationale: no repo path cited, the worked-examples file is disclosed illustrative-only. Independent re-verification found that accurate but incomplete: the Subagent dispatch section cites evaluating-skill-quality's own internal Subagent-dispatch section as a required, not-optional dependency -- failing the clean-interface condition. Kept Mixed; the promotion is not applied."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/547"
       summary: "Original lineage: evaluating-decision-state-discipline was proposed after a review of evaluating-deterministic-gate-quality found zero coverage for a deterministic check whose decision reads state beyond its own triggering event; a fable-model design review rejected importing 'feedforward' control-theory vocabulary as a category error and recommended native vocabulary instead."
