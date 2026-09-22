@@ -148,6 +148,15 @@ def load_lockfile_apm_version(lockfile_path: pathlib.Path = LOCKFILE_PATH) -> st
         data = yaml.safe_load(lockfile_text)
     except yaml.YAMLError as error:
         raise LockfileParseError(f"{lockfile_path}: is not valid YAML: {error}") from error
+    # yaml.safe_load still resolves anchors/aliases, so a maliciously crafted
+    # document (e.g. a deep alias-expansion chain) can exhaust the interpreter via
+    # RecursionError or MemoryError rather than raising yaml.YAMLError. apm.lock.yaml
+    # is a repository-committed file, not attacker-supplied input, but this gate's
+    # own contract (see module docstring) is to fail closed with a typed error on
+    # anything that prevents a real comparison, not to let an unrelated exception
+    # class escape main()'s own handler as a raw traceback.
+    except (RecursionError, MemoryError) as error:
+        raise LockfileParseError(f"{lockfile_path}: exhausted parsing this document: {error}") from error
     if data is None:
         return None
     if not isinstance(data, dict):
