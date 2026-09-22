@@ -513,6 +513,39 @@ _STRING_COMPARISON_AND_SPLIT_RECEIVER_AGNOSTIC_ATTRS = (
     _STRING_COMPARISON_RECEIVER_AGNOSTIC_ATTRS | _STRING_SPLIT_RECEIVER_AGNOSTIC_ATTRS
 )
 
+# Public: every verb name this gate's own trigger categories (a)/(b)/(c) can
+# match, in one flat set -- the union of every receiver-agnostic attribute
+# set above, plus "compile" (category (a)'s one receiver-specific verb,
+# handled separately by `_regex_trigger` via `_re_module_names` and therefore
+# absent from any of the frozensets above). Issue #1921: feeds
+# `gitapex_scan_detection_logic_rule_drift.py`, which cross-checks this set
+# against the human-readable `verb()` list this gate's own `.gitapex/
+# ssot.json` `rule` field spells out by hand, so the two can never again
+# silently diverge the way issue #1918 repair 6 found (category (c) widened
+# to `.split()`/`.rsplit()`/`.partition()` per issue #1532/#1572 without a
+# matching rule-text update). Additive-only: widening this set (a new
+# trigger verb) is always safe on its own; narrowing it (removing a verb)
+# requires the corresponding `.gitapex/ssot.json` rule text edited in the
+# same PR, which the new drift gate above now enforces rather than relying
+# on a reviewer to notice by hand.
+ALL_TRIGGER_VERBS: frozenset[str] = (
+    _REGEX_RECEIVER_AGNOSTIC_ATTRS
+    | _PATH_RESOLUTION_RECEIVER_AGNOSTIC_ATTRS
+    | _OS_PATH_ATTRS
+    | _STRING_COMPARISON_RECEIVER_AGNOSTIC_ATTRS
+    | _STRING_SPLIT_RECEIVER_AGNOSTIC_ATTRS
+    | _COLLECTION_LITERAL_CALL_NAMES
+    | {"compile"}  # a bare set literal, not a frozenset(...) call -- see below
+)
+# Why `| {"compile"}` and not `| frozenset({"compile"})`: the latter is
+# itself a `frozenset(...)` call over an inline collection literal, which is
+# exactly this gate's own category (c) trigger shape
+# (`_string_comparison_call_trigger`) -- adding one, even one this file's
+# own existing properties-file coverage already happens to clear at module
+# scope, is avoidable. `frozenset | set` (a bare `{...}` literal is a
+# `set`, not a `frozenset`) is a well-defined, ordinary set operation and
+# introduces no such call site.
+
 _REGEX_GAP = "regex-property-gap"
 _PATH_RESOLUTION_GAP = "path-resolution-property-gap"
 _STRING_COMPARISON_GAP = "string-comparison-property-gap"
