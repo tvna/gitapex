@@ -74,6 +74,13 @@ def test_load_apm_pin_version_raises_on_missing_file(tmp_path: pathlib.Path) -> 
         gate.load_apm_pin_version(tmp_path / "does-not-exist.nix")
 
 
+def test_load_apm_pin_version_raises_on_non_utf8_bytes(tmp_path: pathlib.Path) -> None:
+    flake_path = tmp_path / "flake.nix"
+    flake_path.write_bytes(b"\xff\xfe not valid utf-8")
+    with pytest.raises(gate.FlakePinParseError):
+        gate.load_apm_pin_version(flake_path)
+
+
 # --- extract_apm_version ------------------------------------------------
 
 
@@ -191,3 +198,20 @@ def test_the_gate_finds_no_drift_in_this_repository() -> None:
 def test_main_reports_clean_exit_zero(capsys: pytest.CaptureFixture[str]) -> None:
     assert gate.main() == 0
     assert "No apm binary version pin drift found." in capsys.readouterr().out
+
+
+def test_main_reports_drift_exit_one(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(gate, "find_drift", lambda: "some drift message")
+    assert gate.main() == 1
+    assert "some drift message" in capsys.readouterr().out
+
+
+def test_main_reports_a_check_error_exit_one(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def raising_find_drift() -> str | None:
+        raise gate.ApmVersionCheckError("could not run apm --version")
+
+    monkeypatch.setattr(gate, "find_drift", raising_find_drift)
+    assert gate.main() == 1
+    assert "could not run apm --version" in capsys.readouterr().err
