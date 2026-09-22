@@ -1786,6 +1786,28 @@
       ]
     },
     {
+      "id": "detection-logic-rule-text-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_detection_logic_rule_drift.py",
+      "rule": "Extracts every verb()-shaped token (regex \\b[a-zA-Z_][a-zA-Z0-9_]*\\(\\)) from detection-logic-property-coverage's own .gitapex/ssot.json rule field and compares it bidirectionally against gitapex_gate_detection_logic_property_coverage.ALL_TRIGGER_VERBS (that gate's own public union of every trigger-verb constant it grades): a verb graded by the gate script but not named as verb() in the rule text is drift, and a verb() token named in the rule text that the gate script no longer grades is drift too. A missing .gitapex/ssot.json, unparseable JSON, a missing detection-logic-property-coverage gate id, or a missing/non-string rule field is each its own fail-closed finding, never a crash. Issue #1921 (refs #1918 repair 6): closes the gap that let category (c) widen to .split()/.rsplit()/.partition() (issue #1532/#1572) without this rule text being updated in the same change, fixed by hand only after the fact in commit 1d4d67a9.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_detection_logic_rule_drift.py"],
+      "trigger": "tests/test_gitapex_scan_detection_logic_rule_drift.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "registry-integrity",
+      "tracking_issue": 1921,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": ".gitapex/ssot.json"},
+        {"kind": "file-glob", "ref": ".github/scripts/gitapex_gate_detection_logic_property_coverage.py"},
+        {"kind": "cross-registry-consistency", "ref": "detection-logic-property-coverage's own .gitapex/ssot.json rule field <-> gitapex_gate_detection_logic_property_coverage.ALL_TRIGGER_VERBS"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
+    },
+    {
       "id": "betterleaks-merge-gate",
       "kind": "script",
       "script": [".github/scripts/gitapex_run_betterleaks.py", ".github/workflows/betterleaks-merge-gate.yml"],

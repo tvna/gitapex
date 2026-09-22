@@ -158,10 +158,11 @@ repos:
       # the last local moment before a gap becomes a CI round-trip, and
       # deliberately not pre-commit: it grades committed state (HEAD vs
       # origin/main), not a staged index, and at ~51 s
-      # warm end to end for all 53 wired gates (issue #1817's own
+      # warm end to end for all 54 wired gates (issue #1817's own
       # apm-binary-version-pin gate is the latest addition, bumping the
-      # prior 52-gate baseline by one; issue #1799's own
-      # defeat-test-mutation-coverage gate, issue #1965's own
+      # prior 53-gate baseline by one; issue #1921's own
+      # detection-logic-rule-text-drift gate bumped the 52-gate baseline by
+      # one before that; issue #1799's own
       # skill-contract-drift gate, and issue #1987's own
       # channel-shape-index-drift gate landed on parallel branches; each
       # bumped the 49-gate baseline to its own independent count before
