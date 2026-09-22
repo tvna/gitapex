@@ -107,7 +107,7 @@ surface only via one gate's own error text partway through the run
   (issue #890), which closes the "configured here but never actually
   installed" half; nothing closes the ``--no-verify`` half. CI remains the
   authoritative merge gate for every gate carrying a ``ci`` plane -- true
-  for 50 of the 52 wired gates. ``behind-base`` (issue #985) and
+  for 51 of the 53 wired gates. ``behind-base`` (issue #985) and
   ``real-checkout-git-write`` (issue #991) are the two exceptions: each
   carries only ``local``, so for those two gates specifically this
   pre-push hook -- bypassable the same way as any other -- is the *only*
@@ -119,7 +119,7 @@ surface only via one gate's own error text partway through the run
   ``jsonschema`` -- a real, non-stdlib dependency, contrary to an earlier
   revision of this paragraph's own "the runner itself needs no
   dependencies" claim. A bare system ``python3`` with no ``jsonschema``
-  installed crashed the whole runner on import before any of the 52 wired
+  installed crashed the whole runner on import before any of the 53 wired
   gates got a chance to run individually, so CONTRIBUTING.md's standalone
   example and the pre-push hook's own ``entry`` both now invoke it as ``uv
   run --frozen python3`` too, the same pin every wired gate's own argv
@@ -207,14 +207,17 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # own _GROUP_TIMEOUT_SECONDS = 600 -- so that one gate's own theoretical
 # worst case is ~4200 s, not 600 s. A ceiling matching that would be useless
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
-# call in the other direction. For scale: a warm run of all 52 wired gates
-# combined measures roughly 51 s end to end (issue #1799's own
+# call in the other direction. For scale: a warm run of all 53 wired gates
+# combined measures roughly 28 s end to end (issue #1817's own
+# apm-binary-version-pin gate is the latest addition, bumping the prior
+# 52-gate baseline by one; different hardware than the figures below in any
+# case, see this paragraph's own closing parenthetical, which is also why
+# this is markedly faster than slower -- the prior 52-gate set (issue #1799's own
 # defeat-test-mutation-coverage gate, issue #1965's own skill-contract-drift
 # gate, and issue #1987's own channel-shape-index-drift gate landed on
 # parallel branches and each bumped the 49-gate baseline to their own
-# independent counts before successive merges combined them into 52;
-# different hardware than the figures below in any case, see this
-# paragraph's own closing parenthetical -- the prior 51-gate set
+# independent counts before successive merges combined them into 52)
+# measured roughly 51 s end to end; the prior 51-gate set
 # (defeat-test-mutation-coverage + skill-contract-drift combined) measured
 # roughly 47 s end to end; the prior 50-gate set (defeat-test-mutation-
 # coverage alone) measured roughly 49 s end to end, unlike every other wired
