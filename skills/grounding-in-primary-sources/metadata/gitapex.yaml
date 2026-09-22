@@ -6,9 +6,9 @@ spec:
   portability: Repository-scoped
   capabilityAssumption: Broad
   skillDependencies:
-    requires: []
-    relatedTo:
+    requires:
       - untrusted-input-triage
+    relatedTo:
       - battle-testing-a-skill
       - responding-to-a-fresh-arrival
   executionRequirements:
@@ -21,6 +21,12 @@ spec:
     network:
       mode: unrestricted
   references:
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1789"
+      summary: "A promotion to Mixed was proposed under the new Portability rule set, but that row is stale: a later evaluating-skill-quality pass (see the entries below) already found Procedure step 5/Stop boundaries defer to BOTH untrusted-input-triage and responding-to-a-fresh-arrival as canonical -- two real dependencies, i.e. fan-out -- and corrected the label to Repository-scoped, not Mixed. Kept Repository-scoped; the promotion is not applied."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1791"
+      summary: "Added untrusted-input-triage to skillDependencies.requires, removed from relatedTo (not duplicated in both): Procedure step 5/Stop boundaries actively defer to that skill's own list as canonical rather than merely routing to it, so the declared dependency graph now matches SKILL.md's actual textual dependency. portability stays Repository-scoped (see the entry above) -- this edit is requires-field-only."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/823"
       summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): reads local/observed state directly per its own \"When to use\" section (read); its own worked example names a concrete shell verification command (pip show anthropic) as part of grounding a claim (shell)."

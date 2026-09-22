@@ -3,7 +3,7 @@ kind: SkillMetadata
 metadata:
   name: drafting-a-skill
 spec:
-  portability: Mixed
+  portability: Repository-scoped
   capabilityAssumption: Broad
   dependencyPolicy: Declared
   lifecycle:
@@ -11,6 +11,9 @@ spec:
       reason: "First draft, pending evaluating-skill-quality and battle-testing-a-skill review verdicts before graduating to stable"
       trackingIssue: "https://github.com/tvna/gitapex/issues/1194"
   references:
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1789"
+      summary: "Re-classified Mixed -> Repository-scoped under the new Portability rule set: trigger 2, fan-out and unclean interface. Step 7 dispatches both evaluating-skill-quality and battle-testing-a-skill (two real dependencies, failing the one-dependency rule); gitapex-cross-links.md also cites evaluating-skill-quality's internal Contract-discipline section and this file's own internal Step 2, not either sibling's top-level contract. Supersedes the prior Mixed-precedent entry below."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1194"
       summary: "gitapex-native successor to obra/superpowers' writing-skills and Anthropic's skill-creator, separated from evaluating-skill-quality by a DDD bounded-context split (drafting = formative 'how should this be'; evaluating = a gate on a finished, static artifact)"

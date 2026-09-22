@@ -6,6 +6,9 @@ spec:
   portability: Mixed
   capabilityAssumption: Adaptive
   references:
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1789"
+      summary: "A promotion to Portable was proposed under the new Portability rule set, rationale: docs/ citations use a rescuing hedge and are Notes-only. Independent re-verification found the placement claim accurate but the hedge wrong: Notes cites docs/glossary.md and docs/scanning-capability-selection-policy.md in inline-code form hedged only as this skill's own authoring repository -- the non-rescuing half, which never rescues an inline-code citation. Kept Mixed; the promotion is not applied."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/843"
       summary: "First roster skill in the scanning-* family to actually ship the family's defining shape: judgment delegated entirely to external pinned CLIs, findings reported unmodified, no unsafe-workflow knowledge embedded in this skill's own references/. scanning-attack-surfaces carries the family name but still performs its own per-item judgment; this skill is what makes the family definition true of a real skill."

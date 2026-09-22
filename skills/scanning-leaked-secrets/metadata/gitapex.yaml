@@ -6,6 +6,9 @@ spec:
   portability: Mixed
   capabilityAssumption: Adaptive
   references:
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1789"
+      summary: "A promotion to Portable was proposed under the new Portability rule set, rationale: .betterleaks.toml and its runner script are disclosed non-dependencies. Independent re-verification found that true of dependency-file portability but not the separate sentence-level litmus test: Notes cites docs/glossary.md/docs/scanning-capability-selection-policy.md hedged only as this authoring repository's own, and the betterleaks runner script with no hedge at all. Kept Mixed; the promotion is not applied."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/849"
       summary: "Ships skills/scanning-leaked-secrets/ as the scanning-* family's second shipped skill, wrapping betterleaks (already SHA256-pinned in flake.nix at 1.6.1) to scan a target's working tree and the git history present in its checkout for leaked secrets, with every finding's secret value redacted before it reaches this skill's own report."

@@ -3,9 +3,12 @@ kind: SkillMetadata
 metadata:
   name: setup-gitapex-toolchain
 spec:
-  portability: Mixed
+  portability: Repository-scoped
   capabilityAssumption: Broad
   references:
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1789"
+      summary: "Re-classified Mixed -> Repository-scoped under evaluating-skill-quality's new Portability rule set: trigger 1 (inherently repo-bound purpose) -- this skill's own mechanisms (flake.nix pins, session-start.sh, apm.yml, gitapex-specific tool names) have no portable core, as the deferral entry below already conceded. Supersedes that deferral and the prior decision entry's Table A rationale, absent from the current rubric.md."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/57, https://github.com/tvna/gitapex/issues/690"
       summary: "An optional setup script is a pure latency optimization and never replaces the automatic SessionStart hook path: this skill's founding goal (these two issues) is zero-manual-step provisioning on any never-configured environment, which a setup script alone cannot deliver since it requires per-environment manual configuration"

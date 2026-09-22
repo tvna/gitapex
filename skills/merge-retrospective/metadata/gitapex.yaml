@@ -16,6 +16,9 @@ spec:
       shell:
         - subprocess
   references:
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1789"
+      summary: "A promotion to Portable was proposed under the new Portability rule set, rationale: the ssot.json dependency that justified Repository-scoped was removed, and hook citations are hedged. Independent re-verification found two surviving failures: references/backlog-grounded-proposal-review.md's Step 4b unconditionally reads ssot.json with no fallback, and at least two hook citations are stated as flat unconditional facts, not hedged. Kept Repository-scoped; the promotion is not applied."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/823"
       summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): all three categories empty -- this skill's own prerequisite states it depends only on a connected GitHub MCP server; no local filesystem or shell action is named anywhere in its procedure."

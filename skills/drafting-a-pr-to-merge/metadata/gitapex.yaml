@@ -3,7 +3,7 @@ kind: SkillMetadata
 metadata:
   name: drafting-a-pr-to-merge
 spec:
-  portability: Mixed
+  portability: Repository-scoped
   capabilityAssumption: Broad
   lifecycle:
     renamedFrom: driving-pr-to-merge
@@ -93,6 +93,9 @@ spec:
         - reviewing-an-artifact
       downstream: "the cited issue's own Acceptance Criteria Map; this skill's DRAFT state confers no merge authority"
   references:
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1789"
+      summary: "Re-classified Mixed -> Repository-scoped under the new Portability rule set: trigger 2, fan-out beyond the single reviewing-an-artifact dependency previously named. references/procedure.md Step 8 also cites executing-a-branch-plan's events-and-review-gate.md Event vocabulary by name and drafting-issues' Stop boundary, alongside untrusted-input-triage and outward-artifact-preflight. Also: Step 8's PR-body preflight cites its script unconditionally, unlike this file's other hedged hook citations."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/823"
       summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): Step 3 fixes the underlying issue (write) and Step 4 pushes the fix (shell git push), beyond this skill's GitHub-MCP calls (not modeled by this tools category)."

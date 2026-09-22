@@ -3,14 +3,14 @@ kind: SkillMetadata
 metadata:
   name: screening-a-low-trust-contribution
 spec:
-  portability: Portable
+  portability: Repository-scoped
   capabilityAssumption: Broad
   skillDependencies:
-    requires: []
+    requires:
+      - untrusted-input-triage
     relatedTo:
       - battle-testing-a-skill
       - responding-to-a-fresh-arrival
-      - untrusted-input-triage
       - scanning-attack-surfaces
   executionRequirements:
     tools:
@@ -19,6 +19,12 @@ spec:
       shell:
         - registry-lookup
   references:
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1789"
+      summary: "Re-classified Portable -> Repository-scoped under the new Portability rule set: check 8 reads and applies untrusted-input-triage's adversarial-forms list as canonical, a real dependency; separately, agents/review-persona.md (outside this skill's own directory) is treated as authoritative with no disclosed vendoring fallback. Either reading lands on Repository-scoped, a wider failure than a single clean sibling-fan-out trigger."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1791"
+      summary: "Added untrusted-input-triage to skillDependencies.requires, removed from relatedTo (not duplicated in both): check 8 actively fetches and applies that skill's own adversarial-forms list rather than merely routing to it, so the declared dependency graph now matches SKILL.md's actual textual dependency."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/823"
       summary: "Declared spec.executionRequirements.tools (W3 third slice, https://github.com/tvna/gitapex/issues/307): check 1 forbids a hand-invoked git/gh CLI for the diff fetch (a platform tool call or API wrapper only, not a local read); check 5 names a registry lookup (e.g. npm view <pkg> scripts) for a new/version-bumped dependency (shell) -- local-CLI-vs-hosted-API is flagged as residual risk in issue 823, not resolved here."

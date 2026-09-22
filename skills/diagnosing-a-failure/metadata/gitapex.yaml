@@ -3,20 +3,20 @@ kind: SkillMetadata
 metadata:
   name: diagnosing-a-failure
 spec:
-  portability: Portable
+  portability: Mixed
   capabilityAssumption: Adaptive
   lifecycle:
     experimental:
       reason: "First draft; one isolated evaluating-skill-quality dispatch (WELL-FORMED-NOT-MATURE, both gaps fixed) and one battle-testing-a-skill dispatch (findings fixed, one deferred) have run -- graduating to stable is a subsequent repository-owner decision, not automatic on a clean review pass"
       trackingIssue: "https://github.com/tvna/gitapex/issues/1155"
   skillDependencies:
-    requires: []
+    requires:
+      - untrusted-input-triage
     relatedTo:
       - planning-a-branch-from-an-issue
       - executing-a-branch-plan
       - eliciting-a-design
       - grounding-in-primary-sources
-      - untrusted-input-triage
   executionRequirements:
     tools:
       read:
@@ -26,6 +26,12 @@ spec:
       shell:
         - bash
   references:
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1789"
+      summary: "Re-classified Portable -> Mixed (Mixed-via-clean-sibling) under the new Portability rule set: the Precondition and Step 8 apply untrusted-input-triage's Extract/Ignore/Flag/Tag discipline and Flag-step rule, not merely route to it. Confirmed the sole real dependency (no fan-out) and that it touches only untrusted-input-triage's top-level named Steps, clearing all three Mixed-via-clean-sibling narrowness conditions."
+    - kind: correction
+      anchor: "https://github.com/tvna/gitapex/issues/1791"
+      summary: "Added untrusted-input-triage to skillDependencies.requires, removed from relatedTo (not duplicated in both): the Precondition and Step 8 actively apply that skill's own discipline rather than merely routing to it, so the declared dependency graph now matches SKILL.md's actual textual dependency."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1155"
       summary: "New native skill, per docs/superpowers/specs/2026-08-29-diagnosing-a-failure-design.md (Decisions 1-7). Absorbs the general-purpose diagnosis half of a now-retired predecessor's own gap; the GitHub-issue-lifecycle half already lives in planning-a-branch-from-an-issue and executing-a-branch-plan (see the design doc's own Method section for the retirement citation)."
