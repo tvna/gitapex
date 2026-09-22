@@ -128,8 +128,11 @@ Required edit shape:
    add one new public module-level constant (e.g. `ALL_TRIGGER_VERBS: frozenset[str]`),
    computed as the union of the file's existing
    `_REGEX_RECEIVER_AGNOSTIC_ATTRS`, `_PATH_RESOLUTION_RECEIVER_AGNOSTIC_ATTRS`,
-   `_OS_PATH_ATTRS`, `_STRING_COMPARISON_RECEIVER_AGNOSTIC_ATTRS`,
-   `_STRING_SPLIT_RECEIVER_AGNOSTIC_ATTRS`, `_COLLECTION_LITERAL_CALL_NAMES`,
+   `_OS_PATH_ATTRS`, `_STRING_COMPARISON_AND_SPLIT_RECEIVER_AGNOSTIC_ATTRS`
+   (itself already the precomputed union of
+   `_STRING_COMPARISON_RECEIVER_AGNOSTIC_ATTRS` and
+   `_STRING_SPLIT_RECEIVER_AGNOSTIC_ATTRS`, reused rather than re-derived),
+   `_COLLECTION_LITERAL_CALL_NAMES`,
    plus the literal `"compile"` (the one receiver-specific verb, handled
    separately by `_regex_trigger` and therefore absent from any existing
    frozenset). A short docstring on the constant states why it exists
