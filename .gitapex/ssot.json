@@ -2275,6 +2275,29 @@
         {"kind": "workflow-event", "ref": "test.yml:pull_request"},
         {"kind": "workflow-event", "ref": "test.yml:push"}
       ]
+    },
+    {
+      "id": "apm-binary-version-pin",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_gate_apm_binary_version_pin.py",
+      "rule": "Two independent checks, either can report drift: (1) apm.lock.yaml's own top-level `apm_version` field must match flake.nix's Class B pin (mkClassB) for apm -- runs in every plane including CI with no `apm` on PATH needed, and is what actually catches the defect as committed; (2) if a bare `apm` is resolvable on PATH, its `apm --version` output must also match the pin -- catches it at the source on a contributor's own machine. No `apm_version` field in the lockfile, and no `apm` on PATH, are each independently treated as nothing-to-check, not drift. Issue #1817: a manual bare `apm install` run against an ambient PATH binary (0.23.1) instead of the flake-pinned build (0.25.0) silently downgraded apm.lock.yaml and deleted deployed hook files the older version considered stale -- the existing toolchain-pin-drift gate only checks workflow-declared install paths, never the binary actually invoked or what it wrote.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_gate_apm_binary_version_pin.py"],
+      "trigger": "tests/test_gitapex_gate_apm_binary_version_pin.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": [],
+      "cluster": "supply-chain",
+      "tracking_issue": 1817,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "flake.nix"},
+        {"kind": "file-glob", "ref": "apm.lock.yaml"},
+        {"kind": "runtime-resolved-reference", "ref": "PATH-resolved `apm` binary's `apm --version` output"},
+        {"kind": "cross-registry-consistency", "ref": "flake.nix mkClassB apm version <-> apm.lock.yaml apm_version <-> PATH `apm --version`"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
     }
   ],
   "clusters": {
