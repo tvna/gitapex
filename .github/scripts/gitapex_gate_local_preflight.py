@@ -208,7 +208,7 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # worst case is ~4200 s, not 600 s. A ceiling matching that would be useless
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
 # call in the other direction. For scale: a warm run of all 54 wired gates
-# combined measures roughly 51 s end to end (issue #1817's own
+# combined measures roughly 49 s end to end (issue #1817's own
 # apm-binary-version-pin gate is the latest addition, bumping the prior
 # 53-gate baseline by one; different hardware than the figures below in any
 # case, see this paragraph's own closing parenthetical, which is also why

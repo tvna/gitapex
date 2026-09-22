@@ -126,7 +126,7 @@ used to be discovered one red check at a time on an already-open PR.
 The same `uv run prek install -t pre-commit -t pre-push -t commit-msg` above also installs
 a **pre-push** hook that runs every gate with a working-tree-only form in
 one pass, before the push leaves your machine. A warm run of all 54 wired
-gates measures roughly 51 seconds end to end (issue #1817's own
+gates measures roughly 49 seconds end to end (issue #1817's own
 apm-binary-version-pin gate is the latest addition, bumping the prior
 53-gate baseline by one -- different hardware than the figures below in any
 case, which is also why this is markedly faster than slower: the prior
