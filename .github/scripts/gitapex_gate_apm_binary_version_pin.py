@@ -81,7 +81,13 @@ LOCKFILE_PATH = REPO_ROOT / "apm.lock.yaml"
 # no nested braces (verified directly against flake.nix -- pname/version/
 # kind/url/sha256 are all flat string/call assignments), and no `.`
 # metacharacter appears in this pattern, so no re.DOTALL flag is needed:
-# `\s`/`[^}]` already match newlines regardless of that flag.
+# `\s`/`[^}]` already match newlines regardless of that flag. Matched against
+# comment-stripped text only (see _strip_nix_line_comments) -- independent
+# review live-reproduced this session: without stripping, a `#`-comment
+# mentioning an old/example version string above the real assignment (e.g.
+# "# bumped from version = \"0.23.1\"") wins the non-greedy search, since
+# `.search()` stops at the first textual match regardless of which line it's
+# on.
 _APM_PIN_RE = re.compile(r'apm\s*=\s*mkReleaseBinary\s+pkgs\s*\{[^}]*?version\s*=\s*"([^"]+)"')
 
 # Matches the version token inside `apm --version`'s real output, e.g.
@@ -91,6 +97,27 @@ _APM_PIN_RE = re.compile(r'apm\s*=\s*mkReleaseBinary\s+pkgs\s*\{[^}]*?version\s*
 # pre-release/build-metadata suffix (e.g. "0.26.0-rc1") compares equal
 # rather than false-positiving on a truncated N.N.N-only extraction.
 _APM_VERSION_OUTPUT_RE = re.compile(r"version\s+(\S+)")
+
+# The real CLI's own output always carries this substring (live-verified this
+# session: "Agent Package Manager (APM) CLI version 0.25.0 (d73e6ac)").
+# Required before trusting a PATH-resolved `apm`'s output at all -- `apm` is
+# also the long-standing name of Atom's now-defunct "Atom Package Manager"
+# CLI, and a stray leftover install can still sit on a contributor's PATH
+# ahead of the flake-provisioned one. Without this check, that binary's
+# differently-shaped `--version` output (no "version X" substring at all)
+# surfaces only as an opaque "could not find a version token" from
+# extract_apm_version, with no indication that the wrong tool entirely was
+# resolved.
+_EXPECTED_APM_SIGNATURE = "Agent Package Manager"
+
+
+def _strip_nix_line_comments(text: str) -> str:
+    """Strip a Nix `# ...` line comment from each line before pin-block
+    matching. None of flake.nix's own Class B string literals (asset names,
+    SRI hashes, tags, this repo's own owner/repo names) contain a literal
+    `#`, so a plain per-line split is sufficient without a real Nix
+    tokenizer."""
+    return "\n".join(line.split("#", 1)[0] for line in text.splitlines())
 
 
 class FlakePinParseError(RuntimeError):
@@ -112,7 +139,7 @@ class ApmVersionCheckError(RuntimeError):
 
 
 def parse_apm_pin_version(flake_text: str) -> str:
-    match = _APM_PIN_RE.search(flake_text)
+    match = _APM_PIN_RE.search(_strip_nix_line_comments(flake_text))
     if not match:
         raise FlakePinParseError(
             'could not find apm\'s `mkReleaseBinary pkgs { ... version = "X.Y.Z"; ... }` block in flake.nix'
@@ -144,6 +171,16 @@ def load_lockfile_apm_version(lockfile_path: pathlib.Path = LOCKFILE_PATH) -> st
         raise LockfileParseError(f"{lockfile_path}: cannot be read: {error}") from error
     except UnicodeDecodeError as error:
         raise LockfileParseError(f"{lockfile_path}: is not valid UTF-8: {error}") from error
+    # An empty or whitespace-only file is exactly the shape a crashed/
+    # interrupted `apm install`/`apm lock` write leaves behind -- the same
+    # corruption class issue #1817 exists to catch -- so it fails loudly
+    # here rather than reaching yaml.safe_load, which would parse it to
+    # None and let the "no apm_version field" branch below wave it through
+    # as nothing-to-check. Independent review live-reproduced this session:
+    # without this guard, an empty apm.lock.yaml is the strongest possible
+    # false negative.
+    if not lockfile_text.strip():
+        raise LockfileParseError(f"{lockfile_path}: is empty")
     try:
         data = yaml.safe_load(lockfile_text)
     except yaml.YAMLError as error:
@@ -180,8 +217,9 @@ def find_path_apm_version(
 ) -> str:
     """Run ``<apm_path> --version`` and return the version token found in
     its output. Raises ApmVersionCheckError on a failure to invoke the
-    binary at all (missing, unreadable, timed out), a non-zero exit, or
-    unparseable output -- never silently treated as "no drift"."""
+    binary at all (missing, unreadable, timed out), a non-zero exit,
+    output that does not look like the real apm CLI's own banner, or
+    otherwise-unparseable output -- never silently treated as "no drift"."""
     try:
         # No suppression comment needed here (same as gitapex_provision_class_b.py's own
         # provision_tool/run_apm_install call sites): ruff's S603 matches direct calls to
@@ -189,12 +227,30 @@ def find_path_apm_version(
         # parameter isn't recognized as one. apm_path is resolved from PATH by the caller via
         # shutil.which, then invoked with a fixed, literal ["--version"] argv -- no shell, no
         # attacker-controlled argument, regardless.
-        proc = runner([apm_path, "--version"], capture_output=True, text=True, timeout=30, check=False)
+        #
+        # errors="replace", not text=True's own strict default: a PATH-resolved binary that
+        # is not actually apm at all (see _EXPECTED_APM_SIGNATURE below) may emit output this
+        # process's own default encoding cannot decode; live-reproduced this session that
+        # subprocess.run(text=True) then raises UnicodeDecodeError -- a ValueError subclass,
+        # not OSError/SubprocessError -- straight out of this function uncaught. Replacing
+        # undecodable bytes keeps this a clean ApmVersionCheckError (the signature/token check
+        # below still correctly rejects the garbled output) instead of an unhandled traceback.
+        proc = runner(
+            [apm_path, "--version"], capture_output=True, text=True, errors="replace", timeout=30, check=False
+        )
     except (OSError, subprocess.SubprocessError) as error:
         raise ApmVersionCheckError(f"could not run `{apm_path} --version`: {error}") from error
     if proc.returncode != 0:
         raise ApmVersionCheckError(f"`{apm_path} --version` exited {proc.returncode}: {proc.stderr.strip()}")
-    return extract_apm_version(proc.stdout.strip())
+    output = proc.stdout.strip()
+    if _EXPECTED_APM_SIGNATURE not in output:
+        raise ApmVersionCheckError(
+            f"`{apm_path} --version` does not look like Microsoft's Agent Package Manager "
+            f"(expected {_EXPECTED_APM_SIGNATURE!r} in its output) -- PATH may be resolving a "
+            f"different tool also named `apm` (e.g. the unrelated, unmaintained Atom Package "
+            f"Manager): {output!r}"
+        )
+    return extract_apm_version(output)
 
 
 def format_lockfile_drift_message(lockfile_version: str, pin_version: str) -> str:

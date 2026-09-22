@@ -81,6 +81,26 @@ def test_parse_apm_pin_version_raises_on_missing_block() -> None:
         gate.parse_apm_pin_version("this text has no mkClassB block at all")
 
 
+def test_parse_apm_pin_version_ignores_a_comment_mentioning_an_old_version() -> None:
+    """Regression test: independent review live-reproduced this session that
+    a `#`-comment mentioning an old/example version string, sitting above
+    the real assignment inside the same block, used to win the non-greedy
+    search -- `.search()` stops at the first textual match regardless of
+    which line it's on."""
+    flake_text = (
+        "      mkClassB = pkgs:\n"
+        "        {\n"
+        "          apm = mkReleaseBinary pkgs {\n"
+        '            pname = "apm";\n'
+        '            # bumped from version = "0.23.1" for issue #1817\n'
+        '            version = "0.25.0";\n'
+        '            kind = "wrapperDir";\n'
+        "          };\n"
+        "        };\n"
+    )
+    assert gate.parse_apm_pin_version(flake_text) == "0.25.0"
+
+
 def test_load_apm_pin_version_reads_a_real_file(tmp_path: pathlib.Path) -> None:
     flake_path = _write_flake(tmp_path)
     assert gate.load_apm_pin_version(flake_path) == "0.25.0"
@@ -111,10 +131,31 @@ def test_load_lockfile_apm_version_returns_none_when_field_absent(tmp_path: path
     assert gate.load_lockfile_apm_version(lockfile_path) is None
 
 
-def test_load_lockfile_apm_version_returns_none_on_empty_file(tmp_path: pathlib.Path) -> None:
+def test_load_lockfile_apm_version_returns_none_when_document_is_yaml_null(tmp_path: pathlib.Path) -> None:
+    """A non-empty file that is still valid YAML for `None` (the literal
+    `null`) is distinct from the empty-file case above: it is a
+    syntactically legitimate, if unusual, document with nothing to check,
+    not the crashed-write corruption shape that case guards against."""
+    lockfile_path = tmp_path / "apm.lock.yaml"
+    lockfile_path.write_text("null\n", encoding="utf-8")
+    assert gate.load_lockfile_apm_version(lockfile_path) is None
+
+
+def test_load_lockfile_apm_version_raises_on_empty_file(tmp_path: pathlib.Path) -> None:
+    """Regression test: an empty apm.lock.yaml is exactly the shape a
+    crashed/interrupted apm write leaves behind -- it must fail loudly, not
+    be silently treated as "no apm_version field, nothing to check"."""
     lockfile_path = tmp_path / "apm.lock.yaml"
     lockfile_path.write_text("", encoding="utf-8")
-    assert gate.load_lockfile_apm_version(lockfile_path) is None
+    with pytest.raises(gate.LockfileParseError):
+        gate.load_lockfile_apm_version(lockfile_path)
+
+
+def test_load_lockfile_apm_version_raises_on_whitespace_only_file(tmp_path: pathlib.Path) -> None:
+    lockfile_path = tmp_path / "apm.lock.yaml"
+    lockfile_path.write_text("   \n\t\n", encoding="utf-8")
+    with pytest.raises(gate.LockfileParseError):
+        gate.load_lockfile_apm_version(lockfile_path)
 
 
 def test_load_lockfile_apm_version_raises_on_missing_file(tmp_path: pathlib.Path) -> None:
@@ -224,6 +265,36 @@ def test_find_path_apm_version_raises_on_os_error() -> None:
 
     with pytest.raises(gate.ApmVersionCheckError):
         gate.find_path_apm_version("/usr/local/bin/apm", runner=failing_runner)
+
+
+def test_find_path_apm_version_passes_errors_replace_to_the_runner() -> None:
+    """Regression test: independent review live-reproduced this session that
+    subprocess.run(text=True) raises an uncaught UnicodeDecodeError (a
+    ValueError subclass, not OSError/SubprocessError) when the resolved
+    binary's output cannot be decoded with the default text codec --
+    exercised here by asserting errors="replace" actually reaches the
+    runner, so a decode failure degrades to a garbled string instead of an
+    unhandled exception."""
+
+    def asserting_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        assert kwargs.get("errors") == "replace"
+        return _completed(0, stdout=_REAL_APM_VERSION_OUTPUT)
+
+    assert gate.find_path_apm_version("/usr/local/bin/apm", runner=asserting_runner) == "0.25.0"
+
+
+def test_find_path_apm_version_raises_when_output_lacks_the_apm_signature() -> None:
+    """Regression test: `apm` is also the name of the unrelated, unmaintained
+    Atom Package Manager CLI, whose own --version output carries no
+    "Agent Package Manager" substring -- a stray leftover install ahead of
+    the flake-provisioned apm on a contributor's PATH must be reported
+    clearly, not surfaced only as an opaque "no version token" error."""
+
+    def atom_apm_runner(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return _completed(0, stdout="apm  2.6.2\nnpm  6.14.4\nnode  12.14.1 x64\n")
+
+    with pytest.raises(gate.ApmVersionCheckError, match="does not look like"):
+        gate.find_path_apm_version("/usr/local/bin/apm", runner=atom_apm_runner)
 
 
 # --- find_drift: lockfile check -----------------------------------------
@@ -354,6 +425,7 @@ def test_format_path_drift_message_names_the_documented_bypass() -> None:
     assert "git push --no-verify" in message
     assert "0.23.1" in message
     assert "0.25.0" in message
+    assert "nix run .#apm -- install" in message
 
 
 def test_format_lockfile_drift_message_names_both_versions() -> None:
@@ -361,6 +433,20 @@ def test_format_lockfile_drift_message_names_both_versions() -> None:
     assert "0.23.1" in message
     assert "0.25.0" in message
     assert "apm.lock.yaml" in message
+    assert "nix run .#apm -- install" in message
+
+
+# --- _strip_nix_line_comments -----------------------------------------
+
+
+def test_strip_nix_line_comments_drops_everything_after_a_hash() -> None:
+    text = 'version = "0.25.0"; # trailing comment\nanother = "line";\n'
+    assert gate._strip_nix_line_comments(text) == 'version = "0.25.0"; \nanother = "line";'
+
+
+def test_strip_nix_line_comments_drops_a_whole_comment_only_line() -> None:
+    text = '# a standalone comment line\nversion = "0.25.0";\n'
+    assert gate._strip_nix_line_comments(text) == '\nversion = "0.25.0";'
 
 
 # --- the gate itself, against this repository's real state -----------------
