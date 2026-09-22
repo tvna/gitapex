@@ -143,6 +143,34 @@ def test_load_lockfile_apm_version_raises_on_non_utf8_bytes(tmp_path: pathlib.Pa
         gate.load_lockfile_apm_version(lockfile_path)
 
 
+def test_load_lockfile_apm_version_raises_on_recursion_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    lockfile_path = tmp_path / "apm.lock.yaml"
+    lockfile_path.write_text("apm_version: 0.25.0\n", encoding="utf-8")
+
+    def exhausting_safe_load(text: str) -> None:
+        raise RecursionError("maximum recursion depth exceeded")
+
+    monkeypatch.setattr(gate.yaml, "safe_load", exhausting_safe_load)
+    with pytest.raises(gate.LockfileParseError):
+        gate.load_lockfile_apm_version(lockfile_path)
+
+
+def test_load_lockfile_apm_version_raises_on_memory_error(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    lockfile_path = tmp_path / "apm.lock.yaml"
+    lockfile_path.write_text("apm_version: 0.25.0\n", encoding="utf-8")
+
+    def exhausting_safe_load(text: str) -> None:
+        raise MemoryError("alias expansion exhausted memory")
+
+    monkeypatch.setattr(gate.yaml, "safe_load", exhausting_safe_load)
+    with pytest.raises(gate.LockfileParseError):
+        gate.load_lockfile_apm_version(lockfile_path)
+
+
 # --- extract_apm_version ------------------------------------------------
 
 
