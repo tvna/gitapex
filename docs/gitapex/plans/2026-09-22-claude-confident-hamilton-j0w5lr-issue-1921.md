@@ -1,6 +1,8 @@
 # Branch Plan: ssot.json rule-text drift check for detection-logic-property-coverage
 
-Issue: https://github.com/tvna/gitapex/issues/1921 (gate-proposal, refs #1918 repair 6)
+Issue: https://github.com/tvna/gitapex/issues/1921
+
+Gate-proposal, refs #1918 repair 6.
 
 Branch: `claude/confident-hamilton-j0w5lr`, from `origin/main`.
 
@@ -70,8 +72,8 @@ Verification below).
 
 ## Task 1: `detection-logic-property-coverage` rule-text drift check
 
-Source: issue #1921's own Acceptance Criteria Map row (re-verified,
-refined technical design recorded on the issue body).
+Source ACM row: issue #1921's own single Acceptance Criteria Map row
+(re-verified, refined technical design recorded on the issue body).
 
 > Planned ops (issue #1921, verbatim): "Add a drift check that extracts
 > the human-readable trigger list named in a gate's `.gitapex/ssot.json`
