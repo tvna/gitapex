@@ -140,6 +140,14 @@ this skill's own bundled script the moment a consumer installs ``skills/``
 without also getting ``evals/``.
 """
 
+# patch-coverage: WAIVED: this whole file is exercised via the co-located
+# test_gitapex_run_verified_isolated_dispatch.py in this same directory
+# (skills/evaluating-skill-quality/scripts/), not a top-level tests/ file --
+# gitapex_gate_patch_coverage.py's own file-discovery only recognizes a
+# stem-matched tests/test_<stem>.py, with no fallback for a co-located test
+# file (issue #1950 surfaced this; the co-located suite covers every line
+# this issue added).
+
 from __future__ import annotations
 
 import argparse
