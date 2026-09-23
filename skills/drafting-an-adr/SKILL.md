@@ -45,8 +45,9 @@ for the criteria checklist and the template itself.
    verdict.
 3. Before drafting, check whether the ADR directory (per
    [references/this-repo-only.md](references/this-repo-only.md))
-   already has an existing, still-`Accepted` record covering this same decision -- the requester
-   asking for a new ADR does not mean one doesn't already exist. If one
+   already has an existing, still-`Accepted` record covering this same
+   decision -- the requester asking for a new ADR does not mean one
+   doesn't already exist. If one
    does, treat this as a Step 12 supersession case, or point to the
    existing record instead of drafting a duplicate, rather than
    producing a second, independent ADR on the same topic.

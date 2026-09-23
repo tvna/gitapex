@@ -158,8 +158,9 @@ a neutral grader of it, and an in-context instruction to "review
 neutrally anyway" does not remove that bias. Give the dispatch only the
 target's path (or content) and this skill's own files, never the calling
 conversation's framing, prior discussion, or opinion of it. Required,
-not optional. Mode B audits a platform's standing configuration rather than authored
-content, so it carries no equivalent authorship-bias condition.
+not optional. Mode B audits a platform's standing configuration rather
+than authored content, so it carries no equivalent authorship-bias
+condition.
 
 ## Mode A procedure
 
@@ -329,8 +330,8 @@ never changes branch protection, revokes a webhook, or rotates a key.
   one never substitutes for it.
 - **`docs/agent-product-scope.md`'s Axis B** (a document specific to this
   skill's own authoring repository, not a sibling skill) -- Axis B is a
-  *future runtime enforcement adapter*: least-privilege tool/filesystem/network gating, actual
-  enforcement code. This skill is a review procedure producing findings,
+  *future runtime enforcement adapter*: least-privilege
+  tool/filesystem/network gating, actual enforcement code. This skill is a review procedure producing findings,
   never enforcement, and does not fulfill, build, or substitute for that
   axis.
 - **Delegated vs. own judgment** -- only one sub-case delegates to an
