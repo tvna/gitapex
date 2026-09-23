@@ -25,6 +25,7 @@ plugin.json        Agent Plugins Specification (agent-plugins.org) v1.0.0 manife
 skills/            one directory per skill (SKILL.md, metadata/gitapex.yaml, optionally references/) — deployed by apm/Claude/Codex
   planning-a-branch-from-an-issue/  turns a GitHub issue into an implementation-ready branch/PR plan with an Acceptance Criteria Map
   drafting-issues/  drafts a new GitHub issue with an Acceptance Criteria Map before creation, so planning-a-branch-from-an-issue can read one instead of building it
+agents/            plugin-distributed subagent definitions (<name>.md); agents/metadata/<name>.gitapex.yaml is an optional AgentMetadata execution-requirements sidecar, validated against .gitapex/agent-metadata.schema.json
 docs/              documentation (this file, versioning policy, design specs, motivation.md) — not deployed
 tests/             pytest suite for the internal CI tooling — not deployed
 .github/           CI workflows and their internal tooling (.github/scripts/gitapex_gate_local_preflight.py) — not deployed

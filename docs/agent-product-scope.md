@@ -59,6 +59,12 @@ Devin, OpenClaw, HermesAgent.
 
 **Owning issue:** gitapex#307 (parent tracking issue); first slice
 (the `executionRequirements` sidecar envelope) shipped in gitapex#349.
+gitapex#2073 extends the same declarations to subagent types: an
+`AgentMetadata` sidecar (`agents/metadata/<name>.gitapex.yaml`, schema
+`.gitapex/agent-metadata.schema.json`) adding `tools.shellDenylist` and
+`lifecycle.exitConditions[]`, whose `onUnsupported` accepts only
+`fail-closed`. Schema only, with no adapter yet; see
+[`gitapex/specs/2026-09-22-agent-lifecycle-execution-requirements-design.md`](gitapex/specs/2026-09-22-agent-lifecycle-execution-requirements-design.md).
 
 **Boundary:** this is a target list for future enforcement code. It is
 not a claim that GitApex is installable in these runtimes (Axis A), nor

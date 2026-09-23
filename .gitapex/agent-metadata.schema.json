@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://gitapex.io/schemas/agent-metadata.schema.json",
+  "title": "gitapex agent metadata sidecar (AgentMetadata gitapex.io/v1alpha1)",
+  "description": "Schema for every agents/metadata/<name>.gitapex.yaml sidecar (issue #2073, parent #307). Declares a subagent/agent type's own execution requirements, owned by the agent type rather than by whichever skill dispatches it. Same apiVersion/kind/metadata/spec envelope as skills/evaluating-skill-quality/references/skill-metadata.schema.json, with a distinct kind. Declaration only: no adapter consumes this yet, so nothing here is enforced at runtime. Cross-file rules this schema cannot express (metadata.name equals the file's <name> stem, agents/<name>.md exists, exitConditions[].id is unique) live in .github/scripts/gitapex_scan_agent_metadata_schema.py.",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "gitapex.io/v1alpha1"
+    },
+    "kind": {
+      "const": "AgentMetadata"
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadata"
+    },
+    "spec": {
+      "$ref": "#/$defs/spec"
+    }
+  },
+  "$defs": {
+    "metadata": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/kebabName",
+          "description": "Must equal the sidecar's own <name> file stem and name an existing agents/<name>.md -- both cross-file checks the companion scanner owns."
+        }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "required": ["executionRequirements"],
+      "additionalProperties": false,
+      "description": "Only executionRequirements in this slice; SkillMetadata's other spec blocks (portability, lifecycle, references, ...) are deliberately not carried over.",
+      "properties": {
+        "executionRequirements": {
+          "$ref": "#/$defs/executionRequirements"
+        }
+      }
+    },
+    "executionRequirements": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "Two recognized categories (tools, lifecycle). filesystem/network/mcp/credentials/browser/externalServices/context are deferred; until they land, any other key is an unknown key and fails closed.",
+      "properties": {
+        "tools": {
+          "$ref": "#/$defs/executionRequirementsTools"
+        },
+        "lifecycle": {
+          "$ref": "#/$defs/executionRequirementsLifecycle"
+        }
+      }
+    },
+    "executionRequirementsTools": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "read/write/shell are allow-lists with the same meaning as in SkillMetadata. shellDenylist is a separate deny-list of shell capability tags the agent must never use; it is additive and never changes what shell means.",
+      "properties": {
+        "read": {
+          "$ref": "#/$defs/toolTagList"
+        },
+        "write": {
+          "$ref": "#/$defs/toolTagList"
+        },
+        "shell": {
+          "$ref": "#/$defs/toolTagList"
+        },
+        "shellDenylist": {
+          "$ref": "#/$defs/toolTagList"
+        }
+      }
+    },
+    "toolTagList": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Free-form capability tags, no fixed vocabulary. An explicit empty list states 'none', distinct from the key being absent."
+    },
+    "executionRequirementsLifecycle": {
+      "type": "object",
+      "required": ["exitConditions"],
+      "additionalProperties": false,
+      "properties": {
+        "exitConditions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/exitCondition"
+          }
+        }
+      }
+    },
+    "exitCondition": {
+      "type": "object",
+      "required": ["id", "command", "required", "onUnsupported"],
+      "additionalProperties": false,
+      "description": "A check the agent must pass before it may stop.",
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/kebabName",
+          "description": "Stable identifier, unique within one sidecar (checked by the companion scanner)."
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The check to run. Data only: this schema never runs it."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether the condition is a hard gate."
+        },
+        "onUnsupported": {
+          "const": "fail-closed",
+          "description": "What an adapter must do when it cannot enforce this condition on its runtime. Only fail-closed is accepted in this slice, encoding #307's Layer 3 rule that a hard requirement is never silently downgraded to prompt guidance."
+        }
+      }
+    },
+    "kebabName": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    }
+  }
+}
