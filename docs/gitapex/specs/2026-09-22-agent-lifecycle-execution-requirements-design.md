@@ -2,12 +2,27 @@
 
 Parent tracking issue: https://github.com/tvna/gitapex/issues/307 (Axis B, Enforcement-adapter target set)
 First slice precedent: https://github.com/tvna/gitapex/issues/349 (`spec.executionRequirements.tools`, merged via PR #351)
-Motivating problem: https://github.com/tvna/gitapex/issues/1996 (`.claude/agents/branch-plan-task.md` YAML-truncation removal, hook migration undecided)
+Motivating problem: https://github.com/tvna/gitapex/issues/1996 (`.claude/agents/branch-plan-task.md` YAML-truncation removal and hook migration)
+Implementation: https://github.com/tvna/gitapex/issues/2073
+
+> **Status (2026-09-23).** Issue #1996 has since merged a direct,
+> Claude-Code-specific fix without waiting on this schema:
+> `.claude/agents/` no longer exists, `agents/branch-plan-task.md`'s
+> frontmatter carries only `disallowedTools: mcp__github`, and both hooks
+> below now live in `hooks/hooks.json` -- a `PreToolUse` Bash hook calling
+> `skills/executing-a-branch-plan/scripts/check_task_bash_safety.sh`, and a
+> `SubagentStop` hook (matcher `^(.*:)?branch-plan-task$`) calling
+> `check_task_full_verification.sh`. Those hooks are hand-written; they do
+> not read an `AgentMetadata` sidecar. The Problem section below is kept
+> as written at design time. Issue #2073 implemented this schema; where
+> this document and that implementation differ, the implementation notes
+> inline below say so.
 
 ## Problem
 
-Issue #1996 needs to relocate two Claude-Code-specific hooks currently
-embedded in `.claude/agents/branch-plan-task.md`'s own frontmatter:
+At design time, issue #1996 needed to relocate two Claude-Code-specific
+hooks then embedded in `.claude/agents/branch-plan-task.md`'s own
+frontmatter:
 
 1. A `PreToolUse` Bash-command classifier that denies `git push`, the `gh`
    CLI, and package-install commands (design doc Decision 17).
@@ -71,6 +86,11 @@ spec:
           onUnsupported: fail-closed
 ```
 
+The `command` above is illustrative; the live verification command is
+whatever `agents/branch-plan-task.md` states today (it has since gained
+`--ignore` flags). The schema treats `command` as data run from the
+repository root and never runs it.
+
 The subagent type owns its own requirement declaration, independent of
 which skill(s) dispatch it -- closing the `review-persona`-shaped
 multi-caller drift risk a skill-nested `subagents:` block would have
@@ -87,34 +107,51 @@ own constraint ("Preserve the existing `gitapex.io/v1alpha1`
 changes it") by not overloading `tools.shell` with mixed allow/deny
 semantics.
 
+Tags have no fixed vocabulary yet, so an adapter defines how a tag such
+as `gh-cli` maps to its runtime's command patterns until a tag registry
+exists. The schema does not reject a tag listed in both `shell` and
+`shellDenylist`; when that happens, deny takes precedence.
+
 ### 3. `lifecycle.exitConditions[]`
 
-A new top-level `executionRequirements` category, alongside (future)
-`tools`/`filesystem`/`network`/`mcp`/`credentials`/`context`. Each entry:
+A new `executionRequirements` category alongside `tools`, with
+`filesystem`/`mcp`/`credentials`/`context` still future. `SkillMetadata`
+already has `packages` and `network`; `AgentMetadata` deliberately leaves
+both out for now. The name `lifecycle` here is distinct from
+`SkillMetadata`'s own `spec.lifecycle` (experimental/stable/deprecated
+status): this one sits under `spec.executionRequirements` and holds only
+exit conditions. Each entry:
 
-- `id` (string, required): stable identifier for the condition.
-- `command` (string, required): the check to run.
-- `required` (boolean, required): whether this condition is a hard gate.
+- `id` (kebab-case string, required): stable identifier, unique within
+  one sidecar.
+- `command` (string, required): the check to run from the repository
+  root.
+- `required` (boolean, required): whether a failing result blocks the
+  agent from stopping (`true`) or is advisory (`false`).
 - `onUnsupported` (enum, required, `fail-closed` only in this slice): what
   an adapter must do when it cannot enforce this condition on its target
   runtime. Restricting this slice to `fail-closed` only operationalizes
   #307's own Layer 3 invariant directly: "An adapter must fail closed
   when it cannot enforce a required property. It must not silently
-  downgrade a hard requirement to prompt guidance." Under this rule, the
-  *current* plugin-distributed variant's prompt-only fallback for
-  Decision 17/20 would not be a compliant adapter output once an adapter
-  for this schema ships -- named here as a consequence this schema
-  surfaces, not something this schema-only issue fixes itself.
+  downgrade a hard requirement to prompt guidance." `onUnsupported`
+  applies whether or not `required` is `true`: it covers a runtime that
+  cannot run the check at all, while `required` covers what a failing
+  result means on a runtime that can. Under this rule, the prompt-only
+  fallback `agents/branch-plan-task.md` still describes for runtimes
+  without an equivalent hook (OpenCode, for example), and its skip when
+  run outside a gitapex checkout, would not be compliant adapter output
+  once an adapter for this schema ships -- named here as a consequence
+  this schema surfaces, not something this schema-only issue fixes
+  itself.
 
 ## Non-goals (deferred to sibling child issues, per #349's own precedent)
 
 - Any runtime adapter implementation (Claude Code included) that
   actually consumes `agents/metadata/<name>.gitapex.yaml` and produces
-  enforcement. A live Claude Code adapter candidate (`hooks/hooks.json`
-  entries scoped via the documented `agent_type` hook-payload field and
-  the `SubagentStop` event's `agent_type` matcher) was researched against
-  Claude Code's own official documentation during this design's own
-  dialogue, but building it is separate implementation work.
+  enforcement. A hand-written Claude Code equivalent now ships in
+  `hooks/hooks.json` (issue #1996); it does not read these sidecars.
+  Building an adapter that generates such hooks from a sidecar is still
+  deferred.
 - `filesystem`, `network`, `mcp`, `credentials`, `browser`,
   `externalServices`, `context` categories for agent sidecars (mirrors
   #349's own identical deferral for skill sidecars).
@@ -122,28 +159,41 @@ A new top-level `executionRequirements` category, alongside (future)
   `review-persona`) to actually declare an `agents/metadata/*.gitapex.yaml`
   file.
 - Deciding whether issue #1996's own implementation waits for this schema
-  to ship or proceeds independently with a direct Claude-Code-specific
-  fix -- left an open question for the repository owner, tracked
-  separately from this design.
-- The shape checker / parser code change itself (`gitapex_check_skill_shape.py`
-  and friends) -- this document fixes the schema's shape; wiring a
-  validator is the child issue's own implementation task, per #349's
-  precedent of shipping schema and validator together in one child PR.
+  to ship -- since resolved: #1996 proceeded independently (see Status
+  above).
+- The validator code itself -- this document fixes the schema's shape.
+  Issue #2073 shipped the schema as `.gitapex/agent-metadata.schema.json`
+  and its validator as `.github/scripts/gitapex_scan_agent_metadata_schema.py`
+  (gate `agent-metadata-schema-drift`), not as an extension of
+  `gitapex_check_skill_shape.py`.
+- Whether runtimes load `agents/metadata/*.gitapex.yaml` as agent
+  definitions was not verified against each runtime's documentation;
+  Claude Code agent definitions are Markdown files, but this is an
+  unverified assumption for other runtimes.
 
 ## Security invariants alignment (cross-check against #307's own list)
 
 - Invariant 1 ("Declaration is not enforcement"): unchanged -- this
   schema slice adds declaration only, no adapter.
 - Invariant 4 ("Unknown sidecar fields and unsupported capabilities fail
-  closed"): the new `AgentMetadata` kind and its `executionRequirements`
-  sub-keys follow the same fail-closed-on-unknown-key rule #349
-  established for `SkillMetadata`.
+  closed"): the new `AgentMetadata` kind is stricter than `SkillMetadata`
+  -- `additionalProperties: false` at every level, including `spec`
+  itself, which `SkillMetadata` leaves open.
 - Layer 3's "must fail closed, never silently downgrade" invariant: now
   directly encoded as `onUnsupported: fail-closed` being the only value
   this slice accepts, rather than left as prose an adapter might not
   honor.
 
 ## Acceptance Criteria Map
+
+As drafted at design time. Issue #2073's re-verified map supersedes the
+Planned-ops and Residual-risk cells: the validator is the standalone
+scanner named under Non-goals (JSON Schema plus cross-file checks: name
+matches file stem, `agents/<name>.md` exists, exit-condition ids are
+unique, sidecar filename/location checks, discovery floor); `spec`
+accepts only `executionRequirements` (no `portability`); and the design
+is documented in `docs/agent-product-scope.md` (Axis B) and
+`docs/repository-layout.md`, not in `SKILL.md`/`rubric.md` sections.
 
 | Criterion | Interpretation | Planned ops | Proof method | Residual risk |
 |---|---|---|---|---|
@@ -155,9 +205,8 @@ A new top-level `executionRequirements` category, alongside (future)
 
 ## Relationship to issue #1996
 
-This design generalizes the *lesson* #1996 surfaced; it does not resolve
-#1996 itself. The repository owner has not yet decided whether #1996's
-own file-removal-and-hook-migration proceeds independently (a direct,
-Claude-Code-specific fix) or waits on this schema. That sequencing
-decision, and the separate Claude Code adapter implementation, are both
-explicitly out of this document's own scope.
+This design generalizes the *lesson* #1996 surfaced; it did not resolve
+#1996 itself. #1996 went ahead with a direct, Claude-Code-specific fix
+(hand-written hooks in `hooks/hooks.json`) without waiting on this
+schema. A Claude Code adapter that would generate those hooks from an
+`AgentMetadata` sidecar remains out of this document's scope.

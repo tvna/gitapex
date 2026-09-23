@@ -18,9 +18,19 @@ Layered validation, mirroring gitapex_scan_skill_metadata_schema.py:
    _gitapex_schema_validation.py helper.
 2. Checks the schema cannot express on its own:
    - ``sidecar-dir`` / ``sidecar-filename``: agents/metadata/, if present,
-     must be a directory holding only ``<kebab-name>.gitapex.yaml`` files.
-     A misspelled suffix (``.gitapex.yml``) would otherwise be skipped by
-     discovery and silently never validated.
+     must be a directory holding only regular (non-symlink)
+     ``<kebab-name>.gitapex.yaml`` files. A misspelled suffix
+     (``.gitapex.yml``) would otherwise be skipped by discovery and
+     silently never validated.
+   - ``sidecar-location``: a ``*.gitapex.y[a]ml`` or ``gitapex.y[a]ml``
+     file anywhere else under agents/ (e.g. ``agents/<name>.gitapex.yaml``
+     or the skill-style ``agents/<name>/metadata/gitapex.yaml``) is a
+     finding, for the same never-validated reason one level up.
+   - ``sidecar-read``: a sidecar that is not UTF-8, not valid YAML, repeats
+     a mapping key, or nests too deeply is a per-file finding; the scan
+     continues so the other sidecars' findings are still reported. A
+     repeated key is rejected because PyYAML keeps the last value silently
+     and a different parser could read the first one instead.
    - ``metadata-name-matches-file``: metadata.name equals the file's
      ``<name>`` stem.
    - ``agent-definition-exists``: agents/<name>.md exists.
@@ -38,6 +48,7 @@ from __future__ import annotations
 import pathlib
 import re
 import sys
+from collections.abc import Hashable
 from typing import Any
 
 import _gitapex_schema_validation
@@ -63,7 +74,9 @@ AGENTS_DIR = REPO_ROOT / "agents"
 SCHEMA_PATH = REPO_ROOT / ".gitapex" / "agent-metadata.schema.json"
 METADATA_DIRNAME = "metadata"
 SIDECAR_SUFFIX = ".gitapex.yaml"
-_SIDECAR_NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*" + re.escape(SIDECAR_SUFFIX) + r"$")
+_SIDECAR_NAME_RE = re.compile(r"[a-z0-9]+(-[a-z0-9]+)*" + re.escape(SIDECAR_SUFFIX))
+_SIDECAR_LIKE_SUFFIXES = (".gitapex.yaml", ".gitapex.yml")
+_SIDECAR_LIKE_NAMES = ("gitapex.yaml", "gitapex.yml")
 # agents/ ships two definitions today (branch-plan-task, review-persona).
 # A floor of 1 catches a wrong or missing agents_dir without needing an
 # edit every time a definition is added or removed.
@@ -84,11 +97,34 @@ def load_schema(schema_path: pathlib.Path = SCHEMA_PATH) -> dict[str, Any]:
     return schema
 
 
+class _UniqueKeyLoader(yaml.SafeLoader):
+    """SafeLoader that rejects a repeated mapping key instead of silently
+    keeping the last value. Keys merged in via ``<<`` count too, so a merge
+    that a later key overrides is also rejected -- strict on purpose."""
+
+
+def _construct_unique_mapping(loader: _UniqueKeyLoader, node: yaml.MappingNode, deep: bool = False) -> Any:
+    loader.flatten_mapping(node)
+    seen: set[Any] = set()
+    for key_node, _ in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if not isinstance(key, Hashable):
+            continue  # construct_mapping below raises its own ConstructorError
+        if key in seen:
+            raise yaml.constructor.ConstructorError(None, None, f"duplicate mapping key {key!r}", key_node.start_mark)
+        seen.add(key)
+    return loader.construct_mapping(node, deep=deep)
+
+
+_UniqueKeyLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_unique_mapping)
+
+
 def load_sidecar(path: pathlib.Path) -> Any:
     """Read and YAML-parse ``path``, raising SidecarReadError on a
-    non-UTF-8 file, invalid YAML, nesting deep enough to hit RecursionError,
-    or alias expansion large enough to hit MemoryError (neither is a
-    YAMLError subclass, so both are caught separately)."""
+    non-UTF-8 file, invalid YAML (including a repeated mapping key), nesting
+    deep enough to hit RecursionError, or alias expansion large enough to
+    hit MemoryError (neither is a YAMLError subclass, so both are caught
+    separately)."""
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as error:
@@ -96,7 +132,7 @@ def load_sidecar(path: pathlib.Path) -> Any:
     except UnicodeDecodeError as error:
         raise SidecarReadError(f"{path}: is not valid UTF-8: {error}") from error
     try:
-        return yaml.safe_load(text)
+        return yaml.load(text, Loader=_UniqueKeyLoader)  # noqa: S506 -- a SafeLoader subclass
     except yaml.YAMLError as error:
         raise SidecarReadError(f"{path}: is not valid YAML: {error}") from error
     except RecursionError as error:
@@ -136,9 +172,24 @@ def find_duplicate_exit_condition_ids(instance: Any) -> list[str]:
     return findings
 
 
+def find_misplaced_sidecars(agents_dir: pathlib.Path, metadata_dir: pathlib.Path) -> list[str]:
+    """sidecar-location: a sidecar-looking file anywhere under agents_dir
+    other than directly inside metadata_dir. Files directly inside
+    metadata_dir are find_drift's own sidecar-filename check instead."""
+    findings: list[str] = []
+    for path in sorted(agents_dir.rglob("*")):
+        if not (path.name.endswith(_SIDECAR_LIKE_SUFFIXES) or path.name in _SIDECAR_LIKE_NAMES):
+            continue
+        if path.parent == metadata_dir:
+            continue
+        findings.append(f"{path}: sidecar-location: agent sidecars belong directly under {metadata_dir}")
+    return findings
+
+
 def find_drift(agents_dir: pathlib.Path = AGENTS_DIR, schema_path: pathlib.Path = SCHEMA_PATH) -> list[str]:
-    """Every drift finding across agents_dir/metadata/. Empty means clean.
-    Raises SidecarReadError when a sidecar or the schema cannot be parsed."""
+    """Every drift finding across agents_dir. Empty means clean. Raises
+    SidecarReadError only when the schema itself cannot be loaded; an
+    unreadable sidecar is a per-file sidecar-read finding."""
     schema = load_schema(schema_path)
     validator = _gitapex_schema_validation.build_validator(schema)
 
@@ -150,18 +201,22 @@ def find_drift(agents_dir: pathlib.Path = AGENTS_DIR, schema_path: pathlib.Path 
         ]
 
     metadata_dir = agents_dir / METADATA_DIRNAME
-    if not metadata_dir.exists():
-        return []
-    if not metadata_dir.is_dir():
-        return [f"{metadata_dir}: sidecar-dir: exists but is not a directory"]
+    findings = find_misplaced_sidecars(agents_dir, metadata_dir)
+    if not metadata_dir.exists() and not metadata_dir.is_symlink():
+        return findings
+    if metadata_dir.is_symlink() or not metadata_dir.is_dir():
+        return [*findings, f"{metadata_dir}: sidecar-dir: exists but is not a real directory"]
 
-    findings: list[str] = []
     for path in sorted(metadata_dir.iterdir()):
-        if not (path.is_file() and _SIDECAR_NAME_RE.match(path.name)):
-            findings.append(f"{path}: sidecar-filename: expected a <kebab-name>{SIDECAR_SUFFIX} file")
+        if path.is_symlink() or not path.is_file() or not _SIDECAR_NAME_RE.fullmatch(path.name):
+            findings.append(f"{path}: sidecar-filename: expected a regular <kebab-name>{SIDECAR_SUFFIX} file")
             continue
         stem = path.name.removesuffix(SIDECAR_SUFFIX)
-        instance = load_sidecar(path)
+        try:
+            instance = load_sidecar(path)
+        except SidecarReadError as error:
+            findings.append(f"{path}: sidecar-read: {str(error).removeprefix(f'{path}: ')}")
+            continue
         per_file = _gitapex_schema_validation.schema_violations(instance, validator)
         per_file += find_name_mismatch(instance, stem)
         if not (agents_dir / f"{stem}.md").is_file():

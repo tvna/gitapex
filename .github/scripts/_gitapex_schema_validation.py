@@ -39,8 +39,8 @@ types), not the same one.
 
 `tests/test_gitapex_schema_validation.py` also owns the drift gate for this
 module's own reason for existing: `gitapex_scan_ssot_schema.py`,
-`gitapex_scan_skill_metadata_schema.py`, and `gitapex_scan_plugin_manifest_schema.py`
-must all call this module rather than reimplementing any of it locally, or
+`gitapex_scan_skill_metadata_schema.py`, `gitapex_scan_plugin_manifest_schema.py`,
+and `gitapex_scan_agent_metadata_schema.py` must all call this module rather than reimplementing any of it locally, or
 the exact drift issue #755 fixed (only one of the two original scripts
 enabling `format_checker`) could silently reopen.
 """

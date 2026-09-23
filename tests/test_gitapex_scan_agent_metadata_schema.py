@@ -352,14 +352,143 @@ def test_find_drift_fails_closed_when_metadata_path_is_a_file(tmp_path: pathlib.
         (b"\xff\xfe not utf-8", "is not valid UTF-8"),
         (b"key: [unterminated", "is not valid YAML"),
         (b"[" * 5000, "is too deeply nested"),
+        (b"a: warn\na: fail-closed\n", "duplicate mapping key 'a'"),
     ],
 )
-def test_find_drift_raises_on_unreadable_sidecar(tmp_path: pathlib.Path, content: bytes, expected: str) -> None:
+def test_find_drift_reports_unreadable_sidecar_as_a_finding(
+    tmp_path: pathlib.Path, content: bytes, expected: str
+) -> None:
     agents_dir = _make_agents_dir(tmp_path)
     (agents_dir / "metadata").mkdir()
-    (agents_dir / "metadata" / "example-agent.gitapex.yaml").write_bytes(content)
-    with pytest.raises(scanner.SidecarReadError, match=expected):
-        scanner.find_drift(agents_dir)
+    path = agents_dir / "metadata" / "example-agent.gitapex.yaml"
+    path.write_bytes(content)
+    findings = scanner.find_drift(agents_dir)
+    assert len(findings) == 1
+    assert findings[0].startswith(f"{path}: sidecar-read: ")
+    assert expected in findings[0]
+
+
+def test_find_drift_keeps_scanning_after_an_unreadable_sidecar(tmp_path: pathlib.Path) -> None:
+    agents_dir = _make_agents_dir(tmp_path, agent_names=("a-agent", "example-agent"))
+    (agents_dir / "metadata").mkdir()
+    (agents_dir / "metadata" / "a-agent.gitapex.yaml").write_bytes(b"key: [unterminated")
+    instance = _instance()
+    instance["kind"] = "SkillMetadata"
+    _write_sidecar(agents_dir, "example-agent", instance)
+    findings = scanner.find_drift(agents_dir)
+    assert any("a-agent.gitapex.yaml: sidecar-read:" in f for f in findings)
+    assert any("example-agent.gitapex.yaml: schema: kind:" in f for f in findings)
+
+
+def test_duplicate_on_unsupported_key_cannot_hide_a_downgrade(tmp_path: pathlib.Path) -> None:
+    """Defeat case: PyYAML's default loader keeps the last duplicate key, so
+    `onUnsupported: warn` followed by `onUnsupported: fail-closed` would
+    validate while a first-wins parser read `warn`."""
+    agents_dir = _make_agents_dir(tmp_path)
+    text = yaml.safe_dump(_instance()).replace(
+        "onUnsupported: fail-closed", "onUnsupported: warn\n        onUnsupported: fail-closed"
+    )
+    assert yaml.safe_load(text) == _instance()
+    (agents_dir / "metadata").mkdir()
+    (agents_dir / "metadata" / "example-agent.gitapex.yaml").write_text(text, encoding="utf-8")
+    findings = scanner.find_drift(agents_dir)
+    assert len(findings) == 1
+    assert "duplicate mapping key 'onUnsupported'" in findings[0]
+
+
+def test_load_sidecar_rejects_duplicate_keys_including_merges(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "example-agent.gitapex.yaml"
+    path.write_text("base: &b {x: 1}\nm:\n  <<: *b\n  x: 2\n", encoding="utf-8")
+    with pytest.raises(scanner.SidecarReadError, match="duplicate mapping key 'x'"):
+        scanner.load_sidecar(path)
+    path.write_text("? [1, 2]\n: v\n", encoding="utf-8")
+    with pytest.raises(scanner.SidecarReadError, match="is not valid YAML"):
+        scanner.load_sidecar(path)
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "example-agent.gitapex.yaml",
+        "metdata/example-agent.gitapex.yaml",
+        "Metadata/example-agent.gitapex.yaml",
+        "example-agent/metadata/gitapex.yaml",
+        "metadata/nested/example-agent.gitapex.yml",
+    ],
+)
+def test_find_drift_flags_a_misplaced_sidecar(tmp_path: pathlib.Path, relative: str) -> None:
+    """Defeat case: discovery reads only agents/metadata/, so a sidecar put
+    anywhere else would otherwise never be validated."""
+    agents_dir = _make_agents_dir(tmp_path)
+    path = agents_dir / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(yaml.safe_dump(_instance()), encoding="utf-8")
+    findings = scanner.find_drift(agents_dir)
+    assert f"{path}: sidecar-location: agent sidecars belong directly under {agents_dir / 'metadata'}" in findings
+
+
+def test_find_drift_rejects_a_filename_with_a_trailing_newline(tmp_path: pathlib.Path) -> None:
+    agents_dir = _make_agents_dir(tmp_path)
+    (agents_dir / "metadata").mkdir()
+    (agents_dir / "metadata" / "example-agent.gitapex.yaml\n").write_text(yaml.safe_dump(_instance()), encoding="utf-8")
+    findings = scanner.find_drift(agents_dir)
+    assert len(findings) == 1
+    assert "sidecar-filename:" in findings[0]
+
+
+def test_find_drift_rejects_a_symlinked_sidecar(tmp_path: pathlib.Path) -> None:
+    agents_dir = _make_agents_dir(tmp_path)
+    target = tmp_path / "elsewhere.yaml"
+    target.write_text(yaml.safe_dump(_instance()), encoding="utf-8")
+    (agents_dir / "metadata").mkdir()
+    (agents_dir / "metadata" / "example-agent.gitapex.yaml").symlink_to(target)
+    findings = scanner.find_drift(agents_dir)
+    assert len(findings) == 1
+    assert "sidecar-filename:" in findings[0]
+
+
+def test_find_drift_rejects_a_symlinked_metadata_dir(tmp_path: pathlib.Path) -> None:
+    agents_dir = _make_agents_dir(tmp_path)
+    real = tmp_path / "real-metadata"
+    real.mkdir()
+    (agents_dir / "metadata").symlink_to(real, target_is_directory=True)
+    findings = scanner.find_drift(agents_dir)
+    assert len(findings) == 1
+    assert "sidecar-dir:" in findings[0]
+
+
+def test_find_drift_rejects_a_dangling_metadata_symlink(tmp_path: pathlib.Path) -> None:
+    agents_dir = _make_agents_dir(tmp_path)
+    (agents_dir / "metadata").symlink_to(tmp_path / "missing", target_is_directory=True)
+    findings = scanner.find_drift(agents_dir)
+    assert len(findings) == 1
+    assert "sidecar-dir:" in findings[0]
+
+
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (("lifecycle", "exitConditions", 0, "id"), "full-verification-suite\n"),
+        (("lifecycle", "exitConditions", 0, "command"), "   "),
+        (("tools", "shellDenylist"), ["  "]),
+        (("tools",), {}),
+    ],
+)
+def test_schema_rejects_newline_whitespace_and_empty_shapes(path: tuple[Any, ...], value: Any) -> None:
+    """Defeat cases: `$` in a Python regex also matches before a trailing
+    newline, and minLength alone accepts a whitespace-only string."""
+    instance = _instance()
+    target: Any = instance["spec"]["executionRequirements"]
+    for part in path[:-1]:
+        target = target[part]
+    target[path[-1]] = value
+    assert _violations(instance)
+
+
+def test_metadata_name_with_trailing_newline_is_rejected() -> None:
+    instance = _instance()
+    instance["metadata"]["name"] = "example-agent\n"
+    assert _violations(instance)
 
 
 def test_load_sidecar_parses_a_valid_file(tmp_path: pathlib.Path) -> None:
@@ -380,7 +509,7 @@ def test_load_sidecar_raises_on_memory_error(tmp_path: pathlib.Path, monkeypatch
     def _exhaust(_text: str) -> Any:
         raise MemoryError("alias expansion")
 
-    monkeypatch.setattr(scanner.yaml, "safe_load", _exhaust)
+    monkeypatch.setattr(scanner.yaml, "load", lambda _text, Loader: _exhaust(_text))
     with pytest.raises(scanner.SidecarReadError, match="exhausted memory while parsing"):
         scanner.load_sidecar(path)
 

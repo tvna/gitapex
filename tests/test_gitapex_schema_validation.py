@@ -136,6 +136,7 @@ _SCANNER_SCRIPTS = (
     REPO_ROOT / ".github" / "scripts" / "gitapex_scan_ssot_schema.py",
     REPO_ROOT / ".github" / "scripts" / "gitapex_scan_skill_metadata_schema.py",
     REPO_ROOT / ".github" / "scripts" / "gitapex_scan_plugin_manifest_schema.py",
+    REPO_ROOT / ".github" / "scripts" / "gitapex_scan_agent_metadata_schema.py",
 )
 
 # Matches a real `import jsonschema` / `from jsonschema import ...`
