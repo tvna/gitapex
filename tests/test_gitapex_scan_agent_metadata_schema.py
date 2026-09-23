@@ -622,3 +622,29 @@ def test_broken_yaml_installation_in_script_mode_propagates_unmodified(monkeypat
 
 def test_real_repository_agent_sidecars_have_no_schema_drift() -> None:
     assert scanner.find_drift() == []
+
+
+def test_find_misplaced_sidecars_direct(tmp_path: pathlib.Path) -> None:
+    agents_dir = _make_agents_dir(tmp_path)
+    metadata_dir = agents_dir / "metadata"
+    metadata_dir.mkdir()
+    (metadata_dir / "example-agent.gitapex.yaml").write_text("x: 1\n", encoding="utf-8")
+    (agents_dir / "notes.yaml").write_text("x: 1\n", encoding="utf-8")
+    assert scanner.find_misplaced_sidecars(agents_dir, metadata_dir) == []
+    stray = agents_dir / "gitapex.yml"
+    stray.write_text("x: 1\n", encoding="utf-8")
+    assert scanner.find_misplaced_sidecars(agents_dir, metadata_dir) == [
+        f"{stray}: sidecar-location: agent sidecars belong directly under {metadata_dir}"
+    ]
+
+
+def test_construct_unique_mapping_direct() -> None:
+    assert yaml.load("a: 1\nb: 2\n", Loader=scanner._UniqueKeyLoader) == {"a": 1, "b": 2}  # noqa: S506
+    loader = scanner._UniqueKeyLoader("a: 1\na: 2\n")
+    try:
+        node = loader.get_single_node()
+        assert isinstance(node, yaml.MappingNode)
+        with pytest.raises(yaml.constructor.ConstructorError, match="duplicate mapping key 'a'"):
+            scanner._construct_unique_mapping(loader, node)
+    finally:
+        loader.dispose()
