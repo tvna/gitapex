@@ -71,6 +71,8 @@ the PR body carries a `## Skill audit evidence` section.
 
 ## Task 1: opt-in evals/ inclusion in the isolated dispatch snapshot
 
+Source ACM rows: issue #1950 rows 1, 2, and 3 (re-verified, see the notes above).
+
 > Planned ops (issue #1950 row 1, verbatim): "Edit
 > `skills/evaluating-skill-quality/scripts/gitapex_run_verified_isolated_dispatch.py`;
 > add/extend a CLI flag (e.g. an optional second path, or a
