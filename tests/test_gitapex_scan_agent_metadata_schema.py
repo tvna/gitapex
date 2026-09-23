@@ -358,6 +358,48 @@ def test_find_drift_raises_on_unreadable_sidecar(tmp_path: pathlib.Path, content
         scanner.find_drift(agents_dir)
 
 
+def test_load_sidecar_parses_a_valid_file(tmp_path: pathlib.Path) -> None:
+    agents_dir = _make_agents_dir(tmp_path)
+    path = _write_sidecar(agents_dir, "example-agent", _instance())
+    assert scanner.load_sidecar(path) == _instance()
+
+
+def test_load_sidecar_raises_on_unreadable_path(tmp_path: pathlib.Path) -> None:
+    with pytest.raises(scanner.SidecarReadError, match="cannot be read"):
+        scanner.load_sidecar(tmp_path / "missing.gitapex.yaml")
+
+
+def test_load_sidecar_raises_on_memory_error(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "example-agent.gitapex.yaml"
+    path.write_text("key: value\n", encoding="utf-8")
+
+    def _exhaust(_text: str) -> Any:
+        raise MemoryError("alias expansion")
+
+    monkeypatch.setattr(scanner.yaml, "safe_load", _exhaust)
+    with pytest.raises(scanner.SidecarReadError, match="exhausted memory while parsing"):
+        scanner.load_sidecar(path)
+
+
+def test_find_schema_violations_names_the_failing_location() -> None:
+    instance = _instance()
+    instance["spec"]["executionRequirements"]["tools"]["shellDenylist"] = [""]
+    assert scanner.find_schema_violations(_instance(), scanner.load_schema()) == []
+    violations = scanner.find_schema_violations(instance, scanner.load_schema())
+    assert violations
+    assert violations[0].startswith("schema: spec/executionRequirements/tools/shellDenylist/0:")
+
+
+def test_find_name_mismatch_direct() -> None:
+    assert scanner.find_name_mismatch(_instance(), "example-agent") == []
+    assert scanner.find_name_mismatch(_instance(), "other-agent") == [
+        "metadata-name-matches-file: 'example-agent' vs file stem 'other-agent'"
+    ]
+    assert scanner.find_name_mismatch(None, "example-agent") == []
+    assert scanner.find_name_mismatch({"metadata": "x"}, "example-agent") == []
+    assert scanner.find_name_mismatch({"metadata": {"name": 1}}, "example-agent") == []
+
+
 def test_find_drift_reports_empty_sidecar_as_schema_violation(tmp_path: pathlib.Path) -> None:
     agents_dir = _make_agents_dir(tmp_path)
     (agents_dir / "metadata").mkdir()

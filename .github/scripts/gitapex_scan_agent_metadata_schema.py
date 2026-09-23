@@ -86,8 +86,9 @@ def load_schema(schema_path: pathlib.Path = SCHEMA_PATH) -> dict[str, Any]:
 
 def load_sidecar(path: pathlib.Path) -> Any:
     """Read and YAML-parse ``path``, raising SidecarReadError on a
-    non-UTF-8 file, invalid YAML, or nesting deep enough to hit
-    RecursionError (not a YAMLError subclass, so caught separately)."""
+    non-UTF-8 file, invalid YAML, nesting deep enough to hit RecursionError,
+    or alias expansion large enough to hit MemoryError (neither is a
+    YAMLError subclass, so both are caught separately)."""
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as error:
@@ -100,6 +101,8 @@ def load_sidecar(path: pathlib.Path) -> Any:
         raise SidecarReadError(f"{path}: is not valid YAML: {error}") from error
     except RecursionError as error:
         raise SidecarReadError(f"{path}: is too deeply nested to parse: {error}") from error
+    except MemoryError as error:
+        raise SidecarReadError(f"{path}: exhausted memory while parsing: {error}") from error
 
 
 def find_schema_violations(instance: Any, schema: dict[str, Any]) -> list[str]:
