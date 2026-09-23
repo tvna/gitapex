@@ -162,9 +162,10 @@ not optional: when the calling repository carries its own
 project-instruction file (for example `CLAUDE.md` or `AGENTS.md`),
 exclude that file from the dispatch's context before dispatching, and
 verify the exclusion held per `evaluating-skill-quality`'s own Subagent
-dispatch section. Mode B audits a platform's standing configuration rather
-than authored content, so it carries no equivalent authorship-bias
-condition.
+dispatch section -- only its verification mechanics; this section's own
+trigger and payload rules govern here. Mode B audits a platform's
+standing configuration rather than authored content, so it carries no
+equivalent authorship-bias condition.
 
 ## Mode A procedure
 
@@ -335,9 +336,9 @@ never changes branch protection, revokes a webhook, or rotates a key.
 - **`docs/agent-product-scope.md`'s Axis B** (a document specific to this
   skill's own authoring repository, not a sibling skill) -- Axis B is a
   *future runtime enforcement adapter*: least-privilege
-  tool/filesystem/network gating, actual enforcement code. This skill is a review procedure producing findings,
-  never enforcement, and does not fulfill, build, or substitute for that
-  axis.
+  tool/filesystem/network gating, actual enforcement code. This skill is
+  a review procedure producing findings, never enforcement, and does not
+  fulfill, build, or substitute for that axis.
 - **`scanning-*` naming, partial fit** -- only one sub-case delegates to an
   external, pinned diagnostic CLI: Mode A's least-privilege check on a
   workflow artifact is backed by zizmor. Everything else -- Mode A's
