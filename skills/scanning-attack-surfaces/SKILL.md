@@ -333,12 +333,10 @@ never changes branch protection, revokes a webhook, or rotates a key.
   evidence for its own per-item verdict. Where a full, unfiltered CI
   posture report is what is wanted, that skill is the one to run; this
   one never substitutes for it.
-- **`docs/agent-product-scope.md`'s Axis B** (a document specific to this
-  skill's own authoring repository, not a sibling skill) -- Axis B is a
-  *future runtime enforcement adapter*: least-privilege
-  tool/filesystem/network gating, actual enforcement code. This skill is
-  a review procedure producing findings, never enforcement, and does not
-  fulfill, build, or substitute for that axis.
+- **A runtime enforcement adapter** (not a sibling skill) --
+  least-privilege tool/filesystem/network gating, actual enforcement
+  code. This skill is a review procedure producing findings, never
+  enforcement, and does not fulfill, build, or substitute for one.
 - **`scanning-*` naming, partial fit** -- only one sub-case delegates to an
   external, pinned diagnostic CLI: Mode A's least-privilege check on a
   workflow artifact is backed by zizmor. Everything else -- Mode A's
@@ -452,10 +450,8 @@ finding: [references/worked-examples.md](references/worked-examples.md).
 Portability: **Mixed**. The portable core above -- both modes' checks and
 procedures, the Applicability gate, and the Stop boundaries -- names no
 path or issue number specific to this skill's own authoring repository.
-The Relationship-to-other-skills section's disambiguation from sibling
-skills is itself portable, but one of its bullets additionally cites
-this repository's own `docs/agent-product-scope.md`, named as
-repository-specific inline where it appears. Two reference
+The Relationship-to-other-skills section's disambiguation is itself
+portable. Two reference
 files are repository-scoped and can be dropped by a vendoring copy:
 [references/gitapex-cross-links.md](references/gitapex-cross-links.md)
 (step B2's cross-link target, whose absence a vendored copy substitutes

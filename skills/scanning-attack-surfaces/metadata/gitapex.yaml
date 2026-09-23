@@ -149,6 +149,9 @@ spec:
     - kind: deferral
       anchor: "https://github.com/tvna/gitapex/issues/848"
       summary: "Ceiling pressure is a disclosed accepted cost, not an oversight: after the absorption the body and description both sit a few lines/characters under gitapex_check_skill_shape.py's limits. What remains in the body is the two modes' procedures and the Stop boundaries; moving either into references/ would leave the body incomplete for a correct run, which Adaptive does not license. The next substantive addition must remove something first."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1790"
+      summary: "Supersedes the SKILL.md naming recorded in the issue-307 Axis B entry above: the Relationship bullet no longer cites docs/agent-product-scope.md's Axis B by path. It keeps only the operative boundary -- this skill is a review procedure and never a runtime enforcement adapter -- so the body carries no origin-repo docs/ path and the Notes disclosure of that citation is removed."
   skillDependencies:
     requires:
       - evaluating-skill-quality
