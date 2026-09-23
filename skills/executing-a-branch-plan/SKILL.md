@@ -92,16 +92,16 @@ first, not skimmed.
    `drafting-a-pr-to-merge`. Event vocabulary and log format: [domain events reference](references/events-and-review-gate.md#domain-events-and-failure-handling).
 6. **Execute, one Workflow run per wave** (Decision 16, 4, 13, 14). For
    each wave from step 3: dispatch one Workflow run containing only that
-   wave's task `agent()` calls, each with `agentType: 'branch-plan-task'` (the Decision 17 backstop -- no `mcp__github__*`
-   tools available to it in either deployment; a hook-backed, empirically
-   verified `gh`/`git push`/install exclusion in the project-local
-   variant, a weaker prompt-plus-session-hook exclusion in the
-   plugin-distributed variant -- verified via the `Agent` tool's own
+   wave's task `agent()` calls, each with `agentType: 'gitapex:branch-plan-task'` (the Decision 17 backstop -- no `mcp__github__*`
+   tools available to it; a `gh`/`git push`/install exclusion
+   enforced by the plugin's own `hooks/hooks.json` `PreToolUse` hook,
+   self-scoped to this agent type by the payload's `agent_type` (issue
+   `#1996`) -- verified via the `Agent` tool's own
    `subagent_type` parameter, a documented but not literally exercised
    proxy for the `Workflow` tool's own `agentType` option this step
    actually uses -- see [the threat-model
    reference](references/threat-model-and-authorization.md#the-branch-plan-task-subagent-type)
-   for the full, honest accounting of both) and `isolation: 'worktree'`. Use the sequential main-thread fallback
+   for the full, honest accounting) and `isolation: 'worktree'`. Use the sequential main-thread fallback
    (one task per turn, no wave/run boundary) when the Workflow tool is
    unavailable (`CLAUDE_CODE_DISABLE_WORKFLOWS=1` or otherwise absent).
    For a task decomposed from a bare-defect-report ACM row, route through
@@ -135,9 +135,9 @@ first, not skimmed.
    worktree** (Decision 20, issue `#1476`, retro `#1475` repair 2) -- not
    deferred solely to this step's own merge-back screening below, which
    let a stale test outside a task's own scope surface only after the
-   wave already reported complete. Project-local: a `SubagentStop` hook
-   backstop (`check_task_full_verification.sh`); plugin-distributed:
-   prompt-only, the same asymmetry as Decision 17's Bash exclusion -- see
+   wave already reported complete. Backstop: the plugin's `SubagentStop`
+   hook (`check_task_full_verification.sh`), which skips with a visible
+   message in a repository without gitapex's own suite -- see
    [the threat-model
    reference](references/threat-model-and-authorization.md#the-branch-plan-task-subagent-type).
    Once a wave's run returns, in the main thread (the Workflow script itself has no
@@ -234,7 +234,7 @@ first, not skimmed.
    reference](references/failure-and-recovery.md#failure-dispatch-step-7).
 8. **Refactor and adversarially review the accumulated diff** (Decision 12, mandatory,
    non-skippable). Two separate fresh subagent dispatches over the full diff -- a
-   refactor/simplify pass (behavior-preserving only, `agentType: 'branch-plan-task'`), then
+   refactor/simplify pass (behavior-preserving only, `agentType: 'gitapex:branch-plan-task'`), then
    an independent adversarial code review (`subagent_type: 'review-persona'`) -- findings
    verified and fixed outside it, in the calling main thread only (never by the refactor
    pass's own behavior-preserving-only subagent), before proceeding. The independent
@@ -309,7 +309,7 @@ file, two own the disjoint call sites (no shared file, no interface edge
 between them -- same wave), one owns the docs file but has an interface
 edge on the schema task (must read the field's final name) -- sequenced
 after it. wave 1: schema task alone. wave 2: both call-site tasks in
-parallel (`isolation: 'worktree'`), each `agentType: 'branch-plan-task'`.
+parallel (`isolation: 'worktree'`), each `agentType: 'gitapex:branch-plan-task'`.
 wave 3: docs task, reading the merged schema. Each wave's Workflow run
 returns to the main thread, which screens, merges, and logs
 `TaskCompleted` before dispatching the next wave. After wave 3, the
@@ -324,12 +324,12 @@ combined diff, then the draft PR converts to ready-for-review.
 - Never let a task `agent()` call touch a GitHub write, the `gh` CLI,
   `git push`, or a package-manager install directly -- these are
   main-thread-only. The GitHub-write exclusion is structurally enforced
-  in both `branch-plan-task` deployment variants (tool restriction, not
+  by the `branch-plan-task` agent definition (tool restriction, not
   prompt alone); the `gh`/`git push`/install exclusion is additionally
-  hook-enforced only in the project-local variant -- see [the threat-model
+  hook-enforced by the plugin's own `hooks/hooks.json` -- see [the threat-model
   reference](references/threat-model-and-authorization.md#the-branch-plan-task-subagent-type)
-  before assuming the plugin-distributed variant carries the same
-  strength.
+  for what that hook does and does not cover, before relying on it
+  alone.
 - Never skip the Decision 12 refactor/adversarial-review stage under time
   pressure -- it is sequence-gated, not a step this skill can rationalize
   away.
@@ -416,9 +416,9 @@ Portability: **Mixed**.
 
 ### Non-portable (Claude-Code-specific)
 
-Step 6's primary path (`Workflow` tool, `agentType: 'branch-plan-task'`,
+Step 6's primary path (`Workflow` tool, `agentType: 'gitapex:branch-plan-task'`,
 `isolation: 'worktree'`), the `branch-plan-task` subagent type, Step 8's
-own two dispatches (`agentType: 'branch-plan-task'`,
+own two dispatches (`agentType: 'gitapex:branch-plan-task'`,
 `subagent_type: 'review-persona'`), and the worktree-base precondition
 backstop -- full inventory and each one's own portable substitute:
 [porting-boundary-map.md](references/porting-boundary-map.md), read only
@@ -441,8 +441,8 @@ bundled `scripts/` (`check_task_bash_safety.sh`,
 `gitapex_check_canonical_governance_paths.py` and their shared
 `_gitapex_path_normalize.py` helper, plus the standalone
 `gitapex_check_branch_plan_reverified.py` and
-`gitapex_check_task_commit_provenance.py`), and both `branch-plan-task`
-agent-definition variants are themselves the untampered, intended copies) is a
+`gitapex_check_task_commit_provenance.py`), the `branch-plan-task` agent
+definition, and `hooks/hooks.json` are themselves the untampered, intended copies) is a
 separate question from the runtime content trust the threat-model reference covers
 -- a step-1 PASS says nothing about whether the copy that produced it was the one
 actually intended for installation. Verify that through the calling repository's own

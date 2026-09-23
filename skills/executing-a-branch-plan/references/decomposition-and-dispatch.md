@@ -337,7 +337,7 @@ not inside a script that cannot reach any of them.
 Per wave: dispatch a Workflow run containing only that wave's
 `pipeline()`/`parallel()` task `agent()` calls, each:
 
-- `agentType: 'branch-plan-task'` -- the Decision 17 backstop subagent
+- `agentType: 'gitapex:branch-plan-task'` -- the Decision 17 backstop subagent
   type (see
   [threat-model-and-authorization.md](threat-model-and-authorization.md#the-branch-plan-task-subagent-type)).
 - `isolation: 'worktree'` when the wave has more than one task (see
@@ -379,7 +379,7 @@ real run to measure, not assumed low-friction.
 Step 8 ([events and review gate
 reference](events-and-review-gate.md#mandatory-aggregate-refactor--adversarial-review-step-8))
 reuses this same agent type and its read-only sibling, not a per-wave
-dispatch: the refactor/simplify pass dispatches with `agentType: 'branch-plan-task'`
+dispatch: the refactor/simplify pass dispatches with `agentType: 'gitapex:branch-plan-task'`
 (that agent type's own second sanctioned call site,
 per `agents/branch-plan-task.md`'s own "Sanctioned call sites" section),
 and the adversarial code review dispatches with `subagent_type: 'review-persona'`
@@ -545,9 +545,9 @@ strictly worse than a missed detection, since it would stop a task's own
 legitimate work over a precondition check this mechanism cannot always
 resolve with confidence. See
 [threat-model-and-authorization.md](threat-model-and-authorization.md#worktree-base-precondition-backstop)
-for the two-variant asymmetry (this mechanism exists only in the
-project-local variant, which alone carries the embedded `PreToolUse`
-hook) and the full disclosed-residual accounting.
+for how it rides the plugin's own `PreToolUse` Bash hook (`hooks/hooks.json`,
+scoped to `gitapex:branch-plan-task`, issue `#1996`) and the full
+disclosed-residual accounting.
 
 ### Sequential fallback
 
