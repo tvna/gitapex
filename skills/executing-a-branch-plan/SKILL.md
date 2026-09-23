@@ -165,7 +165,7 @@ first, not skimmed.
    reference](references/threat-model-and-authorization.md#the-branch-plan-task-subagent-type)
    for why that placement is what actually closes issue `#1477`'s own
    residual-risk question rather than leaving it open per
-   `branch-plan-task` deployment variant. Once both scans are clean,
+   `branch-plan-task` hook registration. Once both scans are clean,
    merge the worktree-isolated commit onto the shared branch, **push the shared branch to the remote**, write
    `TaskStarted`/`TaskCompleted`/`TaskFailed`/`NeedsInput` events (each
    write's own fetch re-checks step 5's concurrent-invocation guard, not

@@ -65,11 +65,7 @@ def test_bash_hook_is_registered_for_bash_and_scopes_to_the_agent_type() -> None
 def test_stop_hook_matcher_and_script_scope_agree_with_the_agent_type() -> None:
     entries = _entries_running("SubagentStop", STOP_HOOK)
     assert len(entries) == 1
-    matcher = entries[0]["matcher"]
-    assert isinstance(matcher, str)
-    assert re.fullmatch(matcher, _expected_agent_type())
-    assert not re.fullmatch(matcher, "branch-plan-task")
-    assert matcher == f"^{_expected_agent_type()}$"
+    assert entries[0]["matcher"] == f"^{_expected_agent_type()}$"
     assert _script_constant(STOP_HOOK) == _expected_agent_type()
 
 

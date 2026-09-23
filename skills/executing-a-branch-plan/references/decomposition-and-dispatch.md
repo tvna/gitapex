@@ -464,8 +464,8 @@ enforcement point actually available, so this backstop only fires once
 the task issues its own FIRST Bash tool call -- any Read/Edit/Write/
 Grep/Glob work a task does before its first Bash call is not covered by
 it at all. This is an explicitly disclosed, asymmetric-strength residual,
-matching this skill's own established disclosure convention (Decision
-17's own two-variant asymmetry) rather than overclaiming full coverage;
+matching this skill's own established disclosure convention rather
+than overclaiming full coverage;
 see
 [threat-model-and-authorization.md](threat-model-and-authorization.md#worktree-base-precondition-backstop)
 for the full accounting.

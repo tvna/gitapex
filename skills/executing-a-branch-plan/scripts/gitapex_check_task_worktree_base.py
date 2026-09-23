@@ -28,8 +28,8 @@ there, rather than adding a second hook registration. This means the
 check piggybacks on the task's own FIRST (and every subsequent) Bash
 call, not a true "before any tool call at all, including a non-Bash one"
 gate -- an explicitly disclosed, asymmetric-strength residual, matching
-this skill's own established disclosure convention (Decision 17's own
-two-variant asymmetry) rather than overclaiming full coverage. See
+this skill's own established disclosure convention rather than
+overclaiming full coverage. See
 references/decomposition-and-dispatch.md and
 references/threat-model-and-authorization.md for the full disclosure.
 
