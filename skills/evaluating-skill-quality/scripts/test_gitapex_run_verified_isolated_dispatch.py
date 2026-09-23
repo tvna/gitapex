@@ -918,6 +918,26 @@ def test_build_target_snapshot_include_evals_refuses_a_special_file(tmp_path: Pa
         gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
 
 
+@pytest.mark.parametrize("planted", ["symlink", "instruction-file"])
+def test_build_target_snapshot_include_evals_revalidates_the_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, planted: str
+) -> None:
+    # Content that slips past the source check (it changed between the
+    # check and the copy) must still be caught on the copy itself -- which
+    # also requires copytree to keep symlinks as links (symlinks=True)
+    # rather than dereference them into regular files.
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+    tasks = tmp_path / "repo" / "evals" / "demo" / "tasks"
+    if planted == "symlink":
+        (tasks / "ctx").symlink_to(tasks / "case.yaml")
+    else:
+        (tasks / "AGENTS.md").write_text("injected", encoding="utf-8")
+    monkeypatch.setattr(gvid, "_validate_include_evals_source", mock.Mock())
+
+    with pytest.raises(ValueError, match="symlink" if planted == "symlink" else "project-instruction file"):
+        gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
+
+
 def test_validate_include_evals_tree_raises_on_a_walk_error(tmp_path: Path) -> None:
     # os.walk's default silently skips an unreadable directory; the check
     # must fail instead of reporting a tree it never read as clean.

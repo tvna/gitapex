@@ -904,10 +904,11 @@ def main(
             print(f"error: --prompt-file not found: {args.prompt_file}", file=sys.stderr)
             return 1
         if args.include_evals:
-            # Every refusal build_target_snapshot can raise is checked here
-            # too, so a deterministic one fails before any live control run
+            # The same layout and tree refusals build_target_snapshot
+            # applies run here too, so they fail before any live control run
             # or registry write (build_target_snapshot re-checks for content
-            # that changes meanwhile).
+            # that changes meanwhile). A copy-time OSError, such as an
+            # unreadable file, still surfaces only at the snapshot step.
             try:
                 skill_dir = _include_evals_skill_dir(args.target)
                 _validate_include_evals_source(skill_dir)
