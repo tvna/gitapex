@@ -1,7 +1,8 @@
 #!/bin/bash
 # SubagentStop hook, scoped to the executing-a-branch-plan skill's
-# task-level subagent type (.claude/agents/branch-plan-task.md's embedded
-# `hooks.SubagentStop` block) -- backs design doc Decision 20
+# task-level subagent type (registered in hooks/hooks.json with matcher
+# ^gitapex:branch-plan-task$ since issue #1996, and re-checked below) --
+# backs design doc Decision 20
 # (docs/superpowers/specs/2026-07-22-plan-execution-handoff-design.md),
 # issue #1476 (retro #1475 repair 2): a task-level dispatch must run the
 # full repo verification suite (pytest plus every deterministic
@@ -48,10 +49,23 @@ fi
 
 hook_event_name=$(printf '%s' "$input" | jq -r '.hook_event_name // empty')
 
-# Defense in depth: the subagent frontmatter's own SubagentStop
-# registration already restricts this hook to that one event, but never
-# trust that alone.
+# Defense in depth: the hooks.json SubagentStop registration already
+# restricts this hook to that one event, but never trust that alone.
 if [ "$hook_event_name" != "SubagentStop" ]; then
+  exit 0
+fi
+
+# Issue #1996: the hooks.json matcher already filters on agent type
+# (^gitapex:branch-plan-task$); re-check it here rather than trusting the
+# matcher alone. A non-string value is malformed input and fails closed.
+branch_plan_task_agent_type="gitapex:branch-plan-task"
+
+if ! printf '%s' "$input" | jq -e '(.agent_type == null) or (.agent_type | type == "string")' >/dev/null 2>&1; then
+  deny "Blocked by executing-a-branch-plan's task-agent full-verification gate: agent_type in the payload is not a string. Failing closed."
+fi
+
+agent_type=$(printf '%s' "$input" | jq -r '.agent_type // empty')
+if [ "$agent_type" != "$branch_plan_task_agent_type" ]; then
   exit 0
 fi
 
@@ -80,6 +94,13 @@ reason=$(printf '%s' "$classifier_output" | jq -r '.reason // empty')
 
 if [ "$decision" = "deny" ]; then
   deny "$reason"
+fi
+
+# Issue #1996: not a gitapex checkout (a plugin consumer), so allow, but
+# say so in a visible systemMessage rather than passing silently.
+if [ "$decision" = "skip" ]; then
+  printf '%s' "$reason" | jq -Rs '{"systemMessage": .}'
+  exit 0
 fi
 
 if [ "$decision" != "allow" ]; then

@@ -111,8 +111,8 @@ DEFAULT_PREFLIGHT_ARGV: tuple[str, ...] = (
 # its rationale: a hang guard, not a budget -- a cold mypy cache (run inside
 # the local-preflight step) can legitimately take longer than a warm-run
 # measurement would suggest. Applied PER STEP to two sequential steps
-# (pytest, then local-preflight) -- .claude/agents/branch-plan-task.md's
-# own SubagentStop hook `timeout` (the OUTER Claude Code hook-process
+# (pytest, then local-preflight) -- hooks/hooks.json's SubagentStop
+# entry for this hook sets `timeout` (the OUTER Claude Code hook-process
 # ceiling, a materially different thing from this per-subprocess value)
 # must stay comfortably above 2x this number, or a legitimately slow
 # (not failing) run can hit Claude Code's own hook timeout first, which
@@ -136,6 +136,15 @@ DEFAULT_STEPS: tuple[VerificationStep, ...] = (
     VerificationStep("pytest", DEFAULT_PYTEST_ARGV),
     VerificationStep("local-preflight", DEFAULT_PREFLIGHT_ARGV),
 )
+
+# Issue #1996: this hook is registered in the plugin's own hooks/hooks.json,
+# so it also fires for a branch-plan-task dispatch inside a consumer
+# repository, which has none of gitapex's own verification suite. The
+# preflight runner DEFAULT_PREFLIGHT_ARGV names is that suite's entry point;
+# its absence from the task's worktree means there is nothing of gitapex's
+# to run. Residual: a task that deletes this file skips the gate, but the
+# deletion shows up in the task diff the main thread screens before merge.
+GITAPEX_SUITE_MARKER = DEFAULT_PREFLIGHT_ARGV[-1]
 
 
 # Bounds how much of a step's own captured stdout+stderr reaches the
@@ -285,6 +294,14 @@ def main(argv: list[str] | None = None) -> int:
         steps = DEFAULT_STEPS
 
     cwd = _resolve_cwd(payload)
+    if args.steps_json is None and not (cwd / GITAPEX_SUITE_MARKER).is_file():
+        reason = (
+            "task-level full verification (issue #1476) skipped: "
+            f"{GITAPEX_SUITE_MARKER} is not present in {cwd}, so this is not a "
+            "gitapex checkout and there is no gitapex verification suite to run (issue #1996)"
+        )
+        print(json.dumps({"decision": "skip", "reason": reason}))
+        return 0
     result = run_verification(steps, cwd, args.timeout_seconds)
     print(json.dumps(result))
     return 0

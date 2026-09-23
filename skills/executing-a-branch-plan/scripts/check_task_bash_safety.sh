@@ -1,7 +1,9 @@
 #!/bin/bash
 # PreToolUse hook, scoped to the executing-a-branch-plan skill's
-# task-level subagent type (.claude/agents/branch-plan-task.md's
-# embedded `hooks.PreToolUse` block, matcher "Bash") -- backs design doc
+# task-level subagent type (registered in hooks/hooks.json, matcher
+# "Bash", and self-scoped below to agent_type "gitapex:branch-plan-task"
+# since issue #1996 removed the project-local agent file whose embedded
+# `hooks.PreToolUse` block used to register it) -- backs design doc
 # Decision 17 (docs/superpowers/specs/2026-07-22-plan-execution-handoff-
 # design.md): the deterministic backstop for Decision 7's exclusion list
 # (task agents never run git push, the gh CLI, or a package-manager
@@ -39,13 +41,10 @@
 # gitapex_check_task_bash_safety.py above -- a worktree-base precondition
 # backstop (does this task's own worktree fork point still match the
 # shared plan branch's current tip?), not a Bash-command classifier, but
-# wired the identical way since no second hooks.PreToolUse frontmatter
-# entry exists in .claude/agents/branch-plan-task.md to hang it off
-# instead (confirmed by reading that file directly before adding this --
-# it defines exactly one PreToolUse entry, matcher "Bash", one command
-# hook; the established convention for a second PreToolUse-scoped check is
-# chaining another sibling script call inside THIS shell wrapper, not a
-# second frontmatter entry). Deliberately asymmetric from the classifier
+# wired the identical way: the established convention for a second
+# PreToolUse-scoped check is chaining another sibling script call inside
+# THIS shell wrapper, which already carries the agent-type scoping, not a
+# second hook registration. Deliberately asymmetric from the classifier
 # above: that one fails CLOSED (deny) on any malformed input or
 # classification uncertainty; the worktree-base check fails OPEN on
 # everything except a clean, confirmed mismatch -- see
@@ -81,9 +80,26 @@ fi
 
 tool_name=$(printf '%s' "$input" | jq -r '.tool_name // empty')
 
-# Defense in depth: the subagent frontmatter's matcher already restricts
-# this hook to Bash, but never trust that alone.
+# Defense in depth: the hooks.json matcher already restricts this hook to
+# Bash, but never trust that alone.
 if [ "$tool_name" != "Bash" ]; then
+  exit 0
+fi
+
+# Issue #1996: hooks/hooks.json registers this hook for every Bash call in
+# the session, main thread and every subagent alike, so it scopes itself
+# here. Claude Code puts the running subagent's type in `agent_type`
+# ("<plugin>:<agent>" for a plugin agent, confirmed live); the main thread
+# carries none. Anything other than an exact match is out of scope. A
+# non-string value is malformed input and fails closed like the checks above.
+branch_plan_task_agent_type="gitapex:branch-plan-task"
+
+if ! printf '%s' "$input" | jq -e '(.agent_type == null) or (.agent_type | type == "string")' >/dev/null 2>&1; then
+  deny "Blocked by executing-a-branch-plan's task-agent Bash gate: agent_type in the payload is not a string. Failing closed."
+fi
+
+agent_type=$(printf '%s' "$input" | jq -r '.agent_type // empty')
+if [ "$agent_type" != "$branch_plan_task_agent_type" ]; then
   exit 0
 fi
 
