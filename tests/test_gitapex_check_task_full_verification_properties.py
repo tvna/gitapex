@@ -65,6 +65,10 @@ def test_main_skips_exactly_when_the_marker_is_absent(other_files: list[str], ma
 
         out = io.StringIO()
         with pytest.MonkeyPatch.context() as patch, contextlib.redirect_stdout(out):
+            # The skip also consults the project directory and this process's
+            # own directory (issue #1996); keep both out of any gitapex checkout.
+            patch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+            patch.chdir(tempfile.gettempdir())
             patch.setattr(checker, "run_verification", record)
             patch.setattr("sys.stdin", _FakeStdin(json.dumps({"cwd": str(root)}).encode("utf-8")))
             assert checker.main([]) == 0
@@ -88,3 +92,23 @@ def test_repository_root_resolves_the_top_level_from_any_depth(depth: int) -> No
         cwd = root.joinpath(*[f"d{i}" for i in range(depth)])
         cwd.mkdir(parents=True, exist_ok=True)
         assert checker.repository_root(cwd).resolve() == root
+
+
+@_PROPERTIES
+@given(marker_present=st.booleans(), via_env=st.booleans())
+def test_session_gitapex_checkout_detects_a_gitapex_session(marker_present: bool, via_env: bool) -> None:
+    with tempfile.TemporaryDirectory() as raw_root, tempfile.TemporaryDirectory() as raw_neutral:
+        root = pathlib.Path(raw_root).resolve()
+        subprocess.run(["git", "init", "-q", str(root)], check=True)
+        if marker_present:
+            (root / checker.GITAPEX_SUITE_MARKER).parent.mkdir(parents=True)
+            (root / checker.GITAPEX_SUITE_MARKER).write_text("", encoding="utf-8")
+        with pytest.MonkeyPatch.context() as patch:
+            if via_env:
+                patch.setenv("CLAUDE_PROJECT_DIR", str(root))
+                patch.chdir(raw_neutral)
+            else:
+                patch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+                patch.chdir(root)
+            found = checker._session_gitapex_checkout()
+        assert (found is not None and found.resolve() == root) if marker_present else found is None

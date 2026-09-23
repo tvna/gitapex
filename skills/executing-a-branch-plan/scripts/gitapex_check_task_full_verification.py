@@ -68,6 +68,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -169,6 +170,26 @@ def repository_root(cwd: Path) -> Path:
     if completed.returncode != 0 or not top:
         return cwd
     return Path(top)
+
+
+def _session_gitapex_checkout() -> Path | None:
+    """The gitapex checkout this session runs in, if any.
+
+    The payload `cwd` alone cannot tell a consumer repository from a task
+    that `cd`ed out of a gitapex checkout (into a scratch directory or a
+    fixture repository it created), and treating the latter as a consumer
+    would skip the gate without anything showing in the diff. So the skip
+    also requires that neither the project directory nor this hook
+    process's own directory resolves to a gitapex checkout."""
+    candidates = [Path.cwd()]
+    project_dir = os.environ.get("CLAUDE_PROJECT_DIR")
+    if project_dir and Path(project_dir).is_dir():
+        candidates.insert(0, Path(project_dir))
+    for candidate in candidates:
+        root = repository_root(candidate)
+        if (root / GITAPEX_SUITE_MARKER).is_file():
+            return root
+    return None
 
 
 # Bounds how much of a step's own captured stdout+stderr reaches the
@@ -319,6 +340,15 @@ def main(argv: list[str] | None = None) -> int:
 
     cwd = repository_root(_resolve_cwd(payload))
     if args.steps_json is None and not (cwd / GITAPEX_SUITE_MARKER).is_file():
+        session_checkout = _session_gitapex_checkout()
+        if session_checkout is not None:
+            reason = (
+                f"task-level full verification (issue #1476) cannot run: this session is in the gitapex "
+                f"checkout {session_checkout}, but the task stopped in {cwd}, which is outside it or a "
+                "separate repository. Return to your worktree root and stop again (issue #1996)"
+            )
+            print(json.dumps({"decision": "deny", "reason": reason}))
+            return 0
         reason = (
             "task-level full verification (issue #1476) skipped: "
             f"{GITAPEX_SUITE_MARKER} is not present in {cwd}, so this is not a "

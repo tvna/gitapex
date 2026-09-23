@@ -1,7 +1,7 @@
 #!/bin/bash
 # SubagentStop hook, scoped to the executing-a-branch-plan skill's
 # task-level subagent type (registered in hooks/hooks.json with matcher
-# ^([^:]+:)?branch-plan-task$ since issue #1996, and re-checked below) --
+# ^(.*:)?branch-plan-task$ since issue #1996, and re-checked below) --
 # backs design doc Decision 20
 # (docs/superpowers/specs/2026-07-22-plan-execution-handoff-design.md),
 # issue #1476 (retro #1475 repair 2): a task-level dispatch must run the
@@ -56,7 +56,7 @@ if [ "$hook_event_name" != "SubagentStop" ]; then
 fi
 
 # Issue #1996: the hooks.json matcher already filters on agent type
-# (^([^:]+:)?branch-plan-task$, any plugin prefix or none); re-check it
+# (^(.*:)?branch-plan-task$, any prefix or none); re-check it
 # here rather than trusting the matcher alone. A non-string value is
 # malformed input and fails closed.
 branch_plan_task_agent_name="branch-plan-task"

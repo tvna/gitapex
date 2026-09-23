@@ -362,7 +362,7 @@ still runs alongside this hook -- defense in depth, not a substitute.
   registry does not by itself prove its payloads carry the field.
 - **Plugin root.** Hooks run from the plugin root the session loaded
   (`${CLAUDE_PLUGIN_ROOT}`), not from the checked-out branch. For this
-  repository's directory marketplace, this session observed the hooks
+  repository's directory marketplace, issue `#1996`'s live probe observed the hooks
   running in place from the checkout; an install served from a cached
   copy enforces whatever version that copy carries.
 
@@ -393,11 +393,10 @@ across both `branch-plan-task` deployment variants that existed then
 run in the main thread against each task's `BASE..HEAD` commit-message
 range, before that task's commit is merged onto the shared branch) makes
 that question moot rather than answering it: the main thread always has
-full filesystem/tool access and is identical across both deployment
-variants, so this specific gap is closed uniformly regardless of which
-`branch-plan-task` variant produced the flagged commit, and regardless of
-`hooks/check-bash-safety.sh`'s own binding status inside either variant's
-task-execution context.
+full filesystem/tool access whatever deployment produced the commit, so
+this specific gap was closed uniformly across both variants then, and
+stays closed regardless of any hook's own binding status inside the
+task's execution context.
 
 ## Full-verification exit condition (Decision 20)
 
@@ -434,7 +433,7 @@ often it needs to catch anything, it does not replace it.
 
 **Registration, the same single mechanism as the Bash-safety hook above
 (issue `#1996`).** `hooks/hooks.json` registers a `SubagentStop` entry with
-matcher `^([^:]+:)?branch-plan-task$` invoking
+matcher `^(.*:)?branch-plan-task$` invoking
 `check_task_full_verification.sh` (a thin bash+jq wrapper around
 `gitapex_check_task_full_verification.py`, mirroring
 `check_task_bash_safety.sh`'s own structure), which re-checks `agent_type`
@@ -455,7 +454,11 @@ still verifies from the root); when that root lacks
 `.github/scripts/gitapex_gate_local_preflight.py`, the classifier returns
 `skip` and the wrapper allows the stop with a `systemMessage` naming the
 skip, rather than running commands that cannot exist there or passing
-silently. Residual: a task that deletes that file skips the gate; the
+silently. The skip also requires that neither `CLAUDE_PROJECT_DIR` nor the
+hook process's own directory resolves to a gitapex checkout: a task that
+`cd`ed out of a gitapex checkout (into a scratch directory or a fixture
+repository it created) is denied with a reason telling it to return to its
+worktree root, not skipped. Residual: a task that deletes that file skips the gate; the
 deletion shows up in the task's own diff, which step 6's merge-back
 screening reads before anything lands on the shared branch.
 
@@ -521,7 +524,7 @@ introduces: it is the identical, already-accepted residual the sibling
 `check_task_bash_safety.sh`/`gitapex_check_task_bash_safety.py` pair above
 already carries for the exact same reason (the `PreToolUse` hook's own
 matcher is scoped to `Bash`, never `Edit`/`Write`, so a task could equally
-rewrite that pair's own worktree copy), tracked there as the still-open
+rewrite that pair's plugin-root copy by absolute path), tracked there as the still-open
 "Stage 2 (execution-boundary enforcement)" follow-up rather than solved.
 Named here explicitly for this new hook rather than left for a reader to
 infer from the sibling's own disclosure -- closing it would require the
@@ -662,10 +665,10 @@ pair above already carry.** `check_task_bash_safety.sh` resolves its own
 sibling scripts (including this mechanism's own
 `gitapex_check_task_worktree_base.py`) via the identical
 `script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"` pattern --
-resolving to the task's own worktree copy, not a copy outside that
-worktree's reach. A `branch-plan-task` dispatch retains Edit/Write access,
-so nothing in this mechanism stops a task from rewriting its own
-worktree's copy of either script to unconditionally emit an "allow"
+resolving to the plugin root's copy since issue `#1996`, which a direct
+checkout loads in place. A `branch-plan-task` dispatch retains Edit/Write access,
+so nothing in this mechanism stops a task from rewriting that copy of
+either script by absolute path to unconditionally emit an "allow"
 verdict before this backstop ever runs against it -- neutralizing this
 precondition check entirely from inside the very dispatch it exists to
 constrain. Not a new class of risk this mechanism introduces: it is the

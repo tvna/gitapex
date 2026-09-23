@@ -70,9 +70,10 @@ def test_stop_hook_matcher_and_script_scope_agree_with_the_agent_type() -> None:
     entries = _entries_running("SubagentStop", STOP_HOOK)
     assert len(entries) == 1
     matcher = entries[0]["matcher"]
-    assert matcher == f"^([^:]+:)?{_agent_name()}$"
+    # Same scope as both scripts' `name | *:name` case pattern.
+    assert matcher == f"^(.*:)?{_agent_name()}$"
     # Any plugin prefix, or none, is in scope; a lookalike name is not.
-    for in_scope in (_expected_agent_type(), _agent_name(), f"fork:{_agent_name()}"):
+    for in_scope in (_expected_agent_type(), _agent_name(), f"fork:{_agent_name()}", f"a:b:{_agent_name()}"):
         assert re.fullmatch(matcher, in_scope), in_scope
     for out_of_scope in (f"x{_agent_name()}", f"{_expected_agent_type()}-extra", "gitapex:review-persona"):
         assert not re.fullmatch(matcher, out_of_scope), out_of_scope
@@ -81,8 +82,9 @@ def test_stop_hook_matcher_and_script_scope_agree_with_the_agent_type() -> None:
 
 def test_project_local_agent_definition_stays_removed() -> None:
     """A reintroduced project-local copy would register a second
-    `branch-plan-task` type reporting the unqualified agent_type, which
-    neither hook matches."""
+    `branch-plan-task` definition next to the plugin's, two definitions of
+    one agent type that could drift apart (both would still be gated, since
+    the hooks accept the unqualified name too)."""
     assert not (REPO_ROOT / ".claude" / "agents" / "branch-plan-task.md").exists()
 
 

@@ -148,7 +148,7 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "^([^:]+:)?branch-plan-task$",
+        "matcher": "^(.*:)?branch-plan-task$",
         "hooks": [
           {
             "type": "command",

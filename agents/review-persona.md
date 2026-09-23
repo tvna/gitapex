@@ -121,9 +121,9 @@ provides no protection on that path either.
 
 This is a plugin-distributed definition only; no project-local
 `.claude/agents/` variant exists. Excluding Bash entirely from the
-allow-list removes the need for the hooks-based Bash safety net the
-project-local `branch-plan-task` variant carries -- see that file
-(`agents/branch-plan-task.md`) and
+allow-list removes the need for the hooks-based Bash safety net
+`branch-plan-task` relies on (registered in the plugin's own
+`hooks/hooks.json` since issue #1996) -- see `agents/branch-plan-task.md` and
 `skills/executing-a-branch-plan/references/threat-model-and-authorization.md`
 for the already primary-source-verified reason plugin-agent frontmatter
 cannot carry a `hooks` field at all; not re-verified independently here.

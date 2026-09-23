@@ -62,12 +62,13 @@ enforced. Claude Code's plugin-agent frontmatter supports no `hooks`
 field ("for security reasons," per Claude Code's own plugin-reference
 documentation), so the Bash-level exclusion (no `gh`, `git push`, or
 install commands) and the full-verification-suite exit condition above
-are backed instead by the plugin's own `hooks/hooks.json`, which scopes
-both hooks to this agent's `agent_type` (`gitapex:branch-plan-task`)
-(issue #1996). In a repository without gitapex's own verification suite
-the exit-condition hook skips with a visible message, so there this
-paragraph's instruction is what asks you to run that repository's own
-checks -- see
+are backed instead, in Claude Code only, by the plugin's own
+`hooks/hooks.json`, which scopes both hooks to any `agent_type` naming
+this agent (issue #1996); other runtimes (e.g. OpenCode) run no such hook,
+so there these exclusions rest on this paragraph alone. Outside a gitapex
+checkout the exit-condition hook skips with a visible message and the two
+commands above do not exist: run that repository's own test and lint
+commands instead before reporting complete -- see
 `skills/executing-a-branch-plan/references/threat-model-and-authorization.md`
 for the full, honest accounting of what is and is not structurally
 enforced here.

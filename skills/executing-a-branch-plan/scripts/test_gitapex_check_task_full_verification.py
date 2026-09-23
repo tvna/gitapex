@@ -30,9 +30,11 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import pathlib
 import subprocess
 import sys
+import tempfile
 
 import gitapex_check_task_full_verification as under_test
 import pytest
@@ -156,7 +158,24 @@ def test_steps_from_json_rejects_malformed_input() -> None:
 # --------------------------------------------------------------------------
 
 
-def _run_main(payload: dict[str, object], *, steps_json: str | None = None) -> dict[str, str]:
+# The classifier also consults the hook process's own directory and
+# CLAUDE_PROJECT_DIR (issue #1996), so every subprocess here runs from a
+# neutral, non-git directory with that variable removed unless a test sets
+# them on purpose -- otherwise running this suite from a gitapex checkout
+# would itself count as "the session is in a gitapex checkout".
+_NEUTRAL_DIR = pathlib.Path(tempfile.mkdtemp(prefix="gitapex-neutral-"))
+
+
+def _hook_env(project_dir: pathlib.Path | None = None) -> dict[str, str]:
+    env = {key: value for key, value in os.environ.items() if key != "CLAUDE_PROJECT_DIR"}
+    if project_dir is not None:
+        env["CLAUDE_PROJECT_DIR"] = str(project_dir)
+    return env
+
+
+def _run_main(
+    payload: dict[str, object], *, steps_json: str | None = None, project_dir: pathlib.Path | None = None
+) -> dict[str, str]:
     argv = [sys.executable, str(CLASSIFIER)]
     if steps_json is not None:
         argv += ["--steps-json", steps_json]
@@ -166,6 +185,8 @@ def _run_main(payload: dict[str, object], *, steps_json: str | None = None) -> d
         capture_output=True,
         text=True,
         timeout=15,
+        cwd=_NEUTRAL_DIR,
+        env=_hook_env(project_dir),
     )
     assert result.returncode == 0, f"classifier exited {result.returncode}: {result.stderr}"
     decoded: dict[str, str] = json.loads(result.stdout)
@@ -254,10 +275,57 @@ def test_main_resolves_the_repository_root_from_a_subdirectory_cwd(
         return {"decision": "allow"}
 
     monkeypatch.setattr(under_test, "run_verification", record)
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    monkeypatch.chdir(_NEUTRAL_DIR)
     monkeypatch.setattr("sys.stdin", _FakeStdin(json.dumps({"cwd": str(subdir)}).encode("utf-8")))
     assert under_test.main([]) == 0
     assert json.loads(capsys.readouterr().out) == {"decision": "allow"}
     assert [path.resolve() for path in seen] == [tmp_path.resolve()]
+
+
+def test_main_denies_when_cwd_left_the_gitapex_checkout_for_a_non_git_dir(tmp_path: pathlib.Path) -> None:
+    """Issue #1996 gate-quality review defeat case: a task in a gitapex
+    session whose last Bash call was `cd /tmp/scratch` must not skip."""
+    project = tmp_path / "gitapex"
+    project.mkdir()
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+    _make_gitapex_checkout(project)
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    result = _run_main({"cwd": str(scratch)}, project_dir=project)
+    assert result["decision"] == "deny"
+    assert "worktree root" in result["reason"]
+
+
+def test_main_denies_when_cwd_is_a_nested_fixture_repository(tmp_path: pathlib.Path) -> None:
+    """Same defeat case, via a fixture repository the task created and
+    entered inside its own checkout."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _make_gitapex_checkout(tmp_path)
+    fixture = tmp_path / "fixture"
+    fixture.mkdir()
+    subprocess.run(["git", "init", "-q", str(fixture)], check=True)
+    result = _run_main({"cwd": str(fixture)}, project_dir=tmp_path)
+    assert result["decision"] == "deny"
+
+
+def test_main_denies_when_the_hook_process_itself_runs_in_a_gitapex_checkout(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "gitapex"
+    project.mkdir()
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+    _make_gitapex_checkout(project)
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    result = subprocess.run(
+        [sys.executable, str(CLASSIFIER)],
+        input=json.dumps({"cwd": str(scratch)}),
+        capture_output=True,
+        text=True,
+        timeout=15,
+        cwd=project,
+        env=_hook_env(),
+    )
+    assert json.loads(result.stdout)["decision"] == "deny"
 
 
 def test_repository_root_falls_back_to_cwd_outside_git(tmp_path: pathlib.Path) -> None:
@@ -408,6 +476,8 @@ def _run_sh(payload: dict[str, object]) -> subprocess.CompletedProcess[str]:
         capture_output=True,
         text=True,
         timeout=15,
+        cwd=_NEUTRAL_DIR,
+        env=_hook_env(),
     )
 
 
