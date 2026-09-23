@@ -77,10 +77,7 @@ For each dependency relationship (a call to middleware, a cloud service,
 or any external consumer the artifact talks to), does the artifact's
 outbound interface -- an API response, a log line, telemetry, a webhook
 payload, an error message -- reveal more than that dependency's actual
-function requires? Grounded in the same principle this repository's own
-contributor-instruction file already states for agent conduct generally
-("do not send more... to an external endpoint... unless the trusted task
-requires it"), generalized here to an artifact's own design.
+function requires?
 
 The concrete test: for a given field, log line, or response value, would
 removing it change whether the dependency can actually do its job? If
@@ -161,11 +158,7 @@ a neutral grader of it, and an in-context instruction to "review
 neutrally anyway" does not remove that bias. Give the dispatch only the
 target's path (or content) and this skill's own files, never the calling
 conversation's framing, prior discussion, or opinion of it. Required,
-not optional, the same way `evaluating-deterministic-gate-quality`'s own
-equivalent requirement is; that skill's own Subagent dispatch section
-(itself deferring to `evaluating-skill-quality`'s isolation-verification
-mechanics) is the pattern this skill reuses rather than re-deriving.
-Mode B audits a platform's standing configuration rather than authored
+not optional. Mode B audits a platform's standing configuration rather than authored
 content, so it carries no equivalent authorship-bias condition.
 
 ## Mode A procedure
@@ -335,26 +328,17 @@ never changes branch protection, revokes a webhook, or rotates a key.
   posture report is what is wanted, that skill is the one to run; this
   one never substitutes for it.
 - **`docs/agent-product-scope.md`'s Axis B** (a document specific to this
-  skill's own authoring repository, not a sibling skill -- named here
-  because the resemblance in name is exactly the kind of conflation this
-  repository's own scope map warns against; its own tracking-issue number
-  is elided here per the no-bare-citation rule below and lives instead in
-  `metadata/gitapex.yaml`) -- Axis B is a *future runtime enforcement
-  adapter*: least-privilege tool/filesystem/network gating, actual
+  skill's own authoring repository, not a sibling skill) -- Axis B is a
+  *future runtime enforcement adapter*: least-privilege tool/filesystem/network gating, actual
   enforcement code. This skill is a review procedure producing findings,
   never enforcement, and does not fulfill, build, or substitute for that
   axis.
-- **The `scanning-*` naming family** (`docs/glossary.md`) -- this skill
-  is a partial member by that family's own definition, and says so rather
-  than claiming full membership. The family delegates judgment entirely
-  to one external, pinned diagnostic CLI and reports its findings
-  unmodified. One sub-case here does exactly that: Mode A's
-  least-privilege check on a workflow artifact is backed by zizmor.
-  Everything else -- Mode A's exposure check, Mode A on every non-workflow
-  artifact type, and the whole of Mode B -- still performs this skill's
-  own judgment against per-item tests and a per-platform checklist. The
-  honest description is a `scanning-*`-named skill with one delegated
-  sub-case, not a delegate throughout.
+- **Delegated vs. own judgment** -- only one sub-case delegates to an
+  external, pinned diagnostic CLI: Mode A's least-privilege check on a
+  workflow artifact is backed by zizmor. Everything else -- Mode A's
+  exposure check, Mode A on every non-workflow artifact type, and the
+  whole of Mode B -- performs this skill's own judgment against per-item
+  tests and a per-platform checklist.
 
 ## Stop boundaries
 
@@ -463,9 +447,9 @@ Portability: **Mixed**. The portable core above -- both modes' checks and
 procedures, the Applicability gate, and the Stop boundaries -- names no
 path or issue number specific to this skill's own authoring repository.
 The Relationship-to-other-skills section's disambiguation from sibling
-skills is itself portable, but two of its bullets additionally cite this
-repository's own `docs/agent-product-scope.md` and `docs/glossary.md`,
-named as repository-specific inline where they appear. Two reference
+skills is itself portable, but one of its bullets additionally cites
+this repository's own `docs/agent-product-scope.md`, named as
+repository-specific inline where it appears. Two reference
 files are repository-scoped and can be dropped by a vendoring copy:
 [references/gitapex-cross-links.md](references/gitapex-cross-links.md)
 (step B2's cross-link target, whose absence a vendored copy substitutes
