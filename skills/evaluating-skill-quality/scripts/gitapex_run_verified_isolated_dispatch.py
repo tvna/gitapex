@@ -645,7 +645,27 @@ def _strip_write_bit(path: Path) -> None:
     path.chmod(path.stat().st_mode & ~0o222)
 
 
-def build_target_snapshot(target: Path, base_dir: Path) -> Path:
+def _include_evals_skill_dir(target: Path) -> Path:
+    """Resolve ``target`` as a ``skills/<name>`` directory for
+    ``--include-evals``, or raise ``ValueError`` -- the sibling
+    ``evals/<name>/`` path is derived from that layout, so a target outside
+    it has no well-defined evals directory to include."""
+    # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
+    skill_dir = target.resolve()
+    if not skill_dir.is_dir() or skill_dir.parent.name != "skills":
+        raise ValueError(f"--include-evals requires --target to be a skills/<name> directory, got {target}")
+    return skill_dir
+
+
+def sibling_evals_dir(skill_dir: Path) -> Path:
+    """Return the repository-root-relative ``evals/<name>/`` path that sits
+    beside ``skills/<name>/`` (issue #1950) -- whether or not it exists."""
+    # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
+    resolved = skill_dir.resolve()
+    return resolved.parent.parent / "evals" / resolved.name
+
+
+def build_target_snapshot(target: Path, base_dir: Path, include_evals: bool = False) -> Path:
     """Copy ``target`` into a fresh scratch directory under ``base_dir`` and
     make it read-only, so the real dispatch's own isolated cwd *is* the
     review target itself rather than an empty directory pointed at an
@@ -668,10 +688,25 @@ def build_target_snapshot(target: Path, base_dir: Path) -> Path:
     directory must be stripped too, or an unprivileged dispatch could still
     create, delete, or rename files directly at that top level even though
     it cannot edit any existing file's content in place.
+
+    ``include_evals`` (issue #1950) changes the layout: instead of the
+    snapshot root *being* ``target``'s own content, it holds
+    ``skills/<name>/`` and, when it exists, the sibling ``evals/<name>/``
+    fixture corpus, under the same repository-root-relative paths -- so a
+    dispatch grading a target's regression corpus sees the real one rather
+    than reporting it absent. A missing ``evals/<name>/`` stays absent in
+    the snapshot (a real absence, not a placeholder). The default (``False``)
+    keeps the original layout unchanged for every existing caller.
     """
     # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
     snapshot = base_dir / "target-snapshot"
-    if target.is_dir():
+    if include_evals:
+        skill_dir = _include_evals_skill_dir(target)
+        shutil.copytree(skill_dir, snapshot / "skills" / skill_dir.name)
+        evals_dir = sibling_evals_dir(skill_dir)
+        if evals_dir.is_dir():
+            shutil.copytree(evals_dir, snapshot / "evals" / skill_dir.name)
+    elif target.is_dir():
         shutil.copytree(target, snapshot)
     else:
         snapshot.mkdir(parents=True, exist_ok=True)
@@ -762,6 +797,12 @@ def main(
         "--prompt-file", type=Path, help="Path to the real dispatch's prompt (required unless --controls-only)."
     )
     parser.add_argument(
+        "--include-evals",
+        action="store_true",
+        help="Snapshot a skills/<name> --target as skills/<name>/ plus its sibling evals/<name>/ "
+        "(repository-root-relative) instead of making the snapshot root the target itself (issue #1950).",
+    )
+    parser.add_argument(
         "--controls-only",
         action="store_true",
         help="Run isolation verification only; never launch a real dispatch. Used by the "
@@ -782,6 +823,18 @@ def main(
         if args.prompt_file is None or not args.prompt_file.is_file():
             print(f"error: --prompt-file not found: {args.prompt_file}", file=sys.stderr)
             return 1
+        if args.include_evals:
+            try:
+                skill_dir = _include_evals_skill_dir(args.target)
+            except ValueError as error:
+                print(f"error: {error}", file=sys.stderr)
+                return 1
+            if not sibling_evals_dir(skill_dir).is_dir():
+                print(
+                    f"note: {args.target} has no sibling evals directory ({sibling_evals_dir(skill_dir)}); "
+                    "the snapshot will carry skills/<name>/ only",
+                    file=sys.stderr,
+                )
 
     try:
         signals = read_identifying_signals(args.claude_bin)
@@ -865,7 +918,7 @@ def main(
             return 0
 
         try:
-            snapshot = build_target_snapshot(args.target, base_dir)
+            snapshot = build_target_snapshot(args.target, base_dir, include_evals=args.include_evals)
         except OSError as error:
             # A broken symlink or an unreadable file inside --target -- a
             # plausible real checkout artifact -- would otherwise crash

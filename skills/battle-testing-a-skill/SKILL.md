@@ -75,7 +75,9 @@ limits.
    Requesting the exclusion is not proof it held: the verified mechanism is
    platform-specific and owned by `evaluating-skill-quality`'s Subagent
    dispatch section -- run its `gitapex_run_verified_isolated_dispatch.py`
-   for the dispatch itself; it verifies isolation from its own
+   for the dispatch itself, with `--include-evals` so dimensions 14/15
+   see the target's sibling `evals/<name>/` (layout: that skill's
+   `references/adversarial-self-audit.md`); it verifies isolation from its own
    orchestrating process before launching (reusing a matching Reviewed
    entry in that skill's own `metadata/isolation-registry.yaml`, or
    running a live positive/negative control pair and recording a new
