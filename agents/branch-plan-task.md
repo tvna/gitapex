@@ -62,9 +62,9 @@ enforced. Claude Code's plugin-agent frontmatter supports no `hooks`
 field ("for security reasons," per Claude Code's own plugin-reference
 documentation), so the Bash-level exclusion (no `gh`, `git push`, or
 install commands) and the full-verification-suite exit condition above
-are backed instead, in Claude Code only, by the plugin's own
+are backed, in Claude Code only, by the plugin's own
 `hooks/hooks.json`, which scopes both hooks to any `agent_type` naming
-this agent (issue #1996); other runtimes (e.g. OpenCode) run no such hook,
+this agent; other runtimes (e.g. OpenCode) run no such hook,
 so there these exclusions rest on this paragraph alone. Outside a gitapex
 checkout the exit-condition hook skips with a visible message and the two
 commands above do not exist: run that repository's own test and lint
