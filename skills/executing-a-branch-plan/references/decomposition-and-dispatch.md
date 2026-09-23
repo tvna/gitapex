@@ -546,7 +546,7 @@ legitimate work over a precondition check this mechanism cannot always
 resolve with confidence. See
 [threat-model-and-authorization.md](threat-model-and-authorization.md#worktree-base-precondition-backstop)
 for how it rides the plugin's own `PreToolUse` Bash hook (`hooks/hooks.json`,
-scoped to `gitapex:branch-plan-task`, issue `#1996`) and the full
+scoped by `agent_type` to the `branch-plan-task` agent, issue `#1996`) and the full
 disclosed-residual accounting.
 
 ### Sequential fallback

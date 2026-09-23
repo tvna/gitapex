@@ -24,12 +24,16 @@ BASH_HOOK = "skills/executing-a-branch-plan/scripts/check_task_bash_safety.sh"
 STOP_HOOK = "skills/executing-a-branch-plan/scripts/check_task_full_verification.sh"
 
 
-def _expected_agent_type() -> str:
-    plugin = json.loads((REPO_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+def _agent_name() -> str:
     text = (REPO_ROOT / "agents" / "branch-plan-task.md").read_text(encoding="utf-8")
     _, frontmatter, _ = text.split("---", 2)
-    agent = yaml.safe_load(frontmatter)
-    return f"{plugin['name']}:{agent['name']}"
+    name: str = yaml.safe_load(frontmatter)["name"]
+    return name
+
+
+def _expected_agent_type() -> str:
+    plugin = json.loads((REPO_ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    return f"{plugin['name']}:{_agent_name()}"
 
 
 def _hooks() -> dict[str, list[dict[str, Any]]]:
@@ -45,8 +49,8 @@ def _entries_running(event: str, script: str) -> list[dict[str, Any]]:
 
 def _script_constant(script: str) -> str:
     text = (REPO_ROOT / script).read_text(encoding="utf-8")
-    found = re.findall(r'^branch_plan_task_agent_type="([^"]+)"$', text, flags=re.MULTILINE)
-    assert len(found) == 1, f"{script}: expected one branch_plan_task_agent_type assignment, found {found}"
+    found = re.findall(r'^branch_plan_task_agent_name="([^"]+)"$', text, flags=re.MULTILINE)
+    assert len(found) == 1, f"{script}: expected one branch_plan_task_agent_name assignment, found {found}"
     value: str = found[0]
     return value
 
@@ -59,14 +63,20 @@ def test_bash_hook_is_registered_for_bash_and_scopes_to_the_agent_type() -> None
     entries = _entries_running("PreToolUse", BASH_HOOK)
     assert len(entries) == 1
     assert entries[0]["matcher"] == "Bash"
-    assert _script_constant(BASH_HOOK) == _expected_agent_type()
+    assert _script_constant(BASH_HOOK) == _agent_name()
 
 
 def test_stop_hook_matcher_and_script_scope_agree_with_the_agent_type() -> None:
     entries = _entries_running("SubagentStop", STOP_HOOK)
     assert len(entries) == 1
-    assert entries[0]["matcher"] == f"^{_expected_agent_type()}$"
-    assert _script_constant(STOP_HOOK) == _expected_agent_type()
+    matcher = entries[0]["matcher"]
+    assert matcher == f"^([^:]+:)?{_agent_name()}$"
+    # Any plugin prefix, or none, is in scope; a lookalike name is not.
+    for in_scope in (_expected_agent_type(), _agent_name(), f"fork:{_agent_name()}"):
+        assert re.fullmatch(matcher, in_scope), in_scope
+    for out_of_scope in (f"x{_agent_name()}", f"{_expected_agent_type()}-extra", "gitapex:review-persona"):
+        assert not re.fullmatch(matcher, out_of_scope), out_of_scope
+    assert _script_constant(STOP_HOOK) == _agent_name()
 
 
 def test_project_local_agent_definition_stays_removed() -> None:

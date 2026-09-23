@@ -21,6 +21,7 @@ import contextlib
 import io
 import json
 import pathlib
+import subprocess
 import tempfile
 
 import gitapex_check_task_full_verification as checker
@@ -76,3 +77,14 @@ def test_main_skips_exactly_when_the_marker_is_absent(other_files: list[str], ma
             assert verdict["decision"] == "skip"
             assert checker.GITAPEX_SUITE_MARKER in verdict["reason"]
             assert ran == []
+
+
+@_PROPERTIES
+@given(depth=st.integers(min_value=0, max_value=4))
+def test_repository_root_resolves_the_top_level_from_any_depth(depth: int) -> None:
+    with tempfile.TemporaryDirectory() as raw_root:
+        root = pathlib.Path(raw_root).resolve()
+        subprocess.run(["git", "init", "-q", str(root)], check=True)
+        cwd = root.joinpath(*[f"d{i}" for i in range(depth)])
+        cwd.mkdir(parents=True, exist_ok=True)
+        assert checker.repository_root(cwd).resolve() == root

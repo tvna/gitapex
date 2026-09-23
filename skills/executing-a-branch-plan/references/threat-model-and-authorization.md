@@ -250,8 +250,9 @@ weaker enforcement.
    instantiation, not a gap).
 2. **Bash hook.** `hooks/hooks.json` registers `check_task_bash_safety.sh`
    for every `Bash` call in the session; the script exits 0 unless the
-   payload's `agent_type` is exactly `gitapex:branch-plan-task`, and fails
-   closed on a non-string `agent_type`. Claude Code fills `agent_type` with
+   payload's `agent_type` names the `branch-plan-task` agent (bare, or
+   with any `<plugin>:` prefix, so a fork or renamed install still
+   enforces), and fails closed on a non-string `agent_type`. Claude Code fills `agent_type` with
    `<plugin name>:<agent name>` for a plugin subagent and leaves it out on
    the main thread -- confirmed live on Claude Code 2.1.280 (issue
    `#1996`), together with a plugin `SubagentStop` matcher filtering on the
@@ -346,6 +347,25 @@ The task prompt still states the full exclusion list in-band (the
 Decision 7 baseline), and the session-wide `hooks/check-bash-safety.sh`
 still runs alongside this hook -- defense in depth, not a substitute.
 
+**Residuals of `agent_type` scoping, disclosed rather than assumed away
+(found by issue `#1996`'s own Step 8 adversarial review):**
+
+- **Nested dispatch.** The agent keeps `Agent`/`Task` (it needs them for
+  `review-persona`). A subagent it spawns reports its own `agent_type`
+  (e.g. `general-purpose`), so neither hook here acts on that subagent's
+  Bash calls; only the session-wide `hooks/check-bash-safety.sh` does,
+  which warns rather than denies on a push. Whether the former
+  frontmatter hooks covered a nested subagent was never verified.
+- **Payload dependence.** Both hooks rely on Claude Code putting
+  `agent_type` in the payload. That was observed for the `Agent`-tool
+  path; the `Workflow` tool's `agent()` path resolving from the same
+  registry does not by itself prove its payloads carry the field.
+- **Plugin root.** Hooks run from the plugin root the session loaded
+  (`${CLAUDE_PLUGIN_ROOT}`), not from the checked-out branch. For this
+  repository's directory marketplace, this session observed the hooks
+  running in place from the checkout; an install served from a cached
+  copy enforces whatever version that copy carries.
+
 **Decision 7's own broader open question -- whether a plugin
 `PreToolUse` hook binds inside a subagent at all -- is answered for the
 `Agent`-tool path** by issue `#1996`'s live probe (a plugin hook fired for
@@ -414,7 +434,7 @@ often it needs to catch anything, it does not replace it.
 
 **Registration, the same single mechanism as the Bash-safety hook above
 (issue `#1996`).** `hooks/hooks.json` registers a `SubagentStop` entry with
-matcher `^gitapex:branch-plan-task$` invoking
+matcher `^([^:]+:)?branch-plan-task$` invoking
 `check_task_full_verification.sh` (a thin bash+jq wrapper around
 `gitapex_check_task_full_verification.py`, mirroring
 `check_task_bash_safety.sh`'s own structure), which re-checks `agent_type`
@@ -429,7 +449,9 @@ condition in-band.
 
 **Consumer repositories skip, visibly.** Because the hook now ships in the
 plugin, it also fires for a dispatch inside a repository that has none of
-gitapex's own verification suite. When the task's working directory lacks
+gitapex's own verification suite. The classifier first resolves the git
+top-level of the payload's `cwd` (so a task that ended in a subdirectory
+still verifies from the root); when that root lacks
 `.github/scripts/gitapex_gate_local_preflight.py`, the classifier returns
 `skip` and the wrapper allows the stop with a `systemMessage` naming the
 skip, rather than running commands that cannot exist there or passing

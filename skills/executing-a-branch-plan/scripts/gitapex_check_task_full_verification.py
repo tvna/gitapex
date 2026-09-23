@@ -147,6 +147,30 @@ DEFAULT_STEPS: tuple[VerificationStep, ...] = (
 GITAPEX_SUITE_MARKER = DEFAULT_PREFLIGHT_ARGV[-1]
 
 
+def repository_root(cwd: Path) -> Path:
+    """The git top-level containing `cwd`, or `cwd` itself outside git.
+
+    The payload `cwd` can sit below the worktree root (a task whose last
+    Bash call was `cd tests`), so the marker check and the verification
+    steps both run from the top-level rather than from `cwd` as given --
+    otherwise one `cd` would turn a gitapex checkout into a skip."""
+    try:
+        completed = subprocess.run(  # noqa: S603
+            ["git", "-C", str(cwd), "rev-parse", "--show-toplevel"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+            stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return cwd
+    top = completed.stdout.strip()
+    if completed.returncode != 0 or not top:
+        return cwd
+    return Path(top)
+
+
 # Bounds how much of a step's own captured stdout+stderr reaches the
 # SubagentStop deny reason (issue #1476, evaluating-deterministic-gate-
 # quality dimension 18): this hook has no secret-redaction pass of its
@@ -293,7 +317,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         steps = DEFAULT_STEPS
 
-    cwd = _resolve_cwd(payload)
+    cwd = repository_root(_resolve_cwd(payload))
     if args.steps_json is None and not (cwd / GITAPEX_SUITE_MARKER).is_file():
         reason = (
             "task-level full verification (issue #1476) skipped: "

@@ -759,8 +759,15 @@ def test_empty_command_is_allowed() -> None:
 
 @pytest.mark.parametrize(
     "agent_type",
-    [_UNSET, "general-purpose", "Explore", "branch-plan-task", "other:branch-plan-task", "gitapex:review-persona"],
-    ids=["absent-main-thread", "general-purpose", "explore", "unqualified-name", "other-plugin", "sibling-agent"],
+    [
+        _UNSET,
+        "general-purpose",
+        "Explore",
+        "gitapex:review-persona",
+        "gitapex:branch-plan-task-extra",
+        "xbranch-plan-task",
+    ],
+    ids=["absent-main-thread", "general-purpose", "explore", "sibling-agent", "longer-name", "suffix-lookalike"],
 )
 def test_out_of_scope_agent_type_is_allowed_silently(agent_type: object) -> None:
     result = run("git push origin HEAD", agent_type=agent_type)
@@ -769,8 +776,16 @@ def test_out_of_scope_agent_type_is_allowed_silently(agent_type: object) -> None
     assert result.stderr == ""
 
 
-def test_in_scope_agent_type_still_denies() -> None:
-    result = run("git push origin HEAD", agent_type=BRANCH_PLAN_TASK_AGENT_TYPE)
+@pytest.mark.parametrize(
+    "agent_type",
+    [BRANCH_PLAN_TASK_AGENT_TYPE, "branch-plan-task", "gitapex-fork:branch-plan-task"],
+    ids=["plugin-qualified", "unqualified-project-local", "renamed-plugin"],
+)
+def test_in_scope_agent_type_still_denies(agent_type: str) -> None:
+    """Issue #1996 adversarial review: any agent named branch-plan-task is
+    enforced, whatever plugin (or none) it came from -- a fork or a renamed
+    install must not silently switch the gate off."""
+    result = run("git push origin HEAD", agent_type=agent_type)
     assert result.returncode == 2
     assert json.loads(result.stderr)["hookSpecificOutput"]["permissionDecision"] == "deny"
 

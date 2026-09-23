@@ -28,6 +28,7 @@ Two layers, mirroring test_gitapex_gate_local_preflight.py's own split:
 
 from __future__ import annotations
 
+import io
 import json
 import pathlib
 import subprocess
@@ -35,6 +36,14 @@ import sys
 
 import gitapex_check_task_full_verification as under_test
 import pytest
+
+
+class _FakeStdin:
+    """Just the `sys.stdin.buffer.read()` surface main() uses."""
+
+    def __init__(self, data: bytes) -> None:
+        self.buffer = io.BytesIO(data)
+
 
 SCRIPT = pathlib.Path(__file__).parent / "check_task_full_verification.sh"
 CLASSIFIER = pathlib.Path(__file__).parent / "gitapex_check_task_full_verification.py"
@@ -227,6 +236,32 @@ def test_main_runs_the_default_steps_when_the_suite_is_present(tmp_path: pathlib
     _make_gitapex_checkout(tmp_path)
     result = _run_main({"cwd": str(tmp_path)})
     assert result["decision"] == "deny"
+
+
+def test_main_resolves_the_repository_root_from_a_subdirectory_cwd(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Issue #1996 adversarial-review defeat case: a task whose last Bash
+    call was `cd tests` must not turn a gitapex checkout into a skip."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _make_gitapex_checkout(tmp_path)
+    subdir = tmp_path / "tests" / "deeper"
+    subdir.mkdir(parents=True)
+    seen: list[pathlib.Path] = []
+
+    def record(_steps: object, cwd: pathlib.Path, _timeout: int) -> dict[str, object]:
+        seen.append(cwd)
+        return {"decision": "allow"}
+
+    monkeypatch.setattr(under_test, "run_verification", record)
+    monkeypatch.setattr("sys.stdin", _FakeStdin(json.dumps({"cwd": str(subdir)}).encode("utf-8")))
+    assert under_test.main([]) == 0
+    assert json.loads(capsys.readouterr().out) == {"decision": "allow"}
+    assert [path.resolve() for path in seen] == [tmp_path.resolve()]
+
+
+def test_repository_root_falls_back_to_cwd_outside_git(tmp_path: pathlib.Path) -> None:
+    assert under_test.repository_root(tmp_path) == tmp_path
 
 
 def test_steps_json_override_never_skips(tmp_path: pathlib.Path) -> None:
@@ -429,6 +464,15 @@ def test_sh_runs_the_real_classifier_end_to_end_and_allows_on_a_clean_worktree(t
     assert "issue #1476" in reason
 
 
+@pytest.mark.parametrize("agent_type", ["branch-plan-task", "gitapex-fork:branch-plan-task"])
+def test_sh_enforces_for_any_agent_named_branch_plan_task(agent_type: str, tmp_path: pathlib.Path) -> None:
+    """Issue #1996 adversarial review: a renamed plugin or a project-local
+    copy still reaches the classifier (here, its visible skip message)."""
+    result = _run_sh({"hook_event_name": "SubagentStop", "cwd": str(tmp_path), "agent_type": agent_type})
+    assert result.returncode == 0, result.stderr
+    assert "skipped" in json.loads(result.stdout)["systemMessage"]
+
+
 def test_sh_skips_visibly_in_a_repository_without_gitapex_own_suite(tmp_path: pathlib.Path) -> None:
     """Issue #1996: a consumer repository gets an allow plus a visible
     systemMessage naming the skip, never a silent pass or a false block."""
@@ -441,8 +485,8 @@ def test_sh_skips_visibly_in_a_repository_without_gitapex_own_suite(tmp_path: pa
 
 @pytest.mark.parametrize(
     "agent_type",
-    [None, "general-purpose", "branch-plan-task", "other:branch-plan-task"],
-    ids=["absent", "general-purpose", "unqualified-name", "other-plugin"],
+    [None, "general-purpose", "gitapex:review-persona", "xbranch-plan-task"],
+    ids=["absent", "general-purpose", "sibling-agent", "suffix-lookalike"],
 )
 def test_sh_out_of_scope_agent_type_does_nothing(agent_type: object, tmp_path: pathlib.Path) -> None:
     """The hooks.json matcher already filters on agent type; the script

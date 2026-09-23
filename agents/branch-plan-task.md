@@ -63,7 +63,7 @@ field ("for security reasons," per Claude Code's own plugin-reference
 documentation), so the Bash-level exclusion (no `gh`, `git push`, or
 install commands) and the full-verification-suite exit condition above
 are backed instead by the plugin's own `hooks/hooks.json`, which scopes
-both hooks to this agent's `agent_type`, `gitapex:branch-plan-task`
+both hooks to this agent's `agent_type` (`gitapex:branch-plan-task`)
 (issue #1996). In a repository without gitapex's own verification suite
 the exit-condition hook skips with a visible message, so there this
 paragraph's instruction is what asks you to run that repository's own

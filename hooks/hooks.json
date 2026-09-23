@@ -148,7 +148,7 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "^gitapex:branch-plan-task$",
+        "matcher": "^([^:]+:)?branch-plan-task$",
         "hooks": [
           {
             "type": "command",

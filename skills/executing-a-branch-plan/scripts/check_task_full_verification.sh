@@ -1,7 +1,7 @@
 #!/bin/bash
 # SubagentStop hook, scoped to the executing-a-branch-plan skill's
 # task-level subagent type (registered in hooks/hooks.json with matcher
-# ^gitapex:branch-plan-task$ since issue #1996, and re-checked below) --
+# ^([^:]+:)?branch-plan-task$ since issue #1996, and re-checked below) --
 # backs design doc Decision 20
 # (docs/superpowers/specs/2026-07-22-plan-execution-handoff-design.md),
 # issue #1476 (retro #1475 repair 2): a task-level dispatch must run the
@@ -56,18 +56,20 @@ if [ "$hook_event_name" != "SubagentStop" ]; then
 fi
 
 # Issue #1996: the hooks.json matcher already filters on agent type
-# (^gitapex:branch-plan-task$); re-check it here rather than trusting the
-# matcher alone. A non-string value is malformed input and fails closed.
-branch_plan_task_agent_type="gitapex:branch-plan-task"
+# (^([^:]+:)?branch-plan-task$, any plugin prefix or none); re-check it
+# here rather than trusting the matcher alone. A non-string value is
+# malformed input and fails closed.
+branch_plan_task_agent_name="branch-plan-task"
 
 if ! printf '%s' "$input" | jq -e '(.agent_type == null) or (.agent_type | type == "string")' >/dev/null 2>&1; then
   deny "Blocked by executing-a-branch-plan's task-agent full-verification gate: agent_type in the payload is not a string. Failing closed."
 fi
 
 agent_type=$(printf '%s' "$input" | jq -r '.agent_type // empty')
-if [ "$agent_type" != "$branch_plan_task_agent_type" ]; then
-  exit 0
-fi
+case "$agent_type" in
+  "$branch_plan_task_agent_name" | *:"$branch_plan_task_agent_name") ;;
+  *) exit 0 ;;
+esac
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 classifier="$script_dir/gitapex_check_task_full_verification.py"

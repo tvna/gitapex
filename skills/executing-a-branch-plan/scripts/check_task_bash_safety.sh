@@ -1,7 +1,7 @@
 #!/bin/bash
 # PreToolUse hook, scoped to the executing-a-branch-plan skill's
 # task-level subagent type (registered in hooks/hooks.json, matcher
-# "Bash", and self-scoped below to agent_type "gitapex:branch-plan-task"
+# "Bash", and self-scoped below to any agent_type naming branch-plan-task
 # since issue #1996 removed the project-local agent file whose embedded
 # `hooks.PreToolUse` block used to register it) -- backs design doc
 # Decision 17 (docs/superpowers/specs/2026-07-22-plan-execution-handoff-
@@ -89,19 +89,22 @@ fi
 # Issue #1996: hooks/hooks.json registers this hook for every Bash call in
 # the session, main thread and every subagent alike, so it scopes itself
 # here. Claude Code puts the running subagent's type in `agent_type`
-# ("<plugin>:<agent>" for a plugin agent, confirmed live); the main thread
-# carries none. Anything other than an exact match is out of scope. A
-# non-string value is malformed input and fails closed like the checks above.
-branch_plan_task_agent_type="gitapex:branch-plan-task"
+# ("<plugin>:<agent>" for a plugin agent, confirmed live; the bare agent
+# name for a project-local one); the main thread carries none. Any agent
+# named branch-plan-task is in scope, whatever plugin prefix it carries, so
+# a fork or renamed install cannot switch the gate off. A non-string value
+# is malformed input and fails closed like the checks above.
+branch_plan_task_agent_name="branch-plan-task"
 
 if ! printf '%s' "$input" | jq -e '(.agent_type == null) or (.agent_type | type == "string")' >/dev/null 2>&1; then
   deny "Blocked by executing-a-branch-plan's task-agent Bash gate: agent_type in the payload is not a string. Failing closed."
 fi
 
 agent_type=$(printf '%s' "$input" | jq -r '.agent_type // empty')
-if [ "$agent_type" != "$branch_plan_task_agent_type" ]; then
-  exit 0
-fi
+case "$agent_type" in
+  "$branch_plan_task_agent_name" | *:"$branch_plan_task_agent_name") ;;
+  *) exit 0 ;;
+esac
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
