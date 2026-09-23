@@ -38,10 +38,12 @@ Source rows, quoted from the issue's "Branch Plan resolution" table.
   Owns `skills/executing-a-branch-plan/scripts/check_task_bash_safety.sh`,
   `check_task_full_verification.sh`,
   `gitapex_check_task_full_verification.py` and their tests.
+  Source ACM row: row 2 of issue #1996's "Branch Plan resolution" table.
 - **Task 2 (row 2, registration).** Planned ops: "Add `PreToolUse`
   `Bash` -> `check_task_bash_safety.sh` ...; add `SubagentStop` matcher
   `^gitapex:branch-plan-task$` -> `check_task_full_verification.sh`
   (timeout 3900 ...)". Owns `hooks/hooks.json` and a new drift test.
+  Source ACM row: row 2 of issue #1996's "Branch Plan resolution" table.
 - **Task 3 (rows 1 and 3).** Planned ops: "Delete the file; update every
   live (non-historical) reference" and "Change `agentType:
   'branch-plan-task'` to `'gitapex:branch-plan-task'` in
@@ -50,6 +52,8 @@ Source rows, quoted from the issue's "Branch Plan resolution" table.
   `.claude/agents/branch-plan-task.md` (deleted), the skill's `SKILL.md`
   and `references/`, `agents/branch-plan-task.md`, and the tests and
   comments that name the deleted path.
+  Source ACM rows: rows 1 and 3 of issue #1996's "Branch Plan resolution"
+  table.
 
 Interface edges: Task 2 names Task 1's scripts and scoping constant;
 Task 3's deletion removes the only current hook registration, so it lands
