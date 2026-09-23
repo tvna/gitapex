@@ -207,6 +207,34 @@ def test_main_denies_on_malformed_steps_json(tmp_path: pathlib.Path) -> None:
     assert result["decision"] == "deny"
 
 
+def _make_gitapex_checkout(root: pathlib.Path) -> None:
+    marker = root / under_test.GITAPEX_SUITE_MARKER
+    marker.parent.mkdir(parents=True)
+    marker.write_text("", encoding="utf-8")
+
+
+def test_main_skips_when_the_repository_lacks_gitapex_own_suite(tmp_path: pathlib.Path) -> None:
+    """Issue #1996: the hook ships in the plugin, so it also fires in a
+    consumer repository that has no gitapex verification suite to run."""
+    result = _run_main({"cwd": str(tmp_path)})
+    assert result["decision"] == "skip"
+    assert under_test.GITAPEX_SUITE_MARKER in result["reason"]
+
+
+def test_main_runs_the_default_steps_when_the_suite_is_present(tmp_path: pathlib.Path) -> None:
+    """The marker present means the real steps run; in an empty scratch
+    checkout they fail, which is the proof they ran rather than skipped."""
+    _make_gitapex_checkout(tmp_path)
+    result = _run_main({"cwd": str(tmp_path)})
+    assert result["decision"] == "deny"
+
+
+def test_steps_json_override_never_skips(tmp_path: pathlib.Path) -> None:
+    steps_json = json.dumps([["fast-fail", ["false"]]])
+    result = _run_main({"cwd": str(tmp_path)}, steps_json=steps_json)
+    assert result["decision"] == "deny"
+
+
 # --------------------------------------------------------------------------
 # DEFAULT_STEPS: pin the real production commands (never executed here)
 # --------------------------------------------------------------------------
@@ -301,19 +329,22 @@ def test_run_verification_does_not_call_an_ordinary_failure_transient(tmp_path: 
 
 
 def _subagent_stop_hook_timeout() -> int:
-    import yaml
-
-    agent_md = pathlib.Path(__file__).resolve().parents[3] / ".claude" / "agents" / "branch-plan-task.md"
-    text = agent_md.read_text(encoding="utf-8")
-    _, frontmatter, _ = text.split("---", 2)
-    parsed = yaml.safe_load(frontmatter)
-    timeout: int = parsed["hooks"]["SubagentStop"][0]["hooks"][0]["timeout"]
+    hooks_json = pathlib.Path(__file__).resolve().parents[3] / "hooks" / "hooks.json"
+    parsed = json.loads(hooks_json.read_text(encoding="utf-8"))
+    timeouts = [
+        hook["timeout"]
+        for entry in parsed["hooks"]["SubagentStop"]
+        for hook in entry["hooks"]
+        if hook["command"].endswith(f'/{SCRIPT.relative_to(SCRIPT.parents[3]).as_posix()}"')
+    ]
+    assert len(timeouts) == 1, timeouts
+    timeout: int = timeouts[0]
     return timeout
 
 
 def test_registered_hook_timeout_stays_above_the_worst_case_classifier_runtime() -> None:
     """The SubagentStop hook's own registered `timeout` in
-    .claude/agents/branch-plan-task.md must stay above every step's own
+    hooks/hooks.json must stay above every step's own
     DEFAULT_TIMEOUT_SECONDS combined -- Claude Code discards a timed-out
     command hook's output entirely and SubagentStop is not one of the two
     documented exceptions that still block on timeout, so an outer
@@ -327,10 +358,18 @@ def test_registered_hook_timeout_stays_above_the_worst_case_classifier_runtime()
 # --------------------------------------------------------------------------
 
 
+BRANCH_PLAN_TASK_AGENT_TYPE = "gitapex:branch-plan-task"
+
+
 def _run_sh(payload: dict[str, object]) -> subprocess.CompletedProcess[str]:
+    """Defaults `agent_type` to the in-scope value (issue #1996); pass an
+    explicit `agent_type` key, or None to drop it, to exercise scoping."""
+    body = {"agent_type": BRANCH_PLAN_TASK_AGENT_TYPE, **payload}
+    if body["agent_type"] is None:
+        del body["agent_type"]
     return subprocess.run(
         ["bash", str(SCRIPT)],
-        input=json.dumps(payload),
+        input=json.dumps(body),
         capture_output=True,
         text=True,
         timeout=15,
@@ -382,8 +421,40 @@ def test_sh_runs_the_real_classifier_end_to_end_and_allows_on_a_clean_worktree(t
     (deny, since neither `uv` nor a pytest/preflight setup exists there --
     proving the plumbing runs the real gitapex_check_task_full_verification.py,
     not that an empty directory passes verification)."""
+    _make_gitapex_checkout(tmp_path)
     result = _run_sh({"hook_event_name": "SubagentStop", "cwd": str(tmp_path)})
     assert result.returncode == 2
     payload = json.loads(result.stderr)
     reason = payload["hookSpecificOutput"]["reason"]
     assert "issue #1476" in reason
+
+
+def test_sh_skips_visibly_in_a_repository_without_gitapex_own_suite(tmp_path: pathlib.Path) -> None:
+    """Issue #1996: a consumer repository gets an allow plus a visible
+    systemMessage naming the skip, never a silent pass or a false block."""
+    result = _run_sh({"hook_event_name": "SubagentStop", "cwd": str(tmp_path)})
+    assert result.returncode == 0, result.stderr
+    message = json.loads(result.stdout)["systemMessage"]
+    assert "skipped" in message
+    assert under_test.GITAPEX_SUITE_MARKER in message
+
+
+@pytest.mark.parametrize(
+    "agent_type",
+    [None, "general-purpose", "branch-plan-task", "other:branch-plan-task"],
+    ids=["absent", "general-purpose", "unqualified-name", "other-plugin"],
+)
+def test_sh_out_of_scope_agent_type_does_nothing(agent_type: object, tmp_path: pathlib.Path) -> None:
+    """The hooks.json matcher already filters on agent type; the script
+    re-checks it rather than trusting the matcher alone."""
+    _make_gitapex_checkout(tmp_path)
+    result = _run_sh({"hook_event_name": "SubagentStop", "cwd": str(tmp_path), "agent_type": agent_type})
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert result.stderr == ""
+
+
+def test_sh_denies_when_agent_type_is_not_a_string(tmp_path: pathlib.Path) -> None:
+    result = _run_sh({"hook_event_name": "SubagentStop", "cwd": str(tmp_path), "agent_type": 12345})
+    assert result.returncode == 2
+    assert "agent_type" in json.loads(result.stderr)["hookSpecificOutput"]["reason"]

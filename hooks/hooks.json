@@ -24,6 +24,16 @@
         ]
       },
       {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/skills/executing-a-branch-plan/scripts/check_task_bash_safety.sh\"",
+            "timeout": 30
+          }
+        ]
+      },
+      {
         "matcher": "Write",
         "hooks": [
           {
@@ -132,6 +142,18 @@
             "type": "command",
             "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/check-post-review-obligation-tracker.sh\"",
             "timeout": 30
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "^gitapex:branch-plan-task$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/skills/executing-a-branch-plan/scripts/check_task_full_verification.sh\"",
+            "timeout": 3900
           }
         ]
       }
