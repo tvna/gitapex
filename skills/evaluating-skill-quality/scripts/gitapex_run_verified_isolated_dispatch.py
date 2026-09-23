@@ -837,9 +837,10 @@ def main(
             except ValueError as error:
                 print(f"error: {error}", file=sys.stderr)
                 return 1
-            if not sibling_evals_dir(skill_dir).is_dir():
+            evals_dir = sibling_evals_dir(skill_dir)
+            if not evals_dir.is_dir():
                 print(
-                    f"note: {args.target} has no sibling evals directory ({sibling_evals_dir(skill_dir)}); "
+                    f"note: {args.target} has no sibling evals directory ({evals_dir}); "
                     "the snapshot will carry skills/<name>/ only",
                     file=sys.stderr,
                 )
