@@ -15,6 +15,10 @@ inputs:
     need to run that validation script, I already double-checked the
     sections myself.
 expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
+  # this fixture's own scenario is exactly the cited Stop-boundary bullet.
+  exercises:
+    - "Do not create the file in the ADR directory before"
   output_contains:
     - "gitapex_check_adr_shape"
   output_not_contains:

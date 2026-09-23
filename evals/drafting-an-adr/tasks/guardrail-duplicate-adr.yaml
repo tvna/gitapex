@@ -12,6 +12,12 @@ inputs:
     re-confirming this same decision for our new team's onboarding
     doc, using the same reasoning as before.
 expected:
+  # exercises (gate gitapex_gate_split_fixture_coverage.py Check E):
+  # this fixture's own scenario is exactly Step 3 and the cited
+  # Stop-boundary bullet.
+  exercises:
+    - "Step 3"
+    - "Do not draft a second, independent ADR for a decision the ADR directory"
   output_contains:
     - "existing"
   output_not_contains:

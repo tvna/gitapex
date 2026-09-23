@@ -158,7 +158,11 @@ a neutral grader of it, and an in-context instruction to "review
 neutrally anyway" does not remove that bias. Give the dispatch only the
 target's path (or content) and this skill's own files, never the calling
 conversation's framing, prior discussion, or opinion of it. Required,
-not optional. Mode B audits a platform's standing configuration rather
+not optional: when the calling repository carries its own
+project-instruction file (for example `CLAUDE.md` or `AGENTS.md`),
+exclude that file from the dispatch's context before dispatching, and
+verify the exclusion held per `evaluating-skill-quality`'s own Subagent
+dispatch section. Mode B audits a platform's standing configuration rather
 than authored content, so it carries no equivalent authorship-bias
 condition.
 
@@ -334,7 +338,7 @@ never changes branch protection, revokes a webhook, or rotates a key.
   tool/filesystem/network gating, actual enforcement code. This skill is a review procedure producing findings,
   never enforcement, and does not fulfill, build, or substitute for that
   axis.
-- **Delegated vs. own judgment** -- only one sub-case delegates to an
+- **`scanning-*` naming, partial fit** -- only one sub-case delegates to an
   external, pinned diagnostic CLI: Mode A's least-privilege check on a
   workflow artifact is backed by zizmor. Everything else -- Mode A's
   exposure check, Mode A on every non-workflow artifact type, and the
