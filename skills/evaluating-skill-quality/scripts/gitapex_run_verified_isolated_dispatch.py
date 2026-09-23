@@ -668,8 +668,9 @@ def _include_evals_skill_dir(target: Path) -> Path:
     ``evals/<name>/`` path is derived from that layout, so a target outside
     it has no well-defined evals directory to include. The path is made
     absolute and ``..``-normalized lexically (``os.path.normpath``), never
-    ``resolve()``d, so a symlinked ``skills/`` parent keeps the caller's own
-    repository layout and names instead of its link destination's."""
+    ``resolve()``d, so the derived ``evals/<name>/`` path follows the
+    caller's own layout; ``_validate_include_evals_source`` then refuses a
+    symlink at either level of that layout."""
     # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
     skill_dir = Path(os.path.normpath(target.absolute()))
     if not skill_dir.is_dir() or skill_dir.parent.name != "skills":
@@ -700,11 +701,10 @@ def _validate_include_evals_tree(tree: Path) -> None:
     file there could be loaded by the harness on demand (a path the
     two-control procedure, which checks only the cwd's ancestry, never
     exercises), and a symlink or special file could materialize arbitrary
-    host content -- a credential file, ``/dev/zero`` -- inside that cwd.
+    host content -- a credential file, ``/dev/zero`` -- inside that cwd; a
+    hard-linked file (link count above one) is refused for the same reason.
     Walk errors raise rather than skip."""
     # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
-    if tree.is_symlink():
-        raise ValueError(f"refusing to snapshot {tree}: it is a symlink")
     for root, dirs, files in os.walk(tree, onerror=_raise_walk_error):
         for name in dirs + files:
             path = Path(root) / name
@@ -714,6 +714,23 @@ def _validate_include_evals_tree(tree: Path) -> None:
                 raise ValueError(f"refusing to snapshot {path}: symlink")
             if name in files and not path.is_file():
                 raise ValueError(f"refusing to snapshot {path}: not a regular file")
+            if name in files and path.lstat().st_nlink > 1:
+                raise ValueError(f"refusing to snapshot {path}: hard-linked file")
+
+
+def _validate_include_evals_source(tree: Path) -> None:
+    """``_validate_include_evals_tree`` for a source tree, plus the checks
+    its walk cannot make on the tree's own path: the tree's own name, and a
+    symlink at the tree itself or its ``skills/``/``evals/`` parent -- a
+    symlinked parent would otherwise redirect a symlink-free-looking walk
+    into arbitrary host content (e.g. ``evals -> $HOME``)."""
+    # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
+    if tree.name.casefold() in _INSTRUCTION_NAMES_CASEFOLDED:
+        raise ValueError(f"refusing to snapshot {tree}: project-instruction file or directory")
+    for level in (tree, tree.parent):
+        if level.is_symlink():
+            raise ValueError(f"refusing to snapshot {tree}: {level} is a symlink")
+    _validate_include_evals_tree(tree)
 
 
 def build_target_snapshot(target: Path, base_dir: Path, include_evals: bool = False) -> Path:
@@ -747,9 +764,13 @@ def build_target_snapshot(target: Path, base_dir: Path, include_evals: bool = Fa
     dispatch grading a target's regression corpus sees the real one rather
     than reporting it absent. A missing ``evals/<name>/`` stays absent in
     the snapshot (a real absence, not a placeholder). Both trees are
-    validated (``_validate_include_evals_tree``) at the source, then copied
-    with ``symlinks=True`` and validated again as copied -- so content that
-    changes between the check and the copy is still caught. The default
+    validated at the source (``_validate_include_evals_source``), then
+    copied with ``symlinks=True`` and validated again as copied, which
+    catches a symlink, special file, or instruction file that appears
+    between the two checks. It does not defend against a concurrent local
+    writer swapping an entry for a symlink *during* the copy (``copytree``
+    then dereferences it into a regular file): the source checkout is
+    assumed not to be under active concurrent modification. The default
     (``False``) keeps the original layout and copy behavior unchanged for
     every existing caller.
     """
@@ -762,7 +783,7 @@ def build_target_snapshot(target: Path, base_dir: Path, include_evals: bool = Fa
         if evals_dir.is_dir() or evals_dir.is_symlink():
             sources.append((evals_dir, snapshot / "evals" / skill_dir.name))
         for source, destination in sources:
-            _validate_include_evals_tree(source)
+            _validate_include_evals_source(source)
             shutil.copytree(source, destination, symlinks=True)
         _validate_include_evals_tree(snapshot)
     elif target.is_dir():
@@ -889,12 +910,12 @@ def main(
             # that changes meanwhile).
             try:
                 skill_dir = _include_evals_skill_dir(args.target)
-                _validate_include_evals_tree(skill_dir)
+                _validate_include_evals_source(skill_dir)
                 evals_dir = sibling_evals_dir(skill_dir)
                 has_evals = evals_dir.is_dir() or evals_dir.is_symlink()
                 if has_evals:
-                    _validate_include_evals_tree(evals_dir)
-            except (OSError, ValueError) as error:
+                    _validate_include_evals_source(evals_dir)
+            except (OSError, ValueError, RecursionError) as error:
                 print(f"error: {error}", file=sys.stderr)
                 return 1
             if not has_evals:
@@ -987,7 +1008,9 @@ def main(
 
         try:
             snapshot = build_target_snapshot(args.target, base_dir, include_evals=args.include_evals)
-        except (OSError, ValueError) as error:
+        except (OSError, ValueError, RecursionError) as error:
+            # RecursionError: copytree recurses per directory level, so a
+            # pathologically deep tree must not escape as a traceback.
             # ValueError: --include-evals refused the target or its evals
             # tree (it can also change between main()'s own precheck and
             # this call, while the controls run). A broken symlink or an

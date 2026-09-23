@@ -820,24 +820,46 @@ def test_sibling_evals_dir_derives_the_repo_root_relative_path(tmp_path: Path) -
     assert gvid.sibling_evals_dir(skill) == tmp_path / "repo" / "evals" / "demo"
 
 
-def test_build_target_snapshot_include_evals_keeps_the_callers_layout_through_a_symlinked_skills_dir(
-    tmp_path: Path,
-) -> None:
-    # Defeat case from the Step 8 review: resolving the target would follow
-    # a symlinked skills/ parent to its destination, reject a valid layout
-    # or pick the wrong evals/ directory. The caller's own layout must win.
-    shared = tmp_path / "shared-skills"
-    (shared / "demo").mkdir(parents=True)
-    (shared / "demo" / "SKILL.md").write_text("skill", encoding="utf-8")
+@pytest.mark.parametrize("parent", ["skills", "evals"])
+def test_build_target_snapshot_include_evals_refuses_a_symlinked_parent_dir(tmp_path: Path, parent: str) -> None:
+    # Defeat case from the pre-merge security review: a symlinked evals/
+    # (or skills/) parent makes the tree path itself look symlink-free, so
+    # the walk would copy arbitrary host content (e.g. evals -> $HOME).
+    host = tmp_path / "home"
+    (host / "demo").mkdir(parents=True)
+    (host / "demo" / "SKILL.md").write_text("host content", encoding="utf-8")
     repo = tmp_path / "repo"
-    (repo / "evals" / "demo").mkdir(parents=True)
-    (repo / "evals" / "demo" / "eval.yaml").write_text("corpus", encoding="utf-8")
-    (repo / "skills").symlink_to(shared)
+    (repo / "skills" / "demo").mkdir(parents=True)
+    (repo / "skills" / "demo" / "SKILL.md").write_text("skill", encoding="utf-8")
+    if parent == "skills":
+        (repo / "skills" / "demo" / "SKILL.md").unlink()
+        (repo / "skills" / "demo").rmdir()
+        (repo / "skills").rmdir()
+    (repo / parent).symlink_to(host)
 
-    snapshot = gvid.build_target_snapshot(repo / "skills" / "demo", tmp_path / "work", include_evals=True)
+    with pytest.raises(ValueError, match="is a symlink"):
+        gvid.build_target_snapshot(repo / "skills" / "demo", tmp_path / "work", include_evals=True)
 
-    assert (snapshot / "skills" / "demo" / "SKILL.md").is_file()
-    assert (snapshot / "evals" / "demo" / "eval.yaml").read_text(encoding="utf-8") == "corpus"
+
+@pytest.mark.parametrize("name", [".claude", "CLAUDE.md"])
+def test_build_target_snapshot_include_evals_refuses_an_instruction_named_target(tmp_path: Path, name: str) -> None:
+    # The walk only checks children, so the tree's own name needs its own
+    # check -- otherwise the refusal only fires on the post-copy snapshot,
+    # after the live controls have already run.
+    skill = _make_repo_skill(tmp_path / "repo", name, with_evals=False)
+
+    with pytest.raises(ValueError, match="project-instruction file or directory"):
+        gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
+
+
+def test_build_target_snapshot_include_evals_refuses_a_hard_linked_file(tmp_path: Path) -> None:
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+    host_file = tmp_path / "credentials"
+    host_file.write_text("secret", encoding="utf-8")
+    os.link(host_file, tmp_path / "repo" / "evals" / "demo" / "tasks" / "ctx")
+
+    with pytest.raises(ValueError, match="hard-linked file"):
+        gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
 
 
 @pytest.mark.parametrize("tree", ["skills", "evals"])
@@ -884,7 +906,7 @@ def test_build_target_snapshot_include_evals_refuses_a_symlinked_evals_root(tmp_
     (tmp_path / "repo" / "evals").mkdir()
     (tmp_path / "repo" / "evals" / "demo").symlink_to(host)
 
-    with pytest.raises(ValueError, match="it is a symlink"):
+    with pytest.raises(ValueError, match="is a symlink"):
         gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
 
 
@@ -1405,7 +1427,7 @@ def test_main_include_evals_rejects_a_target_outside_skills_before_any_control_r
     run.assert_not_called()
 
 
-@pytest.mark.parametrize("failure", ["instruction-file", "unreadable"])
+@pytest.mark.parametrize("failure", ["instruction-file", "unreadable", "too-deep"])
 def test_main_include_evals_refuses_an_unsafe_tree_before_any_control_run(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], failure: str
 ) -> None:
@@ -1418,7 +1440,8 @@ def test_main_include_evals_refuses_an_unsafe_tree_before_any_control_run(
     if failure == "instruction-file":
         (tmp_path / "repo" / "evals" / "demo" / "CLAUDE.md").write_text("injected", encoding="utf-8")
     else:
-        monkeypatch.setattr(gvid, "_validate_include_evals_tree", mock.Mock(side_effect=PermissionError("unreadable")))
+        error = PermissionError("unreadable") if failure == "unreadable" else RecursionError("too deep")
+        monkeypatch.setattr(gvid, "_validate_include_evals_tree", mock.Mock(side_effect=error))
     prompt_file = tmp_path / "prompt.txt"
     prompt_file.write_text("review this skill", encoding="utf-8")
     registry = tmp_path / "registry.yaml"
@@ -1433,22 +1456,21 @@ def test_main_include_evals_refuses_an_unsafe_tree_before_any_control_run(
     assert not registry.exists()
 
 
+@pytest.mark.parametrize("error", [ValueError("refusing to snapshot"), RecursionError("too deep")])
 def test_main_reports_a_value_error_from_the_snapshot_step(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], error: Exception
 ) -> None:
     # The target (or its evals tree) can change between main()'s own
     # --include-evals precheck and the snapshot step, while the controls
-    # run -- a ValueError there must not escape as a traceback.
+    # run, and copytree recurses per directory level -- neither error may
+    # escape as a traceback.
     _stub_home(tmp_path, monkeypatch)
 
     def fake_run(argv: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(argv, 0, stdout="2.1.300 (Claude Code)\n", stderr="")
 
-    def refuse(*_: Any, **__: Any) -> Path:
-        raise ValueError("refusing to snapshot")
-
     monkeypatch.setattr(gvid.subprocess, "run", fake_run)
-    monkeypatch.setattr(gvid, "build_target_snapshot", refuse)
+    monkeypatch.setattr(gvid, "build_target_snapshot", mock.Mock(side_effect=error))
     registry = _reviewed_registry(tmp_path, monkeypatch)
     skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
     prompt_file = tmp_path / "prompt.txt"

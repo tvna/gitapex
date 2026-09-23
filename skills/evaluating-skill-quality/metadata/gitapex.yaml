@@ -604,7 +604,7 @@ spec:
       summary: "gitapex_run_verified_isolated_dispatch.py gained an opt-in --include-evals flag: the snapshot root then holds skills/<name>/ plus its repository-root sibling evals/<name>/ (omitted with a stderr note when absent), so a dispatch can grade the real regression corpus of a target skill. Default layout unchanged; build_isolated_home, _dispatch_env, and the two-control procedure untouched. references/adversarial-self-audit.md documents the layout."
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1950"
-      summary: "Step 8 and pre-merge independent reviews hardened --include-evals: both copied trees are refused, before any control run and again as copied, when they hold a symlink, a special file, a .claude directory, or a CLAUDE.md, CLAUDE.local.md, or AGENTS.md (case-insensitive), since either tree now sits inside the dispatch cwd; copies use symlinks=True, walk errors raise, and the target path is normalized lexically. Default mode is unchanged, including its pre-existing symlink dereferencing."
+      summary: "Pre-merge reviews hardened --include-evals: both trees are refused, before any control run and again as copied, on a symlink (including a symlinked skills/ or evals/ parent), a special or hard-linked file, a .claude directory, or a CLAUDE.md, CLAUDE.local.md, or AGENTS.md (case-insensitive, tree name included). Copies use symlinks=True; walk and recursion errors are reported. A concurrent mid-copy swap is out of scope. Default mode is unchanged."
   skillDependencies:
     requires: []
     relatedTo:
