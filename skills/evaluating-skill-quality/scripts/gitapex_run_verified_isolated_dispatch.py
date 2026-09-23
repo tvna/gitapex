@@ -653,13 +653,19 @@ def _strip_write_bit(path: Path) -> None:
     path.chmod(path.stat().st_mode & ~0o222)
 
 
+_INSTRUCTION_FILE_NAMES = frozenset({"CLAUDE.md", "CLAUDE.local.md", "AGENTS.md"})
+
+
 def _include_evals_skill_dir(target: Path) -> Path:
-    """Resolve ``target`` as a ``skills/<name>`` directory for
+    """Return ``target`` as an absolute ``skills/<name>`` directory for
     ``--include-evals``, or raise ``ValueError`` -- the sibling
     ``evals/<name>/`` path is derived from that layout, so a target outside
-    it has no well-defined evals directory to include."""
+    it has no well-defined evals directory to include. The path is made
+    absolute (``Path.absolute()``), never ``resolve()``d, so a
+    symlinked skill directory or ``skills/`` parent keeps the caller's own
+    repository layout and names instead of its link destination's."""
     # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
-    skill_dir = target.resolve()
+    skill_dir = target.absolute()
     if not skill_dir.is_dir() or skill_dir.parent.name != "skills":
         raise ValueError(f"--include-evals requires --target to be a skills/<name> directory, got {target}")
     return skill_dir
@@ -669,8 +675,22 @@ def sibling_evals_dir(skill_dir: Path) -> Path:
     """Return the repository-root-relative ``evals/<name>/`` path that sits
     beside ``skills/<name>/`` (issue #1950) -- whether or not it exists."""
     # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
-    resolved = skill_dir.resolve()
-    return resolved.parent.parent / "evals" / resolved.name
+    absolute = skill_dir.absolute()
+    return absolute.parent.parent / "evals" / absolute.name
+
+
+def _reject_instruction_files(tree: Path) -> None:
+    """Raise ``ValueError`` if ``tree`` holds a project-instruction file
+    anywhere below it. Copied into the dispatch's cwd subtree, such a file
+    could be loaded by the harness on demand when the dispatch reads nearby
+    files -- a leak path the two-control procedure (which checks only the
+    cwd and its ancestry) never exercises. Walks with ``followlinks=True``
+    to match ``shutil.copytree``'s own default of dereferencing symlinks."""
+    # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
+    for root, _dirs, files in os.walk(tree, followlinks=True):
+        found = _INSTRUCTION_FILE_NAMES.intersection(files)
+        if found:
+            raise ValueError(f"refusing to snapshot {root}: it contains project-instruction file(s) {sorted(found)}")
 
 
 def build_target_snapshot(target: Path, base_dir: Path, include_evals: bool = False) -> Path:
@@ -703,7 +723,8 @@ def build_target_snapshot(target: Path, base_dir: Path, include_evals: bool = Fa
     fixture corpus, under the same repository-root-relative paths -- so a
     dispatch grading a target's regression corpus sees the real one rather
     than reporting it absent. A missing ``evals/<name>/`` stays absent in
-    the snapshot (a real absence, not a placeholder). The default (``False``)
+    the snapshot (a real absence, not a placeholder); one carrying a
+    project-instruction file is refused (``_reject_instruction_files``). The default (``False``)
     keeps the original layout unchanged for every existing caller.
     """
     # function-body-test-coverage: WAIVED: covered by the co-located test file (100% coverage); this gate's own tests/-only search doesn't see it (issue #1809)
@@ -713,6 +734,7 @@ def build_target_snapshot(target: Path, base_dir: Path, include_evals: bool = Fa
         shutil.copytree(skill_dir, snapshot / "skills" / skill_dir.name)
         evals_dir = sibling_evals_dir(skill_dir)
         if evals_dir.is_dir():
+            _reject_instruction_files(evals_dir)
             shutil.copytree(evals_dir, snapshot / "evals" / skill_dir.name)
     elif target.is_dir():
         shutil.copytree(target, snapshot)
@@ -928,8 +950,11 @@ def main(
 
         try:
             snapshot = build_target_snapshot(args.target, base_dir, include_evals=args.include_evals)
-        except OSError as error:
-            # A broken symlink or an unreadable file inside --target -- a
+        except (OSError, ValueError) as error:
+            # ValueError: --include-evals refused the target or its evals
+            # tree (it can also change between main()'s own precheck and
+            # this call, while the controls run). A broken symlink or an
+            # unreadable file inside --target -- a
             # plausible real checkout artifact -- would otherwise crash
             # main() with a raw traceback instead of this module's own
             # consistent print-and-return-1 convention (issue #1809, Step 8

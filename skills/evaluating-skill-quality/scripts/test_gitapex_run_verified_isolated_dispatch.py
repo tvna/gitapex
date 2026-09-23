@@ -811,7 +811,54 @@ def test_build_target_snapshot_include_evals_rejects_a_file_target(tmp_path: Pat
 def test_sibling_evals_dir_derives_the_repo_root_relative_path(tmp_path: Path) -> None:
     skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
 
-    assert gvid.sibling_evals_dir(skill) == (tmp_path / "repo" / "evals" / "demo").resolve()
+    assert gvid.sibling_evals_dir(skill) == tmp_path / "repo" / "evals" / "demo"
+
+
+def test_build_target_snapshot_include_evals_keeps_the_callers_layout_through_a_symlinked_skills_dir(
+    tmp_path: Path,
+) -> None:
+    # Defeat case from the Step 8 review: resolving the target would follow
+    # a symlinked skills/ parent to its destination, reject a valid layout
+    # or pick the wrong evals/ directory. The caller's own layout must win.
+    shared = tmp_path / "shared-skills"
+    (shared / "demo").mkdir(parents=True)
+    (shared / "demo" / "SKILL.md").write_text("skill", encoding="utf-8")
+    repo = tmp_path / "repo"
+    (repo / "evals" / "demo").mkdir(parents=True)
+    (repo / "evals" / "demo" / "eval.yaml").write_text("corpus", encoding="utf-8")
+    (repo / "skills").symlink_to(shared)
+
+    snapshot = gvid.build_target_snapshot(repo / "skills" / "demo", tmp_path / "work", include_evals=True)
+
+    assert (snapshot / "skills" / "demo" / "SKILL.md").is_file()
+    assert (snapshot / "evals" / "demo" / "eval.yaml").read_text(encoding="utf-8") == "corpus"
+
+
+@pytest.mark.parametrize("name", ["CLAUDE.md", "AGENTS.md", "CLAUDE.local.md"])
+def test_build_target_snapshot_include_evals_refuses_an_evals_tree_with_an_instruction_file(
+    tmp_path: Path, name: str
+) -> None:
+    # A project-instruction file inside evals/<name>/ would land in the
+    # dispatch's cwd subtree, where the harness can load it on demand --
+    # a path the two-control procedure never exercises.
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+    (tmp_path / "repo" / "evals" / "demo" / "tasks" / name).write_text("injected", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="project-instruction file"):
+        gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
+
+
+def test_build_target_snapshot_include_evals_refuses_an_instruction_file_behind_a_symlinked_dir(
+    tmp_path: Path,
+) -> None:
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "AGENTS.md").write_text("injected", encoding="utf-8")
+    (tmp_path / "repo" / "evals" / "demo" / "linked").symlink_to(outside)
+
+    with pytest.raises(ValueError, match="project-instruction file"):
+        gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
 
 
 # ---- run_real_dispatch (argv construction only) ------------------------------
@@ -1319,6 +1366,45 @@ def test_main_include_evals_rejects_a_target_outside_skills_before_any_control_r
     assert exit_code == 1
     assert "--include-evals requires --target to be a skills/<name> directory" in capsys.readouterr().err
     assert calls == []
+
+
+def test_main_reports_a_value_error_from_the_snapshot_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # The target (or its evals tree) can change between main()'s own
+    # --include-evals precheck and the snapshot step, while the controls
+    # run -- a ValueError there must not escape as a traceback.
+    _stub_home(tmp_path, monkeypatch)
+
+    def fake_run(argv: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(argv, 0, stdout="2.1.300 (Claude Code)\n", stderr="")
+
+    def refuse(*_: Any, **__: Any) -> Path:
+        raise ValueError("refusing to snapshot")
+
+    monkeypatch.setattr(gvid.subprocess, "run", fake_run)
+    monkeypatch.setattr(gvid, "build_target_snapshot", refuse)
+    registry = _reviewed_registry(tmp_path, monkeypatch)
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("review this skill", encoding="utf-8")
+
+    exit_code = gvid.main(
+        [
+            "--target",
+            str(skill),
+            "--include-evals",
+            "--prompt-file",
+            str(prompt_file),
+            "--registry",
+            str(registry),
+            "--history-markdown",
+            str(tmp_path / "history.md"),
+        ]
+    )
+
+    assert exit_code == 1
+    assert "could not build a snapshot of --target" in capsys.readouterr().err
 
 
 def test_main_requires_target_and_prompt_file_unless_controls_only(
