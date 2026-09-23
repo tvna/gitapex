@@ -19,9 +19,8 @@ holds -- is what this skill grades, at two different altitudes.
 ## Two modes, one reporting discipline
 
 The two modes below answer different questions about different kinds of
-target, and neither subsumes the other. They were separate skills until
-the absorption recorded in `metadata/gitapex.yaml` merged them, and that
-merge deliberately did not flatten their two vocabularies into one:
+target, and neither subsumes the other; their two vocabularies stay
+distinct rather than flattened into one:
 
 - **Mode A -- artifact exposure and privilege.** Target: one artifact.
   Verdict vocabulary: `exposure-minimal` / `exposure-excess` per
@@ -312,11 +311,9 @@ never changes branch protection, revokes a webhook, or rotates a key.
   `evaluating-deterministic-gate-quality`'s own delegation-recommendation
   step also names this skill as the delegate for an exposure- or
   privilege-shaped finding it surfaces, rather than re-deriving that
-  analysis inline -- that step's own reference text still hardcodes the
-  pre-rename name as a literal string (a disclosed, deliberate choice on
-  that skill's own side, not fixed by this rename), but confirms the
-  named delegate is actually present in the calling environment before
-  trusting it, rather than blindly following the string.
+  analysis inline -- that step confirms the named delegate is actually
+  present in the calling environment before trusting it, rather than
+  following the name alone.
 - **`screening-a-low-trust-contribution`** (`relatedTo`) -- screens a
   single incoming diff for supply-chain/injection threat at contribution
   time, including what that diff *changes* about the hosting surface Mode
@@ -472,9 +469,9 @@ one of them is required reading on every Mode B run, per step B2, rather
 than optional depth -- the one place this skill's Adaptive declaration is
 partial rather than clean.
 
-Ceiling pressure is disclosed rather than left to be discovered: after
-the absorption both this body and this description sit within a few
-lines/characters of `gitapex_check_skill_shape.py`'s limits, and what
+Ceiling pressure is disclosed rather than left to be discovered: both
+this body and this description sit within a few lines/characters of
+`gitapex_check_skill_shape.py`'s limits, and what
 remains cannot move to `references/` without leaving the body incomplete
 for a correct run, so the next substantive addition has to remove
 something first. `metadata/gitapex.yaml` carries the full reasoning.
