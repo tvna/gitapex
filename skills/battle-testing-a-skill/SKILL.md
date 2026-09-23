@@ -76,12 +76,12 @@ limits.
    platform-specific and owned by `evaluating-skill-quality`'s Subagent
    dispatch section -- run its `gitapex_run_verified_isolated_dispatch.py`
    for the dispatch itself, with `--include-evals` for a `skills/<name>`
-   target so dimensions 14/15 see its sibling `evals/<name>/` (layout: that skill's
-   `references/adversarial-self-audit.md`); it verifies isolation from its own
-   orchestrating process before launching (reusing a matching Reviewed
-   entry in that skill's own `metadata/isolation-registry.yaml`, or
-   running a live positive/negative control pair and recording a new
-   entry otherwise). Only that test counts as proof -- an ancestry-only
+   target so dimensions 14/15 see its sibling `evals/<name>/`; it verifies
+   isolation from its own orchestrating process before launching (reusing
+   a matching Reviewed entry in that skill's own
+   `metadata/isolation-registry.yaml`, or running a live positive/negative
+   control pair and recording a new entry otherwise). Only that test
+   counts as proof -- an ancestry-only
    check on the scratch path has already missed a real leak (see
    `references/provenance-and-caveats.md`, "Variance re-measurement"). No
    available mechanism -> stop; never fall back to the Agent-tool (or any
