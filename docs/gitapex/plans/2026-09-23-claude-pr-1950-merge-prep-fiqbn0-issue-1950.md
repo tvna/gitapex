@@ -88,7 +88,8 @@ Source ACM rows: issue #1950 rows 1, 2, and 3 (re-verified, see the notes above)
 Design: `--include-evals` (derived-from-`--target` convention). When set,
 `--target` must be a directory whose parent is named `skills`; the
 snapshot root then holds `skills/<name>/` and, when it exists,
-`evals/<name>/` (resolved as `<target>/../../evals/<name>`) as siblings.
+`evals/<name>/` (derived lexically as `<target>/../../evals/<name>`, never
+symlink-resolved) as siblings.
 An absent `evals/<name>/` is reported on stderr and left absent in the
 snapshot (a real absence, which dimension 14 should grade as such). A
 `--target` that does not fit the convention is rejected before any

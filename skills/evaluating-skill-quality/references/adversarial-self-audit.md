@@ -178,12 +178,14 @@ sibling `evals/<name>/`, so a default snapshot can never show it. When the
 review grades that corpus (`battle-testing-a-skill` dimensions 14/15),
 pass `--include-evals` with a `skills/<name>` target: the snapshot root
 then holds `skills/<name>/` and `evals/<name>/` as siblings (the latter
-omitted, with a stderr note, when the skill has none; the run is refused
-when that evals tree holds a `CLAUDE.md`, `CLAUDE.local.md`, or
-`AGENTS.md`, which the harness could load from inside the dispatch cwd),
-and the dispatch
+omitted, with a stderr note, when the skill has none), and the dispatch
 prompt must name those paths instead of telling the dispatch its cwd *is*
-the target.
+the target. Both trees now sit inside the dispatch cwd, so the run is
+refused, before any control run, when either holds a symlink, a special
+file, a `.claude` directory, or a `CLAUDE.md`, `CLAUDE.local.md`, or
+`AGENTS.md` (names compared case-insensitively): the harness could load
+an instruction file from there, and a symlink could pull arbitrary host
+content into the cwd.
 
 If the script reports "No verified mechanism available," follow its own
 printed guidance (an environment fix, or a hand-off to an already-verified

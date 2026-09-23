@@ -13,9 +13,11 @@ section.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 import gitapex_run_verified_isolated_dispatch as gvid
 import pytest
@@ -770,15 +772,19 @@ def test_build_target_snapshot_include_evals_keeps_repo_relative_siblings(tmp_pa
         assert not (path.stat().st_mode & 0o222), path
 
 
-def test_build_target_snapshot_include_evals_resolves_a_relative_target(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("relative", [".", "../demo", "../../skills/demo/."])
+def test_build_target_snapshot_include_evals_normalizes_a_relative_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, relative: str
 ) -> None:
+    # Defeat cases: without absolutizing, Path(".").parent.name is "";
+    # without ".." normalization, ".../demo/../demo" has parent name "..".
     repo = tmp_path / "repo"
     _make_repo_skill(repo, "demo", with_evals=True)
-    monkeypatch.chdir(repo)
+    monkeypatch.chdir(repo / "skills" / "demo")
 
-    snapshot = gvid.build_target_snapshot(Path("skills/demo/"), tmp_path / "work", include_evals=True)
+    snapshot = gvid.build_target_snapshot(Path(relative), tmp_path / "work", include_evals=True)
 
+    assert (snapshot / "skills" / "demo" / "SKILL.md").is_file()
     assert (snapshot / "evals" / "demo" / "tasks" / "case.yaml").is_file()
 
 
@@ -834,31 +840,67 @@ def test_build_target_snapshot_include_evals_keeps_the_callers_layout_through_a_
     assert (snapshot / "evals" / "demo" / "eval.yaml").read_text(encoding="utf-8") == "corpus"
 
 
-@pytest.mark.parametrize("name", ["CLAUDE.md", "AGENTS.md", "CLAUDE.local.md"])
-def test_build_target_snapshot_include_evals_refuses_an_evals_tree_with_an_instruction_file(
-    tmp_path: Path, name: str
-) -> None:
-    # A project-instruction file inside evals/<name>/ would land in the
-    # dispatch's cwd subtree, where the harness can load it on demand --
-    # a path the two-control procedure never exercises.
+@pytest.mark.parametrize("tree", ["skills", "evals"])
+@pytest.mark.parametrize("name", ["CLAUDE.md", "AGENTS.md", "CLAUDE.local.md", "claude.md", "Agents.md"])
+def test_build_target_snapshot_include_evals_refuses_an_instruction_file(tmp_path: Path, tree: str, name: str) -> None:
+    # Either copied tree lands in the dispatch's cwd subtree, where the
+    # harness can load an instruction file on demand -- a path the
+    # two-control procedure never exercises. Case variants match too: on a
+    # case-insensitive filesystem they are the file a CLAUDE.md lookup opens.
     skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
-    (tmp_path / "repo" / "evals" / "demo" / "tasks" / name).write_text("injected", encoding="utf-8")
+    (tmp_path / "repo" / tree / "demo" / name).write_text("injected", encoding="utf-8")
 
     with pytest.raises(ValueError, match="project-instruction file"):
         gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
 
 
-def test_build_target_snapshot_include_evals_refuses_an_instruction_file_behind_a_symlinked_dir(
-    tmp_path: Path,
-) -> None:
+def test_build_target_snapshot_include_evals_refuses_a_dot_claude_directory(tmp_path: Path) -> None:
     skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    (outside / "AGENTS.md").write_text("injected", encoding="utf-8")
-    (tmp_path / "repo" / "evals" / "demo" / "linked").symlink_to(outside)
+    (tmp_path / "repo" / "evals" / "demo" / ".claude" / "rules").mkdir(parents=True)
 
-    with pytest.raises(ValueError, match="project-instruction file"):
+    with pytest.raises(ValueError, match="project-instruction file or directory"):
         gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
+
+
+@pytest.mark.parametrize("link_kind", ["file", "dir"])
+def test_build_target_snapshot_include_evals_refuses_a_symlink_to_host_content(tmp_path: Path, link_kind: str) -> None:
+    # A symlinked fixture would otherwise be dereferenced by copytree and
+    # materialize an arbitrary host file (e.g. a credential) in the cwd.
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+    host = tmp_path / "home"
+    host.mkdir()
+    (host / "credentials.json").write_text("secret", encoding="utf-8")
+    link_target = host / "credentials.json" if link_kind == "file" else host
+    (tmp_path / "repo" / "evals" / "demo" / "tasks" / "ctx").symlink_to(link_target)
+
+    with pytest.raises(ValueError, match="symlink"):
+        gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
+
+
+def test_build_target_snapshot_include_evals_refuses_a_symlinked_evals_root(tmp_path: Path) -> None:
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=False)
+    host = tmp_path / "home"
+    host.mkdir()
+    (tmp_path / "repo" / "evals").mkdir()
+    (tmp_path / "repo" / "evals" / "demo").symlink_to(host)
+
+    with pytest.raises(ValueError, match="it is a symlink"):
+        gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
+
+
+def test_build_target_snapshot_include_evals_refuses_a_special_file(tmp_path: Path) -> None:
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+    os.mkfifo(tmp_path / "repo" / "evals" / "demo" / "tasks" / "pipe")
+
+    with pytest.raises(ValueError, match="not a regular file"):
+        gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
+
+
+def test_validate_include_evals_tree_raises_on_a_walk_error(tmp_path: Path) -> None:
+    # os.walk's default silently skips an unreadable directory; the check
+    # must fail instead of reporting a tree it never read as clean.
+    with pytest.raises(FileNotFoundError):
+        gvid._validate_include_evals_tree(tmp_path / "missing")
 
 
 # ---- run_real_dispatch (argv construction only) ------------------------------
@@ -1339,13 +1381,8 @@ def test_main_include_evals_rejects_a_target_outside_skills_before_any_control_r
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     _stub_home(tmp_path, monkeypatch)
-    calls: list[list[str]] = []
-
-    def fake_run(argv: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
-        calls.append(argv)
-        return subprocess.CompletedProcess(argv, 0, stdout="", stderr="")
-
-    monkeypatch.setattr(gvid.subprocess, "run", fake_run)
+    run = mock.Mock(name="subprocess.run")
+    monkeypatch.setattr(gvid.subprocess, "run", run)
     target = tmp_path / "elsewhere" / "demo"
     target.mkdir(parents=True)
     prompt_file = tmp_path / "prompt.txt"
@@ -1365,7 +1402,35 @@ def test_main_include_evals_rejects_a_target_outside_skills_before_any_control_r
 
     assert exit_code == 1
     assert "--include-evals requires --target to be a skills/<name> directory" in capsys.readouterr().err
-    assert calls == []
+    run.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", ["instruction-file", "unreadable"])
+def test_main_include_evals_refuses_an_unsafe_tree_before_any_control_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], failure: str
+) -> None:
+    # End to end, unpatched snapshot logic: a refusal known before the
+    # controls run must not cost live control calls or a registry write.
+    _stub_home(tmp_path, monkeypatch)
+    run = mock.Mock(name="subprocess.run")
+    monkeypatch.setattr(gvid.subprocess, "run", run)
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+    if failure == "instruction-file":
+        (tmp_path / "repo" / "evals" / "demo" / "CLAUDE.md").write_text("injected", encoding="utf-8")
+    else:
+        monkeypatch.setattr(gvid, "_validate_include_evals_tree", mock.Mock(side_effect=PermissionError("unreadable")))
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("review this skill", encoding="utf-8")
+    registry = tmp_path / "registry.yaml"
+
+    exit_code = gvid.main(
+        ["--target", str(skill), "--include-evals", "--prompt-file", str(prompt_file), "--registry", str(registry)]
+    )
+
+    assert exit_code == 1
+    assert "error:" in capsys.readouterr().err
+    run.assert_not_called()
+    assert not registry.exists()
 
 
 def test_main_reports_a_value_error_from_the_snapshot_step(
