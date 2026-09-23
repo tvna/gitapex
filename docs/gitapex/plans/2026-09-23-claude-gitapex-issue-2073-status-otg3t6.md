@@ -13,6 +13,8 @@ Branch: `claude/gitapex-issue-2073-status-otg3t6`, from `origin/main`.
   ("Re-verified: `planning-a-branch-from-an-issue` (2026-09-23T13:41:11Z)"),
   written by this same session after a second re-verification pass
   (https://github.com/tvna/gitapex/issues/2073#issuecomment-5795918937).
+  `skills/executing-a-branch-plan/scripts/gitapex_check_branch_plan_reverified.py`
+  reported "PASS: re-verification marker found" against that body.
 - Semantic approval: explicit confirmation from the active human operator
   in the current interactive session, given against this exact five-item
   Branch Plan (design-doc cherry-pick, schema, scanner + tests, ssot.json

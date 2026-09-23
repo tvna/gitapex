@@ -23,9 +23,12 @@ Layered validation, mirroring gitapex_scan_skill_metadata_schema.py:
      (``.gitapex.yml``) would otherwise be skipped by discovery and
      silently never validated.
    - ``sidecar-location``: a ``*.gitapex.y[a]ml`` or ``gitapex.y[a]ml``
-     file anywhere else under agents/ (e.g. ``agents/<name>.gitapex.yaml``
-     or the skill-style ``agents/<name>/metadata/gitapex.yaml``) is a
-     finding, for the same never-validated reason one level up.
+     file (any letter case) anywhere else under agents/ (e.g.
+     ``agents/<name>.gitapex.yaml`` or the skill-style
+     ``agents/<name>/metadata/gitapex.yaml``) is a finding, for the same
+     never-validated reason one level up. So is any symlink under agents/
+     other than agents/metadata itself (which sidecar-dir reports), since
+     the walk does not follow one.
    - ``sidecar-read``: a sidecar that is not UTF-8, not valid YAML, repeats
      a mapping key, or nests too deeply is a per-file finding; the scan
      continues so the other sidecars' findings are still reported. A
@@ -173,14 +176,21 @@ def find_duplicate_exit_condition_ids(instance: Any) -> list[str]:
 
 
 def find_misplaced_sidecars(agents_dir: pathlib.Path, metadata_dir: pathlib.Path) -> list[str]:
-    """sidecar-location: a sidecar-looking file anywhere under agents_dir
-    other than directly inside metadata_dir. Files directly inside
-    metadata_dir are find_drift's own sidecar-filename check instead."""
+    """sidecar-location: a sidecar-looking file (any letter case), or any
+    symlink, anywhere under agents_dir other than metadata_dir itself or
+    its direct entries, which find_drift's own sidecar-dir and
+    sidecar-filename checks cover instead."""
     findings: list[str] = []
     for path in sorted(agents_dir.rglob("*")):
-        if not (path.name.endswith(_SIDECAR_LIKE_SUFFIXES) or path.name in _SIDECAR_LIKE_NAMES):
+        if path == metadata_dir or path.parent == metadata_dir:
+            continue  # find_drift's own sidecar-dir / sidecar-filename checks
+        if path.is_symlink():
+            # rglob does not descend into a symlinked directory, so a
+            # sidecar behind one would otherwise go unseen.
+            findings.append(f"{path}: sidecar-location: symlinks under {agents_dir} are not allowed")
             continue
-        if path.parent == metadata_dir:
+        name = path.name.lower()
+        if not (name.endswith(_SIDECAR_LIKE_SUFFIXES) or name in _SIDECAR_LIKE_NAMES):
             continue
         findings.append(f"{path}: sidecar-location: agent sidecars belong directly under {metadata_dir}")
     return findings

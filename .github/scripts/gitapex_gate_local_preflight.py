@@ -208,9 +208,11 @@ SSOT_PATH = REPO_ROOT / ".gitapex" / "ssot.json"
 # worst case is ~4200 s, not 600 s. A ceiling matching that would be useless
 # as a hang guard (80 minutes of a silent pre-push), so this is a judgment
 # call in the other direction. For scale: a warm run of all 55 wired gates
-# combined measures roughly 49 s end to end (issue #1817's own
-# apm-binary-version-pin gate is the latest addition, bumping the prior
-# 53-gate baseline by one; different hardware than the figures below in any
+# combined measures roughly 47 s end to end on a 4-core cloud session
+# (issue #2073's own agent-metadata-schema-drift gate is the latest
+# addition, bumping the prior 54-gate baseline, measured at roughly 49 s,
+# by one; issue #1817's own apm-binary-version-pin gate bumped the prior
+# 53-gate baseline by one before that; different hardware than the figures below in any
 # case, see this paragraph's own closing parenthetical, which is also why
 # this is markedly faster than slower -- the prior 53-gate set (issue #1921's own
 # detection-logic-rule-text-drift gate bumped the 52-gate baseline by one)

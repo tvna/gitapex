@@ -648,3 +648,39 @@ def test_construct_unique_mapping_direct() -> None:
             scanner._construct_unique_mapping(loader, node)
     finally:
         loader.dispose()
+
+
+@pytest.mark.parametrize("relative", ["example-agent.GITAPEX.yaml", "x/Gitapex.YML"])
+def test_find_drift_flags_a_misplaced_sidecar_in_any_letter_case(tmp_path: pathlib.Path, relative: str) -> None:
+    agents_dir = _make_agents_dir(tmp_path)
+    path = agents_dir / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("x: 1\n", encoding="utf-8")
+    assert any(f.startswith(f"{path}: sidecar-location:") for f in scanner.find_drift(agents_dir))
+
+
+def test_find_drift_flags_a_symlinked_directory_hiding_a_sidecar(tmp_path: pathlib.Path) -> None:
+    """Defeat case: rglob does not follow a symlinked directory, so a
+    sidecar reachable only through one would otherwise never be seen."""
+    agents_dir = _make_agents_dir(tmp_path)
+    hidden = tmp_path / "hidden"
+    hidden.mkdir()
+    (hidden / "gitapex.yaml").write_text("x: 1\n", encoding="utf-8")
+    link = agents_dir / "example-agent"
+    link.symlink_to(hidden, target_is_directory=True)
+    assert scanner.find_drift(agents_dir) == [f"{link}: sidecar-location: symlinks under {agents_dir} are not allowed"]
+
+
+@pytest.mark.parametrize("tag", ["gh-cli ", " gh-cli", "gh-cli\n", "gh\ncli"])
+def test_shell_denylist_rejects_padded_or_multiline_tags(tag: str) -> None:
+    """Defeat case: an exact-match adapter lookup would silently miss a
+    padded deny tag, so the schema rejects the padding itself."""
+    instance = _instance()
+    instance["spec"]["executionRequirements"]["tools"]["shellDenylist"] = [tag]
+    assert _violations(instance)
+
+
+def test_shell_denylist_accepts_single_character_and_inner_space_tags() -> None:
+    instance = _instance()
+    instance["spec"]["executionRequirements"]["tools"]["shellDenylist"] = ["x", "package install"]
+    assert _violations(instance) == []

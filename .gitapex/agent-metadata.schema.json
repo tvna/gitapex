@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://gitapex.io/schemas/agent-metadata.schema.json",
+  "$id": "https://github.com/tvna/gitapex/blob/main/.gitapex/agent-metadata.schema.json",
   "title": "gitapex agent metadata sidecar (AgentMetadata gitapex.io/v1alpha1)",
   "description": "Schema for every agents/metadata/<name>.gitapex.yaml sidecar (issue #2073, parent #307). Declares a subagent/agent type's own execution requirements, owned by the agent type rather than by whichever skill dispatches it. Same apiVersion/kind/metadata/spec envelope as skills/evaluating-skill-quality/references/skill-metadata.schema.json, with a distinct kind. Declaration only: no adapter consumes this yet, so nothing here is enforced at runtime. Cross-file rules this schema cannot express (metadata.name equals the file's <name> stem, agents/<name>.md exists, exitConditions[].id is unique) live in .github/scripts/gitapex_scan_agent_metadata_schema.py.",
   "type": "object",
@@ -82,9 +82,9 @@
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "pattern": "\\S"
+        "pattern": "^\\S(.*\\S)?(?!\\n)$"
       },
-      "description": "Free-form capability tags, each with at least one non-whitespace character. No fixed vocabulary yet: an adapter defines how a tag maps to its runtime. An explicit empty list states 'none', distinct from the key being absent. A tag listed in both shell and shellDenylist is not rejected here; deny takes precedence."
+      "description": "Free-form capability tags: no leading or trailing whitespace and no newline, so an exact-match lookup of a deny tag cannot silently miss a padded copy. No fixed vocabulary yet: an adapter defines how a tag maps to its runtime. An explicit empty list states 'none', distinct from the key being absent. A tag listed in both shell and shellDenylist is not rejected here; deny takes precedence."
     },
     "executionRequirementsLifecycle": {
       "type": "object",
