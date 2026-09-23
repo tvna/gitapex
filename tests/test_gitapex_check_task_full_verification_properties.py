@@ -17,6 +17,8 @@ Reproducibility: ``derandomize=True`` with an explicit ``max_examples`` and
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import pathlib
 import tempfile
@@ -48,9 +50,7 @@ _OTHER_FILES = st.lists(
 
 @_PROPERTIES
 @given(other_files=_OTHER_FILES, marker_present=st.booleans())
-def test_main_skips_exactly_when_the_marker_is_absent(
-    other_files: list[str], marker_present: bool, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_main_skips_exactly_when_the_marker_is_absent(other_files: list[str], marker_present: bool) -> None:
     with tempfile.TemporaryDirectory() as raw_root:
         root = pathlib.Path(raw_root)
         for relative in [*other_files, *([checker.GITAPEX_SUITE_MARKER] if marker_present else [])]:
@@ -62,11 +62,12 @@ def test_main_skips_exactly_when_the_marker_is_absent(
             ran.append(cwd)
             return {"decision": "allow"}
 
-        with monkeypatch.context() as patch:
+        out = io.StringIO()
+        with pytest.MonkeyPatch.context() as patch, contextlib.redirect_stdout(out):
             patch.setattr(checker, "run_verification", record)
             patch.setattr("sys.stdin", _FakeStdin(json.dumps({"cwd": str(root)}).encode("utf-8")))
             assert checker.main([]) == 0
-        verdict = json.loads(capsys.readouterr().out)
+        verdict = json.loads(out.getvalue())
 
         if marker_present:
             assert verdict == {"decision": "allow"}
