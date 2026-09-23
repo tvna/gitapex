@@ -63,7 +63,6 @@ def test_repository_scan_reaches_the_real_hook_surfaces():
     discovered = {p.relative_to(REPO_ROOT).as_posix() for p in gate.discover(REPO_ROOT)}
     assert "hooks/hooks.json" in discovered
     assert "agents/branch-plan-task.md" in discovered
-    assert ".claude/agents/branch-plan-task.md" in discovered
 
 
 # --- violations ---------------------------------------------------------

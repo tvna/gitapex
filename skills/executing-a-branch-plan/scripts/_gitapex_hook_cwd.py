@@ -6,9 +6,9 @@ check_task_bash_safety.sh) need the exact same answer to "which directory
 is this dispatched task's own worktree root": the hook payload's own `cwd`
 field when it names a real directory (per Claude Code's documented hook
 input schema for both hook events), this process's own working directory
-otherwise -- matching the empirically-verified fallback
-check_task_bash_safety.sh's own `${CLAUDE_PROJECT_DIR:-$(pwd)}` uses for
-the PreToolUse hook (see references/threat-model-and-authorization.md).
+otherwise (the hook process's own directory, normally the project
+directory). The full-verification classifier then resolves the git
+top-level from this (issue #1996).
 
 Leading underscore, same convention as this directory's other
 single-underscore "not a public entry point" names (`_gitapex_path_normalize.py`):

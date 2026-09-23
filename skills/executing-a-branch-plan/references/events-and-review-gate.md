@@ -392,7 +392,7 @@ silently does not catch what it claims to.
 
 1. **Refactor/simplify pass**, over the full accumulated diff (every
    task's own diff combined), not per-task. A fresh subagent dispatch
-   (`agentType: 'branch-plan-task'` -- this agent type's own second
+   (`agentType: 'gitapex:branch-plan-task'` -- this agent type's own second
    sanctioned call site, alongside Step 6's per-task dispatch; see
    `agents/branch-plan-task.md`'s own "Sanctioned call sites" section),
    distinct from the task agents that wrote the code -- the same agent

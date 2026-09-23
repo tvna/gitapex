@@ -36,8 +36,20 @@ import pytest
 SCRIPT = Path(__file__).parent / "check_task_bash_safety.sh"
 
 
-def run(command: str, tool_name: str = "Bash") -> subprocess.CompletedProcess[str]:
-    payload = json.dumps({"tool_name": tool_name, "tool_input": {"command": command}})
+# The hook is registered session-wide in hooks/hooks.json and scopes itself
+# to this agent type via the payload's own `agent_type` field (issue #1996).
+BRANCH_PLAN_TASK_AGENT_TYPE = "gitapex:branch-plan-task"
+
+_UNSET = object()
+
+
+def run(
+    command: str, tool_name: str = "Bash", agent_type: object = BRANCH_PLAN_TASK_AGENT_TYPE
+) -> subprocess.CompletedProcess[str]:
+    body: dict[str, object] = {"tool_name": tool_name, "tool_input": {"command": command}}
+    if agent_type is not _UNSET:
+        body["agent_type"] = agent_type
+    payload = json.dumps(body)
     return subprocess.run(
         ["bash", str(SCRIPT)],
         input=payload,
@@ -737,3 +749,49 @@ def test_non_bash_tool_name_is_ignored() -> None:
 
 def test_empty_command_is_allowed() -> None:
     assert_allowed("")
+
+
+# --- Issue #1996: agent-type scoping ----------------------------------------
+# The hook fires for every Bash call in the session (main thread and every
+# subagent), so it must stay silent outside a branch-plan-task dispatch and
+# must still deny inside one.
+
+
+@pytest.mark.parametrize(
+    "agent_type",
+    [
+        _UNSET,
+        "general-purpose",
+        "Explore",
+        "gitapex:review-persona",
+        "gitapex:branch-plan-task-extra",
+        "xbranch-plan-task",
+    ],
+    ids=["absent-main-thread", "general-purpose", "explore", "sibling-agent", "longer-name", "suffix-lookalike"],
+)
+def test_out_of_scope_agent_type_is_allowed_silently(agent_type: object) -> None:
+    result = run("git push origin HEAD", agent_type=agent_type)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == ""
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    "agent_type",
+    [BRANCH_PLAN_TASK_AGENT_TYPE, "branch-plan-task", "gitapex-fork:branch-plan-task"],
+    ids=["plugin-qualified", "unqualified-project-local", "renamed-plugin"],
+)
+def test_in_scope_agent_type_still_denies(agent_type: str) -> None:
+    """Issue #1996 adversarial review: any agent named branch-plan-task is
+    enforced, whatever plugin (or none) it came from -- a fork or a renamed
+    install must not silently switch the gate off."""
+    result = run("git push origin HEAD", agent_type=agent_type)
+    assert result.returncode == 2
+    assert json.loads(result.stderr)["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+@pytest.mark.parametrize("agent_type", [12345, ["gitapex:branch-plan-task"], {"name": "x"}, True])
+def test_non_string_agent_type_fails_closed(agent_type: object) -> None:
+    result = run("echo hi", agent_type=agent_type)
+    assert result.returncode == 2
+    assert "agent_type" in json.loads(result.stderr)["systemMessage"]

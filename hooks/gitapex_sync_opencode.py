@@ -80,8 +80,8 @@ REVIEW_PERSONA_PERMISSION = {
 }
 
 # branch-plan-task.md's Claude-side boundary restated for OpenCode:
-# `disallowedTools: mcp__github` in its own frontmatter (both
-# agents/branch-plan-task.md and .claude/agents/branch-plan-task.md).
+# `disallowedTools: mcp__github` in agents/branch-plan-task.md's own
+# frontmatter.
 # Unlike review-persona.md, this subagent's own body states a real need
 # for Edit, Write, Bash and dispatching Agent/Task, so none of
 # REVIEW_PERSONA_PERMISSION's other keys apply here -- only the MCP

@@ -205,8 +205,9 @@ tool-permission configuration (a settings-level deny rule ... scoped to
 task-agent dispatch where the platform supports scoping)" -- i.e. a
 `.claude/settings.json` `permissions.deny` entry. What ships here instead
 is a different mechanism: a custom subagent type's own `tools`/
-`disallowedTools` frontmatter plus (in the project-local variant only)
-an embedded `hooks.PreToolUse` block. This is not an oversight; it is
+`disallowedTools` frontmatter plus a `PreToolUse` hook scoped to that
+subagent type (since issue `#1996`, registered in the plugin's own
+`hooks/hooks.json` and self-scoped by `agent_type`). This is not an oversight; it is
 what "where the platform supports scoping" resolved to once actually
 tested against Claude Code's real settings schema during this skill's
 own authoring pass: `permissions.deny` in `.claude/settings.json` is a
@@ -226,28 +227,48 @@ broader open question" below -- re-verify `hooks/check-bash-safety.sh`
 specifically inside a plugin-installed deployment before relying on it
 as covering task-agent dispatch.
 
-**Decision 17's own backstop exists in two variants, of genuinely
-different strength, and this asymmetry is stated here explicitly rather
-than papered over** -- verified against Claude Code's actual
-plugin-agent schema, not a plausible-sounding claim.
+**Decision 17's own backstop is one mechanism, the same in every
+deployment, since issue `#1996`.** Before that issue it existed in two
+variants of different strength: a project-local
+`.claude/agents/branch-plan-task.md` carrying embedded hooks, and the
+plugin-shipped `agents/branch-plan-task.md`, which cannot carry any (per
+Claude Code's plugin-reference documentation, "for security reasons,
+`hooks`, `mcpServers`, and `permissionMode` are not supported for
+plugin-shipped agents"). Issue `#1996` removed the project-local copy and
+moved its hooks into the plugin's own `hooks/hooks.json`, which Claude
+Code runs inside subagents too. The one remaining definition dispatches as
+`gitapex:branch-plan-task` wherever the plugin is loaded; a direct checkout
+of this repository loads it through `.claude/settings.json`'s directory
+marketplace. A session without the plugin has no `branch-plan-task` type at
+all, so a dispatch fails loudly on an unknown type rather than running with
+weaker enforcement.
 
-1. **Project-local variant** (`.claude/agents/branch-plan-task.md` --
-   this repository checked out and worked on directly, the deployment
-   this skill's own authoring session used). Defines a dedicated subagent
-   type with `disallowedTools: mcp__github` (the entire GitHub MCP
-   server, not a per-method list -- Claude Code's own subagent tool
-   restriction is whole-server granularity, not per-method, so denying
-   reads along with writes is the correct, stricter instantiation, not a
-   gap) plus an embedded `hooks.PreToolUse` block (matcher `"Bash"`)
-   invoking `skills/executing-a-branch-plan/scripts/check_task_bash_ safety.sh` -- scoped, per Claude Code's own subagent-hooks
-   documentation, to fire only while that specific subagent type is
-   active, not session-wide, and independent of `CLAUDE_PLUGIN_ROOT`
-   (Decision 7's own open question).
+1. **Tool restriction.** `disallowedTools: mcp__github` (the entire
+   GitHub MCP server, not a per-method list -- Claude Code's own subagent
+   tool restriction is whole-server granularity, not per-method, so
+   denying reads along with writes is the correct, stricter
+   instantiation, not a gap).
+2. **Bash hook.** `hooks/hooks.json` registers `check_task_bash_safety.sh`
+   for every `Bash` call in the session; the script exits 0 unless the
+   payload's `agent_type` names the `branch-plan-task` agent (bare, or
+   with any `<plugin>:` prefix, so a fork or renamed install still
+   enforces), and fails closed on a non-string `agent_type`. Claude Code fills `agent_type` with
+   `<plugin name>:<agent name>` for a plugin subagent and leaves it out on
+   the main thread -- confirmed live on Claude Code 2.1.280 (issue
+   `#1996`), together with a plugin `SubagentStop` matcher filtering on the
+   same value and a plugin `PreToolUse` hook firing for a subagent's Bash
+   call. `tests/test_gitapex_branch_plan_task_hook_scope.py` ties the
+   plugin name, the agent name, both hooks.json entries and both scripts'
+   scoping constants together, so a rename cannot silently stop the hooks
+   from firing.
 
-   **Scope of the empirical verification below, stated precisely rather
+   **The probes below exercised the former project-local registration**,
+   which ran the same `check_task_bash_safety.sh`; they remain the evidence
+   for the script's own deny behavior inside a subagent and a worktree.
+   **Scope of that empirical verification, stated precisely rather
    than left ambiguous:** the probes were run via the top-level `Agent`
    tool's `subagent_type` parameter, not via a literal `Workflow` tool
-   script calling `agent(..., {agentType: 'branch-plan-task'})` -- the
+   script calling `agent()` with the `branch-plan-task` agent type -- the
    actual invocation step 6 describes. The `Workflow` tool's own
    documentation states `agentType` "resolves from the same registry as
    the Agent tool," which is why this substitution is treated as a valid
@@ -288,7 +309,10 @@ plugin-agent schema, not a plausible-sounding claim.
    that has the file committed, so the fallback's own relative-path
    resolution still finds the script even with `CLAUDE_PROJECT_DIR`
    unset. This closes the specific residual risk the row-2 ACM entry
-   (see the implementation PR) named as untested; not left open.
+   (see the implementation PR) named as untested; not left open. Since
+   issue `#1996` the registration command uses `${CLAUDE_PLUGIN_ROOT}`
+   instead, so the script now resolves from the plugin root whatever the
+   subagent's working directory is.
 
    **What "empirically verified" and "hard deny" above do NOT cover,
    stated explicitly rather than left for a reader to assume
@@ -319,39 +343,34 @@ plugin-agent schema, not a plausible-sounding claim.
    tracked as a separate, owner-decision-requiring follow-up, not part of
    this issue's own scope.
 
-2. **Plugin-distributed variant** (`agents/branch-plan-task.md` at this
-   repository's own plugin root -- the deployment when gitapex is
-   installed as a plugin into a different repository, the distribution
-   mode `.claude-plugin/plugin.json` exists for). **Materially weaker,
-   verified against Claude Code's own primary documentation, not
-   assumed:** per Claude Code's plugin-reference documentation, "for
-   security reasons, `hooks`, `mcpServers`, and `permissionMode` are not
-   supported for plugin-shipped agents" -- a plugin agent's `tools`/
-   `disallowedTools` fields work exactly as in the project-local variant
-   (so `disallowedTools: mcp__github` still holds), but there is no
-   mechanism to attach a per-agent Bash-command hook to a plugin-shipped
-   agent at all. In this deployment mode, the `gh`/`git push`/install
-   exclusion rests on this agent's own in-band prompt instruction (the
-   Decision 7 baseline: "task prompts state this full exclusion list
-   explicitly, in-band, since the hook itself cannot be relied on to
-   enforce any of it inside that context") plus whatever session-wide
-   PreToolUse hook the calling session independently has registered --
-   for a session with gitapex's own plugin hooks active, that is
-   `hooks/check-bash-safety.sh`, which hard-denies package/plugin
-   installs and `gh issue`/`gh pr` writes and warns (does not deny) on
-   `git push`, with narrow, disclosed carve-outs (issue `#1320`,
-   `#1326`) -- see that hook's own documentation for the exact scope.
-   This is real, structural, defense-in-depth coverage, but it is
-   neither task-scoped nor as strict as the project-local variant, and
-   this reference does not overstate it as equivalent.
+The task prompt still states the full exclusion list in-band (the
+Decision 7 baseline), and the session-wide `hooks/check-bash-safety.sh`
+still runs alongside this hook -- defense in depth, not a substitute.
 
-**Decision 7's own broader open question -- whether
-`hooks/check-bash-safety.sh` binds inside a subagent/Workflow execution
-context in a real plugin-installed deployment -- remains open and
-unverified by either variant above**, and must still be re-verified
-there before this skill relies on that separate hook for anything beyond
-the honest, weaker accounting just given for the plugin-distributed
-variant.
+**Residuals of `agent_type` scoping, disclosed rather than assumed away
+(found by issue `#1996`'s own Step 8 adversarial review):**
+
+- **Nested dispatch.** The agent keeps `Agent`/`Task` (it needs them for
+  `review-persona`). A subagent it spawns reports its own `agent_type`
+  (e.g. `general-purpose`), so neither hook here acts on that subagent's
+  Bash calls; only the session-wide `hooks/check-bash-safety.sh` does,
+  which warns rather than denies on a push. Whether the former
+  frontmatter hooks covered a nested subagent was never verified.
+- **Payload dependence.** Both hooks rely on Claude Code putting
+  `agent_type` in the payload. That was observed for the `Agent`-tool
+  path; the `Workflow` tool's `agent()` path resolving from the same
+  registry does not by itself prove its payloads carry the field.
+- **Plugin root.** Hooks run from the plugin root the session loaded
+  (`${CLAUDE_PLUGIN_ROOT}`), not from the checked-out branch. For this
+  repository's directory marketplace, issue `#1996`'s live probe observed the hooks
+  running in place from the checkout; an install served from a cached
+  copy enforces whatever version that copy carries.
+
+**Decision 7's own broader open question -- whether a plugin
+`PreToolUse` hook binds inside a subagent at all -- is answered for the
+`Agent`-tool path** by issue `#1996`'s live probe (a plugin hook fired for
+a subagent's Bash call). The `Workflow` tool's own `agent()` path has not
+been exercised literally; see the proxy caveat above.
 
 **Issue `#1477` (gate-proposal, retro `#1475` repair 3) closed a related,
 narrower residual risk by routing around this exact asymmetry rather than
@@ -368,17 +387,16 @@ history rewrite and a force-with-lease push to fix. The row-1 ACM entry for
 that issue asked whether a hook enforcing this inside the task's own
 isolated worktree would need the same tooling access as the
 outward-artifact-preflight scanner, and whether it would fire consistently
-across both `branch-plan-task` deployment variants above -- exactly the
-asymmetry this section spends its own length documenting. The chosen fix
+across both `branch-plan-task` deployment variants that existed then
+(before issue `#1996` unified them). The chosen fix
 (step 6's own `scripts/gitapex_check_task_commit_provenance.py` scan,
 run in the main thread against each task's `BASE..HEAD` commit-message
 range, before that task's commit is merged onto the shared branch) makes
 that question moot rather than answering it: the main thread always has
-full filesystem/tool access and is identical across both deployment
-variants, so this specific gap is closed uniformly regardless of which
-`branch-plan-task` variant produced the flagged commit, and regardless of
-`hooks/check-bash-safety.sh`'s own binding status inside either variant's
-task-execution context.
+full filesystem/tool access whatever deployment produced the commit, so
+this specific gap was closed uniformly across both variants then, and
+stays closed regardless of any hook's own binding status inside the
+task's execution context.
 
 ## Full-verification exit condition (Decision 20)
 
@@ -413,34 +431,36 @@ enumeration invented here. Step 6's own merge-back screening (above) is
 unchanged and still runs afterward -- this exit condition narrows how
 often it needs to catch anything, it does not replace it.
 
-**Same two-variant asymmetry as the Bash-safety hook above, for the same
-reason.**
+**Registration, the same single mechanism as the Bash-safety hook above
+(issue `#1996`).** `hooks/hooks.json` registers a `SubagentStop` entry with
+matcher `^(.*:)?branch-plan-task$` invoking
+`check_task_full_verification.sh` (a thin bash+jq wrapper around
+`gitapex_check_task_full_verification.py`, mirroring
+`check_task_bash_safety.sh`'s own structure), which re-checks `agent_type`
+itself rather than trusting the matcher alone. `SubagentStop` fires when
+the subagent finishes; the hook exits 2 to deny stopping (Claude Code's own
+documented behavior: "Prevents the subagent from stopping"), feeding its
+`reason` back for the subagent to act on, exactly as `PreToolUse`'s own
+exit-2 deny already does for a disallowed Bash command. This is a
+deterministic backstop -- the task cannot report complete by simply
+choosing not to run the suite. The task prompt also states the exit
+condition in-band.
 
-1. **Project-local variant.** `.claude/agents/branch-plan-task.md` embeds
-   a `hooks.SubagentStop` block invoking `check_task_full_verification.sh`
-   (a thin bash+jq wrapper around `gitapex_check_task_full_verification.py`,
-   mirroring `check_task_bash_safety.sh`'s own structure), scoped by Claude
-   Code's own subagent-hooks documentation to fire only while this
-   specific subagent type is active. `SubagentStop` fires when the
-   subagent finishes; the hook exits 2 to deny stopping (Claude Code's own
-   documented behavior: "Prevents the subagent from stopping"), feeding
-   its `reason` back for the subagent to act on, exactly as `PreToolUse`'s
-   own exit-2 deny already does for a disallowed Bash command. This is a
-   deterministic backstop -- the task cannot report complete by simply
-   choosing not to run the suite, the same structural guarantee Decision
-   17's own hook gives the Bash exclusion list.
-2. **Plugin-distributed variant.** `agents/branch-plan-task.md` carries
-   the identical exit condition as an in-band prompt instruction only, for
-   the identical reason Decision 17's own Bash exclusion is prompt-only
-   there: Claude Code's plugin-agent frontmatter supports no `hooks` field
-   at all. There is no deterministic backstop of any kind for this
-   exit condition in that deployment mode -- weaker than even the
-   plugin variant's own Bash exclusion, which at least gets partial,
-   session-wide coverage from `hooks/check-bash-safety.sh` where that hook
-   is registered; nothing plays an equivalent role for a missing
-   verification run, since "did the subagent actually run these two
-   commands before its last message" is not a Bash-command pattern any
-   PreToolUse hook could classify.
+**Consumer repositories skip, visibly.** Because the hook now ships in the
+plugin, it also fires for a dispatch inside a repository that has none of
+gitapex's own verification suite. The classifier first resolves the git
+top-level of the payload's `cwd` (so a task that ended in a subdirectory
+still verifies from the root); when that root lacks
+`.github/scripts/gitapex_gate_local_preflight.py`, the classifier returns
+`skip` and the wrapper allows the stop with a `systemMessage` naming the
+skip, rather than running commands that cannot exist there or passing
+silently. The skip also requires that neither `CLAUDE_PROJECT_DIR` nor the
+hook process's own directory resolves to a gitapex checkout: a task that
+`cd`ed out of a gitapex checkout (into a scratch directory or a fixture
+repository it created) is denied with a reason telling it to return to its
+worktree root, not skipped. Residual: a task that deletes that file skips the gate; the
+deletion shows up in the task's own diff, which step 6's merge-back
+screening reads before anything lands on the shared branch.
 
 **Two properties of this mechanism's own Stop-hook response and hook
 registration, both load-bearing:**
@@ -462,10 +482,10 @@ registration, both load-bearing:**
   not-failing verification run hitting Claude Code's own hook timeout
   first would silently fail OPEN, exactly the defect this whole mechanism
   exists to close. The `SubagentStop` hook registration in
-  `.claude/agents/branch-plan-task.md` sets `timeout: 3900` (comfortably
-  above 2x the per-step ceiling); the two values are cross-referenced in
-  both files so a future edit to one is less likely to silently desync
-  from the other.
+  `hooks/hooks.json` sets `timeout: 3900` (comfortably above 2x the
+  per-step ceiling). See `test_gitapex_check_task_full_verification.py`
+  for the test asserting that relationship, so a future edit to one cannot
+  silently desync from the other.
 
 **Known, disclosed limitation, not solved here: no bound on repeated
 denial.** A genuinely persistent failure -- an unrelated pre-existing
@@ -489,21 +509,22 @@ similarly-shaped gap in this reference.
 **Known, disclosed limitation, not solved here: the gate can self-tamper
 its own copy.** `check_task_full_verification.sh` resolves its own classifier
 via `script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"` -- the
-literal, identical pattern `check_task_bash_safety.sh` above already uses,
-and the same empirically-confirmed fact applies to both: this resolves to
-the task's own worktree copy of the file, not a copy outside that
-worktree's reach. A `branch-plan-task` dispatch retains Edit/Write tool
-access (only specific Bash patterns are excluded, never Edit/Write), so
-nothing in this mechanism stops a task from rewriting its own worktree's
-copy of either this script or `gitapex_check_task_full_verification.py`
-to unconditionally emit `{"decision": "allow"}` before ever attempting to
-stop -- neutralizing this exit condition entirely from inside the very
-dispatch it exists to constrain. This is not a new class of risk this PR
+literal, identical pattern `check_task_bash_safety.sh` above already uses.
+Since issue `#1996` both are launched from `${CLAUDE_PLUGIN_ROOT}`, so
+this resolves to the plugin root's copy, not the task's own worktree copy;
+editing the worktree copy no longer changes the running gate. That
+narrows the residual without closing it: a direct checkout loads the
+plugin in place from the main checkout, and a `branch-plan-task` dispatch
+retains Edit/Write tool access (only specific Bash patterns are excluded,
+never Edit/Write), so nothing in this mechanism stops a task from
+rewriting that copy by absolute path to unconditionally emit
+`{"decision": "allow"}` before ever attempting to stop -- neutralizing
+this exit condition from inside the very dispatch it exists to constrain. This is not a new class of risk this PR
 introduces: it is the identical, already-accepted residual the sibling
 `check_task_bash_safety.sh`/`gitapex_check_task_bash_safety.py` pair above
 already carries for the exact same reason (the `PreToolUse` hook's own
 matcher is scoped to `Bash`, never `Edit`/`Write`, so a task could equally
-rewrite that pair's own worktree copy), tracked there as the still-open
+rewrite that pair's plugin-root copy by absolute path), tracked there as the still-open
 "Stage 2 (execution-boundary enforcement)" follow-up rather than solved.
 Named here explicitly for this new hook rather than left for a reader to
 infer from the sibling's own disclosure -- closing it would require the
@@ -570,44 +591,20 @@ investigation already applies elsewhere in this section: only
 `SubagentStop` exists (already used above for Decision 20's own exit
 condition, a different purpose -- verifying work done, not gating work
 about to start). The earliest deterministic enforcement point actually
-available is therefore the SAME embedded `PreToolUse` "Bash" hook Decision
+available is therefore the SAME `PreToolUse` "Bash" hook Decision
 17's own backstop already uses -- this mechanism is chained into
 `check_task_bash_safety.sh` as a second sibling classifier call (the
-identical pattern that script already uses to invoke `gitapex_check_task_ bash_safety.py`), not a second `hooks.PreToolUse` frontmatter entry (no
-such second entry exists in the shipped frontmatter for any hook event in
-this agent type -- confirmed by reading `.claude/agents/branch-plan-task.md` directly before choosing this shape).
-
-**Same two-variant asymmetry as the two mechanisms above, for the same
-reason, and stated with the identical precision.**
-
-1. **Project-local variant.** `.claude/agents/branch-plan-task.md`'s own
-   embedded `hooks.PreToolUse` block (matcher `"Bash"`) already invokes
-   `check_task_bash_safety.sh`; this mechanism rides that SAME hook
-   invocation via the sibling-script chain above, so no frontmatter change
-   was needed to wire it in at all -- the file itself is otherwise
-   unchanged by this mechanism.
-2. **Plugin-distributed variant.** `agents/branch-plan-task.md` carries no
-   `hooks` field at all, for the identical reason Decision 17's own Bash
-   exclusion and Decision 20's own full-verification exit condition are
-   prompt-only there. There is no deterministic backstop of any kind for
-   this precondition in that deployment mode; the same prose-instruction
-   treatment given those two mechanisms is extended to this one there,
-   for consistency, not because prose enforcement is expected to be
-   reliable -- "does this worktree's own fork point still match the
-   shared branch's current tip" is exactly the kind of repo-state fact a
-   model is not reliably positioned to self-check without being told to
-   run the specific git commands this script runs, the same limitation
-   this reference already names for the other two mechanisms in this
-   deployment mode.
+identical pattern that script already uses to invoke `gitapex_check_task_ bash_safety.py`), not a second hook registration. It therefore
+inherits that hook's registration and `agent_type` scoping unchanged
+(`hooks/hooks.json` since issue `#1996`), in every deployment.
 
 **Piggybacks on the task's own first Bash call, not a true "before any
 tool call at all, including a non-Bash one" gate -- an explicitly
 disclosed, asymmetric-strength residual, named here rather than left for
 a reader to assume complete coverage.** Any Read/Edit/Write/Grep/Glob work
 a task does before its own first Bash call is not covered by this
-backstop at all, in either variant. This matches, rather than
-contradicts, this section's own established convention (Decision 17's own
-two-variant asymmetry, disclosed above rather than overclaimed) of naming
+backstop at all. This matches, rather than
+contradicts, this section's own established convention of naming
 an enforcement gap precisely instead of describing this mechanism as
 covering more than it does.
 
@@ -668,10 +665,10 @@ pair above already carry.** `check_task_bash_safety.sh` resolves its own
 sibling scripts (including this mechanism's own
 `gitapex_check_task_worktree_base.py`) via the identical
 `script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"` pattern --
-resolving to the task's own worktree copy, not a copy outside that
-worktree's reach. A `branch-plan-task` dispatch retains Edit/Write access,
-so nothing in this mechanism stops a task from rewriting its own
-worktree's copy of either script to unconditionally emit an "allow"
+resolving to the plugin root's copy since issue `#1996`, which a direct
+checkout loads in place. A `branch-plan-task` dispatch retains Edit/Write access,
+so nothing in this mechanism stops a task from rewriting that copy of
+either script by absolute path to unconditionally emit an "allow"
 verdict before this backstop ever runs against it -- neutralizing this
 precondition check entirely from inside the very dispatch it exists to
 constrain. Not a new class of risk this mechanism introduces: it is the

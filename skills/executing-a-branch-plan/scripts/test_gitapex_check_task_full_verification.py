@@ -28,13 +28,24 @@ Two layers, mirroring test_gitapex_gate_local_preflight.py's own split:
 
 from __future__ import annotations
 
+import io
 import json
+import os
 import pathlib
 import subprocess
 import sys
+import tempfile
 
 import gitapex_check_task_full_verification as under_test
 import pytest
+
+
+class _FakeStdin:
+    """Just the `sys.stdin.buffer.read()` surface main() uses."""
+
+    def __init__(self, data: bytes) -> None:
+        self.buffer = io.BytesIO(data)
+
 
 SCRIPT = pathlib.Path(__file__).parent / "check_task_full_verification.sh"
 CLASSIFIER = pathlib.Path(__file__).parent / "gitapex_check_task_full_verification.py"
@@ -147,7 +158,24 @@ def test_steps_from_json_rejects_malformed_input() -> None:
 # --------------------------------------------------------------------------
 
 
-def _run_main(payload: dict[str, object], *, steps_json: str | None = None) -> dict[str, str]:
+# The classifier also consults the hook process's own directory and
+# CLAUDE_PROJECT_DIR (issue #1996), so every subprocess here runs from a
+# neutral, non-git directory with that variable removed unless a test sets
+# them on purpose -- otherwise running this suite from a gitapex checkout
+# would itself count as "the session is in a gitapex checkout".
+_NEUTRAL_DIR = pathlib.Path(tempfile.mkdtemp(prefix="gitapex-neutral-"))
+
+
+def _hook_env(project_dir: pathlib.Path | None = None) -> dict[str, str]:
+    env = {key: value for key, value in os.environ.items() if key != "CLAUDE_PROJECT_DIR"}
+    if project_dir is not None:
+        env["CLAUDE_PROJECT_DIR"] = str(project_dir)
+    return env
+
+
+def _run_main(
+    payload: dict[str, object], *, steps_json: str | None = None, project_dir: pathlib.Path | None = None
+) -> dict[str, str]:
     argv = [sys.executable, str(CLASSIFIER)]
     if steps_json is not None:
         argv += ["--steps-json", steps_json]
@@ -157,6 +185,8 @@ def _run_main(payload: dict[str, object], *, steps_json: str | None = None) -> d
         capture_output=True,
         text=True,
         timeout=15,
+        cwd=_NEUTRAL_DIR,
+        env=_hook_env(project_dir),
     )
     assert result.returncode == 0, f"classifier exited {result.returncode}: {result.stderr}"
     decoded: dict[str, str] = json.loads(result.stdout)
@@ -204,6 +234,107 @@ def test_main_denies_on_non_object_stdin() -> None:
 
 def test_main_denies_on_malformed_steps_json(tmp_path: pathlib.Path) -> None:
     result = _run_main({"cwd": str(tmp_path)}, steps_json="not json")
+    assert result["decision"] == "deny"
+
+
+def _make_gitapex_checkout(root: pathlib.Path) -> None:
+    marker = root / under_test.GITAPEX_SUITE_MARKER
+    marker.parent.mkdir(parents=True)
+    marker.write_text("", encoding="utf-8")
+
+
+def test_main_skips_when_the_repository_lacks_gitapex_own_suite(tmp_path: pathlib.Path) -> None:
+    """Issue #1996: the hook ships in the plugin, so it also fires in a
+    consumer repository that has no gitapex verification suite to run."""
+    result = _run_main({"cwd": str(tmp_path)})
+    assert result["decision"] == "skip"
+    assert under_test.GITAPEX_SUITE_MARKER in result["reason"]
+
+
+def test_main_runs_the_default_steps_when_the_suite_is_present(tmp_path: pathlib.Path) -> None:
+    """The marker present means the real steps run; in an empty scratch
+    checkout they fail, which is the proof they ran rather than skipped."""
+    _make_gitapex_checkout(tmp_path)
+    result = _run_main({"cwd": str(tmp_path)})
+    assert result["decision"] == "deny"
+
+
+def test_main_resolves_the_repository_root_from_a_subdirectory_cwd(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Issue #1996 adversarial-review defeat case: a task whose last Bash
+    call was `cd tests` must not turn a gitapex checkout into a skip."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _make_gitapex_checkout(tmp_path)
+    subdir = tmp_path / "tests" / "deeper"
+    subdir.mkdir(parents=True)
+    seen: list[pathlib.Path] = []
+
+    def record(_steps: object, cwd: pathlib.Path, _timeout: int) -> dict[str, object]:
+        seen.append(cwd)
+        return {"decision": "allow"}
+
+    monkeypatch.setattr(under_test, "run_verification", record)
+    monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+    monkeypatch.chdir(_NEUTRAL_DIR)
+    monkeypatch.setattr("sys.stdin", _FakeStdin(json.dumps({"cwd": str(subdir)}).encode("utf-8")))
+    assert under_test.main([]) == 0
+    assert json.loads(capsys.readouterr().out) == {"decision": "allow"}
+    assert [path.resolve() for path in seen] == [tmp_path.resolve()]
+
+
+def test_main_denies_when_cwd_left_the_gitapex_checkout_for_a_non_git_dir(tmp_path: pathlib.Path) -> None:
+    """Issue #1996 gate-quality review defeat case: a task in a gitapex
+    session whose last Bash call was `cd /tmp/scratch` must not skip."""
+    project = tmp_path / "gitapex"
+    project.mkdir()
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+    _make_gitapex_checkout(project)
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    result = _run_main({"cwd": str(scratch)}, project_dir=project)
+    assert result["decision"] == "deny"
+    assert "worktree root" in result["reason"]
+
+
+def test_main_denies_when_cwd_is_a_nested_fixture_repository(tmp_path: pathlib.Path) -> None:
+    """Same defeat case, via a fixture repository the task created and
+    entered inside its own checkout."""
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    _make_gitapex_checkout(tmp_path)
+    fixture = tmp_path / "fixture"
+    fixture.mkdir()
+    subprocess.run(["git", "init", "-q", str(fixture)], check=True)
+    result = _run_main({"cwd": str(fixture)}, project_dir=tmp_path)
+    assert result["decision"] == "deny"
+
+
+def test_main_denies_when_the_hook_process_itself_runs_in_a_gitapex_checkout(tmp_path: pathlib.Path) -> None:
+    project = tmp_path / "gitapex"
+    project.mkdir()
+    subprocess.run(["git", "init", "-q", str(project)], check=True)
+    _make_gitapex_checkout(project)
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    result = subprocess.run(
+        [sys.executable, str(CLASSIFIER)],
+        input=json.dumps({"cwd": str(scratch)}),
+        capture_output=True,
+        text=True,
+        timeout=15,
+        cwd=project,
+        env=_hook_env(),
+    )
+    assert json.loads(result.stdout)["decision"] == "deny"
+
+
+def test_repository_root_falls_back_to_cwd_outside_git(tmp_path: pathlib.Path) -> None:
+    assert under_test.repository_root(tmp_path) == tmp_path
+
+
+def test_steps_json_override_never_skips(tmp_path: pathlib.Path) -> None:
+    steps_json = json.dumps([["fast-fail", ["false"]]])
+    result = _run_main({"cwd": str(tmp_path)}, steps_json=steps_json)
     assert result["decision"] == "deny"
 
 
@@ -301,19 +432,22 @@ def test_run_verification_does_not_call_an_ordinary_failure_transient(tmp_path: 
 
 
 def _subagent_stop_hook_timeout() -> int:
-    import yaml
-
-    agent_md = pathlib.Path(__file__).resolve().parents[3] / ".claude" / "agents" / "branch-plan-task.md"
-    text = agent_md.read_text(encoding="utf-8")
-    _, frontmatter, _ = text.split("---", 2)
-    parsed = yaml.safe_load(frontmatter)
-    timeout: int = parsed["hooks"]["SubagentStop"][0]["hooks"][0]["timeout"]
+    hooks_json = pathlib.Path(__file__).resolve().parents[3] / "hooks" / "hooks.json"
+    parsed = json.loads(hooks_json.read_text(encoding="utf-8"))
+    timeouts = [
+        hook["timeout"]
+        for entry in parsed["hooks"]["SubagentStop"]
+        for hook in entry["hooks"]
+        if hook["command"].endswith(f'/{SCRIPT.relative_to(SCRIPT.parents[3]).as_posix()}"')
+    ]
+    assert len(timeouts) == 1, timeouts
+    timeout: int = timeouts[0]
     return timeout
 
 
 def test_registered_hook_timeout_stays_above_the_worst_case_classifier_runtime() -> None:
     """The SubagentStop hook's own registered `timeout` in
-    .claude/agents/branch-plan-task.md must stay above every step's own
+    hooks/hooks.json must stay above every step's own
     DEFAULT_TIMEOUT_SECONDS combined -- Claude Code discards a timed-out
     command hook's output entirely and SubagentStop is not one of the two
     documented exceptions that still block on timeout, so an outer
@@ -327,13 +461,23 @@ def test_registered_hook_timeout_stays_above_the_worst_case_classifier_runtime()
 # --------------------------------------------------------------------------
 
 
+BRANCH_PLAN_TASK_AGENT_TYPE = "gitapex:branch-plan-task"
+
+
 def _run_sh(payload: dict[str, object]) -> subprocess.CompletedProcess[str]:
+    """Defaults `agent_type` to the in-scope value (issue #1996); pass an
+    explicit `agent_type` key, or None to drop it, to exercise scoping."""
+    body = {"agent_type": BRANCH_PLAN_TASK_AGENT_TYPE, **payload}
+    if body["agent_type"] is None:
+        del body["agent_type"]
     return subprocess.run(
         ["bash", str(SCRIPT)],
-        input=json.dumps(payload),
+        input=json.dumps(body),
         capture_output=True,
         text=True,
         timeout=15,
+        cwd=_NEUTRAL_DIR,
+        env=_hook_env(),
     )
 
 
@@ -382,8 +526,49 @@ def test_sh_runs_the_real_classifier_end_to_end_and_allows_on_a_clean_worktree(t
     (deny, since neither `uv` nor a pytest/preflight setup exists there --
     proving the plumbing runs the real gitapex_check_task_full_verification.py,
     not that an empty directory passes verification)."""
+    _make_gitapex_checkout(tmp_path)
     result = _run_sh({"hook_event_name": "SubagentStop", "cwd": str(tmp_path)})
     assert result.returncode == 2
     payload = json.loads(result.stderr)
     reason = payload["hookSpecificOutput"]["reason"]
     assert "issue #1476" in reason
+
+
+@pytest.mark.parametrize("agent_type", ["branch-plan-task", "gitapex-fork:branch-plan-task"])
+def test_sh_enforces_for_any_agent_named_branch_plan_task(agent_type: str, tmp_path: pathlib.Path) -> None:
+    """Issue #1996 adversarial review: a renamed plugin or a project-local
+    copy still reaches the classifier (here, its visible skip message)."""
+    result = _run_sh({"hook_event_name": "SubagentStop", "cwd": str(tmp_path), "agent_type": agent_type})
+    assert result.returncode == 0, result.stderr
+    assert "skipped" in json.loads(result.stdout)["systemMessage"]
+
+
+def test_sh_skips_visibly_in_a_repository_without_gitapex_own_suite(tmp_path: pathlib.Path) -> None:
+    """Issue #1996: a consumer repository gets an allow plus a visible
+    systemMessage naming the skip, never a silent pass or a false block."""
+    result = _run_sh({"hook_event_name": "SubagentStop", "cwd": str(tmp_path)})
+    assert result.returncode == 0, result.stderr
+    message = json.loads(result.stdout)["systemMessage"]
+    assert "skipped" in message
+    assert under_test.GITAPEX_SUITE_MARKER in message
+
+
+@pytest.mark.parametrize(
+    "agent_type",
+    [None, "general-purpose", "gitapex:review-persona", "xbranch-plan-task"],
+    ids=["absent", "general-purpose", "sibling-agent", "suffix-lookalike"],
+)
+def test_sh_out_of_scope_agent_type_does_nothing(agent_type: object, tmp_path: pathlib.Path) -> None:
+    """The hooks.json matcher already filters on agent type; the script
+    re-checks it rather than trusting the matcher alone."""
+    _make_gitapex_checkout(tmp_path)
+    result = _run_sh({"hook_event_name": "SubagentStop", "cwd": str(tmp_path), "agent_type": agent_type})
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert result.stderr == ""
+
+
+def test_sh_denies_when_agent_type_is_not_a_string(tmp_path: pathlib.Path) -> None:
+    result = _run_sh({"hook_event_name": "SubagentStop", "cwd": str(tmp_path), "agent_type": 12345})
+    assert result.returncode == 2
+    assert "agent_type" in json.loads(result.stderr)["hookSpecificOutput"]["reason"]

@@ -68,6 +68,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -111,8 +112,8 @@ DEFAULT_PREFLIGHT_ARGV: tuple[str, ...] = (
 # its rationale: a hang guard, not a budget -- a cold mypy cache (run inside
 # the local-preflight step) can legitimately take longer than a warm-run
 # measurement would suggest. Applied PER STEP to two sequential steps
-# (pytest, then local-preflight) -- .claude/agents/branch-plan-task.md's
-# own SubagentStop hook `timeout` (the OUTER Claude Code hook-process
+# (pytest, then local-preflight) -- hooks/hooks.json's SubagentStop
+# entry for this hook sets `timeout` (the OUTER Claude Code hook-process
 # ceiling, a materially different thing from this per-subprocess value)
 # must stay comfortably above 2x this number, or a legitimately slow
 # (not failing) run can hit Claude Code's own hook timeout first, which
@@ -136,6 +137,59 @@ DEFAULT_STEPS: tuple[VerificationStep, ...] = (
     VerificationStep("pytest", DEFAULT_PYTEST_ARGV),
     VerificationStep("local-preflight", DEFAULT_PREFLIGHT_ARGV),
 )
+
+# Issue #1996: this hook is registered in the plugin's own hooks/hooks.json,
+# so it also fires for a branch-plan-task dispatch inside a consumer
+# repository, which has none of gitapex's own verification suite. The
+# preflight runner DEFAULT_PREFLIGHT_ARGV names is that suite's entry point;
+# its absence from the task's worktree means there is nothing of gitapex's
+# to run. Residual: a task that deletes this file skips the gate, but the
+# deletion shows up in the task diff the main thread screens before merge.
+GITAPEX_SUITE_MARKER = DEFAULT_PREFLIGHT_ARGV[-1]
+
+
+def repository_root(cwd: Path) -> Path:
+    """The git top-level containing `cwd`, or `cwd` itself outside git.
+
+    The payload `cwd` can sit below the worktree root (a task whose last
+    Bash call was `cd tests`), so the marker check and the verification
+    steps both run from the top-level rather than from `cwd` as given --
+    otherwise one `cd` would turn a gitapex checkout into a skip."""
+    try:
+        completed = subprocess.run(  # noqa: S603
+            ["git", "-C", str(cwd), "rev-parse", "--show-toplevel"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+            stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return cwd
+    top = completed.stdout.strip()
+    if completed.returncode != 0 or not top:
+        return cwd
+    return Path(top)
+
+
+def _session_gitapex_checkout() -> Path | None:
+    """The gitapex checkout this session runs in, if any.
+
+    The payload `cwd` alone cannot tell a consumer repository from a task
+    that `cd`ed out of a gitapex checkout (into a scratch directory or a
+    fixture repository it created), and treating the latter as a consumer
+    would skip the gate without anything showing in the diff. So the skip
+    also requires that neither the project directory nor this hook
+    process's own directory resolves to a gitapex checkout."""
+    candidates = [Path.cwd()]
+    project_dir = os.environ.get("CLAUDE_PROJECT_DIR")
+    if project_dir and Path(project_dir).is_dir():
+        candidates.insert(0, Path(project_dir))
+    for candidate in candidates:
+        root = repository_root(candidate)
+        if (root / GITAPEX_SUITE_MARKER).is_file():
+            return root
+    return None
 
 
 # Bounds how much of a step's own captured stdout+stderr reaches the
@@ -284,7 +338,24 @@ def main(argv: list[str] | None = None) -> int:
     else:
         steps = DEFAULT_STEPS
 
-    cwd = _resolve_cwd(payload)
+    cwd = repository_root(_resolve_cwd(payload))
+    if args.steps_json is None and not (cwd / GITAPEX_SUITE_MARKER).is_file():
+        session_checkout = _session_gitapex_checkout()
+        if session_checkout is not None:
+            reason = (
+                f"task-level full verification (issue #1476) cannot run: this session is in the gitapex "
+                f"checkout {session_checkout}, but the task stopped in {cwd}, which is outside it or a "
+                "separate repository. Return to your worktree root and stop again (issue #1996)"
+            )
+            print(json.dumps({"decision": "deny", "reason": reason}))
+            return 0
+        reason = (
+            "task-level full verification (issue #1476) skipped: "
+            f"{GITAPEX_SUITE_MARKER} is not present in {cwd}, so this is not a "
+            "gitapex checkout and there is no gitapex verification suite to run (issue #1996)"
+        )
+        print(json.dumps({"decision": "skip", "reason": reason}))
+        return 0
     result = run_verification(steps, cwd, args.timeout_seconds)
     print(json.dumps(result))
     return 0

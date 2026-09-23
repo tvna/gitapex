@@ -58,21 +58,24 @@ def test_tool_boundary_checks_fail_before_task1_fix_and_pass_after() -> None:
     repository content" instruction.
 
     The frontmatter side needs no reconstruction: `diff`-ing
+    the (since-removed, issue #1996) project-local copy
     `.claude/agents/branch-plan-task.md` at commit `b5336810` (Task 3's
     own rewrite, already landed by the time Task 1's commit was made)
     against this checkout's own current copy of the same file is empty --
     Task 1 touched only `hooks/gitapex_sync_opencode.py`, never this
     file's own `disallowedTools: mcp__github` declaration. So the real,
     live file already carries the exact frontmatter the pre-fix state saw;
-    only `AGENT_SPECS` needs reconstructing.
+    only `AGENT_SPECS` needs reconstructing. After issue #1996 removed that
+    copy, the plugin-distributed `agents/branch-plan-task.md` carries the
+    identical `disallowedTools: mcp__github` declaration and is the target.
 
     This is a real regression-test shape, not merely re-testing Task 2's
     own already-existing synthetic-fixture unit tests: Task 2's own suite
-    never reads this repository's real `.claude/agents/branch-plan-task.md`
+    never reads this repository's real `agents/branch-plan-task.md`
     file, and never exercises the reconstructed pre-fix AGENT_SPECS
     against it.
     """
-    target = REPO_ROOT / ".claude" / "agents" / "branch-plan-task.md"
+    target = REPO_ROOT / "agents" / "branch-plan-task.md"
     assert target.is_file(), target
 
     # Reconstruction of hooks/gitapex_sync_opencode.py's own AGENT_SPECS

@@ -214,7 +214,8 @@ picture -- it stopped hiding the parts that do not pass.
 
 ## Worked example: the branch-plan-task subagent definition
 
-Real target: `.claude/agents/branch-plan-task.md`.
+Real target: `.claude/agents/branch-plan-task.md` (removed by issue `#1996`;
+kept as the record of the evaluation as it ran).
 
 **Precondition.** Readable; a Subagent definition, one of the five
 in-scope channels. Clears the precondition.

@@ -18,19 +18,18 @@ one.** Claude Code has no `SubagentStart` hook event -- confirmed directly
 against Claude Code's own hooks documentation during this script's own
 authoring pass, matching design doc Decision 7's own "test, don't assume"
 method applied to the identical question elsewhere in this skill. The
-`branch-plan-task` agent type's own embedded `PreToolUse` "Bash" hook
-(`check_task_bash_safety.sh`, `.claude/agents/branch-plan-task.md`) is the
+`branch-plan-task` agent type's own `PreToolUse` "Bash" hook
+(`check_task_bash_safety.sh`, registered in `hooks/hooks.json` and scoped
+by `agent_type` since issue #1996) is the
 earliest deterministic enforcement point actually available -- this module
 is chained into that shell script as a second sibling classifier call,
 exactly the way `gitapex_check_task_bash_safety.py` is already invoked
-there, rather than adding a second `hooks.PreToolUse` frontmatter entry
-(no such second entry exists in the shipped frontmatter for any hook
-event in this agent type -- each event has exactly one). This means the
+there, rather than adding a second hook registration. This means the
 check piggybacks on the task's own FIRST (and every subsequent) Bash
 call, not a true "before any tool call at all, including a non-Bash one"
 gate -- an explicitly disclosed, asymmetric-strength residual, matching
-this skill's own established disclosure convention (Decision 17's own
-two-variant asymmetry) rather than overclaiming full coverage. See
+this skill's own established disclosure convention rather than
+overclaiming full coverage. See
 references/decomposition-and-dispatch.md and
 references/threat-model-and-authorization.md for the full disclosure.
 

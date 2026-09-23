@@ -41,8 +41,8 @@ has the tooling access the outward-artifact-preflight scanner needs, and
 whether it fires consistently across both the project-local variant (an
 embedded PreToolUse hook) and the plugin-distributed variant (no hook
 support at all, per Claude Code's own plugin-agent frontmatter restriction
--- see references/threat-model-and-authorization.md's own accounting of
-that asymmetry). Running this check in the main thread instead of inside
+-- the two variants that existed before issue #1996 moved both hooks into
+the plugin's own hooks/hooks.json). Running this check in the main thread instead of inside
 the task's own worktree sidesteps that asymmetry entirely: the main thread
 always has full filesystem access regardless of which branch-plan-task
 variant produced the commit, so this check's own correctness does not
