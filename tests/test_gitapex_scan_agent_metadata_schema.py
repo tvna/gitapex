@@ -11,9 +11,13 @@ cross-file checks it cannot express, and main().
 
 from __future__ import annotations
 
+import builtins
 import copy
+import importlib
 import json
 import pathlib
+import runpy
+import sys
 from typing import Any
 
 import gitapex_scan_agent_metadata_schema as scanner
@@ -444,6 +448,44 @@ def test_main_returns_1_on_read_error(monkeypatch: pytest.MonkeyPatch, capsys: p
 def test_main_returns_0_on_the_real_repository(capsys: pytest.CaptureFixture[str]) -> None:
     assert scanner.main() == 0
     assert "No agent metadata schema drift found." in capsys.readouterr().out
+
+
+# ---- missing PyYAML dependency (same guard as gitapex_scan_skill_metadata_schema.py) ----
+
+
+def test_missing_pyyaml_in_script_mode_exits_2_with_clear_message(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    with pytest.raises(SystemExit) as exc_info:
+        runpy.run_path(str(pathlib.Path(scanner.__file__)), run_name="__main__")
+    assert exc_info.value.code == 2
+    stderr = capsys.readouterr().err
+    assert "PyYAML" in stderr
+    assert "uv sync --group dev" in stderr
+
+
+def test_missing_pyyaml_on_plain_import_propagates_not_systemexit(monkeypatch: pytest.MonkeyPatch) -> None:
+    module_name = "gitapex_scan_agent_metadata_schema"
+    monkeypatch.setitem(sys.modules, "yaml", None)
+    monkeypatch.delitem(sys.modules, module_name, raising=False)
+    with pytest.raises(ModuleNotFoundError) as exc_info:
+        importlib.import_module(module_name)
+    assert exc_info.value.name == "yaml"
+
+
+def test_broken_yaml_installation_in_script_mode_propagates_unmodified(monkeypatch: pytest.MonkeyPatch) -> None:
+    real_import = builtins.__import__
+
+    def _fake_import(name: str, *args: object, **kwargs: object) -> object:
+        if name == "yaml":
+            raise ModuleNotFoundError("No module named 'yaml.tokens'", name="yaml.tokens")
+        return real_import(name, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(builtins, "__import__", _fake_import)
+    with pytest.raises(ModuleNotFoundError) as exc_info:
+        runpy.run_path(str(pathlib.Path(scanner.__file__)), run_name="__main__")
+    assert exc_info.value.name == "yaml.tokens"
 
 
 # ---- the gate itself ----
