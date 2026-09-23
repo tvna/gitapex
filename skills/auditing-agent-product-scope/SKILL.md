@@ -160,8 +160,7 @@ its own owning issues/files, never gitapex's.
   the cross-axis scope map those rows feed into.
 - **vs. `scanning-attack-surfaces`:** that skill audits one target
   repository's hosting-platform *configuration* surface (branch
-  protection, required checks, and similar) in its own Mode B, having
-  absorbed the standalone skill that previously owned that capability.
+  protection, required checks, and similar) in its own Mode B.
   This skill never re-implements it -- the platform axis's candidates
   are handed off to it (Step 3).
 

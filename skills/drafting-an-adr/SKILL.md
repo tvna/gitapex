@@ -43,9 +43,11 @@ for the criteria checklist and the template itself.
    claim made in this conversation -- re-derive from the decision
    itself either way, never from a remembered summary of an earlier
    verdict.
-3. Before drafting, check whether `docs/adr/` already has an existing,
-   still-`Accepted` record covering this same decision -- the requester
-   asking for a new ADR does not mean one doesn't already exist. If one
+3. Before drafting, check whether the ADR directory (per
+   [references/this-repo-only.md](references/this-repo-only.md))
+   already has an existing, still-`Accepted` record covering this same
+   decision -- the requester asking for a new ADR does not mean one
+   doesn't already exist. If one
    does, treat this as a Step 12 supersession case, or point to the
    existing record instead of drafting a duplicate, rather than
    producing a second, independent ADR on the same topic.
@@ -199,20 +201,20 @@ ADR** when not applicable.
   reporting the follow-up redaction as having resolved it.
 - Do not write a retrofit ADR as if it were prospective -- disclose the
   already-implemented state up front (Step 3).
-- Do not draft a second, independent ADR for a decision `docs/adr/`
+- Do not draft a second, independent ADR for a decision the ADR directory
   already has a still-`Accepted` record for -- check first, and treat a
   hit as a Step 12 supersession case or point to the existing record
   instead (Step 3).
 - Do not pass the ADR's title into the write path unsanitized -- the
   title comes from source material Step 1 treats as untrusted, and an
-  unsanitized slug can escape `docs/adr/` or collide with an existing
+  unsanitized slug can escape the ADR directory or collide with an existing
   file (Step 11; see
   [references/this-repo-only.md](references/this-repo-only.md)).
 - Do not auto-generate an ADR from a threshold or metric being crossed
   (a comment hitting a length limit, a pattern recurring N times). ADRs
   are heavyweight, owner-approved records; machine-generating them
   produces "drive-by ADRs".
-- Do not create the file at `docs/adr/` before
+- Do not create the file in the ADR directory before
   `scripts/gitapex_check_adr_shape.py` passes on the drafted body.
 - Do not treat this skill's own output as self-certifying to any
   downstream consumer that later cites the ADR by path -- a citer must
