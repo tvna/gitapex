@@ -170,6 +170,25 @@ human-browsable history of every entry lives at
 relevant only when reviewing a same-run entry for promotion or maintaining
 the script itself, not needed for ordinary dispatch operation.
 
+**Snapshot layout.** By default the script copies `--target` into a
+read-only snapshot and makes that snapshot the dispatch's cwd, so the
+dispatch reads `./SKILL.md`, `./references/` directly. A skill's
+regression corpus lives outside that directory, at the repository-root
+sibling `evals/<name>/`, so a default snapshot can never show it. When the
+review grades that corpus (`battle-testing-a-skill` dimensions 14/15),
+pass `--include-evals` with a `skills/<name>` target: the snapshot root
+then holds `skills/<name>/` and `evals/<name>/` as siblings (the latter
+omitted, with a stderr note, when the skill has none), and the dispatch
+prompt must name those paths instead of telling the dispatch its cwd *is*
+the target. Both trees now sit inside the dispatch cwd, so the run is
+refused, before any control run, when either tree (or its `skills/` or
+`evals/` parent) is a symlink or holds a symlink, a special file, a
+hard-linked file, a `.claude` directory, or a `CLAUDE.md`,
+`CLAUDE.local.md`, or `AGENTS.md` (names compared case-insensitively):
+the harness could load an instruction file from there, and a link could
+pull arbitrary host content into the cwd. The checkout is assumed not to
+be modified concurrently while the snapshot is copied.
+
 If the script reports "No verified mechanism available," follow its own
 printed guidance (an environment fix, or a hand-off to an already-verified
 environment) rather than dispatching anyway. Never fall back to an

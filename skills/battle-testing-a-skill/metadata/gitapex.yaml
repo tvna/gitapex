@@ -103,6 +103,9 @@ spec:
     - kind: decision
       anchor: "https://github.com/tvna/gitapex/issues/1809"
       summary: "Two Procedure/Stop-boundary citations of adversarial-self-audit.md's own removed 'Verification procedure'/'Known entries' headings were repointed at the new gitapex_run_verified_isolated_dispatch.py's own printed guidance instead. Citation-only, no functional/frontmatter change. This fell outside the linked issue's own design doc/branch plan file-ownership map (an independent Step 8 review flagged the scope-of-record gap); recorded here to close it."
+    - kind: decision
+      anchor: "https://github.com/tvna/gitapex/issues/1950"
+      summary: "Step 2 now tells the orchestrator to pass --include-evals to gitapex_run_verified_isolated_dispatch.py, so dimensions 14/15 grade the target's real sibling evals/<name>/ corpus instead of a structural false negative from a skills/<name>/-only snapshot. One clause, no frontmatter or rubric change."
   skillDependencies:
     requires:
       - evaluating-skill-quality

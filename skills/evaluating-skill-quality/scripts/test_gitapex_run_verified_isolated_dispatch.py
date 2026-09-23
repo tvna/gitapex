@@ -13,9 +13,11 @@ section.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 import gitapex_run_verified_isolated_dispatch as gvid
 import pytest
@@ -744,6 +746,205 @@ def test_build_target_snapshot_copies_single_file(tmp_path: Path) -> None:
     assert (snapshot / "SKILL.md").read_text(encoding="utf-8") == "content"
 
 
+def _make_repo_skill(repo: Path, name: str, *, with_evals: bool) -> Path:
+    skill = repo / "skills" / name
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("skill", encoding="utf-8")
+    if with_evals:
+        tasks = repo / "evals" / name / "tasks"
+        tasks.mkdir(parents=True)
+        (tasks / "case.yaml").write_text("fixture", encoding="utf-8")
+    return skill
+
+
+def test_build_target_snapshot_include_evals_keeps_repo_relative_siblings(tmp_path: Path) -> None:
+    # Issue #1950: a target skill's evals/<name>/ lives at the repository
+    # root, sibling to skills/<name>/ -- the snapshot must carry both,
+    # under the same repository-root-relative paths.
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+
+    snapshot = gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
+
+    assert (snapshot / "skills" / "demo" / "SKILL.md").read_text(encoding="utf-8") == "skill"
+    assert (snapshot / "evals" / "demo" / "tasks" / "case.yaml").read_text(encoding="utf-8") == "fixture"
+    assert not (snapshot / "SKILL.md").exists()
+    for path in (snapshot, snapshot / "skills", snapshot / "evals", snapshot / "evals" / "demo" / "tasks"):
+        assert not (path.stat().st_mode & 0o222), path
+
+
+@pytest.mark.parametrize("relative", [".", "../demo", "../../skills/demo/."])
+def test_build_target_snapshot_include_evals_normalizes_a_relative_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, relative: str
+) -> None:
+    # Defeat cases: without absolutizing, Path(".").parent.name is "";
+    # without ".." normalization, ".../demo/../demo" has parent name "..".
+    repo = tmp_path / "repo"
+    _make_repo_skill(repo, "demo", with_evals=True)
+    monkeypatch.chdir(repo / "skills" / "demo")
+
+    snapshot = gvid.build_target_snapshot(Path(relative), tmp_path / "work", include_evals=True)
+
+    assert (snapshot / "skills" / "demo" / "SKILL.md").is_file()
+    assert (snapshot / "evals" / "demo" / "tasks" / "case.yaml").is_file()
+
+
+def test_build_target_snapshot_include_evals_leaves_a_missing_evals_dir_absent(tmp_path: Path) -> None:
+    # A skill with no evals/<name>/ is a real absence the dispatch should
+    # see as such -- never an empty placeholder directory.
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=False)
+
+    snapshot = gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
+
+    assert (snapshot / "skills" / "demo" / "SKILL.md").is_file()
+    assert not (snapshot / "evals").exists()
+
+
+def test_build_target_snapshot_include_evals_rejects_a_target_outside_skills(tmp_path: Path) -> None:
+    target = tmp_path / "not-skills" / "demo"
+    target.mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="skills/<name>"):
+        gvid.build_target_snapshot(target, tmp_path / "work", include_evals=True)
+
+
+def test_build_target_snapshot_include_evals_rejects_a_file_target(tmp_path: Path) -> None:
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+
+    with pytest.raises(ValueError, match="skills/<name>"):
+        gvid.build_target_snapshot(skill / "SKILL.md", tmp_path / "work", include_evals=True)
+
+
+def test_sibling_evals_dir_derives_the_repo_root_relative_path(tmp_path: Path) -> None:
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+
+    assert gvid.sibling_evals_dir(skill) == tmp_path / "repo" / "evals" / "demo"
+
+
+@pytest.mark.parametrize("parent", ["skills", "evals"])
+def test_build_target_snapshot_include_evals_refuses_a_symlinked_parent_dir(tmp_path: Path, parent: str) -> None:
+    # Defeat case from the pre-merge security review: a symlinked evals/
+    # (or skills/) parent makes the tree path itself look symlink-free, so
+    # the walk would copy arbitrary host content (e.g. evals -> $HOME).
+    host = tmp_path / "home"
+    (host / "demo").mkdir(parents=True)
+    (host / "demo" / "SKILL.md").write_text("host content", encoding="utf-8")
+    repo = tmp_path / "repo"
+    (repo / "skills" / "demo").mkdir(parents=True)
+    (repo / "skills" / "demo" / "SKILL.md").write_text("skill", encoding="utf-8")
+    if parent == "skills":
+        (repo / "skills" / "demo" / "SKILL.md").unlink()
+        (repo / "skills" / "demo").rmdir()
+        (repo / "skills").rmdir()
+    (repo / parent).symlink_to(host)
+
+    with pytest.raises(ValueError, match="is a symlink"):
+        gvid.build_target_snapshot(repo / "skills" / "demo", tmp_path / "work", include_evals=True)
+
+
+@pytest.mark.parametrize("name", [".claude", "CLAUDE.md"])
+def test_build_target_snapshot_include_evals_refuses_an_instruction_named_target(tmp_path: Path, name: str) -> None:
+    # The walk only checks children, so the tree's own name needs its own
+    # check -- otherwise the refusal only fires on the post-copy snapshot,
+    # after the live controls have already run.
+    skill = _make_repo_skill(tmp_path / "repo", name, with_evals=False)
+
+    with pytest.raises(ValueError, match="project-instruction file or directory"):
+        gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
+
+
+def test_build_target_snapshot_include_evals_refuses_a_hard_linked_file(tmp_path: Path) -> None:
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+    host_file = tmp_path / "credentials"
+    host_file.write_text("secret", encoding="utf-8")
+    os.link(host_file, tmp_path / "repo" / "evals" / "demo" / "tasks" / "ctx")
+
+    with pytest.raises(ValueError, match="hard-linked file"):
+        gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
+
+
+@pytest.mark.parametrize("tree", ["skills", "evals"])
+@pytest.mark.parametrize("name", ["CLAUDE.md", "AGENTS.md", "CLAUDE.local.md", "claude.md", "Agents.md"])
+def test_build_target_snapshot_include_evals_refuses_an_instruction_file(tmp_path: Path, tree: str, name: str) -> None:
+    # Either copied tree lands in the dispatch's cwd subtree, where the
+    # harness can load an instruction file on demand -- a path the
+    # two-control procedure never exercises. Case variants match too: on a
+    # case-insensitive filesystem they are the file a CLAUDE.md lookup opens.
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+    (tmp_path / "repo" / tree / "demo" / name).write_text("injected", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="project-instruction file"):
+        gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
+
+
+def test_build_target_snapshot_include_evals_refuses_a_dot_claude_directory(tmp_path: Path) -> None:
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+    (tmp_path / "repo" / "evals" / "demo" / ".claude" / "rules").mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="project-instruction file or directory"):
+        gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
+
+
+@pytest.mark.parametrize("link_kind", ["file", "dir"])
+def test_build_target_snapshot_include_evals_refuses_a_symlink_to_host_content(tmp_path: Path, link_kind: str) -> None:
+    # A symlinked fixture would otherwise be dereferenced by copytree and
+    # materialize an arbitrary host file (e.g. a credential) in the cwd.
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+    host = tmp_path / "home"
+    host.mkdir()
+    (host / "credentials.json").write_text("secret", encoding="utf-8")
+    link_target = host / "credentials.json" if link_kind == "file" else host
+    (tmp_path / "repo" / "evals" / "demo" / "tasks" / "ctx").symlink_to(link_target)
+
+    with pytest.raises(ValueError, match="symlink"):
+        gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
+
+
+def test_build_target_snapshot_include_evals_refuses_a_symlinked_evals_root(tmp_path: Path) -> None:
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=False)
+    host = tmp_path / "home"
+    host.mkdir()
+    (tmp_path / "repo" / "evals").mkdir()
+    (tmp_path / "repo" / "evals" / "demo").symlink_to(host)
+
+    with pytest.raises(ValueError, match="is a symlink"):
+        gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
+
+
+def test_build_target_snapshot_include_evals_refuses_a_special_file(tmp_path: Path) -> None:
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+    os.mkfifo(tmp_path / "repo" / "evals" / "demo" / "tasks" / "pipe")
+
+    with pytest.raises(ValueError, match="not a regular file"):
+        gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
+
+
+@pytest.mark.parametrize("planted", ["symlink", "instruction-file"])
+def test_build_target_snapshot_include_evals_revalidates_the_copy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, planted: str
+) -> None:
+    # Content that slips past the source check (it changed between the
+    # check and the copy) must still be caught on the copy itself -- which
+    # also requires copytree to keep symlinks as links (symlinks=True)
+    # rather than dereference them into regular files.
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+    tasks = tmp_path / "repo" / "evals" / "demo" / "tasks"
+    if planted == "symlink":
+        (tasks / "ctx").symlink_to(tasks / "case.yaml")
+    else:
+        (tasks / "AGENTS.md").write_text("injected", encoding="utf-8")
+    monkeypatch.setattr(gvid, "_validate_include_evals_source", mock.Mock())
+
+    with pytest.raises(ValueError, match="symlink" if planted == "symlink" else "project-instruction file"):
+        gvid.build_target_snapshot(skill, tmp_path / "work", include_evals=True)
+
+
+def test_validate_include_evals_tree_raises_on_a_walk_error(tmp_path: Path) -> None:
+    # os.walk's default silently skips an unreadable directory; the check
+    # must fail instead of reporting a tree it never read as clean.
+    with pytest.raises(FileNotFoundError):
+        gvid._validate_include_evals_tree(tmp_path / "missing")
+
+
 # ---- run_real_dispatch (argv construction only) ------------------------------
 
 
@@ -1102,6 +1303,208 @@ def test_main_reports_target_snapshot_failure(
             str(prompt_file),
             "--registry",
             str(tmp_path / "registry.yaml"),
+            "--history-markdown",
+            str(tmp_path / "history.md"),
+        ]
+    )
+
+    assert exit_code == 1
+    assert "could not build a snapshot of --target" in capsys.readouterr().err
+
+
+def _reviewed_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    monkeypatch.setenv("CLAUDE_CODE_REMOTE", "true")
+    monkeypatch.delenv("CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE", raising=False)
+    registry = tmp_path / "registry.yaml"
+    gvid.save_registry(
+        registry,
+        [
+            {
+                "identifying_signals": {"CLAUDE_CODE_REMOTE": "true", "claude_version": "2.1.300 (Claude Code)"},
+                "leak_vector": "claude_md_agents_md",
+                "result": "isolated",
+                "trust_class": "reviewed",
+                "date": "2026-08-01",
+                "mechanism": gvid._CANONICAL_MECHANISM,
+            }
+        ],
+    )
+    return registry
+
+
+def test_main_include_evals_dispatches_from_a_snapshot_carrying_both_siblings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _stub_home(tmp_path, monkeypatch)
+    seen_cwd_listing: list[str] = []
+
+    def fake_run(
+        argv: list[str],
+        cwd: str | None = None,
+        env: dict[str, str] | None = None,
+        capture_output: bool = True,
+        text: bool = True,
+        check: bool = False,
+        timeout: float | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        if argv[:2] == ["claude", "--version"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="2.1.300 (Claude Code)\n", stderr="")
+        assert cwd is not None
+        seen_cwd_listing.extend(sorted(str(p.relative_to(cwd)) for p in Path(cwd).rglob("*") if p.is_file()))
+        return subprocess.CompletedProcess(argv, 0, stdout="review report", stderr="")
+
+    monkeypatch.setattr(gvid.subprocess, "run", fake_run)
+    registry = _reviewed_registry(tmp_path, monkeypatch)
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("review this skill", encoding="utf-8")
+
+    exit_code = gvid.main(
+        [
+            "--target",
+            str(skill),
+            "--include-evals",
+            "--prompt-file",
+            str(prompt_file),
+            "--registry",
+            str(registry),
+            "--history-markdown",
+            str(tmp_path / "history.md"),
+        ]
+    )
+
+    assert exit_code == 0
+    assert seen_cwd_listing == ["evals/demo/tasks/case.yaml", "skills/demo/SKILL.md"]
+
+
+def test_main_include_evals_notes_a_missing_evals_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _stub_home(tmp_path, monkeypatch)
+
+    def fake_run(
+        argv: list[str],
+        cwd: str | None = None,
+        env: dict[str, str] | None = None,
+        capture_output: bool = True,
+        text: bool = True,
+        check: bool = False,
+        timeout: float | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        if argv[:2] == ["claude", "--version"]:
+            return subprocess.CompletedProcess(argv, 0, stdout="2.1.300 (Claude Code)\n", stderr="")
+        return subprocess.CompletedProcess(argv, 0, stdout="review report", stderr="")
+
+    monkeypatch.setattr(gvid.subprocess, "run", fake_run)
+    registry = _reviewed_registry(tmp_path, monkeypatch)
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=False)
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("review this skill", encoding="utf-8")
+
+    exit_code = gvid.main(
+        [
+            "--target",
+            str(skill),
+            "--include-evals",
+            "--prompt-file",
+            str(prompt_file),
+            "--registry",
+            str(registry),
+            "--history-markdown",
+            str(tmp_path / "history.md"),
+        ]
+    )
+
+    assert exit_code == 0
+    assert "has no sibling evals directory" in capsys.readouterr().err
+
+
+def test_main_include_evals_rejects_a_target_outside_skills_before_any_control_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _stub_home(tmp_path, monkeypatch)
+    run = mock.Mock(name="subprocess.run")
+    monkeypatch.setattr(gvid.subprocess, "run", run)
+    target = tmp_path / "elsewhere" / "demo"
+    target.mkdir(parents=True)
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("review this skill", encoding="utf-8")
+
+    exit_code = gvid.main(
+        [
+            "--target",
+            str(target),
+            "--include-evals",
+            "--prompt-file",
+            str(prompt_file),
+            "--registry",
+            str(tmp_path / "registry.yaml"),
+        ]
+    )
+
+    assert exit_code == 1
+    assert "--include-evals requires --target to be a skills/<name> directory" in capsys.readouterr().err
+    run.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", ["instruction-file", "unreadable", "too-deep"])
+def test_main_include_evals_refuses_an_unsafe_tree_before_any_control_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], failure: str
+) -> None:
+    # End to end, unpatched snapshot logic: a refusal known before the
+    # controls run must not cost live control calls or a registry write.
+    _stub_home(tmp_path, monkeypatch)
+    run = mock.Mock(name="subprocess.run")
+    monkeypatch.setattr(gvid.subprocess, "run", run)
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+    if failure == "instruction-file":
+        (tmp_path / "repo" / "evals" / "demo" / "CLAUDE.md").write_text("injected", encoding="utf-8")
+    else:
+        error = PermissionError("unreadable") if failure == "unreadable" else RecursionError("too deep")
+        monkeypatch.setattr(gvid, "_validate_include_evals_tree", mock.Mock(side_effect=error))
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("review this skill", encoding="utf-8")
+    registry = tmp_path / "registry.yaml"
+
+    exit_code = gvid.main(
+        ["--target", str(skill), "--include-evals", "--prompt-file", str(prompt_file), "--registry", str(registry)]
+    )
+
+    assert exit_code == 1
+    assert "error:" in capsys.readouterr().err
+    run.assert_not_called()
+    assert not registry.exists()
+
+
+@pytest.mark.parametrize("error", [ValueError("refusing to snapshot"), RecursionError("too deep")])
+def test_main_reports_a_value_error_from_the_snapshot_step(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], error: Exception
+) -> None:
+    # The target (or its evals tree) can change between main()'s own
+    # --include-evals precheck and the snapshot step, while the controls
+    # run, and copytree recurses per directory level -- neither error may
+    # escape as a traceback.
+    _stub_home(tmp_path, monkeypatch)
+
+    def fake_run(argv: list[str], **_: Any) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(argv, 0, stdout="2.1.300 (Claude Code)\n", stderr="")
+
+    monkeypatch.setattr(gvid.subprocess, "run", fake_run)
+    monkeypatch.setattr(gvid, "build_target_snapshot", mock.Mock(side_effect=error))
+    registry = _reviewed_registry(tmp_path, monkeypatch)
+    skill = _make_repo_skill(tmp_path / "repo", "demo", with_evals=True)
+    prompt_file = tmp_path / "prompt.txt"
+    prompt_file.write_text("review this skill", encoding="utf-8")
+
+    exit_code = gvid.main(
+        [
+            "--target",
+            str(skill),
+            "--include-evals",
+            "--prompt-file",
+            str(prompt_file),
+            "--registry",
+            str(registry),
             "--history-markdown",
             str(tmp_path / "history.md"),
         ]
