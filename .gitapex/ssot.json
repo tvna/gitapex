@@ -55,6 +55,12 @@
       "authority": "Versioned, testable record of how faithfully each target agent-tool runtime can enforce the ten W2 execution-requirement dimensions (parent issue #307); authoritative source for a future W4 enforcement adapter, not yet consumed by any gate"
     },
     {
+      "id": "agent-metadata-schema",
+      "path": ".gitapex/agent-metadata.schema.json",
+      "format": "json",
+      "authority": "JSON Schema for agents/metadata/<name>.gitapex.yaml AgentMetadata sidecars (issue #2073, parent #307) -- authoritative shape for a subagent type's own declared execution requirements, read by agent-metadata-schema-drift; declaration only, not yet consumed by any enforcement adapter"
+    },
+    {
       "id": "waza-suite-schemas",
       "path": ".gitapex/waza-eval.schema.json",
       "format": "json",
@@ -1328,6 +1334,29 @@
       ]
     },
     {
+      "id": "agent-metadata-schema-drift",
+      "kind": "script",
+      "script": ".github/scripts/gitapex_scan_agent_metadata_schema.py",
+      "rule": "Every agents/metadata/<name>.gitapex.yaml sidecar must validate against .gitapex/agent-metadata.schema.json (JSON Schema draft 2020-12; kind AgentMetadata, tools.shellDenylist, lifecycle.exitConditions[] with onUnsupported restricted to fail-closed), its metadata.name must equal its <name> file stem, agents/<name>.md must exist, and its exitConditions[].id values must be unique. agents/metadata/ may hold only regular <kebab-name>.gitapex.yaml files; a sidecar-like file (any letter case) or any symlink elsewhere under agents/ is a sidecar-location finding; tool tags are printable ASCII with no leading or trailing space; a sidecar that repeats a YAML mapping key is a sidecar-read finding; and a missing or empty agents/ directory fails closed. Zero real sidecars exist yet, so the real-tree scan is vacuous until the first agent declares one.",
+      "planes": ["ci", "local"],
+      "local_invocation": ["uv", "run", "--frozen", "python3", ".github/scripts/gitapex_scan_agent_metadata_schema.py"],
+      "trigger": "tests/test_gitapex_scan_agent_metadata_schema.py inside the pytest step of .github/workflows/test.yml",
+      "policy_refs": ["agent-metadata-schema"],
+      "cluster": "runtime-compatibility",
+      "tracking_issue": 2073,
+      "status": "active",
+      "supersedes": null,
+      "bypass_review_status": "not-yet-reviewed",
+      "target": [
+        {"kind": "file-glob", "ref": "agents/metadata/*.gitapex.yaml"},
+        {"kind": "file-glob", "ref": ".gitapex/agent-metadata.schema.json"},
+        {"kind": "cross-registry-consistency", "ref": "metadata.name <-> sidecar file stem"},
+        {"kind": "cross-registry-consistency", "ref": "sidecar file stem <-> agents/<name>.md"},
+        {"kind": "workflow-event", "ref": "test.yml:pull_request"},
+        {"kind": "workflow-event", "ref": "test.yml:push"}
+      ]
+    },
+    {
       "id": "metadata-outcome-lines-drift",
       "kind": "script",
       "script": ".github/scripts/gitapex_gate_metadata_outcome_lines.py",
@@ -2310,7 +2339,7 @@
     "supply-chain": "Toolchain and dependency provisioning, and manifest-identity drift.",
     "test-integrity": "Quality floors on the artifacts backing the other clusters' own gates: test-suite coverage, static type checking, and static analysis of the gate scripts' own error paths.",
     "registry-integrity": "Self-validation of this registry file itself against its schema and against the repo's real files.",
-    "runtime-compatibility": "Cross-runtime execution-requirement compatibility matrix (parent issue #307's W2): schema validation now, real-runtime research-data drift checks once populated.",
+    "runtime-compatibility": "Cross-runtime execution-requirement compatibility matrix (parent issue #307's W2) and the AgentMetadata execution-requirement sidecar schema (#307 W1b): schema validation now, real-runtime research-data drift checks once populated.",
     "secret-scanning": "Detection of credentials and other secrets committed to the repository, on both the local hook path and the CI merge path."
   }
 }
