@@ -19,9 +19,8 @@ holds -- is what this skill grades, at two different altitudes.
 ## Two modes, one reporting discipline
 
 The two modes below answer different questions about different kinds of
-target, and neither subsumes the other. They were separate skills until
-the absorption recorded in `metadata/gitapex.yaml` merged them, and that
-merge deliberately did not flatten their two vocabularies into one:
+target, and neither subsumes the other; their two vocabularies stay
+distinct rather than flattened into one:
 
 - **Mode A -- artifact exposure and privilege.** Target: one artifact.
   Verdict vocabulary: `exposure-minimal` / `exposure-excess` per
@@ -77,10 +76,7 @@ For each dependency relationship (a call to middleware, a cloud service,
 or any external consumer the artifact talks to), does the artifact's
 outbound interface -- an API response, a log line, telemetry, a webhook
 payload, an error message -- reveal more than that dependency's actual
-function requires? Grounded in the same principle this repository's own
-contributor-instruction file already states for agent conduct generally
-("do not send more... to an external endpoint... unless the trusted task
-requires it"), generalized here to an artifact's own design.
+function requires?
 
 The concrete test: for a given field, log line, or response value, would
 removing it change whether the dependency can actually do its job? If
@@ -161,12 +157,14 @@ a neutral grader of it, and an in-context instruction to "review
 neutrally anyway" does not remove that bias. Give the dispatch only the
 target's path (or content) and this skill's own files, never the calling
 conversation's framing, prior discussion, or opinion of it. Required,
-not optional, the same way `evaluating-deterministic-gate-quality`'s own
-equivalent requirement is; that skill's own Subagent dispatch section
-(itself deferring to `evaluating-skill-quality`'s isolation-verification
-mechanics) is the pattern this skill reuses rather than re-deriving.
-Mode B audits a platform's standing configuration rather than authored
-content, so it carries no equivalent authorship-bias condition.
+not optional: when the calling repository carries its own
+project-instruction file (for example `CLAUDE.md` or `AGENTS.md`),
+exclude that file from the dispatch's context before dispatching, and
+verify the exclusion held per `evaluating-skill-quality`'s own Subagent
+dispatch section -- only its verification mechanics; this section's own
+trigger and payload rules govern here. Mode B audits a platform's
+standing configuration rather than authored content, so it carries no
+equivalent authorship-bias condition.
 
 ## Mode A procedure
 
@@ -313,11 +311,9 @@ never changes branch protection, revokes a webhook, or rotates a key.
   `evaluating-deterministic-gate-quality`'s own delegation-recommendation
   step also names this skill as the delegate for an exposure- or
   privilege-shaped finding it surfaces, rather than re-deriving that
-  analysis inline -- that step's own reference text still hardcodes the
-  pre-rename name as a literal string (a disclosed, deliberate choice on
-  that skill's own side, not fixed by this rename), but confirms the
-  named delegate is actually present in the calling environment before
-  trusting it, rather than blindly following the string.
+  analysis inline -- that step confirms the named delegate is actually
+  present in the calling environment before trusting it, rather than
+  following the name alone.
 - **`screening-a-low-trust-contribution`** (`relatedTo`) -- screens a
   single incoming diff for supply-chain/injection threat at contribution
   time, including what that diff *changes* about the hosting surface Mode
@@ -334,27 +330,16 @@ never changes branch protection, revokes a webhook, or rotates a key.
   evidence for its own per-item verdict. Where a full, unfiltered CI
   posture report is what is wanted, that skill is the one to run; this
   one never substitutes for it.
-- **`docs/agent-product-scope.md`'s Axis B** (a document specific to this
-  skill's own authoring repository, not a sibling skill -- named here
-  because the resemblance in name is exactly the kind of conflation this
-  repository's own scope map warns against; its own tracking-issue number
-  is elided here per the no-bare-citation rule below and lives instead in
-  `metadata/gitapex.yaml`) -- Axis B is a *future runtime enforcement
-  adapter*: least-privilege tool/filesystem/network gating, actual
-  enforcement code. This skill is a review procedure producing findings,
-  never enforcement, and does not fulfill, build, or substitute for that
-  axis.
-- **The `scanning-*` naming family** (`docs/glossary.md`) -- this skill
-  is a partial member by that family's own definition, and says so rather
-  than claiming full membership. The family delegates judgment entirely
-  to one external, pinned diagnostic CLI and reports its findings
-  unmodified. One sub-case here does exactly that: Mode A's
-  least-privilege check on a workflow artifact is backed by zizmor.
-  Everything else -- Mode A's exposure check, Mode A on every non-workflow
-  artifact type, and the whole of Mode B -- still performs this skill's
-  own judgment against per-item tests and a per-platform checklist. The
-  honest description is a `scanning-*`-named skill with one delegated
-  sub-case, not a delegate throughout.
+- **A runtime enforcement adapter** (not a sibling skill) --
+  least-privilege tool/filesystem/network gating, actual enforcement
+  code. This skill is a review procedure producing findings, never
+  enforcement, and does not fulfill, build, or substitute for one.
+- **`scanning-*` naming, partial fit** -- only one sub-case delegates to an
+  external, pinned diagnostic CLI: Mode A's least-privilege check on a
+  workflow artifact is backed by zizmor. Everything else -- Mode A's
+  exposure check, Mode A on every non-workflow artifact type, and the
+  whole of Mode B -- performs this skill's own judgment against per-item
+  tests and a per-platform checklist.
 
 ## Stop boundaries
 
@@ -462,10 +447,8 @@ finding: [references/worked-examples.md](references/worked-examples.md).
 Portability: **Mixed**. The portable core above -- both modes' checks and
 procedures, the Applicability gate, and the Stop boundaries -- names no
 path or issue number specific to this skill's own authoring repository.
-The Relationship-to-other-skills section's disambiguation from sibling
-skills is itself portable, but two of its bullets additionally cite this
-repository's own `docs/agent-product-scope.md` and `docs/glossary.md`,
-named as repository-specific inline where they appear. Two reference
+The Relationship-to-other-skills section's disambiguation is itself
+portable. Two reference
 files are repository-scoped and can be dropped by a vendoring copy:
 [references/gitapex-cross-links.md](references/gitapex-cross-links.md)
 (step B2's cross-link target, whose absence a vendored copy substitutes
@@ -486,9 +469,9 @@ one of them is required reading on every Mode B run, per step B2, rather
 than optional depth -- the one place this skill's Adaptive declaration is
 partial rather than clean.
 
-Ceiling pressure is disclosed rather than left to be discovered: after
-the absorption both this body and this description sit within a few
-lines/characters of `gitapex_check_skill_shape.py`'s limits, and what
+Ceiling pressure is disclosed rather than left to be discovered: both
+this body and this description sit within a few lines/characters of
+`gitapex_check_skill_shape.py`'s limits, and what
 remains cannot move to `references/` without leaving the body incomplete
 for a correct run, so the next substantive addition has to remove
 something first. `metadata/gitapex.yaml` carries the full reasoning.
