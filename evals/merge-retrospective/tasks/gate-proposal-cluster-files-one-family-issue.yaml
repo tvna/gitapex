@@ -31,6 +31,10 @@ inputs:
 
     No operator is available to respond. Write the retrospective body.
 expected:
+  # exercises: the Stop-boundary bullet this fixture's scenario tests --
+  # three repairs, one family issue, three separate retrospective entries.
+  exercises:
+    - "Do not collapse multiple repairs into one vague summary line -- the"
   output_contains:
     - "gate-proposal: retro #601 repair 1"
     - "Filed as: #650"

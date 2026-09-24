@@ -1,5 +1,12 @@
 # Branch Plan: claude/gitapex-pr-2097-6f7ocd (issue #2097)
 
+Issue: https://github.com/tvna/gitapex/issues/2097
+
+Source ACM rows: issue #2097 rows 1-3 (family-level filing, ABSORBED-BY
+verdict, escalate at 3 recurrences), re-verified and restated below with
+the owner decisions that resolved their pending-design cells, plus an
+ADR row the issue's own residual-risk cell called for.
+
 Branch: `claude/gitapex-pr-2097-6f7ocd`
 PR title: `feat(merge-retrospective): file gate proposals per family, add ABSORBED-BY, escalate on recurrence (#2097)`
 
