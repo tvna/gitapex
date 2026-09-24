@@ -46,7 +46,7 @@ from __future__ import annotations
 
 import datetime as _datetime
 import re as _re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import NamedTuple
 
 # The literal label name every `gate-proposal`-classified issue this
@@ -387,6 +387,60 @@ def count_family_occurrences(family_body: str, comment_bodies: Iterable[str]) ->
     for line_match in CONSOLIDATES_LINE_RE.finditer(_normalize_newlines(family_body)):
         consolidated.update(int(ref) for ref in _ISSUE_REF_RE.findall(line_match.group(1)))
     return 1 + len(consolidated) + len(parse_recurrence_keys(comment_bodies))
+
+
+# A retrospective body's full repair entry starts `N. [label] ...` at
+# column 0; its `Filed as: #M` line follows, indented, before the next
+# entry. The up-front index-only list reuses the same `N.` prefix but
+# never carries a `Filed as:` line, so it can never verify a key.
+_REPAIR_ENTRY_START_RE = _re.compile(r"^(\d+)\.[ \t]", _re.MULTILINE)
+_FILED_AS_RE = _re.compile(r"^[ \t]*Filed as:[ \t]*#(\d+)[ \t]*$", _re.MULTILINE)
+
+
+def retro_records_filing(retro_body: str, repair_index: int, family_issue_number: int) -> bool:
+    """True iff `retro_body` has a repair entry numbered `repair_index`
+    whose own `Filed as:` line names `family_issue_number`.
+
+    A recurrence comment is externally authored text: anyone who can
+    comment can post a `Recurrence: retro #R repair K` line. Its key
+    counts only once retrospective #R's own body, re-fetched, confirms
+    repair K was recorded on this family -- the same re-fetch discipline
+    Step 5 already applies to a `Filed as:` line (issue #2097)."""
+    text = _normalize_newlines(retro_body)
+    starts = list(_REPAIR_ENTRY_START_RE.finditer(text))
+    for position, start in enumerate(starts):
+        if int(start.group(1)) != repair_index:
+            continue
+        end = starts[position + 1].start() if position + 1 < len(starts) else len(text)
+        if any(int(m.group(1)) == family_issue_number for m in _FILED_AS_RE.finditer(text, start.start(), end)):
+            return True
+    return False
+
+
+def count_verified_family_occurrences(
+    family_issue_number: int,
+    family_body: str,
+    comment_bodies: Iterable[str],
+    retro_bodies: Mapping[int, str],
+    own_keys: Iterable[tuple[int, int]] = (),
+) -> int:
+    """`count_family_occurrences`, counting a recurrence key only when it
+    is one of `own_keys` (posted by this run, whose retrospective line is
+    not written yet) or `retro_records_filing` confirms it against the
+    re-fetched body in `retro_bodies`. An unverifiable key -- a forged
+    comment, or a retrospective that no longer exists -- adds nothing, so
+    a forged line can never push a family over the threshold."""
+    own = set(own_keys)
+    consolidated: set[int] = set()
+    for line_match in CONSOLIDATES_LINE_RE.finditer(_normalize_newlines(family_body)):
+        consolidated.update(int(ref) for ref in _ISSUE_REF_RE.findall(line_match.group(1)))
+    verified = {
+        (retro, index)
+        for retro, index in parse_recurrence_keys(comment_bodies)
+        if (retro, index) in own
+        or (retro in retro_bodies and retro_records_filing(retro_bodies[retro], index, family_issue_number))
+    }
+    return 1 + len(consolidated) + len(verified | own)
 
 
 def needs_escalation(occurrence_count: int) -> bool:

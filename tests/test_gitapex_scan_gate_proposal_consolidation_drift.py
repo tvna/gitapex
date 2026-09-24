@@ -616,6 +616,11 @@ def test_find_unlisted_duplicates_ignores_closed_or_unknown_targets() -> None:
     assert unlisted == {}
 
 
+def test_normalize_newlines_handles_crlf_and_lone_cr() -> None:
+    assert csd._normalize_newlines("a\r\nb\rc") == "a\nb\nc"
+    assert csd._normalize_newlines(None) == ""
+
+
 def test_crlf_consolidates_and_recurrence_lines_still_parse() -> None:
     # GitHub stores web-UI edits with CRLF line endings.
     assert csd.extract_consolidates_issue_numbers("intro\r\nConsolidates: #1, #2\r\nmore") == [1, 2]

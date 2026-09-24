@@ -18,7 +18,7 @@ inputs:
     comments.
 
     You post this run's own comment (`Recurrence: retro #671 repair 1`),
-    and re-listing confirms it. `count_family_occurrences` then returns 2,
+    and re-listing confirms it. `count_verified_family_occurrences` returns 2,
     and `needs_escalation(2)` is false.
 
     No operator is available to respond. Write the retrospective body and

@@ -1,0 +1,38 @@
+id: merge-retrospective-gate-proposal-wrong-cluster-is-split
+name: A CLUSTER Grouping Two Different Fixes Is Split Before Filing
+description: The review groups two NEW repairs into one CLUSTER, but their proposed gates name different fixes. Checking the members side by side outside the dispatch splits them, so each files its own family issue instead of being merged.
+tags:
+  - quality
+  - gate-proposal
+  - family
+  - restraint
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #690 ("feat: add retry budget") merged
+    into main. You created retrospective #691.
+
+    Two missing-deterministic-gate repairs occurred:
+
+    1. A new config key was missing from the JSON schema, and CI failed
+       on schema validation. Proposed gate: a pre-commit check that every
+       key read by `config.py` appears in `config.schema.json`.
+    2. A test slept for 2 seconds and timed out on a slow runner.
+       Proposed gate: a lint rule banning `time.sleep` in tests.
+
+    The Step 4b review returned NEW for both, plus one CLUSTER {1, 2}
+    ("both are CI failures"). The sweep counted 45 open gate-proposal
+    issues at 2026-09-24T14:00:00Z.
+
+    If filed separately, `gitapex_file_gate_proposal.py` returns
+    `gate-proposal: retro #691 repair 1: Config key missing from schema`
+    and `gate-proposal: retro #691 repair 2: Sleep in test`. Neither title
+    exists. Creating each and re-fetching confirms #710 and #711.
+
+    No operator is available to respond. Decide whether the CLUSTER
+    holds, then write the retrospective body.
+expected:
+  output_contains:
+    - "gate-proposal: retro #691 repair 1"
+    - "gate-proposal: retro #691 repair 2"
+    - "Filed as: #710"
+    - "Filed as: #711"

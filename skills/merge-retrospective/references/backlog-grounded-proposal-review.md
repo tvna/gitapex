@@ -79,8 +79,9 @@ runs recording on the same family issue cannot overwrite each other.
 It replaces the old create-then-close standalone issue as the
 non-conflicting write. After posting one, re-fetch the family issue's
 body and comments and count its occurrences (the script's
-`count_family_occurrences`: the original filing, each `Consolidates:`
-source, and each distinct recurrence key). At `ESCALATION_THRESHOLD`
+`count_verified_family_occurrences`: the original filing, each
+`Consolidates:` source, and each distinct recurrence key its own
+retrospective confirms -- a comment alone is not proof). At `ESCALATION_THRESHOLD`
 (3) or more, add the `gate-proposal-escalated` label (re-fetch the
 current labels and write their union; create the label first if it is
 missing). The family issue is then the next work item. File nothing

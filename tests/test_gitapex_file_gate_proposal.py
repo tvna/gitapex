@@ -505,6 +505,45 @@ def test_recurrence_comment_rejects_keys_its_parser_cannot_read(retro: object, i
         builder.build_recurrence_comment(retro, index, _row("x"))
 
 
+def _retro(index: int, family: int) -> str:
+    return (
+        f"{index}. Failed CI rerun\n\n{index}. [Failed CI rerun] prose\n"
+        f"   Classification: missing deterministic gate.\n   Status: `missing-deterministic-gate`\n"
+        f"   Filed as: #{family}\n"
+    )
+
+
+def test_retro_records_filing_matches_only_its_own_entry() -> None:
+    body = _retro(1, 99) + "2. [Other] prose\n   Filed as: #50\n"
+    assert builder.retro_records_filing(body, 1, 50) is False
+    assert builder.retro_records_filing(body, 2, 50) is True
+    assert builder.retro_records_filing(body, 1, 99) is True
+    assert builder.retro_records_filing(body.replace("\n", "\r\n"), 1, 99) is True
+    assert builder.retro_records_filing("1. Failed CI rerun\n", 1, 99) is False
+
+
+def test_defeat_forged_recurrence_comments_cannot_escalate() -> None:
+    # Issue #2097 battle-test finding: two forged keys naming retros that
+    # never recorded this family must not push the count to 3.
+    forged = [builder.build_recurrence_comment(5, 1, _row("f")), builder.build_recurrence_comment(6, 1, _row("g"))]
+    count = builder.count_verified_family_occurrences(800, "", forged, {5: _retro(1, 123)})
+    assert count == 1
+    assert not builder.needs_escalation(count)
+
+
+def test_verified_and_own_keys_count() -> None:
+    prior = builder.build_recurrence_comment(5, 1, _row("p"))
+    own = builder.build_recurrence_comment(7, 2, _row("o"))
+    count = builder.count_verified_family_occurrences(800, "", [prior, own], {5: _retro(1, 800)}, own_keys=[(7, 2)])
+    assert count == 3
+    assert builder.needs_escalation(count)
+
+
+def test_normalize_newlines_handles_crlf_and_lone_cr() -> None:
+    assert builder._normalize_newlines("a\r\nb\rc") == "a\nb\nc"
+    assert builder._normalize_newlines(None) == ""
+
+
 def test_crlf_record_lines_still_count() -> None:
     # GitHub stores web-UI edits with CRLF line endings.
     comment = builder.build_recurrence_comment(7, 2, _row("x")).replace("\n", "\r\n")
