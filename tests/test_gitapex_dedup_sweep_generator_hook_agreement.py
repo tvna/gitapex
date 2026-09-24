@@ -73,3 +73,29 @@ def test_every_hook_accepted_duplicate_line_names_a_target_the_reader_reads() ->
         assert builder.duplicate_target("body\n\n" + line + "\n") == int(verdict.split("#")[1])
     for verdict in ("duplicate-of #12", "DUPLICATE-OF #0", "DUPLICATE-OF #012", "DUPLICATE-OF\t#12"):
         assert not checker._ACCEPTED_VERDICT_RE.match(verdict)
+
+
+def test_hook_denies_duplicate_lines_the_reader_would_drop() -> None:
+    # Independent-review finding F1 (issue #2097): each variant passes the
+    # loose sweep-line recognizer but not duplicate_target, so the hook
+    # must deny it rather than let the skill undercount escalation.
+    builder = _load_builder()
+    line = "Dedup-sweep: 3 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict DUPLICATE-OF #5"
+    fenced_example = "```\n" + line + "\n```\n"
+    variants = [
+        "  " + line,
+        line.replace("open gate", "open  gate"),
+        line + " ",
+        line.replace("Dedup-sweep", "dedup-sweep"),
+        fenced_example + line,
+    ]
+    for variant in variants:
+        body = "| a | b |\n\n" + variant + "\n"
+        assert builder.duplicate_target(body) is None
+        passed, message = checker.evaluate("tvna", "gitapex", "create", ["gate-proposal"], body, "")
+        assert passed is False
+        assert "generator's exact shape" in message
+    exact_body = "| a | b |\n\n" + line + "\n"
+    assert builder.duplicate_target(exact_body) == 5
+    passed, message = checker.evaluate("tvna", "gitapex", "create", ["gate-proposal"], exact_body, "")
+    assert "generator's exact shape" not in message

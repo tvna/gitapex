@@ -143,10 +143,18 @@ _INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 # at column 0, so stripping indented lines can only deny, never allow.
 _INDENTED_CODE_RE = re.compile(r"^(?:[ ]{4}|\t).*$", re.MULTILINE)
 
-# `DUPLICATE-OF` is matched in exactly the shape the skill's own
-# `duplicate_target` reads back, so a filing this hook allows is never a
-# record the skill's escalation count silently drops.
 _ACCEPTED_VERDICT_RE = re.compile(r"^(?:(?i:NEW)|DUPLICATE-OF #[1-9]\d*)$")
+
+# Issue #2097: a DUPLICATE-OF creation must also carry exactly one line in
+# the generator's exact shape -- the same pattern, read over the same
+# unstripped body, as `duplicate_target` in
+# skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py (an
+# independent copy: the hooks tree cannot import the skill tree). So a
+# DUPLICATE-OF filing this hook allows is never a record the skill's
+# escalation count silently drops.
+_EXACT_DUPLICATE_LINE_RE = re.compile(
+    r"^Dedup-sweep: \d+ open gate-proposal issues at \S+; verdict DUPLICATE-OF #[1-9]\d*$", re.MULTILINE
+)
 
 _SWEEP_RE = re.compile(
     r"^[ \t]*Dedup-sweep:[ \t]*(\d+)[ \t]+open[ \t]+gate-proposal[ \t]+issues[ \t]+at[ \t]+(\S+)"
@@ -342,6 +350,14 @@ def evaluate(
             "DUPLICATE-OF #<N> does -- an ABSORBED-BY repair files as DUPLICATE-OF its mechanism's "
             "extend issue"
         )
+    if verdict.upper().startswith("DUPLICATE-OF"):
+        exact = _EXACT_DUPLICATE_LINE_RE.findall((body or "").replace("\r\n", "\n").replace("\r", "\n"))
+        if len(exact) != 1:
+            return False, (
+                "a DUPLICATE-OF filing needs exactly one Dedup-sweep line in the generator's exact shape "
+                f"(found {len(exact)}), so the skill's escalation count can read its target back -- "
+                "generate it via skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py"
+            )
     try:
         _datetime.datetime.strptime(timestamp, _TIMESTAMP_FORMAT)
     except (ValueError, TypeError):

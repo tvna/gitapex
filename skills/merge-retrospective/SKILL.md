@@ -268,9 +268,10 @@ discipline -- ground it in the actual code before writing it.
       its tag is itself the disclosed reason. Every other repair lands
       on exactly one family issue: a verified CLUSTER of `NEW` repairs
       creates one issue with one ACM row per member, while
-      `DUPLICATE-OF #N` and `ABSORBED-BY` file a standalone record
-      closed as a duplicate of the existing family issue, which
-      escalates at three occurrences. Either way, record
+      `DUPLICATE-OF #N` files a standalone record closed as a duplicate
+      of that family issue, which escalates at three occurrences, and
+      `ABSORBED-BY` does the same against the mechanism's open `extend`
+      issue, creating that issue instead when none is open. Either way, record
       `Filed as: #<issue number>` alongside the repair's own `Status:` line. Run
       `skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py`
       for every title and body -- see
