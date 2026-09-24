@@ -94,8 +94,20 @@ def test_hook_denies_duplicate_lines_the_reader_would_drop() -> None:
         assert builder.duplicate_target(body) is None
         passed, message = checker.evaluate("tvna", "gitapex", "create", ["gate-proposal"], body, "")
         assert passed is False
-        assert "generator's exact shape" in message
+        assert "exact shape" in message
     exact_body = "| a | b |\n\n" + line + "\n"
     assert builder.duplicate_target(exact_body) == 5
     passed, message = checker.evaluate("tvna", "gitapex", "create", ["gate-proposal"], exact_body, "")
-    assert "generator's exact shape" not in message
+    assert "exact shape" not in message
+
+
+def test_hook_denies_a_fenced_exact_line_naming_another_target() -> None:
+    # Independent-review round 2 finding B (issue #2097): a visible,
+    # non-exact DUPLICATE-OF #12 line plus a fenced exact line naming #99
+    # would let the skill count the record toward #99.
+    line = "Dedup-sweep: 3 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict DUPLICATE-OF #{}"
+    body = "```\n" + line.format(99) + "\n```\n" + line.format(12).replace("Dedup-sweep:", "Dedup-sweep: ") + "\n"
+    assert _load_builder().duplicate_target(body) == 99
+    passed, message = checker.evaluate("tvna", "gitapex", "create", ["gate-proposal"], body, "")
+    assert passed is False
+    assert "naming the same target" in message

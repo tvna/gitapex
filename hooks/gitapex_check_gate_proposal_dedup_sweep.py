@@ -352,11 +352,16 @@ def evaluate(
         )
     if verdict.upper().startswith("DUPLICATE-OF"):
         exact = _EXACT_DUPLICATE_LINE_RE.findall((body or "").replace("\r\n", "\n").replace("\r", "\n"))
-        if len(exact) != 1:
+        # The one exact line must also be the very sweep line checked above
+        # (outside any fence, same verdict), so the target the skill reads
+        # back is the target this filing declares.
+        visible = _EXACT_DUPLICATE_LINE_RE.findall(_strip_fences(body))
+        if len(exact) != 1 or visible != exact or not exact[0].endswith(f"; verdict {verdict}"):
             return False, (
-                "a DUPLICATE-OF filing needs exactly one Dedup-sweep line in the generator's exact shape "
-                f"(found {len(exact)}), so the skill's escalation count can read its target back -- "
-                "generate it via skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py"
+                "a DUPLICATE-OF filing needs exactly one Dedup-sweep line in the generator's exact shape, "
+                f"outside any code block and naming the same target (found {len(exact)}), so the skill's "
+                "escalation count reads back the target this filing declares -- generate it via "
+                "skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py"
             )
     try:
         _datetime.datetime.strptime(timestamp, _TIMESTAMP_FORMAT)
