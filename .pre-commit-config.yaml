@@ -157,10 +157,12 @@ repos:
       # already-open PR. This runs all of them in one pass at pre-push --
       # the last local moment before a gap becomes a CI round-trip, and
       # deliberately not pre-commit: it grades committed state (HEAD vs
-      # origin/main), not a staged index, and at ~49 s
-      # warm end to end for all 54 wired gates (issue #1817's own
-      # apm-binary-version-pin gate is the latest addition, bumping the
-      # prior 53-gate baseline by one; issue #1921's own
+      # origin/main), not a staged index, and at ~47 s
+      # warm end to end for all 55 wired gates (issue #2073's own
+      # agent-metadata-schema-drift gate is the latest addition, bumping
+      # the prior 54-gate baseline, measured at ~49 s, by one; issue
+      # #1817's own apm-binary-version-pin gate bumped the 53-gate
+      # baseline by one before that; issue #1921's own
       # detection-logic-rule-text-drift gate bumped the 52-gate baseline by
       # one before that; issue #1799's own
       # defeat-test-mutation-coverage gate, issue #1965's own

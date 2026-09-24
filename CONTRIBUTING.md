@@ -125,10 +125,12 @@ used to be discovered one red check at a time on an already-open PR.
 
 The same `uv run prek install -t pre-commit -t pre-push -t commit-msg` above also installs
 a **pre-push** hook that runs every gate with a working-tree-only form in
-one pass, before the push leaves your machine. A warm run of all 54 wired
-gates measures roughly 49 seconds end to end (issue #1817's own
-apm-binary-version-pin gate is the latest addition, bumping the prior
-53-gate baseline by one -- different hardware than the figures below in any
+one pass, before the push leaves your machine. A warm run of all 55 wired
+gates measures roughly 47 seconds end to end on a 4-core cloud session
+(issue #2073's own agent-metadata-schema-drift gate is the latest
+addition, bumping the prior 54-gate baseline by one; that 54-gate set,
+after issue #1817's own apm-binary-version-pin gate bumped the prior
+53-gate baseline by one, measured roughly 49 seconds -- different hardware than the figures below in any
 case, which is also why this is markedly faster than slower: the prior
 53-gate set (issue #1921's own detection-logic-rule-text-drift gate, which
 bumped the 52-gate baseline by one) measured roughly 51 seconds; issue #1799's own
@@ -185,7 +187,7 @@ it up, then confirm both shims with the check in the previous section.
 The runner itself also resolves through `uv` (issue #1485: it imports
 `_gitapex_schema_validation.py`, which needs `jsonschema` -- a real,
 non-stdlib dependency a bare system `python3` is not guaranteed to have),
-and so do all 54 wired gates (the same `uv run` pins CI uses). Without `uv`
+and so do all 55 wired gates (the same `uv run` pins CI uses). Without `uv`
 on PATH every one of them reports `FAIL ... failed to run` -- that is one
 missing tool, not a whole broken wired set.
 
