@@ -82,9 +82,9 @@
       "uniqueItems": true,
       "items": {
         "type": "string",
-        "pattern": "^\\S(.*\\S)?(?!\\n)$"
+        "pattern": "^[!-~]([ -~]*[!-~])?(?!\\n)$"
       },
-      "description": "Free-form capability tags: no leading or trailing whitespace and no newline, so an exact-match lookup of a deny tag cannot silently miss a padded copy. No fixed vocabulary yet: an adapter defines how a tag maps to its runtime. An explicit empty list states 'none', distinct from the key being absent. A tag listed in both shell and shellDenylist is not rejected here; deny takes precedence."
+      "description": "Free-form capability tags restricted to printable ASCII, with no leading or trailing space: no zero-width, format, or line-break character, so an exact-match lookup of a deny tag cannot silently miss a padded or look-alike copy. The (?!\\n) lookahead stops $ from matching before a trailing newline under Python's re.search. No fixed vocabulary yet: an adapter defines how a tag maps to its runtime. An explicit empty list states 'none', distinct from the key being absent. A tag listed in both shell and shellDenylist is not rejected here; deny takes precedence."
     },
     "executionRequirementsLifecycle": {
       "type": "object",

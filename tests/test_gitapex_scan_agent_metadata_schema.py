@@ -671,7 +671,21 @@ def test_find_drift_flags_a_symlinked_directory_hiding_a_sidecar(tmp_path: pathl
     assert scanner.find_drift(agents_dir) == [f"{link}: sidecar-location: symlinks under {agents_dir} are not allowed"]
 
 
-@pytest.mark.parametrize("tag", ["gh-cli ", " gh-cli", "gh-cli\n", "gh\ncli"])
+@pytest.mark.parametrize(
+    "tag",
+    [
+        "gh-cli ",
+        " gh-cli",
+        "gh-cli\n",
+        "gh\ncli",
+        "gh\rcli",
+        "gh\tcli",
+        "gh-cli\u200b",
+        "\ufeffgh-cli",
+        "gh\u2028cli",
+        "gh-cl\u0131",
+    ],
+)
 def test_shell_denylist_rejects_padded_or_multiline_tags(tag: str) -> None:
     """Defeat case: an exact-match adapter lookup would silently miss a
     padded deny tag, so the schema rejects the padding itself."""

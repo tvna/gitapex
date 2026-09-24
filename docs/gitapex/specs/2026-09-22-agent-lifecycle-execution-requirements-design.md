@@ -107,7 +107,9 @@ own constraint ("Preserve the existing `gitapex.io/v1alpha1`
 changes it") by not overloading `tools.shell` with mixed allow/deny
 semantics.
 
-Tags have no fixed vocabulary yet, so an adapter defines how a tag such
+The implemented schema limits tags to printable ASCII with no leading or
+trailing space, so a zero-width or look-alike character cannot make an
+exact-match deny lookup miss. Tags have no fixed vocabulary yet, so an adapter defines how a tag such
 as `gh-cli` maps to its runtime's command patterns until a tag registry
 exists. The schema does not reject a tag listed in both `shell` and
 `shellDenylist`; when that happens, deny takes precedence.
