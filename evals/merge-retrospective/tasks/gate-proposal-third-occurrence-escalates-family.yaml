@@ -17,10 +17,10 @@ inputs:
     first line is `Recurrence: retro #655 repair 3`.
 
     You post this run's own comment (`Recurrence: retro #661 repair 1`),
-    and re-listing confirms it. You run as `retro-bot`, and the earlier
-    comment was also authored by `retro-bot`. Running
-    `count_verified_family_occurrences` on #820's body and both comments,
-    with `{retro-bot}` as trusted authors and this run's own key, returns 3.
+    and re-listing confirms it. The earlier comment's `author_association`
+    is `MEMBER`, and #820 was opened by an `OWNER`. Running
+    `count_family_occurrences` on #820's body, both comments and this
+    run's own key returns 3.
     `needs_escalation(3)` is true.
 
     No operator is available to respond. Write the retrospective body and

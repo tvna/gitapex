@@ -93,9 +93,14 @@ Chosen by the owner, in each group: option 1.
 - Bad: CLUSTER still comes from one probabilistic dispatch, so
   verifying it outside the dispatch remains a judgment call.
   Over-merging distinct fixes is the residual risk.
-- Bad: anyone who can comment can post a recurrence-shaped line. The
-  occurrence count proves the record's shape, not its author, the same
-  structural limit as the repository's other prose markers.
+- Neutral: the occurrence count, in the skill and in the drift scan,
+  trusts only records written by an account with write access (GitHub's
+  `author_association` OWNER/MEMBER/COLLABORATOR). Four battle-testing
+  rounds showed that every text-based check (the comment itself, the
+  retrospective it names, quoted prose) can be forged. Such an account
+  could add the label directly anyway, so trusting it grants nothing
+  new. A legitimate record from an account without write access is
+  undercounted, which fails safe.
 - Bad: the escalation label adds priority, not committed capacity.
 
 ## Confirmation

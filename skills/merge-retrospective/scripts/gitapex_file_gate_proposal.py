@@ -46,7 +46,7 @@ from __future__ import annotations
 
 import datetime as _datetime
 import re as _re
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Iterable, Sequence
 from typing import NamedTuple
 
 # The literal label name every `gate-proposal`-classified issue this
@@ -104,6 +104,15 @@ ESCALATION_THRESHOLD = 3
 # retrospective issue and repair index so a resumed run can tell whether
 # its own record already landed. Parallel copy (and sync test) as above.
 RECURRENCE_LINE_RE = _re.compile(r"^Recurrence: retro #(\d+) repair (\d+)[ \t]*$", _re.MULTILINE)
+
+# The `author_association` values GitHub reports for an account with
+# write access to the repository. Only records written by such an account
+# count toward escalation: anyone with write access could add the label
+# directly anyway, so trusting them adds no power, while text from anyone
+# else -- a comment, an issue body they own -- proves nothing. GitHub sets
+# this field; it cannot be forged from text (issue #2097). Parallel copy
+# (and sync test) as above.
+WRITE_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 
 # Same shape the consolidation scan reads (parallel copy, sync-tested).
 CONSOLIDATES_LINE_RE = _re.compile(r"^Consolidates:[ \t]*(#\d+(?:,[ \t]*#\d+)*)[ \t]*$", _re.MULTILINE)
@@ -367,65 +376,72 @@ def _normalize_newlines(text: str | None) -> str:
     return (text or "").replace("\r\n", "\n").replace("\r", "\n")
 
 
+def _strip_fenced_blocks(text: str) -> str:
+    """Blank every line inside a ``` or ~~~ fenced block, so a record line
+    pasted into a code block as an example (or as quoted attacker text) is
+    never read as a real record."""
+    out: list[str] = []
+    fence = ""
+    for line in text.split("\n"):
+        stripped = line.lstrip(" \t")
+        marker = stripped[:3]
+        if not fence and marker in ("```", "~~~"):
+            fence = marker
+            out.append("")
+            continue
+        if fence:
+            if stripped.startswith(fence):
+                fence = ""
+            out.append("")
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
 def parse_recurrence_keys(comment_bodies: Iterable[str]) -> set[tuple[int, int]]:
     """Return the distinct `(retrospective issue, repair index)` keys the
-    given comments record. A key recorded twice (a resumed run that
-    re-posted) counts once."""
+    given comments record, ignoring any line inside a fenced block. A key
+    recorded twice (a resumed run that re-posted) counts once."""
     keys: set[tuple[int, int]] = set()
     for body in comment_bodies:
-        for match in RECURRENCE_LINE_RE.finditer(_normalize_newlines(body)):
+        for match in RECURRENCE_LINE_RE.finditer(_strip_fenced_blocks(_normalize_newlines(body))):
             keys.add((int(match.group(1)), int(match.group(2))))
     return keys
 
 
-def count_family_occurrences(family_body: str, comment_bodies: Iterable[str]) -> int:
+class RecurrenceComment(NamedTuple):
+    """One comment on a family issue: its body and its `author_association`,
+    exactly as the GitHub API returned them."""
+
+    body: str
+    author_association: str
+
+
+def count_family_occurrences(
+    family_body: str,
+    family_author_association: str,
+    comments: Iterable[RecurrenceComment],
+    own_keys: Iterable[tuple[int, int]] = (),
+) -> int:
     """Return how many repairs one family issue records: 1 for its own
     original filing, plus each distinct `Consolidates:` source, plus each
     distinct recurrence key (issue #2097, owner decision: the original
-    filing counts toward the threshold)."""
-    consolidated: set[int] = set()
-    for line_match in CONSOLIDATES_LINE_RE.finditer(_normalize_newlines(family_body)):
-        consolidated.update(int(ref) for ref in _ISSUE_REF_RE.findall(line_match.group(1)))
-    return 1 + len(consolidated) + len(parse_recurrence_keys(comment_bodies))
+    filing counts toward the threshold).
 
-
-class RecurrenceComment(NamedTuple):
-    """One comment on a family issue: its body and its author login, exactly
-    as the GitHub API returned them."""
-
-    body: str
-    author: str
-
-
-def count_verified_family_occurrences(
-    family_body: str,
-    comments: Iterable[RecurrenceComment],
-    trusted_authors: Collection[str],
-    own_keys: Iterable[tuple[int, int]] = (),
-) -> int:
-    """`count_family_occurrences`, counting a recurrence key only when the
-    comment carrying it was authored by one of `trusted_authors` -- the
-    accounts that run this procedure -- or when it is one of `own_keys`
-    (posted by this run).
-
-    Body text proves nothing: anyone who can comment can post a
-    recurrence-shaped line, open an issue imitating a retrospective, or get
-    a multi-line quote carrying a `Filed as:` line into a real
-    retrospective's prose. A comment's author is recorded by GitHub and
-    cannot be forged from text, so it is the one signal a key is trusted on
-    (issue #2097). An untrusted key adds nothing; a legitimate key posted
-    under an account missing from `trusted_authors` is undercounted, which
-    fails safe (no label) rather than open.
+    Only records a write-access account wrote count (`WRITE_ASSOCIATIONS`):
+    `Consolidates:` sources only when the family issue itself was opened by
+    one (so only write-access accounts can edit that body), and recurrence
+    keys only from comments by one, plus `own_keys` (this run's own post).
+    Everything else is text anyone could have written. An uncounted
+    legitimate record fails safe -- no label -- rather than open.
     """
-    if isinstance(trusted_authors, str):
-        # `"bot" in "retro-bot"` is True: a bare string would turn
-        # membership into substring matching.
-        raise TypeError("trusted_authors must be a collection of logins, not a single string")
-    trusted_bodies = [comment.body for comment in comments if comment.author and comment.author in trusted_authors]
-    keys = parse_recurrence_keys(trusted_bodies) | set(own_keys)
+    keys = parse_recurrence_keys(
+        comment.body for comment in comments if comment.author_association in WRITE_ASSOCIATIONS
+    ) | set(own_keys)
     consolidated: set[int] = set()
-    for line_match in CONSOLIDATES_LINE_RE.finditer(_normalize_newlines(family_body)):
-        consolidated.update(int(ref) for ref in _ISSUE_REF_RE.findall(line_match.group(1)))
+    if family_author_association in WRITE_ASSOCIATIONS:
+        for line_match in CONSOLIDATES_LINE_RE.finditer(_normalize_newlines(family_body)):
+            consolidated.update(int(ref) for ref in _ISSUE_REF_RE.findall(line_match.group(1)))
     return 1 + len(consolidated) + len(keys)
 
 

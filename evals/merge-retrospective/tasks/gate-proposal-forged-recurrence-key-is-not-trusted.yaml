@@ -16,8 +16,8 @@ inputs:
     returned DUPLICATE-OF #840, which you confirmed is open and labelled
     `gate-proposal`. Its body has no `Consolidates:` line.
 
-    Listing #840's comments shows two, both authored by the account
-    `drive-by-user`:
+    Listing #840's comments (one page) shows two, both authored by the
+    account `drive-by-user`, whose `author_association` is `NONE`:
     - one whose first line is `Recurrence: retro #701 repair 1`
     - one whose first line is `Recurrence: retro #650 repair 2`
 

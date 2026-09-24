@@ -628,7 +628,12 @@ def test_normalize_newlines_handles_crlf_and_lone_cr() -> None:
 def test_crlf_consolidates_and_recurrence_lines_still_parse() -> None:
     # GitHub stores web-UI edits with CRLF line endings.
     assert csd.extract_consolidates_issue_numbers("intro\r\nConsolidates: #1, #2\r\nmore") == [1, 2]
-    assert csd.count_family_occurrences("Consolidates: #1\r", ["Recurrence: retro #5 repair 1\r\nbody"]) == 3
+    assert (
+        csd.count_family_occurrences(
+            "Consolidates: #1\r", "OWNER", [("Recurrence: retro #5 repair 1\r\nbody", "OWNER")]
+        )
+        == 3
+    )
 
 
 def test_main_fetches_comments_when_the_count_field_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -636,11 +641,11 @@ def test_main_fetches_comments_when_the_count_field_is_missing(monkeypatch: pyte
     _patch_lists(monkeypatch, [record], [])
     fetched: list[int] = []
 
-    def fake_comments(owner: str, repo: str, number: int, token: str) -> list[str]:
+    def fake_comments(owner: str, repo: str, number: int, token: str) -> list[tuple[str, str]]:
         fetched.append(number)
         return []
 
-    monkeypatch.setattr(csd, "fetch_issue_comment_bodies", fake_comments)
+    monkeypatch.setattr(csd, "fetch_issue_comments", fake_comments)
     assert csd.main(["--owner", "tvna", "--repo", "gitapex"]) == 0
     assert fetched == [400]
 
@@ -649,21 +654,51 @@ def test_find_unlisted_duplicates_flags_umbrella_with_no_consolidates_line() -> 
     assert csd.find_unlisted_duplicates({50}, {}, {7: 50}) == {50: [7]}
 
 
-def _record(number: int, body: str = "", labels: list[str] | None = None, comments: int = 0) -> dict[str, Any]:
-    return {"number": number, "body": body, "labels": [{"name": n} for n in labels or []], "comments": comments}
+def _record(
+    number: int, body: str = "", labels: list[str] | None = None, comments: int = 0, association: str = "OWNER"
+) -> dict[str, Any]:
+    return {
+        "number": number,
+        "body": body,
+        "labels": [{"name": n} for n in labels or []],
+        "comments": comments,
+        "author_association": association,
+    }
+
+
+def _owned(*bodies: str) -> list[tuple[str, str]]:
+    return [(body, "OWNER") for body in bodies]
 
 
 def test_count_family_occurrences_matches_builder_semantics() -> None:
-    comments = ["Recurrence: retro #5 repair 1\n...", "Recurrence: retro #5 repair 1", "Recurrence: retro #6 repair 2"]
-    assert csd.count_family_occurrences("Consolidates: #1, #2", comments) == 1 + 2 + 2
+    comments = _owned(
+        "Recurrence: retro #5 repair 1\n...", "Recurrence: retro #5 repair 1", "Recurrence: retro #6 repair 2"
+    )
+    assert csd.count_family_occurrences("Consolidates: #1, #2", "OWNER", comments) == 1 + 2 + 2
+
+
+@pytest.mark.parametrize("association", ["NONE", "CONTRIBUTOR", ""])
+def test_defeat_records_without_write_access_cannot_turn_the_scan_red(association: str) -> None:
+    # Run-4 finding H: two forged comments, or a Consolidates line in a
+    # body its non-member opener can edit, must not reach the threshold.
+    forged = [("Recurrence: retro #1 repair 1", association), ("Recurrence: retro #2 repair 1", association)]
+    assert csd.count_family_occurrences("Consolidates: #3, #4", association, forged) == 1
+    records = [_record(100, body="Consolidates: #3, #4", association=association)]
+    assert csd.find_missing_escalations(records, {100: forged}) == {}
+
+
+def test_defeat_a_key_inside_a_fenced_block_does_not_count_in_the_scan() -> None:
+    body = "quoting:\n```\nRecurrence: retro #5 repair 1\n```"
+    assert csd.count_family_occurrences("", "OWNER", [(body, "OWNER")]) == 1
+    assert csd._strip_fenced_blocks("a\n~~~\nb\n~~~\nc") == "a\n\n\n\nc"
 
 
 def test_find_missing_escalations_flags_unlabelled_family_at_threshold() -> None:
     records = [_record(100), _record(101, labels=["gate-proposal", "gate-proposal-escalated"]), _record(102)]
     comments = {
-        100: ["Recurrence: retro #1 repair 1", "Recurrence: retro #2 repair 1"],
-        101: ["Recurrence: retro #1 repair 1", "Recurrence: retro #2 repair 1"],
-        102: ["Recurrence: retro #1 repair 1"],
+        100: _owned("Recurrence: retro #1 repair 1", "Recurrence: retro #2 repair 1"),
+        101: _owned("Recurrence: retro #1 repair 1", "Recurrence: retro #2 repair 1"),
+        102: _owned("Recurrence: retro #1 repair 1"),
     }
     assert csd.find_missing_escalations(records, comments) == {100: 3}
 
@@ -683,26 +718,30 @@ def test_format_family_drift_report_names_every_finding() -> None:
     assert report.endswith("FAIL: 2 family-record finding(s).")
 
 
-def test_fetch_issue_comment_bodies_pages_to_exhaustion() -> None:
-    pages = [[{"body": f"c{i}"} for i in range(100)], [{"body": None}, {"body": "last"}]]
+def test_fetch_issue_comments_pages_to_exhaustion() -> None:
+    pages = [
+        [{"body": f"c{i}", "author_association": "NONE"} for i in range(100)],
+        [{"body": None}, {"body": "last", "author_association": "MEMBER"}],
+    ]
     seen: list[str] = []
 
     def opener(request: urllib.request.Request) -> Response:
         seen.append(request.full_url)
         return Response(200, json.dumps(pages[len(seen) - 1]))
 
-    bodies = csd.fetch_issue_comment_bodies("tvna", "gitapex", 1800, "tok", opener=opener, sleeper=lambda _: None)
-    assert len(bodies) == 102
-    assert bodies[-2:] == ["", "last"]
+    comments = csd.fetch_issue_comments("tvna", "gitapex", 1800, "tok", opener=opener, sleeper=lambda _: None)
+    assert len(comments) == 102
+    assert comments[0] == ("c0", "NONE")
+    assert comments[-2:] == [("", ""), ("last", "MEMBER")]
     assert seen[1].endswith("/issues/1800/comments?per_page=100&page=2")
 
 
-def test_fetch_issue_comment_bodies_raises_on_non_object_page() -> None:
+def test_fetch_issue_comments_raises_on_non_object_page() -> None:
     def opener(request: urllib.request.Request) -> Response:
         return Response(200, json.dumps(["not an object"]))
 
     with pytest.raises(csd.GitHubApiError, match="non-list or non-object"):
-        csd.fetch_issue_comment_bodies("tvna", "gitapex", 1, "tok", opener=opener, sleeper=lambda _: None)
+        csd.fetch_issue_comments("tvna", "gitapex", 1, "tok", opener=opener, sleeper=lambda _: None)
 
 
 def _patch_lists(
@@ -737,11 +776,11 @@ def test_main_fails_on_missing_escalation_and_skips_comment_free_issues(
     _patch_lists(monkeypatch, [_record(300, comments=2), _record(301)], [])
     fetched: list[int] = []
 
-    def fake_comments(owner: str, repo: str, number: int, token: str) -> list[str]:
+    def fake_comments(owner: str, repo: str, number: int, token: str) -> list[tuple[str, str]]:
         fetched.append(number)
-        return ["Recurrence: retro #1 repair 1", "Recurrence: retro #2 repair 3"]
+        return _owned("Recurrence: retro #1 repair 1", "Recurrence: retro #2 repair 3")
 
-    monkeypatch.setattr(csd, "fetch_issue_comment_bodies", fake_comments)
+    monkeypatch.setattr(csd, "fetch_issue_comments", fake_comments)
     exit_code = csd.main(["--owner", "tvna", "--repo", "gitapex"])
     assert exit_code == 1
     assert fetched == [300]
@@ -756,7 +795,7 @@ def test_main_passes_when_family_records_are_consistent(monkeypatch: pytest.Monk
     )
     monkeypatch.setattr(
         csd,
-        "fetch_issue_comment_bodies",
-        lambda *a, **k: ["Recurrence: retro #1 repair 1", "Recurrence: retro #2 repair 3"],
+        "fetch_issue_comments",
+        lambda *a, **k: _owned("Recurrence: retro #1 repair 1", "Recurrence: retro #2 repair 3"),
     )
     assert csd.main(["--owner", "tvna", "--repo", "gitapex"]) == 0

@@ -505,34 +505,58 @@ def test_recurrence_comment_rejects_keys_its_parser_cannot_read(retro: object, i
         builder.build_recurrence_comment(retro, index, _row("x"))
 
 
-def _comment(retro: int, index: int, author: str = "retro-bot") -> Any:
-    return builder.RecurrenceComment(body=builder.build_recurrence_comment(retro, index, _row("x")), author=author)
+def _comment(retro: int, index: int, association: str = "OWNER") -> Any:
+    return builder.RecurrenceComment(
+        body=builder.build_recurrence_comment(retro, index, _row("x")), author_association=association
+    )
 
 
-def test_defeat_forged_recurrence_comments_cannot_escalate() -> None:
-    # Issue #2097 battle-test findings: keys posted by any other account --
-    # however their text, the issue they name, or a quote inside a real
-    # retrospective is dressed up -- must not push the count to 3.
-    forged = [_comment(5, 1, "attacker"), _comment(6, 1, "attacker"), _comment(7, 1, "")]
-    count = builder.count_verified_family_occurrences("", forged, {"retro-bot"})
+def test_write_associations_are_the_exact_literals() -> None:
+    assert frozenset({"OWNER", "MEMBER", "COLLABORATOR"}) == builder.WRITE_ASSOCIATIONS
+
+
+@pytest.mark.parametrize(
+    "association", ["NONE", "CONTRIBUTOR", "FIRST_TIME_CONTRIBUTOR", "FIRST_TIMER", "MANNEQUIN", ""]
+)
+def test_defeat_recurrence_keys_from_accounts_without_write_access_do_not_count(association: str) -> None:
+    # Issue #2097 battle-test findings: a key posted by anyone without write
+    # access -- however its text, the issue it names, or a quote inside a
+    # real retrospective is dressed up -- must not push the count to 3.
+    forged = [_comment(5, 1, association), _comment(6, 1, association)]
+    count = builder.count_family_occurrences("", "OWNER", forged)
     assert count == 1
     assert not builder.needs_escalation(count)
 
 
-def test_trusted_and_own_keys_count() -> None:
-    comments = [_comment(5, 1), _comment(5, 1), _comment(6, 2, "attacker"), _comment(7, 2)]
-    count = builder.count_verified_family_occurrences("", comments, {"retro-bot"}, own_keys=[(7, 2)])
+@pytest.mark.parametrize("association", ["NONE", "CONTRIBUTOR", ""])
+def test_defeat_consolidates_line_in_a_body_without_write_access_does_not_count(association: str) -> None:
+    # Run-4 finding G: whoever opened the family issue can edit its body at
+    # will, so its Consolidates line counts only when a write-access
+    # account opened it.
+    assert builder.count_family_occurrences("Consolidates: #1, #2", association, []) == 1
+    assert builder.count_family_occurrences("Consolidates: #1, #2", "MEMBER", []) == 3
+
+
+def test_defeat_a_key_inside_a_fenced_block_does_not_count() -> None:
+    # Run-4 finding C: a write-access account quoting attacker text in a
+    # code block must not relay a key.
+    body = "Someone posted this:\n```\nRecurrence: retro #5 repair 1\n```\n~~~\nRecurrence: retro #6 repair 1\n~~~"
+    assert builder.parse_recurrence_keys([body]) == set()
+    assert builder.parse_recurrence_keys([body + "\nRecurrence: retro #7 repair 1"]) == {(7, 1)}
+
+
+def test_strip_fenced_blocks_blanks_only_fenced_lines() -> None:
+    assert builder._strip_fenced_blocks("a\n```py\nb\n```\nc") == "a\n\n\n\nc"
+    assert builder._strip_fenced_blocks("a\n~~~\nb") == "a\n\n"
+
+
+def test_write_access_and_own_keys_count() -> None:
+    comments = [_comment(5, 1), _comment(5, 1, "MEMBER"), _comment(6, 2, "NONE"), _comment(7, 2, "COLLABORATOR")]
+    count = builder.count_family_occurrences("", "OWNER", comments, own_keys=[(7, 2)])
     assert count == 1 + 2
-    count = builder.count_verified_family_occurrences("Consolidates: #1", comments, {"retro-bot"}, own_keys=[(9, 1)])
+    count = builder.count_family_occurrences("Consolidates: #1", "OWNER", comments, own_keys=[(9, 1)])
     assert count == 1 + 1 + 3
     assert builder.needs_escalation(count)
-
-
-def test_defeat_a_bare_string_of_trusted_authors_is_rejected() -> None:
-    # `"bot" in "retro-bot"` is True: a bare string would turn membership
-    # into substring matching and trust an author named `bot`.
-    with pytest.raises(TypeError, match="trusted_authors"):
-        builder.count_verified_family_occurrences("", [_comment(5, 1, "bot")], "retro-bot")
 
 
 def test_normalize_newlines_handles_crlf_and_lone_cr() -> None:
@@ -540,12 +564,19 @@ def test_normalize_newlines_handles_crlf_and_lone_cr() -> None:
     assert builder._normalize_newlines(None) == ""
 
 
+def _owned(body: str) -> Any:
+    return builder.RecurrenceComment(body=body, author_association="OWNER")
+
+
 def test_crlf_record_lines_still_count() -> None:
     # GitHub stores web-UI edits with CRLF line endings.
     comment = builder.build_recurrence_comment(7, 2, _row("x")).replace("\n", "\r\n")
     assert builder.parse_recurrence_keys([comment]) == {(7, 2)}
-    assert builder.count_family_occurrences("intro\r\nConsolidates: #1, #2\r\nmore", [comment]) == 1 + 2 + 1
-    assert builder.count_family_occurrences("Consolidates: #1\r", []) == 2
+    assert (
+        builder.count_family_occurrences("intro\r\nConsolidates: #1, #2\r\nmore", "OWNER", [_owned(comment)])
+        == 1 + 2 + 1
+    )
+    assert builder.count_family_occurrences("Consolidates: #1\r", "OWNER", []) == 2
 
 
 def test_defeat_free_text_cannot_forge_a_recurrence_key() -> None:
@@ -571,12 +602,12 @@ def test_count_family_occurrences_counts_original_sources_and_distinct_recurrenc
         builder.build_recurrence_comment(20, 1, _row("a")),  # resumed run re-posted
         builder.build_recurrence_comment(21, 4, _row("b")),
     ]
-    assert builder.count_family_occurrences(body, comments) == 1 + 2 + 2
+    assert builder.count_family_occurrences(body, "OWNER", [_owned(c) for c in comments]) == 1 + 2 + 2
 
 
 def test_count_family_occurrences_dedupes_sources_across_consolidates_lines() -> None:
     body = "Consolidates: #10, #11\n\nConsolidates: #11, #12\n"
-    assert builder.count_family_occurrences(body, []) == 1 + 3
+    assert builder.count_family_occurrences(body, "OWNER", []) == 1 + 3
 
 
 def test_escalation_fires_at_two_prior_occurrences_plus_a_new_recurrence() -> None:
@@ -584,16 +615,14 @@ def test_escalation_fires_at_two_prior_occurrences_plus_a_new_recurrence() -> No
     # and one recorded recurrence) + 1 new matching repair = 3.
     prior = builder.build_recurrence_comment(8, 2, _row("prior"))
     new = builder.build_recurrence_comment(9, 1, _row("x"))
-    count = builder.count_family_occurrences("no consolidates line", [prior, new])
+    count = builder.count_family_occurrences("no consolidates line", "OWNER", [_owned(prior), _owned(new)])
     assert count == 3
     assert builder.needs_escalation(count)
 
 
 def test_escalation_does_not_fire_below_threshold() -> None:
     # 1 prior source (the original filing only) + 1 new recurrence.
-    count = builder.count_family_occurrences(
-        "no consolidates line", [builder.build_recurrence_comment(9, 1, _row("x"))]
-    )
+    count = builder.count_family_occurrences("no consolidates line", "OWNER", [_comment(9, 1)])
     assert count == 2
     assert not builder.needs_escalation(count)
     assert builder.needs_escalation(3)

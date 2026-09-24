@@ -25,9 +25,9 @@ Issue #2097 adds two family-record checks over the same label:
 - Escalation consistency: an OPEN gate-proposal issue whose occurrence
   count (1 + `Consolidates:` sources + distinct `Recurrence: retro #R
   repair K` comment keys) reached `ESCALATION_THRESHOLD` must carry
-  `GATE_PROPOSAL_ESCALATED_LABEL`. Disclosed limit: anyone who can
-  comment can post a recurrence-shaped line, so the count proves record
-  shape, not authorship.
+  `GATE_PROPOSAL_ESCALATED_LABEL`. Only records written by an account
+  with write access (`author_association` OWNER/MEMBER/COLLABORATOR)
+  count, so text from anyone else cannot turn this check red.
 
 Primary-source grounding for the GraphQL dependency (issue #1653's own
 research, not re-derived here): GitHub's REST API documents no read-side
@@ -130,6 +130,9 @@ _ISSUE_REF_RE = re.compile(r"#(\d+)")
 GATE_PROPOSAL_ESCALATED_LABEL = "gate-proposal-escalated"
 ESCALATION_THRESHOLD = 3
 RECURRENCE_LINE_RE = re.compile(r"^Recurrence: retro #(\d+) repair (\d+)[ \t]*$", re.MULTILINE)
+# Only records written by an account with write access count (see the
+# skill builder's own comment on this constant).
+WRITE_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 
 _COMMENTS_PER_PAGE = 100
 
@@ -265,21 +268,50 @@ def find_unlisted_duplicates(
     return unlisted
 
 
-def count_family_occurrences(family_body: str, comment_bodies: list[str]) -> int:
+def _strip_fenced_blocks(text: str) -> str:
+    """Blank every line inside a ``` or ~~~ fenced block, so a record line
+    pasted into a code block as an example (or as quoted attacker text) is
+    never read as a real record."""
+    out: list[str] = []
+    fence = ""
+    for line in text.split("\n"):
+        stripped = line.lstrip(" \t")
+        marker = stripped[:3]
+        if not fence and marker in ("```", "~~~"):
+            fence = marker
+            out.append("")
+            continue
+        if fence:
+            if stripped.startswith(fence):
+                fence = ""
+            out.append("")
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def count_family_occurrences(family_body: str, family_author_association: str, comments: list[tuple[str, str]]) -> int:
     """Independent copy of the skill builder's own counter (see
     `RECURRENCE_LINE_RE`'s comment): 1 for the original filing, plus each
-    distinct `Consolidates:` source, plus each distinct recurrence key."""
+    distinct `Consolidates:` source when the family issue was opened by a
+    write-access account, plus each distinct recurrence key from a comment
+    `(body, author_association)` by one. Text from anyone else cannot turn
+    this check red."""
     keys = {
         (int(match.group(1)), int(match.group(2)))
-        for body in comment_bodies
-        for match in RECURRENCE_LINE_RE.finditer(_normalize_newlines(body))
+        for body, association in comments
+        if association in WRITE_ASSOCIATIONS
+        for match in RECURRENCE_LINE_RE.finditer(_strip_fenced_blocks(_normalize_newlines(body)))
     }
-    return 1 + len(extract_consolidates_issue_numbers(family_body)) + len(keys)
+    consolidated = (
+        extract_consolidates_issue_numbers(family_body) if family_author_association in WRITE_ASSOCIATIONS else []
+    )
+    return 1 + len(consolidated) + len(keys)
 
 
 def find_missing_escalations(
     open_records: list[dict[str, Any]],
-    comment_bodies_by_number: dict[int, list[str]],
+    comments_by_number: dict[int, list[tuple[str, str]]],
 ) -> dict[int, int]:
     """Return `{family issue: occurrence count}` for every OPEN
     gate-proposal issue whose count reached `ESCALATION_THRESHOLD` but
@@ -289,7 +321,9 @@ def find_missing_escalations(
     missing: dict[int, int] = {}
     for record in open_records:
         number = record["number"]
-        count = count_family_occurrences(record.get("body") or "", comment_bodies_by_number.get(number, []))
+        count = count_family_occurrences(
+            record.get("body") or "", str(record.get("author_association") or ""), comments_by_number.get(number, [])
+        )
         if count < ESCALATION_THRESHOLD:
             continue
         label_names = {label.get("name") for label in record.get("labels") or [] if isinstance(label, dict)}
@@ -391,19 +425,19 @@ def fetch_issue_duplicate_state(
     raise GitHubApiError(f"GraphQL query for issue #{number} failed: HTTP {_gitapex_github_http.format_code(code)}")
 
 
-def fetch_issue_comment_bodies(
+def fetch_issue_comments(
     owner: str,
     repo: str,
     number: int,
     token: str,
     opener: Callable[[urllib.request.Request], Any] = _gitapex_github_http.default_opener,
     sleeper: Callable[[float], None] | None = None,
-) -> list[str]:
-    """REST-fetch every comment body on issue `number`, paging to
-    exhaustion. Raises `GitHubApiError` on a failed page rather than
-    returning a partial list that would undercount occurrences."""
+) -> list[tuple[str, str]]:
+    """REST-fetch every comment on issue `number` as `(body,
+    author_association)`, paging to exhaustion. Raises `GitHubApiError` on
+    a failed or malformed page rather than returning a partial list."""
     sleeper = sleeper if sleeper is not None else time.sleep
-    bodies: list[str] = []
+    comments: list[tuple[str, str]] = []
     page = 1
     while True:
         url = (
@@ -413,9 +447,9 @@ def fetch_issue_comment_bodies(
         items = _gitapex_github_http.fetch_json_page(url, token, opener, sleeper)
         if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
             raise GitHubApiError(f"comments for issue #{number} returned a non-list or non-object page")
-        bodies.extend(str(item.get("body") or "") for item in items)
+        comments.extend((str(item.get("body") or ""), str(item.get("author_association") or "")) for item in items)
         if len(items) < _COMMENTS_PER_PAGE:
-            return bodies
+            return comments
         page += 1
 
 
@@ -523,8 +557,8 @@ def main(argv: list[str] | None = None) -> int:
 
         # Issue #2097, escalation: only issues with comments can carry a
         # recurrence record, so the rest skip the extra request.
-        comment_bodies_by_number = {
-            record["number"]: fetch_issue_comment_bodies(args.owner, args.repo, record["number"], token)
+        comments_by_number = {
+            record["number"]: fetch_issue_comments(args.owner, args.repo, record["number"], token)
             for record in open_records
             if record.get("comments", 1) != 0
         }
@@ -535,7 +569,7 @@ def main(argv: list[str] | None = None) -> int:
     violations_by_umbrella = find_consolidation_violations(referenced_numbers_by_umbrella, referenced_states)
     open_numbers = {record["number"] for record in open_records}
     unlisted = find_unlisted_duplicates(open_numbers, referenced_numbers_by_umbrella, duplicate_targets)
-    missing_escalations = find_missing_escalations(open_records, comment_bodies_by_number)
+    missing_escalations = find_missing_escalations(open_records, comments_by_number)
     print(format_consolidation_drift_report(violations_by_umbrella, args.label))
     family_report = format_family_drift_report(unlisted, missing_escalations)
     if family_report:
