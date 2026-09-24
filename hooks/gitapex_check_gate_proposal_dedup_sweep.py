@@ -143,7 +143,10 @@ _INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 # at column 0, so stripping indented lines can only deny, never allow.
 _INDENTED_CODE_RE = re.compile(r"^(?:[ ]{4}|\t).*$", re.MULTILINE)
 
-_ACCEPTED_VERDICT_RE = re.compile(r"^(?:NEW|DUPLICATE-OF[ \t]+#\d+)$", re.IGNORECASE)
+# `DUPLICATE-OF` is matched in exactly the shape the skill's own
+# `duplicate_target` reads back, so a filing this hook allows is never a
+# record the skill's escalation count silently drops.
+_ACCEPTED_VERDICT_RE = re.compile(r"^(?:(?i:NEW)|DUPLICATE-OF #[1-9]\d*)$")
 
 _SWEEP_RE = re.compile(
     r"^[ \t]*Dedup-sweep:[ \t]*(\d+)[ \t]+open[ \t]+gate-proposal[ \t]+issues[ \t]+at[ \t]+(\S+)"
@@ -326,7 +329,7 @@ def evaluate(
     if not sweeps:
         return False, (
             "this gate-proposal filing carries no 'Dedup-sweep: <N> open gate-proposal issues at "
-            "<ISO-8601>; verdict NEW' proof line -- run the Step 4b backlog sweep and generate the "
+            "<ISO-8601>; verdict NEW|DUPLICATE-OF #<N>' proof line -- run the Step 4b backlog sweep and generate the "
             "line via skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py, never hand-typed"
         )
     if len(sweeps) > 1:

@@ -40,6 +40,9 @@ text, and any residual risk already noted in its prose (or none).
 As direct `mcp__github__*` tool calls:
 
 - Search for an issue with that **exact** title, never substring.
+  For a `gate-proposal: extend <gate-id>` title, count open issues
+  only: one title serves every future extension of that mechanism, so
+  a closed match is finished work, never this repair's family issue.
 - **No match:** create it with the script's own title, body, and
   label (regenerating the sweep line per create -- reusing one
   filing's line self-denies as stale), then re-fetch to confirm
@@ -98,7 +101,7 @@ stale copy.
 ## A failed or unconfirmed filing blocks that repair's line, not the rest of the cycle -- and blocks closing
 
 If the script cannot compute a value for a repair (a required
-classification field is missing), if the create or comment call itself
+classification field is missing), if the create or close call itself
 fails, or if a write cannot be confirmed by re-fetch (treat an
 unconfirmed write as a failure, the same as an outright one) -- skip
 only that repair's `Filed as:` line and continue with the rest. Never

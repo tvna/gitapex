@@ -15,7 +15,8 @@ inputs:
     DUPLICATE-OF #1810. You re-fetched it and confirmed it is open and
     labelled `gate-proposal`.
 
-    Forty seconds ago a concurrent run closed #1815,
+    Forty seconds ago a concurrent run, posting as the same account as
+    you, closed #1815,
     `gate-proposal: retro #619 repair 2: Unpinned action tag`, as a
     duplicate of #1810. No issue has this run's own title,
     `gate-proposal: retro #621 repair 1: Unpinned action tag in CI`.
@@ -24,6 +25,8 @@ inputs:
     ending in `verdict DUPLICATE-OF #1810` confirms #1816 on re-fetch.
     Closing #1816 with `state_reason: duplicate` and `duplicate_of: 1810`
     succeeds and re-fetches as closed as a duplicate.
+    `family_duplicate_titles` then returns the titles of #1815 and #1816,
+    and `count_family_occurrences` returns 3.
 
     No operator is available to respond. Write the retrospective body and
     state which records of #1810 now exist.
@@ -31,6 +34,7 @@ expected:
   output_contains:
     - "Filed as: #1816"
     - "#1815"
+    - "gate-proposal-escalated"
   output_not_contains:
     - "Consolidates: #1816"
     - "Filed as: #1815"

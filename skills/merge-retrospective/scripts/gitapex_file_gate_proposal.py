@@ -338,7 +338,7 @@ def duplicate_target(body: str) -> int | None:
     can rewrite its body at any time, so only a body this procedure
     wrote, via `build_gate_proposal_acm_body` (whose free-text cells
     cannot start a second sweep line), names a trustworthy target."""
-    matches = list(_DEDUP_SWEEP_LINE_RE.finditer((body or "").replace("\r\n", "\n")))
+    matches = list(_DEDUP_SWEEP_LINE_RE.finditer((body or "").replace("\r\n", "\n").replace("\r", "\n")))
     if len(matches) != 1 or matches[0].group(2) is None:
         return None
     return int(matches[0].group(2))

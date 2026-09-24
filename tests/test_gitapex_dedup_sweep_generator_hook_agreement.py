@@ -61,3 +61,15 @@ def test_full_generated_body_carries_exactly_one_hook_visible_line() -> None:
         dedup_sweep_timestamp="2026-09-05T11:00:00Z",
     )
     assert len(checker.find_sweep_lines(body)) == 1
+
+
+def test_every_hook_accepted_duplicate_line_names_a_target_the_reader_reads() -> None:
+    # Issue #2097: a filing the hook allows must never be a record the
+    # skill's duplicate_target drops, or the skill undercounts escalation.
+    builder = _load_builder()
+    for verdict in ("DUPLICATE-OF #1571", "DUPLICATE-OF #7"):
+        line = f"Dedup-sweep: 3 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict {verdict}"
+        assert checker._ACCEPTED_VERDICT_RE.match(verdict)
+        assert builder.duplicate_target("body\n\n" + line + "\n") == int(verdict.split("#")[1])
+    for verdict in ("duplicate-of #12", "DUPLICATE-OF #0", "DUPLICATE-OF #012", "DUPLICATE-OF\t#12"):
+        assert not checker._ACCEPTED_VERDICT_RE.match(verdict)

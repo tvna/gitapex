@@ -43,4 +43,6 @@ expected:
   output_not_contains:
     - "Filed as: #845"
     - "Filed as: #846"
+    - "gate-proposal-escalated label added"
     - "added the gate-proposal-escalated label"
+    - "applied gate-proposal-escalated"

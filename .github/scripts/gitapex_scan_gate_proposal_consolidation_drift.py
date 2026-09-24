@@ -458,7 +458,11 @@ def main(argv: list[str] | None = None) -> int:
             if record.get("state_reason") != "duplicate":
                 continue
             state = fetch_issue_duplicate_state(args.owner, args.repo, record["number"], token)
-            duplicate_targets[record["number"]] = state.get("duplicate_of_number") if state else None
+            if state is None or not record.get("title"):
+                # Listed a moment ago, now unresolvable or untitled: counting
+                # it as no record would lower an escalation count silently.
+                raise GitHubApiError(f"closed duplicate #{record['number']} could not be resolved for counting")
+            duplicate_targets[record["number"]] = state.get("duplicate_of_number")
     except GitHubApiError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

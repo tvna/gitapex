@@ -686,7 +686,17 @@ def test_main_passes_when_a_closed_duplicate_is_missing_from_consolidates(monkey
     assert csd.main(["--owner", "tvna", "--repo", "gitapex"]) == 0
 
 
-def test_main_treats_an_unresolvable_duplicate_as_no_record(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_fails_loudly_on_an_unresolvable_duplicate(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Dropping it would lower an escalation count silently (dimension 15).
     _patch_lists(monkeypatch, [_record(300)], [_closed(1, "a"), _closed(2, "b")])
     monkeypatch.setattr(csd, "fetch_issue_duplicate_state", lambda *a, **k: None)
-    assert csd.main(["--owner", "tvna", "--repo", "gitapex"]) == 0
+    assert csd.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
+    assert "closed duplicate #1 could not be resolved" in capsys.readouterr().err
+
+
+def test_main_fails_loudly_on_an_untitled_duplicate(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_lists(monkeypatch, [_record(300)], [_closed(1, "")])
+    monkeypatch.setattr(csd, "fetch_issue_duplicate_state", lambda *a, **k: _verified_state(300))
+    assert csd.main(["--owner", "tvna", "--repo", "gitapex"]) == 1

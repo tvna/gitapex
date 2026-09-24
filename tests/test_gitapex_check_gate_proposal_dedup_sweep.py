@@ -187,7 +187,18 @@ def test_a_second_sweep_line_of_any_verdict_is_ambiguous(second_verdict: str) ->
 
 
 @pytest.mark.parametrize(
-    "verdict", ["RECLASSIFY", "DUPLICATE-OF#12", "DUPLICATE-OF #12 extra", "NEW plus trailing text"]
+    "verdict",
+    [
+        "RECLASSIFY",
+        "DUPLICATE-OF#12",
+        "DUPLICATE-OF #12 extra",
+        "NEW plus trailing text",
+        # Shapes the skill's duplicate_target would not read back.
+        "duplicate-of #12",
+        "DUPLICATE-OF #0",
+        "DUPLICATE-OF #012",
+        "DUPLICATE-OF\t#12",
+    ],
 )
 def test_any_other_verdict_text_denies(verdict: str) -> None:
     passed, message = _evaluate(_body(3, verdict=verdict), [_issues(3)])

@@ -42,9 +42,9 @@ filing is confirmed.
   (an ALREADY-SHIPPED verdict), in place of `Filed as:`.
 - `Absorbed by:` names the ssot gate id of the generic mechanism an
   ABSORBED-BY verdict routed this repair to, in inline code. Present
-  only with that verdict, always beside a `Filed as:` line naming the
-  mechanism's `gate-proposal: extend` family issue, where the follow-up
-  row is tracked.
+  only with that verdict, always beside a `Filed as:` line: the
+  mechanism's `gate-proposal: extend` family issue when this repair
+  created it, else the record closed as that issue's duplicate.
 - `Recurrence note:` present only when two or more repairs circle back
   to the same intent or thesis, never by count alone -- same omission
   rule as `Proposed gate`/`Filed as:`. Never a fourth category;

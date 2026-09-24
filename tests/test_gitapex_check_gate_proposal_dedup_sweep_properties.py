@@ -116,7 +116,8 @@ def test_evaluate_accepts_exactly_new_and_duplicate_of(count: int, timestamp: st
         "tvna", "gitapex", "create", ["gate-proposal"], _ACM_PREFIX + _sweep_line(count, timestamp, verdict), ""
     )
     assert passed is False
-    if verdict.startswith("ABSORBED-BY"):
+    # `#0` is no issue number, so the skill could never read it back.
+    if verdict.startswith("ABSORBED-BY") or verdict == "DUPLICATE-OF #0":
         assert "never creates an issue" in message
     else:
         assert "never creates an issue" not in message

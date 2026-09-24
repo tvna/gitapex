@@ -479,6 +479,7 @@ def _duplicate_body(target: int, label: str = "x") -> str:
 def test_duplicate_target_reads_the_generated_sweep_line() -> None:
     assert builder.duplicate_target(_duplicate_body(1571)) == 1571
     assert builder.duplicate_target(_duplicate_body(1571).replace("\n", "\r\n")) == 1571
+    assert builder.duplicate_target(_duplicate_body(1571).replace("\n", "\r")) == 1571
 
 
 def test_duplicate_target_is_none_for_a_new_filing() -> None:
