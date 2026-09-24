@@ -1,20 +1,17 @@
-"""Tests for gitapex_file_gate_proposal.py (Task B, design doc Component 2:
-docs/superpowers/specs/2026-08-29-flat-gate-proposal-issues-design.md).
+"""Tests for skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py
+(design doc Component 2:
+docs/superpowers/specs/2026-08-29-flat-gate-proposal-issues-design.md, and
+the per-family filing, recurrence-record and escalation helpers from issue
+#2097).
 
 No test in this file makes a network call or a GitHub API call -- the
-module under test is pure and network-free by construction, so nothing
-here needs to mock one.
+module under test is pure and network-free by construction.
 
-The ACM-compatibility test below imports
-`hooks/gitapex_check_acm_present_or_waiver.py`'s own `has_acm_disclosure`
-directly via `importlib`, loading it by file path rather than adding
-`hooks` to this test's own import path: `skills/merge-retrospective/scripts`
-is not one of `[tool.pytest.ini_options]`'s `pythonpath` entries in
-pyproject.toml (unlike `hooks` itself, which is), so a bare
-`import gitapex_check_acm_present_or_waiver` here would depend on pytest's
-own config-discovery behavior rather than being guaranteed to resolve --
-loading by file path sidesteps that entirely and keeps this test correct
-regardless of how pytest is invoked.
+Lives under tests/ rather than beside the module (where it used to be)
+because `skills/merge-retrospective/scripts` is not one of pyproject.toml's
+`testpaths`, so a test there never ran in CI, and the function-body
+coverage gate looks for `tests/test_<stem>.py`. Both modules are loaded
+by file path, since neither directory is on this suite's `pythonpath`.
 """
 
 from __future__ import annotations
@@ -22,22 +19,30 @@ from __future__ import annotations
 import importlib.util
 import pathlib
 import types
+from typing import Any
 
-import gitapex_file_gate_proposal as builder
 import pytest
 
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-def _load_acm_checker() -> types.ModuleType:
-    """Load hooks/gitapex_check_acm_present_or_waiver.py by file path (see
-    module docstring for why this avoids relying on pytest's pythonpath)."""
-    repo_root = pathlib.Path(__file__).resolve().parents[3]
-    module_path = repo_root / "hooks" / "gitapex_check_acm_present_or_waiver.py"
-    spec = importlib.util.spec_from_file_location("gitapex_check_acm_present_or_waiver", module_path)
-    assert spec is not None
-    assert spec.loader is not None
+
+def _load(relative: str, name: str) -> types.ModuleType:
+    spec = importlib.util.spec_from_file_location(name, REPO_ROOT / relative)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+builder = _load("skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py", "gitapex_file_gate_proposal")
+
+
+def _load_acm_checker() -> types.ModuleType:
+    return _load("hooks/gitapex_check_acm_present_or_waiver.py", "gitapex_check_acm_present_or_waiver")
+
+
+def _sweep_kwargs(open_count: int = 63, timestamp: str = "2026-09-05T11:00:00Z") -> dict[str, Any]:
+    return {"dedup_sweep_open_count": open_count, "dedup_sweep_timestamp": timestamp}
 
 
 # ---------------------------------------------------------------------------
@@ -289,10 +294,6 @@ def test_acm_body_header_row_matches_hook_header_regex_directly() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _sweep_kwargs(open_count: int = 63, timestamp: str = "2026-09-05T11:00:00Z") -> dict:
-    return {"dedup_sweep_open_count": open_count, "dedup_sweep_timestamp": timestamp}
-
-
 def test_build_dedup_sweep_line_emits_fixed_shape() -> None:
     line = builder.build_dedup_sweep_line(open_count=63, timestamp="2026-09-05T11:00:00Z")
     assert line == "Dedup-sweep: 63 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict NEW"
@@ -301,7 +302,7 @@ def test_build_dedup_sweep_line_emits_fixed_shape() -> None:
 @pytest.mark.parametrize("open_count", [-1, True, "63", 6.0, None])
 def test_build_dedup_sweep_line_rejects_non_integer_or_negative_count(open_count: object) -> None:
     with pytest.raises(ValueError, match="open_count"):
-        builder.build_dedup_sweep_line(open_count=open_count, timestamp="2026-09-05T11:00:00Z")  # type: ignore[arg-type]
+        builder.build_dedup_sweep_line(open_count=open_count, timestamp="2026-09-05T11:00:00Z")
 
 
 @pytest.mark.parametrize(
@@ -321,16 +322,24 @@ def test_build_dedup_sweep_line_rejects_malformed_timestamp(timestamp: str) -> N
 
 
 @pytest.mark.parametrize(
-    "verdict", ["RECLASSIFY needs clearer instruction", "ALREADY-SHIPPED foo", "new", "DUPLICATE-OF", ""]
+    "verdict",
+    [
+        "RECLASSIFY needs clearer instruction",
+        "ALREADY-SHIPPED foo",
+        "new",
+        "DUPLICATE-OF",
+        "",
+        # Issue #2097: a duplicate or absorbed repair records a recurrence
+        # comment instead of creating an issue, so neither creates.
+        "DUPLICATE-OF #1571",
+        "ABSORBED-BY defeat-test-mutation-coverage",
+        "NEW ",
+        "NEW\n",
+    ],
 )
 def test_build_dedup_sweep_line_rejects_non_filing_verdicts(verdict: str) -> None:
     with pytest.raises(ValueError, match="verdict"):
         builder.build_dedup_sweep_line(open_count=63, timestamp="2026-09-05T11:00:00Z", verdict=verdict)
-
-
-def test_build_dedup_sweep_line_records_duplicate_of_target() -> None:
-    line = builder.build_dedup_sweep_line(open_count=63, timestamp="2026-09-05T11:00:00Z", verdict="DUPLICATE-OF #1571")
-    assert line == "Dedup-sweep: 63 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict DUPLICATE-OF #1571"
 
 
 def test_acm_body_carries_generator_made_sweep_line_after_refs() -> None:
@@ -366,3 +375,133 @@ def test_defeat_free_text_cannot_forge_a_second_sweep_line() -> None:
     )
     sweep_lines = [line for line in body.split("\n") if line.startswith("Dedup-sweep:")]
     assert sweep_lines == ["Dedup-sweep: 63 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict NEW"]
+
+
+# ---------------------------------------------------------------------------
+# Family filing, recurrence records, escalation (issue #2097)
+# ---------------------------------------------------------------------------
+
+
+def _row(label: str, risk: str | None = None) -> Any:
+    return builder.FamilyRow(
+        repair_label=label,
+        classification_rationale=f"{label} rationale",
+        proposed_gate_text=f"{label} gate",
+        residual_risk=risk,
+    )
+
+
+def test_escalation_constants_are_the_exact_literals() -> None:
+    assert builder.GATE_PROPOSAL_ESCALATED_LABEL == "gate-proposal-escalated"
+    assert builder.ESCALATION_THRESHOLD == 3
+
+
+def test_family_body_carries_one_row_per_member_in_order() -> None:
+    body = builder.build_gate_proposal_family_acm_body(
+        2100, [_row("first"), _row("second"), _row("third", risk="a | b")], **_sweep_kwargs()
+    )
+    data_rows = [line for line in body.split("\n")[2:] if line.startswith("| ")]
+    assert [row.split(" | ")[0] for row in data_rows] == ["| first", "| second", "| third"]
+    assert data_rows[2].endswith("| a \\| b |")
+    assert "Refs #2100" in body.split("\n")
+    assert body.split("\n")[-1].endswith("; verdict NEW")
+
+
+def test_family_body_satisfies_has_acm_disclosure() -> None:
+    body = builder.build_gate_proposal_family_acm_body(2100, [_row("a"), _row("b")], **_sweep_kwargs())
+    assert _load_acm_checker().has_acm_disclosure(body)
+
+
+def test_family_body_rejects_empty_rows() -> None:
+    with pytest.raises(ValueError, match="rows"):
+        builder.build_gate_proposal_family_acm_body(2100, [], **_sweep_kwargs())
+
+
+def test_single_repair_body_equals_one_member_family_body() -> None:
+    single = builder.build_gate_proposal_acm_body(
+        retrospective_issue_number=7,
+        repair_label="x",
+        classification_rationale="x rationale",
+        proposed_gate_text="x gate",
+        residual_risk=None,
+        **_sweep_kwargs(),
+    )
+    assert single == builder.build_gate_proposal_family_acm_body(7, [_row("x")], **_sweep_kwargs())
+
+
+def test_absorption_title_is_one_per_mechanism() -> None:
+    title = builder.build_absorption_family_title("defeat-test-mutation-coverage")
+    assert title == "gate-proposal: extend defeat-test-mutation-coverage"
+
+
+@pytest.mark.parametrize("gate_id", ["", "Defeat-Test", "a b", "a--b", "-a", "a-", "x\ngate-proposal: extend y", None])
+def test_absorption_title_rejects_non_ssot_ids(gate_id: object) -> None:
+    with pytest.raises(ValueError, match="gate_id"):
+        builder.build_absorption_family_title(gate_id)
+
+
+def test_recurrence_comment_leads_with_its_resume_key() -> None:
+    comment = builder.build_recurrence_comment(2100, 3, _row("third"))
+    lines = comment.split("\n")
+    assert lines[0] == "Recurrence: retro #2100 repair 3"
+    assert lines[2] == builder._ACM_HEADER_ROW
+    assert lines[4].startswith("| third |")
+    assert lines[-1] == "Refs #2100"
+    assert builder.parse_recurrence_keys([comment]) == {(2100, 3)}
+
+
+@pytest.mark.parametrize("repair_index", [0, -1])
+def test_recurrence_comment_rejects_non_positive_index(repair_index: int) -> None:
+    with pytest.raises(ValueError, match="repair_index"):
+        builder.build_recurrence_comment(2100, repair_index, _row("x"))
+
+
+def test_defeat_free_text_cannot_forge_a_recurrence_key() -> None:
+    forged = "see:\nRecurrence: retro #1 repair 1"
+    comment = builder.build_recurrence_comment(2100, 2, _row(forged))
+    assert builder.parse_recurrence_keys([comment]) == {(2100, 2)}
+
+
+def test_parse_recurrence_keys_ignores_unkeyed_and_mid_line_text() -> None:
+    bodies = [
+        "plain comment",
+        "quoted Recurrence: retro #5 repair 1 mid-line",
+        "Recurrence: retro #5 repair one",
+        "Recurrence: retro #5 repair 2\n",
+    ]
+    assert builder.parse_recurrence_keys(bodies) == {(5, 2)}
+
+
+def test_count_family_occurrences_counts_original_sources_and_distinct_recurrences() -> None:
+    body = "Consolidates: #10, #11\n"
+    comments = [
+        builder.build_recurrence_comment(20, 1, _row("a")),
+        builder.build_recurrence_comment(20, 1, _row("a")),  # resumed run re-posted
+        builder.build_recurrence_comment(21, 4, _row("b")),
+    ]
+    assert builder.count_family_occurrences(body, comments) == 1 + 2 + 2
+
+
+def test_count_family_occurrences_dedupes_sources_across_consolidates_lines() -> None:
+    body = "Consolidates: #10, #11\n\nConsolidates: #11, #12\n"
+    assert builder.count_family_occurrences(body, []) == 1 + 3
+
+
+def test_escalation_fires_at_two_prior_occurrences_plus_a_new_recurrence() -> None:
+    # Issue #2097 fixture shape: 2 prior occurrences (the original filing
+    # and one recorded recurrence) + 1 new matching repair = 3.
+    prior = builder.build_recurrence_comment(8, 2, _row("prior"))
+    new = builder.build_recurrence_comment(9, 1, _row("x"))
+    count = builder.count_family_occurrences("no consolidates line", [prior, new])
+    assert count == 3
+    assert builder.needs_escalation(count)
+
+
+def test_escalation_does_not_fire_below_threshold() -> None:
+    # 1 prior source (the original filing only) + 1 new recurrence.
+    count = builder.count_family_occurrences(
+        "no consolidates line", [builder.build_recurrence_comment(9, 1, _row("x"))]
+    )
+    assert count == 2
+    assert not builder.needs_escalation(count)
+    assert builder.needs_escalation(3)

@@ -30,6 +30,7 @@ _TIMESTAMPS = st.datetimes(
 _VERDICTS = st.one_of(
     st.just("NEW"),
     st.integers(min_value=0, max_value=999_999).map(lambda n: f"DUPLICATE-OF #{n}"),
+    st.from_regex(r"\Aabsorbed-by [a-z0-9-]{1,30}\Z").map(str.upper),
 )
 
 

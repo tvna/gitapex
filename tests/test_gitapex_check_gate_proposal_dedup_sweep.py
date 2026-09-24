@@ -158,9 +158,25 @@ def test_crlf_line_endings_still_verify() -> None:
     assert passed is True
 
 
-def test_duplicate_of_verdict_line_allows_on_matching_count() -> None:
-    passed, _ = _evaluate(_body(3, verdict="DUPLICATE-OF #1571"), [_issues(3)])
+@pytest.mark.parametrize("verdict", ["DUPLICATE-OF #1571", "ABSORBED-BY defeat-test-mutation-coverage"])
+def test_non_new_verdict_denies_even_on_matching_count(verdict: str) -> None:
+    # Issue #2097: only NEW creates an issue; duplicates and absorbed
+    # repairs record a recurrence comment instead.
+    passed, message = _evaluate(_body(3, verdict=verdict), [_issues(3)])
+    assert passed is False
+    assert "never creates an issue" in message
+
+
+def test_lowercase_new_verdict_still_allows() -> None:
+    passed, _ = _evaluate(_body(3, verdict="new"), [_issues(3)])
     assert passed is True
+
+
+def test_a_second_non_new_sweep_line_is_ambiguous() -> None:
+    body = _body(3) + "\nDedup-sweep: 3 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict ABSORBED-BY x\n"
+    passed, message = _evaluate(body, [_issues(3)])
+    assert passed is False
+    assert "ambiguous" in message
 
 
 def test_missing_token_denies_fail_closed() -> None:

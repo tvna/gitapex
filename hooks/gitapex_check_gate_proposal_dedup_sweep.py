@@ -18,15 +18,13 @@ generated only by
 re-fetch of the open `gate-proposal` population. Denies when the line is
 absent, ambiguous (two or more), malformed, or stale.
 
-Accepted verdicts are `NEW` and `DUPLICATE-OF #<N>`: a deliberate,
-narrow superset of the issue's literal `verdict NEW` shape. Row 3 of that
-same issue requires a `DUPLICATE-OF` repair to still create its
-standalone issue through the Step 5 flow -- a flow whose body this hook
-already grades -- so a hook accepting only `verdict NEW` would deny
-exactly the concurrent-safe duplicate path the issue mandates. The
-count-match (not the verdict word) is the freshness proof either way;
-which `#<N>` a duplicate names is verified by the calling skill
-(re-fetching #N, per row 2), never by this hook.
+The only accepted verdict is `NEW` (issue #2097). A `DUPLICATE-OF #<N>`
+or `ABSORBED-BY <gate-id>` repair records an append-only recurrence
+comment on the existing family issue instead of creating a standalone
+issue, so a creation carrying either verdict is a stale procedure and is
+denied. Both shapes are still recognized as sweep lines, so a second,
+non-NEW line next to a NEW one trips the ambiguity check rather than
+going unseen. The count-match is the freshness proof.
 
 Scope notes, named rather than left implicit:
 
@@ -143,7 +141,7 @@ _INDENTED_CODE_RE = re.compile(r"^(?:[ ]{4}|\t).*$", re.MULTILINE)
 
 _SWEEP_RE = re.compile(
     r"^[ \t]*Dedup-sweep:[ \t]*(\d+)[ \t]+open[ \t]+gate-proposal[ \t]+issues[ \t]+at[ \t]+(\S+)"
-    r"[ \t]*;[ \t]*verdict[ \t]+(NEW|DUPLICATE-OF[ \t]+#\d+)[ \t]*$",
+    r"[ \t]*;[ \t]*verdict[ \t]+(NEW|DUPLICATE-OF[ \t]+#\d+|ABSORBED-BY[ \t]+\S+)[ \t]*$",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -328,7 +326,12 @@ def evaluate(
     if len(sweeps) > 1:
         return False, f"ambiguous filing: {len(sweeps)} Dedup-sweep lines found, exactly one is required"
 
-    count, timestamp, _verdict = sweeps[0]
+    count, timestamp, verdict = sweeps[0]
+    if verdict.upper() != "NEW":
+        return False, (
+            f"Dedup-sweep verdict {verdict!r} never creates an issue (issue #2097): a DUPLICATE-OF or "
+            "ABSORBED-BY repair records a recurrence comment on the existing family issue instead"
+        )
     try:
         _datetime.datetime.strptime(timestamp, _TIMESTAMP_FORMAT)
     except (ValueError, TypeError):

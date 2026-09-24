@@ -46,6 +46,8 @@ from __future__ import annotations
 
 import datetime as _datetime
 import re as _re
+from collections.abc import Iterable, Sequence
+from typing import NamedTuple
 
 # The literal label name every `gate-proposal`-classified issue this
 # design files carries (Decision 6). Exact-match string -- do not deviate;
@@ -81,11 +83,34 @@ _ACM_DIVIDER_ROW = "|---|---|---|---|---|"
 # (not a bare digit-shape regex, which would accept month 13).
 _DEDUP_SWEEP_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
-# The only verdicts a filed standalone can truthfully carry: a fresh
-# proposal (`NEW`), or a duplicate that still files standalone before
-# closing (issue #1806 row 3) naming its umbrella. `RECLASSIFY` and
-# `ALREADY-SHIPPED` never file, so they have no line shape here.
-_DEDUP_SWEEP_VERDICT_RE = _re.compile(r"^(?:NEW|DUPLICATE-OF #\d+)$")
+# The only verdict a created issue can truthfully carry is `NEW` (issue
+# #2097): a DUPLICATE-OF or ABSORBED-BY repair records a recurrence
+# comment on an existing family issue instead of creating one, and
+# `RECLASSIFY`/`ALREADY-SHIPPED` never file, so none of them has a line
+# shape here.
+_DEDUP_SWEEP_VERDICT_RE = _re.compile(r"^NEW\Z")
+
+# The label a family issue gets once `count_family_occurrences` reaches
+# `ESCALATION_THRESHOLD` (issue #2097). Like `GATE_PROPOSAL_LABEL`, a
+# parallel copy lives in
+# .github/scripts/gitapex_scan_gate_proposal_consolidation_drift.py, kept
+# in sync by tests/test_gitapex_retro_gate_label_sync.py.
+GATE_PROPOSAL_ESCALATED_LABEL = "gate-proposal-escalated"
+ESCALATION_THRESHOLD = 3
+
+# One recurrence record per comment, on its own line, keyed on the
+# retrospective issue and repair index so a resumed run can tell whether
+# its own record already landed. Parallel copy (and sync test) as above.
+RECURRENCE_LINE_RE = _re.compile(r"^Recurrence: retro #(\d+) repair (\d+)[ \t]*$", _re.MULTILINE)
+
+# Same shape the consolidation scan reads (parallel copy, sync-tested).
+CONSOLIDATES_LINE_RE = _re.compile(r"^Consolidates:[ \t]*(#\d+(?:,[ \t]*#\d+)*)[ \t]*$", _re.MULTILINE)
+_ISSUE_REF_RE = _re.compile(r"#(\d+)")
+
+# An ssot gate id, as `.gitapex/ssot.json` spells them (lowercase words
+# joined by hyphens). Anything else is refused rather than interpolated
+# into an exact-match title.
+_GATE_ID_RE = _re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 def build_dedup_sweep_line(open_count: int, timestamp: str, verdict: str = "NEW") -> str:
@@ -94,7 +119,7 @@ def build_dedup_sweep_line(open_count: int, timestamp: str, verdict: str = "NEW"
     `open_count` is the live count of open `gate-proposal` issues observed
     by the sweep; `timestamp` is when the sweep ran, UTC
     `YYYY-MM-DDTHH:MM:SSZ`; `verdict` is the Step 4b verdict this filing
-    records (`NEW` by default). Raises `ValueError` when `open_count` is
+    records, and only `NEW` ever creates an issue. Raises `ValueError` when `open_count` is
     not a non-negative `int` (`bool` excluded explicitly --
     `isinstance(True, int)` is `True`, and a boolean count is the same
     contract violation `build_gate_proposal_title`'s own 1-based-index
@@ -114,7 +139,7 @@ def build_dedup_sweep_line(open_count: int, timestamp: str, verdict: str = "NEW"
     except ValueError:
         raise ValueError(f"timestamp must be ISO-8601 UTC YYYY-MM-DDTHH:MM:SSZ, got {timestamp!r}") from None
     if not isinstance(verdict, str) or not _DEDUP_SWEEP_VERDICT_RE.match(verdict):
-        raise ValueError(f"verdict must be NEW or DUPLICATE-OF #<N>, got {verdict!r}")
+        raise ValueError(f"verdict must be NEW, got {verdict!r}")
     return f"Dedup-sweep: {open_count} open gate-proposal issues at {timestamp}; verdict {verdict}"
 
 
@@ -177,20 +202,23 @@ def _sanitize_cell(value: str) -> str:
     return collapsed.replace("\\", "\\\\").replace("|", "\\|").strip()
 
 
-def build_gate_proposal_acm_body(
-    retrospective_issue_number: int,
-    repair_label: str,
-    classification_rationale: str,
-    proposed_gate_text: str,
-    residual_risk: str | None,
-    *,
-    dedup_sweep_open_count: int,
-    dedup_sweep_timestamp: str,
-    dedup_sweep_verdict: str = "NEW",
-) -> str:
-    """Return the fully-populated Acceptance Criteria Map body for one
-    `missing-deterministic-gate` repair (Decision 4), mapped directly from
-    fields the repair's own classification pass already produced:
+class FamilyRow(NamedTuple):
+    """One repair's own fields, as its classification pass produced them.
+    A family issue carries one ACM row per member repair (issue #2097), so
+    a cluster never collapses two repairs into one summary row.
+
+    A `NamedTuple`, not a dataclass: sibling tests load this module by
+    file path without registering it in `sys.modules`, which `@dataclass`
+    needs and `NamedTuple` does not."""
+
+    repair_label: str
+    classification_rationale: str
+    proposed_gate_text: str
+    residual_risk: str | None
+
+
+def _acm_data_row(row: FamilyRow) -> str:
+    """Map one repair onto the Decision 4 columns:
 
     - Criterion      = `repair_label` (the repair's own one-line label)
     - Interpretation = `classification_rationale`
@@ -200,6 +228,27 @@ def build_gate_proposal_acm_body(
     - Residual risk  = `residual_risk`, or `_RESIDUAL_RISK_NONE_IDENTIFIED`
       when the repair's own text named none (empty, `None`, or
       whitespace-only)
+    """
+    stripped_risk = (row.residual_risk or "").strip()
+    residual_risk_text = stripped_risk if stripped_risk else _RESIDUAL_RISK_NONE_IDENTIFIED
+    criterion_cell = _sanitize_cell(row.repair_label)
+    interpretation_cell = _sanitize_cell(row.classification_rationale)
+    planned_ops_cell = _sanitize_cell(row.proposed_gate_text)
+    residual_risk_cell = _sanitize_cell(residual_risk_text)
+    return f"| {criterion_cell} | {interpretation_cell} | {planned_ops_cell} | {_PROOF_METHOD} | {residual_risk_cell} |"
+
+
+def build_gate_proposal_family_acm_body(
+    retrospective_issue_number: int,
+    rows: Sequence[FamilyRow],
+    *,
+    dedup_sweep_open_count: int,
+    dedup_sweep_timestamp: str,
+    dedup_sweep_verdict: str = "NEW",
+) -> str:
+    """Return the Acceptance Criteria Map body for one family issue: every
+    member repair of a verified CLUSTER (or a lone NEW repair) gets its
+    own row, in the order given (issue #2097, row 1).
 
     The produced body carries a real ACM table, not a `tracking` waiver:
     per Decision 4, a filed issue is genuine, actionable future work, so
@@ -211,23 +260,17 @@ def build_gate_proposal_acm_body(
     `has_acm_disclosure` directly and asserts it passes on this
     function's own output). A trailing `Refs #<retrospective-issue-number>`
     line supplies the back-link Decision 1/Architecture require.
+
+    Raises `ValueError` on an empty `rows`: a family issue with no member
+    repair has nothing to propose.
     """
-    # function-body-test-coverage: WAIVED: covered by tests/test_gitapex_dedup_sweep_generator_hook_agreement.py
-    # (same diff, commit 422cdfe) via builder.build_gate_proposal_acm_body -- a differently-named integration
-    # test file this gate's own tests/test_{stem}.py naming convention does not scan.
-    stripped_risk = (residual_risk or "").strip()
-    residual_risk_text = stripped_risk if stripped_risk else _RESIDUAL_RISK_NONE_IDENTIFIED
-    criterion_cell = _sanitize_cell(repair_label)
-    interpretation_cell = _sanitize_cell(classification_rationale)
-    planned_ops_cell = _sanitize_cell(proposed_gate_text)
-    residual_risk_cell = _sanitize_cell(residual_risk_text)
-    data_row = (
-        f"| {criterion_cell} | {interpretation_cell} | {planned_ops_cell} | {_PROOF_METHOD} | {residual_risk_cell} |"
-    )
+    if not rows:
+        raise ValueError("rows must name at least one member repair")
     # The sweep line trails the body (never interleaved with the table) so
-    # rows 0-2 keep fixed positions for existing readers. Free-text fields
-    # cannot forge one: `_sanitize_cell` collapses their newlines to
-    # spaces, so no second `Dedup-sweep:` line can ever start inside them.
+    # the header and first data row keep fixed positions for existing
+    # readers. Free-text fields cannot forge one: `_sanitize_cell`
+    # collapses their newlines to spaces, so no second `Dedup-sweep:` line
+    # can ever start inside them.
     sweep_line = build_dedup_sweep_line(
         open_count=dedup_sweep_open_count, timestamp=dedup_sweep_timestamp, verdict=dedup_sweep_verdict
     )
@@ -235,10 +278,105 @@ def build_gate_proposal_acm_body(
         [
             _ACM_HEADER_ROW,
             _ACM_DIVIDER_ROW,
-            data_row,
+            *(_acm_data_row(row) for row in rows),
             "",
             f"Refs #{retrospective_issue_number}",
             "",
             sweep_line,
         ]
     )
+
+
+def build_gate_proposal_acm_body(
+    retrospective_issue_number: int,
+    repair_label: str,
+    classification_rationale: str,
+    proposed_gate_text: str,
+    residual_risk: str | None,
+    *,
+    dedup_sweep_open_count: int,
+    dedup_sweep_timestamp: str,
+    dedup_sweep_verdict: str = "NEW",
+) -> str:
+    """Return the Acceptance Criteria Map body for a single-member family
+    -- `build_gate_proposal_family_acm_body` with exactly one row."""
+    # function-body-test-coverage: WAIVED: covered by tests/test_gitapex_dedup_sweep_generator_hook_agreement.py
+    # (same diff, commit 422cdfe) via builder.build_gate_proposal_acm_body -- a differently-named integration
+    # test file this gate's own tests/test_{stem}.py naming convention does not scan.
+    return build_gate_proposal_family_acm_body(
+        retrospective_issue_number,
+        [FamilyRow(repair_label, classification_rationale, proposed_gate_text, residual_risk)],
+        dedup_sweep_open_count=dedup_sweep_open_count,
+        dedup_sweep_timestamp=dedup_sweep_timestamp,
+        dedup_sweep_verdict=dedup_sweep_verdict,
+    )
+
+
+def build_absorption_family_title(gate_id: str) -> str:
+    """Return the exact title of the one family issue that collects
+    follow-up rows for a generic mechanism (ABSORBED-BY, issue #2097).
+
+    One title per mechanism, so the exact-title search finds the same
+    issue on every run and absorbed repairs never multiply issues. Raises
+    `ValueError` when `gate_id` is not an ssot-shaped id.
+    """
+    if not isinstance(gate_id, str) or not _GATE_ID_RE.match(gate_id):
+        raise ValueError(f"gate_id must be an ssot gate id (lowercase, hyphen-joined), got {gate_id!r}")
+    return f"gate-proposal: extend {gate_id}"
+
+
+def build_recurrence_comment(
+    retrospective_issue_number: int,
+    repair_index: int,
+    row: FamilyRow,
+) -> str:
+    """Return the comment body that records one repair on an existing
+    family issue (DUPLICATE-OF #N or ABSORBED-BY, issue #2097).
+
+    A comment is append-only, so two concurrent retrospective runs each
+    add their own record and neither can overwrite the other -- the
+    guarantee issue #1806 gave the old create-then-close standalone
+    issue. The first line is the resume key `parse_recurrence_keys`
+    reads; the repair's own ACM row follows verbatim.
+    """
+    if repair_index < 1:
+        raise ValueError(f"repair_index must be a 1-based positive integer, got {repair_index!r}")
+    return "\n".join(
+        [
+            f"Recurrence: retro #{retrospective_issue_number} repair {repair_index}",
+            "",
+            _ACM_HEADER_ROW,
+            _ACM_DIVIDER_ROW,
+            _acm_data_row(row),
+            "",
+            f"Refs #{retrospective_issue_number}",
+        ]
+    )
+
+
+def parse_recurrence_keys(comment_bodies: Iterable[str]) -> set[tuple[int, int]]:
+    """Return the distinct `(retrospective issue, repair index)` keys the
+    given comments record. A key recorded twice (a resumed run that
+    re-posted) counts once."""
+    keys: set[tuple[int, int]] = set()
+    for body in comment_bodies:
+        for match in RECURRENCE_LINE_RE.finditer(body or ""):
+            keys.add((int(match.group(1)), int(match.group(2))))
+    return keys
+
+
+def count_family_occurrences(family_body: str, comment_bodies: Iterable[str]) -> int:
+    """Return how many repairs one family issue records: 1 for its own
+    original filing, plus each distinct `Consolidates:` source, plus each
+    distinct recurrence key (issue #2097, owner decision: the original
+    filing counts toward the threshold)."""
+    consolidated: set[int] = set()
+    for line_match in CONSOLIDATES_LINE_RE.finditer(family_body or ""):
+        consolidated.update(int(ref) for ref in _ISSUE_REF_RE.findall(line_match.group(1)))
+    return 1 + len(consolidated) + len(parse_recurrence_keys(comment_bodies))
+
+
+def needs_escalation(occurrence_count: int) -> bool:
+    """True once a family has recurred often enough to be the next work
+    item rather than one more recorded recurrence."""
+    return occurrence_count >= ESCALATION_THRESHOLD

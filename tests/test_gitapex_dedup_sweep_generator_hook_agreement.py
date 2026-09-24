@@ -42,13 +42,6 @@ def test_generator_new_line_is_accepted_by_hook_parser() -> None:
     assert found == [(63, "2026-09-05T11:00:00Z", "NEW")]
 
 
-def test_generator_duplicate_of_line_is_accepted_by_hook_parser() -> None:
-    builder = _load_builder()
-    line = builder.build_dedup_sweep_line(open_count=63, timestamp="2026-09-05T11:00:00Z", verdict="DUPLICATE-OF #1571")
-    found = checker.find_sweep_lines("body\n\n" + line + "\n")
-    assert found == [(63, "2026-09-05T11:00:00Z", "DUPLICATE-OF #1571")]
-
-
 def test_full_generated_body_carries_exactly_one_hook_visible_line() -> None:
     builder = _load_builder()
     body = builder.build_gate_proposal_acm_body(
