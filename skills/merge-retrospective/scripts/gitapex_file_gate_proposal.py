@@ -333,11 +333,11 @@ def duplicate_target(body: str) -> int | None:
     """Return #N when `body` carries exactly one generator-made
     `Dedup-sweep: ...; verdict DUPLICATE-OF #N` line, else `None`.
 
-    Only meaningful for an issue that also carries `GATE_PROPOSAL_LABEL`:
-    GitHub drops label changes from anyone without push access, so a
-    labelled issue was filed by this procedure (or someone with push
-    access), and its body was built by `build_gate_proposal_acm_body`,
-    whose free-text cells cannot start a second sweep line."""
+    Only meaningful for an issue that carries `GATE_PROPOSAL_LABEL` and
+    was opened by the account this procedure posts as: an issue's author
+    can rewrite its body at any time, so only a body this procedure
+    wrote, via `build_gate_proposal_acm_body` (whose free-text cells
+    cannot start a second sweep line), names a trustworthy target."""
     matches = list(_DEDUP_SWEEP_LINE_RE.finditer((body or "").replace("\r\n", "\n")))
     if len(matches) != 1 or matches[0].group(2) is None:
         return None

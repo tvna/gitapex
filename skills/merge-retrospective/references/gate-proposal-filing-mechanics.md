@@ -63,13 +63,16 @@ is closed as a duplicate before recording it as filed. Each record is
 its own issue, so concurrent runs never write the same object.
 
 Then apply 4b.3's escalation rule. List closed issues labelled
-`GATE_PROPOSAL_LABEL`, every page, and keep those whose body's
+`GATE_PROPOSAL_LABEL`, every page, and keep those opened by the account
+this run posts as (`mcp__github__get_me`) whose body's
 `duplicate_target` is N; re-fetch each kept issue and drop any whose
 `state_reason` is not `duplicate`. Pass the kept titles to
 `count_family_occurrences`. Only push- or triage-gated state counts: the
 label (GitHub drops label changes from anyone without push access), the
 duplicate closure, and the generator-made sweep line of an issue this
-procedure filed. No comment or body text anyone else writes is read. A
+procedure filed. An issue's author can edit its body at any time, so a
+body counts only when this procedure's own account wrote it; no comment
+or body text anyone else writes is read. A
 legacy source closed before this procedure (no sweep line) is not
 counted here; the consolidation scan, which reads GraphQL
 `duplicateOf`, still counts it. If `needs_escalation` holds and the

@@ -104,7 +104,8 @@ groups.
 - Neutral: the occurrence count reads only push- or triage-gated state:
   the `gate-proposal` label (GitHub drops label changes from anyone
   without push access), the duplicate closure, and the generator-made
-  sweep line of an issue this procedure filed. Five battle-testing
+  sweep line of an issue this procedure's own account filed (an
+  issue's author can edit its body at any time). Six battle-testing
   rounds forged every text-based record tried first (a recurrence
   comment, the retrospective it names, quoted prose, a `Consolidates:`
   line in an editable body). The skill reads the target from the sweep
