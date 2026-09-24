@@ -32,6 +32,16 @@ Resolves the issue's "Unknown, pending design" cells:
    gets the `gate-proposal-escalated` label. `ranking-the-open-queue`'s
    rubric reads that label.
 4. ADR 0006 records the decision.
+5. Revision after five failed battle-testing rounds (owner choice "case
+   E"): decision 1 is replaced. A recurrence is a standalone
+   `gate-proposal` issue, titled by the title builder, whose sweep line
+   reads `verdict DUPLICATE-OF #N`, closed with `state_reason: duplicate`
+   and `duplicate_of: N`. Decision 3's count becomes 1 + distinct titles
+   of closed gate-proposal duplicates of the family issue. The
+   reverse-direction scan check is dropped: the duplicate relation is
+   itself the record, so no `Consolidates:` append is owed. Live proof
+   that the MCP `duplicate_of` field marks the relation is a completion
+   condition. The ACM rows below read with this revision applied.
 
 ## Acceptance Criteria Map
 

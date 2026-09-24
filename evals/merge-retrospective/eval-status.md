@@ -26,14 +26,14 @@ mere presence in an externally-editable issue body as proof of a
 completed filing -- `battle-testing-a-skill`'s dimension 13 finding,
 fixed in the same PR that found it). Issue #2097 added 12 more
 not-yet-split-assigned `gate-proposal-*` fixtures for per-family filing:
-a verified cluster files one family issue; a duplicate posts a
-recurrence comment instead of creating and closing an issue; concurrent
-runs keep both records; an ABSORBED-BY repair lands on its mechanism's
+a verified cluster files one family issue; a duplicate files a
+standalone record closed as the family's duplicate; concurrent runs
+keep both records; an ABSORBED-BY repair lands on its mechanism's
 `extend` issue; an ABSORBED-BY id that is undeclared, deprecated or missing from the
 registry falls back to NEW; a third
 occurrence escalates; a second does not; a closed DUPLICATE-OF target
-falls back to NEW; a CLUSTER naming two different fixes is split; a
-recurrence key posted by another account is not trusted. That brings
+falls back to NEW; a CLUSTER naming two different fixes is split; text
+imitating a duplicate record is not counted. That brings
 the not-yet-split set to 18. The former Step 0 carry-forward check (added to
 `SKILL.md`, Refs #108) had committed eval coverage from two of the 20
 split fixtures (`carried-forward-gate-unimplemented-train.yaml`,

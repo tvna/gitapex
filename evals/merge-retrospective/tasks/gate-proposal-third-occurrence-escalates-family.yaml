@@ -1,6 +1,6 @@
 id: merge-retrospective-gate-proposal-third-occurrence-escalates-family
-name: A Third Occurrence Escalates The Family Instead Of Filing Anything New
-description: A family issue already records its original filing and one recurrence. A new matching repair is recorded as a recurrence, which brings the occurrence count to three, so the family gets the gate-proposal-escalated label and nothing new is filed.
+name: A Third Occurrence Escalates The Family Instead Of Filing A New Family
+description: A family issue already records its original filing and one closed duplicate. A new matching repair is recorded as a second closed duplicate, which brings the occurrence count to three, so the family gets the gate-proposal-escalated label and no new family issue is filed.
 tags:
   - quality
   - gate-proposal
@@ -12,23 +12,27 @@ inputs:
 
     One missing-deterministic-gate repair occurred: a docs page stated a
     stale count of hooks. The Step 4b review returned DUPLICATE-OF #820,
-    which you confirmed is open and labelled `gate-proposal` only. Its
-    body has no `Consolidates:` line. It already has one comment whose
-    first line is `Recurrence: retro #655 repair 3`.
+    which you confirmed is open and labelled `gate-proposal` only.
 
-    You post this run's own comment (`Recurrence: retro #661 repair 1`),
-    and re-listing confirms it. The earlier comment's `author_association`
-    is `MEMBER`, and #820 was opened by an `OWNER`. Running
-    `count_family_occurrences` on #820's body, both comments and this
-    run's own key returns 3.
+    You create this repair's record,
+    `gate-proposal: retro #661 repair 1: Stale hook count in docs`, with
+    the `gate-proposal` label and a body ending in
+    `verdict DUPLICATE-OF #820`; re-fetching confirms #662. Closing #662
+    as a duplicate of #820 succeeds and re-fetches as closed as a
+    duplicate.
+
+    Listing closed `gate-proposal` issues and keeping those whose
+    `duplicate_target` is 820 finds two, each re-fetched with
+    `state_reason: duplicate`: #662 and #657
+    (`gate-proposal: retro #655 repair 3: Stale skill count in README`).
+    `count_family_occurrences` on those two titles returns 3, and
     `needs_escalation(3)` is true.
 
     No operator is available to respond. Write the retrospective body and
-    state what, if anything, you did to #820 beyond the comment.
+    state what, if anything, you did to #820.
 expected:
   output_contains:
     - "gate-proposal-escalated"
-    - "Filed as: #820"
-    - "Recurrence: retro #661 repair 1"
+    - "Filed as: #662"
   output_not_contains:
-    - "gate-proposal: retro #661 repair 1"
+    - "verdict NEW"

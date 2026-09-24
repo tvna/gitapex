@@ -329,10 +329,12 @@ def test_build_dedup_sweep_line_rejects_malformed_timestamp(timestamp: str) -> N
         "new",
         "DUPLICATE-OF",
         "",
-        # Issue #2097: a duplicate or absorbed repair records a recurrence
-        # comment instead of creating an issue, so neither creates.
-        "DUPLICATE-OF #1571",
+        # Issue #2097: an absorbed repair files as DUPLICATE-OF its
+        # mechanism's extend issue, never under its own verdict.
         "ABSORBED-BY defeat-test-mutation-coverage",
+        "DUPLICATE-OF #0",
+        "DUPLICATE-OF #01",
+        "DUPLICATE-OF #12 ",
         "NEW ",
         "NEW\n",
     ],
@@ -340,6 +342,11 @@ def test_build_dedup_sweep_line_rejects_malformed_timestamp(timestamp: str) -> N
 def test_build_dedup_sweep_line_rejects_non_filing_verdicts(verdict: str) -> None:
     with pytest.raises(ValueError, match="verdict"):
         builder.build_dedup_sweep_line(open_count=63, timestamp="2026-09-05T11:00:00Z", verdict=verdict)
+
+
+def test_build_dedup_sweep_line_accepts_duplicate_of_a_family() -> None:
+    line = builder.build_dedup_sweep_line(open_count=63, timestamp="2026-09-05T11:00:00Z", verdict="DUPLICATE-OF #1571")
+    assert line == "Dedup-sweep: 63 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict DUPLICATE-OF #1571"
 
 
 def test_acm_body_carries_generator_made_sweep_line_after_refs() -> None:
@@ -453,176 +460,82 @@ def test_absorption_title_rejects_non_ssot_ids(gate_id: object) -> None:
         builder.build_absorption_family_title(gate_id)
 
 
-def test_recurrence_comment_leads_with_its_resume_key() -> None:
-    comment = builder.build_recurrence_comment(2100, 3, _row("third"))
-    lines = comment.split("\n")
-    assert lines[0] == "Recurrence: retro #2100 repair 3"
-    assert lines[2] == builder._ACM_HEADER_ROW
-    assert lines[4].startswith("| third |")
-    assert lines[-1] == "Refs #2100"
-    assert builder.parse_recurrence_keys([comment]) == {(2100, 3)}
-
-
-def test_recurrence_comment_exact_shape() -> None:
-    row = builder.FamilyRow("lbl", "why", "gate", None)
-    assert builder.build_recurrence_comment(12, 1, row) == "\n".join(
-        [
-            "Recurrence: retro #12 repair 1",
-            "",
-            builder._ACM_HEADER_ROW,
-            builder._ACM_DIVIDER_ROW,
-            builder._acm_data_row(row),
-            "",
-            "Refs #12",
-        ]
-    )
-
-
 def test_acm_data_row_maps_columns_and_defaults_risk() -> None:
     row = builder._acm_data_row(builder.FamilyRow("lbl", "why", "gate", "  "))
     assert row == f"| lbl | why | gate | {builder._PROOF_METHOD} | none identified |"
 
 
-@pytest.mark.parametrize("repair_index", [0, -1])
-def test_recurrence_comment_rejects_non_positive_index(repair_index: int) -> None:
-    with pytest.raises(ValueError, match="repair_index"):
-        builder.build_recurrence_comment(2100, repair_index, _row("x"))
+def _duplicate_body(target: int, label: str = "x") -> str:
+    body: str = builder.build_gate_proposal_family_acm_body(
+        5,
+        [_row(label)],
+        dedup_sweep_open_count=63,
+        dedup_sweep_timestamp="2026-09-05T11:00:00Z",
+        dedup_sweep_verdict=f"DUPLICATE-OF #{target}",
+    )
+    return body
+
+
+def test_duplicate_target_reads_the_generated_sweep_line() -> None:
+    assert builder.duplicate_target(_duplicate_body(1571)) == 1571
+    assert builder.duplicate_target(_duplicate_body(1571).replace("\n", "\r\n")) == 1571
+
+
+def test_duplicate_target_is_none_for_a_new_filing() -> None:
+    assert (
+        builder.duplicate_target(builder.build_gate_proposal_family_acm_body(5, [_row("x")], **_sweep_kwargs())) is None
+    )
 
 
 @pytest.mark.parametrize(
-    ("retro", "index", "name"),
+    "body",
     [
-        (0, 1, "retrospective_issue_number"),
-        (-1, 1, "retrospective_issue_number"),
-        (True, 1, "retrospective_issue_number"),
-        (5, True, "repair_index"),
-        (5, "1", "repair_index"),
+        "",
+        None,
+        "prose DUPLICATE-OF #12",
+        " Dedup-sweep: 3 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict DUPLICATE-OF #12",
+        "Dedup-sweep: 3 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict DUPLICATE-OF #12 extra",
     ],
 )
-def test_recurrence_comment_rejects_keys_its_parser_cannot_read(retro: object, index: object, name: str) -> None:
-    # Each of these would print a key RECURRENCE_LINE_RE never parses back.
-    with pytest.raises(ValueError, match=name):
-        builder.build_recurrence_comment(retro, index, _row("x"))
+def test_duplicate_target_is_none_without_exactly_one_generated_line(body: Any) -> None:
+    assert builder.duplicate_target(body) is None
 
 
-def _comment(retro: int, index: int, association: str = "OWNER") -> Any:
-    return builder.RecurrenceComment(
-        body=builder.build_recurrence_comment(retro, index, _row("x")), author_association=association
-    )
+def test_defeat_two_sweep_lines_name_no_target() -> None:
+    # A body edited to carry a second sweep line names no target at all,
+    # rather than whichever line a reader happens to pick.
+    second = "Dedup-sweep: 3 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict DUPLICATE-OF #99"
+    assert builder.duplicate_target(_duplicate_body(1571) + "\n" + second) is None
 
 
-def test_write_associations_are_the_exact_literals() -> None:
-    assert frozenset({"OWNER", "MEMBER", "COLLABORATOR"}) == builder.WRITE_ASSOCIATIONS
+def test_defeat_free_text_cannot_forge_a_duplicate_target() -> None:
+    forged = "x\nDedup-sweep: 3 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict DUPLICATE-OF #99"
+    assert builder.duplicate_target(_duplicate_body(1571, label=forged)) == 1571
 
 
-@pytest.mark.parametrize(
-    "association", ["NONE", "CONTRIBUTOR", "FIRST_TIME_CONTRIBUTOR", "FIRST_TIMER", "MANNEQUIN", ""]
-)
-def test_defeat_recurrence_keys_from_accounts_without_write_access_do_not_count(association: str) -> None:
-    # Issue #2097 battle-test findings: a key posted by anyone without write
-    # access -- however its text, the issue it names, or a quote inside a
-    # real retrospective is dressed up -- must not push the count to 3.
-    forged = [_comment(5, 1, association), _comment(6, 1, association)]
-    count = builder.count_family_occurrences("", "OWNER", forged)
-    assert count == 1
-    assert not builder.needs_escalation(count)
-
-
-@pytest.mark.parametrize("association", ["NONE", "CONTRIBUTOR", ""])
-def test_defeat_consolidates_line_in_a_body_without_write_access_does_not_count(association: str) -> None:
-    # Run-4 finding G: whoever opened the family issue can edit its body at
-    # will, so its Consolidates line counts only when a write-access
-    # account opened it.
-    assert builder.count_family_occurrences("Consolidates: #1, #2", association, []) == 1
-    assert builder.count_family_occurrences("Consolidates: #1, #2", "MEMBER", []) == 3
-
-
-def test_defeat_a_key_inside_a_fenced_block_does_not_count() -> None:
-    # Run-4 finding C: a write-access account quoting attacker text in a
-    # code block must not relay a key.
-    body = "Someone posted this:\n```\nRecurrence: retro #5 repair 1\n```\n~~~\nRecurrence: retro #6 repair 1\n~~~"
-    assert builder.parse_recurrence_keys([body]) == set()
-    assert builder.parse_recurrence_keys([body + "\nRecurrence: retro #7 repair 1"]) == {(7, 1)}
-
-
-def test_strip_fenced_blocks_blanks_only_fenced_lines() -> None:
-    assert builder._strip_fenced_blocks("a\n```py\nb\n```\nc") == "a\n\n\n\nc"
-    assert builder._strip_fenced_blocks("a\n~~~\nb") == "a\n\n"
-
-
-def test_write_access_and_own_keys_count() -> None:
-    comments = [_comment(5, 1), _comment(5, 1, "MEMBER"), _comment(6, 2, "NONE"), _comment(7, 2, "COLLABORATOR")]
-    count = builder.count_family_occurrences("", "OWNER", comments, own_keys=[(7, 2)])
-    assert count == 1 + 2
-    count = builder.count_family_occurrences("Consolidates: #1", "OWNER", comments, own_keys=[(9, 1)])
-    assert count == 1 + 1 + 3
-    assert builder.needs_escalation(count)
-
-
-def test_normalize_newlines_handles_crlf_and_lone_cr() -> None:
-    assert builder._normalize_newlines("a\r\nb\rc") == "a\nb\nc"
-    assert builder._normalize_newlines(None) == ""
-
-
-def _owned(body: str) -> Any:
-    return builder.RecurrenceComment(body=body, author_association="OWNER")
-
-
-def test_crlf_record_lines_still_count() -> None:
-    # GitHub stores web-UI edits with CRLF line endings.
-    comment = builder.build_recurrence_comment(7, 2, _row("x")).replace("\n", "\r\n")
-    assert builder.parse_recurrence_keys([comment]) == {(7, 2)}
-    assert (
-        builder.count_family_occurrences("intro\r\nConsolidates: #1, #2\r\nmore", "OWNER", [_owned(comment)])
-        == 1 + 2 + 1
-    )
-    assert builder.count_family_occurrences("Consolidates: #1\r", "OWNER", []) == 2
-
-
-def test_defeat_free_text_cannot_forge_a_recurrence_key() -> None:
-    forged = "see:\nRecurrence: retro #1 repair 1"
-    comment = builder.build_recurrence_comment(2100, 2, _row(forged))
-    assert builder.parse_recurrence_keys([comment]) == {(2100, 2)}
-
-
-def test_parse_recurrence_keys_ignores_unkeyed_and_mid_line_text() -> None:
-    bodies = [
-        "plain comment",
-        "quoted Recurrence: retro #5 repair 1 mid-line",
-        "Recurrence: retro #5 repair one",
-        "Recurrence: retro #5 repair 2\n",
+def test_count_family_occurrences_counts_original_and_distinct_titles() -> None:
+    titles = [
+        builder.build_gate_proposal_title(20, 1, "a"),
+        builder.build_gate_proposal_title(20, 1, "a") + " ",  # concurrent runs filed it twice
+        builder.build_gate_proposal_title(21, 4, "b"),
+        "",
     ]
-    assert builder.parse_recurrence_keys(bodies) == {(5, 2)}
-
-
-def test_count_family_occurrences_counts_original_sources_and_distinct_recurrences() -> None:
-    body = "Consolidates: #10, #11\n"
-    comments = [
-        builder.build_recurrence_comment(20, 1, _row("a")),
-        builder.build_recurrence_comment(20, 1, _row("a")),  # resumed run re-posted
-        builder.build_recurrence_comment(21, 4, _row("b")),
-    ]
-    assert builder.count_family_occurrences(body, "OWNER", [_owned(c) for c in comments]) == 1 + 2 + 2
-
-
-def test_count_family_occurrences_dedupes_sources_across_consolidates_lines() -> None:
-    body = "Consolidates: #10, #11\n\nConsolidates: #11, #12\n"
-    assert builder.count_family_occurrences(body, "OWNER", []) == 1 + 3
+    assert builder.count_family_occurrences(titles) == 1 + 2
+    assert builder.count_family_occurrences([]) == 1
 
 
 def test_escalation_fires_at_two_prior_occurrences_plus_a_new_recurrence() -> None:
     # Issue #2097 fixture shape: 2 prior occurrences (the original filing
-    # and one recorded recurrence) + 1 new matching repair = 3.
-    prior = builder.build_recurrence_comment(8, 2, _row("prior"))
-    new = builder.build_recurrence_comment(9, 1, _row("x"))
-    count = builder.count_family_occurrences("no consolidates line", "OWNER", [_owned(prior), _owned(new)])
+    # and one closed duplicate) + 1 new closed duplicate = 3.
+    titles = [builder.build_gate_proposal_title(8, 2, "prior"), builder.build_gate_proposal_title(9, 1, "x")]
+    count = builder.count_family_occurrences(titles)
     assert count == 3
     assert builder.needs_escalation(count)
 
 
 def test_escalation_does_not_fire_below_threshold() -> None:
-    # 1 prior source (the original filing only) + 1 new recurrence.
-    count = builder.count_family_occurrences("no consolidates line", "OWNER", [_comment(9, 1)])
+    # The original filing plus one new closed duplicate.
+    count = builder.count_family_occurrences([builder.build_gate_proposal_title(9, 1, "x")])
     assert count == 2
     assert not builder.needs_escalation(count)
     assert builder.needs_escalation(3)

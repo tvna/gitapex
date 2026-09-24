@@ -6,14 +6,14 @@ failure/resume and close-condition rules that govern it.
 
 ## Contents
 
-- [Building every title, body and comment](#building-every-title-body-and-comment)
+- [Building every title and body](#building-every-title-and-body)
 - [Creating a family issue](#creating-a-family-issue)
 - [Recording a recurrence](#recording-a-recurrence)
 - [Recording the result in the retrospective body](#recording-the-result-in-the-retrospective-body)
 - [A failed or unconfirmed filing blocks that repair's line, not the rest of the cycle -- and blocks closing](#a-failed-or-unconfirmed-filing-blocks-that-repairs-line-not-the-rest-of-the-cycle----and-blocks-closing)
 - [Close condition](#close-condition)
 
-## Building every title, body and comment
+## Building every title and body
 
 `skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py` is
 pure and network-free (see Prerequisite): it computes strings and never
@@ -30,10 +30,10 @@ text, and any residual risk already noted in its prose (or none).
   is `GATE_PROPOSAL_LABEL`.
 - **A mechanism's family issue** (ABSORBED-BY with no open issue yet):
   the same body builder, titled by `build_absorption_family_title`.
-- **A recurrence record** (DUPLICATE-OF #N, or ABSORBED-BY onto an
-  existing mechanism issue): `build_recurrence_comment` with this
-  retrospective's number, the repair's index, and its row. Its first
-  line, `Recurrence: retro #R repair K`, is the resume key.
+- **A duplicate record** (DUPLICATE-OF #N, or ABSORBED-BY onto an
+  existing mechanism issue #N): the new-family-issue title and body
+  builders again, with `dedup_sweep_verdict="DUPLICATE-OF #N"`, so the
+  body ends with `Dedup-sweep: ...; verdict DUPLICATE-OF #N`.
 
 ## Creating a family issue
 
@@ -44,42 +44,42 @@ As direct `mcp__github__*` tool calls:
   label (regenerating the sweep line per create -- reusing one
   filing's line self-denies as stale), then re-fetch to confirm
   it exists before recording anything as filed.
-- **Exactly one match:** confirm its body still carries an
-  Acceptance Criteria Map first; a title match without one
-  fails closed and escalates instead of recording filed.
+- **Exactly one match:** confirm it carries the `gate-proposal` label
+  and its body still carries an Acceptance Criteria Map first -- this
+  applies to a `gate-proposal: extend <gate-id>` match too, since anyone
+  can open an issue with that title. A match missing either fails
+  closed and escalates instead of recording filed.
 - **More than one match:** fail closed and escalate -- the same
   discipline as Step 0's own ambiguous-stub-match handling.
   Never guess which one is authoritative, and never file a third.
 
 ## Recording a recurrence
 
-Comments are externally authored: anyone who can comment can post a
-line shaped like a recurrence key. List the family issue's comments to
-exhaustion (every page, as Step 0 already requires for its own search)
-before deciding anything. Skip the post only when a comment carrying
-this repair's `Recurrence: retro #R repair K` line was authored by the
-account this run posts as (`mcp__github__get_me`) -- a prior run of this
-procedure. The same line from any other author proves nothing; post
-anyway. Otherwise post the comment with `mcp__github__add_issue_comment`
-and re-list the comments to confirm it landed.
+Create the duplicate record exactly like a family issue above (exact
+title search, create with `GATE_PROPOSAL_LABEL`, re-fetch), then close
+it with `mcp__github__issue_write`: `state: closed`,
+`state_reason: duplicate`, `duplicate_of: N`. Re-fetch and confirm it
+is closed as a duplicate before recording it as filed. Each record is
+its own issue, so concurrent runs never write the same object.
 
-Then apply 4b.3's escalation rule: re-fetch the family issue's body and
-`author_association`, and every comment's body and
-`author_association`, and compute `count_family_occurrences` with this
-run's own key as `own_keys`. Only records written by an account with
-write access (`WRITE_ASSOCIATIONS`: OWNER, MEMBER, COLLABORATOR) count --
-a `Consolidates:` line only when that account opened the family issue,
-and a recurrence key only from a comment it wrote, outside any fenced
-block. Text from anyone else, however it is dressed up, adds nothing;
-anyone with write access could add the label directly anyway. If
-`needs_escalation` holds and the issue lacks
-`GATE_PROPOSAL_ESCALATED_LABEL`, write the union of its current labels
-and that label.
+Then apply 4b.3's escalation rule. List closed issues labelled
+`GATE_PROPOSAL_LABEL`, every page, and keep those whose body's
+`duplicate_target` is N; re-fetch each kept issue and drop any whose
+`state_reason` is not `duplicate`. Pass the kept titles to
+`count_family_occurrences`. Only push- or triage-gated state counts: the
+label (GitHub drops label changes from anyone without push access), the
+duplicate closure, and the generator-made sweep line of an issue this
+procedure filed. No comment or body text anyone else writes is read. A
+legacy source closed before this procedure (no sweep line) is not
+counted here; the consolidation scan, which reads GraphQL
+`duplicateOf`, still counts it. If `needs_escalation` holds and the
+family issue lacks `GATE_PROPOSAL_ESCALATED_LABEL`, write the union of
+its current labels and that label.
 
 ## Recording the result in the retrospective body
 
 Once a repair's record is confirmed (created-and-verified, matched, or
-comment confirmed), record `Filed as: #<issue number>` immediately
+closed as a duplicate and verified), record `Filed as: #<issue number>` immediately
 alongside that repair's own `Status: missing-deterministic-gate` line in
 this retrospective issue's body, plus `Absorbed by:` for an ABSORBED-BY
 repair -- add them there; never remove or replace the `Status:` line
@@ -104,9 +104,10 @@ later, resumed run retries only the repairs still missing one -- but a
 `Filed as: #<N>` line already present in this retrospective issue's own
 body is itself untrusted state, not proof: the body is externally
 editable between runs (a careless edit, or a hostile one), so re-fetch
-issue `#<N>` and confirm it still exists with the `gate-proposal` label
-and either carries this repair's row in its own ACM table or a comment
-with this repair's recurrence key, before skipping it. A re-fetch that
+issue `#<N>` and confirm it still exists with the `gate-proposal` label,
+was opened by the account this run posts as (`mcp__github__get_me`),
+and carries this repair's row in its own ACM table (and, for a
+duplicate record, is closed as a duplicate), before skipping it. A re-fetch that
 cannot complete at all (a network/API error) is not the same finding as
 a completed re-fetch that comes back mismatched or absent, but is
 handled identically -- named separately here only so a reader does not
@@ -119,14 +120,15 @@ presence.
 
 Step 4b verdicts and CLUSTER membership live only in memory, so a
 resumed run has neither. Before re-filing a repair that lacks a
-confirmed line, look for its existing record first: an open
-`gate-proposal` issue whose body carries `Refs #<this retrospective>`
-and an ACM row whose Criterion is this repair's own label (a family
-issue created before the interruption), or a comment carrying this
-repair's own recurrence key authored by the account this run posts as. If one is found, record `Filed as:` for it
-and stop. Only when none is found, re-run Step 4b for the repairs still
-unrecorded, then file them through the flows above. The exact-title search and the recurrence
-key check are the backstops against a duplicate either way.
+confirmed line, look for its existing record first: a `gate-proposal`
+issue, open or closed, opened by the account this run posts as, whose
+body carries `Refs #<this retrospective>` and an ACM row whose Criterion
+is this repair's own label (created before the interruption). If one is
+found, finish it -- a duplicate record still open is closed as above --
+record `Filed as:` for it and stop. Only when none is found, re-run Step
+4b for the repairs still unrecorded, then file them through the flows
+above. The exact-title search is the backstop against a duplicate
+either way.
 
 ## Close condition
 

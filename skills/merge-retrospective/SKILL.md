@@ -178,7 +178,7 @@ discipline -- ground it in the actual code before writing it.
 4. **Classify each repair** using the taxonomy above. State the
    classification explicitly; do not leave it implicit in prose. A
    `missing-deterministic-gate` repair keeps its Step 2 index ready for
-   Step 5's title or recurrence key below -- still nothing written yet. Also
+   Step 5's title below -- still nothing written yet. Also
    check for recurrence (see above) for Step 5's `Recurrence note:`.
 
    **`review-worked-as-designed` tag** (per `docs/adr/0004-reduce-verification-to-one-fresh-review-per-diff.md`, which adopts direction (a) of the review decided at https://github.com/tvna/gitapex/issues/1807). A
@@ -267,12 +267,12 @@ discipline -- ground it in the actual code before writing it.
       its tag is itself the disclosed reason. Every other repair lands
       on exactly one family issue: a verified CLUSTER of `NEW` repairs
       creates one issue with one ACM row per member, while
-      `DUPLICATE-OF #N` and `ABSORBED-BY` post an append-only recurrence
-      comment on the existing family issue and escalate it at three
-      occurrences. Either way, record `Filed as: #<issue number>`
-      alongside the repair's own `Status:` line. Run
+      `DUPLICATE-OF #N` and `ABSORBED-BY` file a standalone record
+      closed as a duplicate of the existing family issue, which
+      escalates at three occurrences. Either way, record
+      `Filed as: #<issue number>` alongside the repair's own `Status:` line. Run
       `skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py`
-      for every title, body and comment -- see
+      for every title and body -- see
       `references/gate-proposal-filing-mechanics.md` for the mechanics,
       the resume rule, and the close condition.
    - **Zero-repair fast-close.** When Step 2 finds no repairs at all,
@@ -322,7 +322,7 @@ discipline -- ground it in the actual code before writing it.
 - Do not collapse multiple repairs into one vague summary line -- the
   retrospective body keeps one entry per repair, even sharing a root
   cause (a recurrence note surfaces that, never merged entries), and a
-  family issue keeps one ACM row or recurrence comment per repair.
+  family keeps one ACM row or duplicate record per repair.
   Issues are per family; records are per repair.
 
 ## Worked example

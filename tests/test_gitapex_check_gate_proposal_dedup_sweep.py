@@ -158,11 +158,15 @@ def test_crlf_line_endings_still_verify() -> None:
     assert passed is True
 
 
-@pytest.mark.parametrize("verdict", ["DUPLICATE-OF #1571", "ABSORBED-BY defeat-test-mutation-coverage"])
-def test_non_new_verdict_denies_even_on_matching_count(verdict: str) -> None:
-    # Issue #2097: only NEW creates an issue; duplicates and absorbed
-    # repairs record a recurrence comment instead.
-    passed, message = _evaluate(_body(3, verdict=verdict), [_issues(3)])
+def test_duplicate_of_verdict_line_allows_on_matching_count() -> None:
+    passed, _ = _evaluate(_body(3, verdict="DUPLICATE-OF #1571"), [_issues(3)])
+    assert passed is True
+
+
+def test_absorbed_by_verdict_denies_even_on_matching_count() -> None:
+    # Issue #2097: an absorbed repair files as DUPLICATE-OF its
+    # mechanism's extend issue, never under its own verdict.
+    passed, message = _evaluate(_body(3, verdict="ABSORBED-BY defeat-test-mutation-coverage"), [_issues(3)])
     assert passed is False
     assert "never creates an issue" in message
 
@@ -173,7 +177,7 @@ def test_lowercase_new_verdict_still_allows() -> None:
 
 
 @pytest.mark.parametrize("second_verdict", ["ABSORBED-BY x", "RECLASSIFY", "ALREADY-SHIPPED x", "DUPLICATE-OF#12"])
-def test_a_second_non_new_sweep_line_is_ambiguous(second_verdict: str) -> None:
+def test_a_second_sweep_line_of_any_verdict_is_ambiguous(second_verdict: str) -> None:
     # Any verdict shape counts, so a hand-added second line cannot hide
     # beside a valid NEW line.
     line = f"Dedup-sweep: 3 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict {second_verdict}"
@@ -182,8 +186,10 @@ def test_a_second_non_new_sweep_line_is_ambiguous(second_verdict: str) -> None:
     assert "ambiguous" in message
 
 
-@pytest.mark.parametrize("verdict", ["RECLASSIFY", "DUPLICATE-OF#12", "NEW plus trailing text"])
-def test_any_non_new_verdict_text_denies(verdict: str) -> None:
+@pytest.mark.parametrize(
+    "verdict", ["RECLASSIFY", "DUPLICATE-OF#12", "DUPLICATE-OF #12 extra", "NEW plus trailing text"]
+)
+def test_any_other_verdict_text_denies(verdict: str) -> None:
     passed, message = _evaluate(_body(3, verdict=verdict), [_issues(3)])
     assert passed is False
     assert "never creates an issue" in message

@@ -49,7 +49,8 @@ For the record on an existing family issue:
 
 1. An issue comment carrying a `Recurrence: retro #R repair K` line.
 2. A direct append to the family issue body.
-3. Keep create-then-close, and only change the grouping.
+3. Keep create-then-close: a standalone record, closed as a duplicate
+   of the family issue.
 
 For where absorbed follow-up work is tracked:
 
@@ -67,40 +68,48 @@ For the escalation signal:
 
 ## Decision Outcome
 
-Chosen by the owner, in each group: option 1.
+Chosen by the owner: option 3 for the record (revised from option 1
+during battle-testing, see Consequences), option 1 in the other two
+groups.
 
-- Only NEW creates an issue. A verified CLUSTER of NEW repairs creates
-  one family issue with one ACM row per member. The builder script and
-  the Dedup-sweep hook both reject any other verdict on a creation.
-- DUPLICATE-OF #N posts an append-only recurrence comment on #N. The
-  comment replaces the standalone issue as the non-conflicting write.
-  Its key doubles as the resume check.
+- A new family issue is created only for NEW. A verified CLUSTER of NEW
+  repairs creates one family issue with one ACM row per member.
+- DUPLICATE-OF #N creates a standalone record whose generator-made
+  sweep line reads `verdict DUPLICATE-OF #N`, then closes it with
+  `state_reason: duplicate` and `duplicate_of: N`. Each record is its
+  own issue, so concurrent runs never write the same object. The
+  builder script and the Dedup-sweep hook accept only NEW and
+  DUPLICATE-OF #N on a creation.
 - ABSORBED-BY `<gate-id>` applies only to an `active` ssot gate
   declaring `generic_mechanism: true`. Anything else falls back to NEW.
   The follow-up work lands on the mechanism's single `extend` family
   issue, which is created through the NEW flow the first time.
-- Occurrences = 1 (original filing) + distinct `Consolidates:` sources +
-  distinct recurrence keys. At 3 or more, the family issue gets the
-  `gate-proposal-escalated` label, which `ranking-the-open-queue` reads.
+- Occurrences = 1 (original filing) + distinct titles of closed
+  `gate-proposal` issues marked as duplicates of the family issue. At 3
+  or more, the family issue gets the `gate-proposal-escalated` label,
+  which `ranking-the-open-queue` reads.
 
 ## Consequences
 
 - Good: open gate-proposal count grows with families, not repairs.
-- Good: no create-then-close churn; the lost-append class (#1800/#2089)
-  is now detected in both directions by the consolidation scan.
-- Neutral: a family issue's history is split between its body (the
-  original rows and any `Consolidates:` line) and its comments.
+- Good: no best-effort umbrella append is owed any more, so the
+  lost-append class (#1800/#2089) cannot recur: the duplicate relation
+  is itself the record.
+- Bad: every recurrence still creates and closes one issue, so closed
+  `gate-proposal` issues keep growing with repairs; only the open count
+  grows with families.
 - Bad: CLUSTER still comes from one probabilistic dispatch, so
   verifying it outside the dispatch remains a judgment call.
   Over-merging distinct fixes is the residual risk.
-- Neutral: the occurrence count, in the skill and in the drift scan,
-  trusts only records written by an account with write access (GitHub's
-  `author_association` OWNER/MEMBER/COLLABORATOR). Four battle-testing
-  rounds showed that every text-based check (the comment itself, the
-  retrospective it names, quoted prose) can be forged. Such an account
-  could add the label directly anyway, so trusting it grants nothing
-  new. A legitimate record from an account without write access is
-  undercounted, which fails safe.
+- Neutral: the occurrence count reads only push- or triage-gated state:
+  the `gate-proposal` label (GitHub drops label changes from anyone
+  without push access), the duplicate closure, and the generator-made
+  sweep line of an issue this procedure filed. Five battle-testing
+  rounds forged every text-based record tried first (a recurrence
+  comment, the retrospective it names, quoted prose, a `Consolidates:`
+  line in an editable body). The skill reads the target from the sweep
+  line, so it undercounts legacy duplicates filed without one; the drift
+  scan reads GraphQL `duplicateOf` and still counts them.
 - Bad: the escalation label adds priority, not committed capacity.
 
 ## Confirmation
@@ -111,4 +120,8 @@ Chosen by the owner, in each group: option 1.
   `tests/test_gitapex_scan_ssot_schema.py` and
   `tests/test_gitapex_retro_gate_label_sync.py`.
 - The daily `retrospective-gate-drift` workflow runs the consolidation
-  scan's reverse-direction and escalation checks against live issues.
+  scan's escalation check against live issues.
+- Live proof (2026-09-24): issue #2102, closed through the GitHub MCP
+  `issue_write` tool with `state_reason: duplicate` and
+  `duplicate_of: 2097`, reads `state_reason: duplicate` over REST, and
+  #2097's timeline gained a `marked_as_duplicate` event.

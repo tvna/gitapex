@@ -18,13 +18,17 @@ generated only by
 re-fetch of the open `gate-proposal` population. Denies when the line is
 absent, ambiguous (two or more), malformed, or stale.
 
-The only accepted verdict is `NEW` (issue #2097). A `DUPLICATE-OF #<N>`
-or `ABSORBED-BY <gate-id>` repair records an append-only recurrence
-comment on the existing family issue instead of creating a standalone
-issue, so a creation carrying either verdict is a stale procedure and is
-denied. Any verdict text is recognized as a sweep line, so a second,
-non-NEW line next to a NEW one trips the ambiguity check rather than
-going unseen. The count-match is the freshness proof.
+Accepted verdicts are `NEW` and `DUPLICATE-OF #<N>` (issue #2097). A
+`NEW` creation is a family issue; a `DUPLICATE-OF #<N>` creation is the
+standalone record of one recurrence, which the calling skill closes as a
+duplicate of #N right after -- the GitHub-native relation the escalation
+count is derived from. Any other verdict (`ABSORBED-BY <gate-id>`, which
+lands as a `DUPLICATE-OF` its mechanism's `extend` issue, or free text)
+is denied. Any verdict text is recognized as a sweep line, so a second
+line next to an accepted one trips the ambiguity check rather than going
+unseen. The count-match (not the verdict word) is the freshness proof;
+which `#<N>` a duplicate names is verified by the calling skill
+(re-fetching #N), never by this hook.
 
 Scope notes, named rather than left implicit:
 
@@ -138,6 +142,8 @@ _INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 # indented) and before inline code. Generator-emitted lines always start
 # at column 0, so stripping indented lines can only deny, never allow.
 _INDENTED_CODE_RE = re.compile(r"^(?:[ ]{4}|\t).*$", re.MULTILINE)
+
+_ACCEPTED_VERDICT_RE = re.compile(r"^(?:NEW|DUPLICATE-OF[ \t]+#\d+)$", re.IGNORECASE)
 
 _SWEEP_RE = re.compile(
     r"^[ \t]*Dedup-sweep:[ \t]*(\d+)[ \t]+open[ \t]+gate-proposal[ \t]+issues[ \t]+at[ \t]+(\S+)"
@@ -327,10 +333,11 @@ def evaluate(
         return False, f"ambiguous filing: {len(sweeps)} Dedup-sweep lines found, exactly one is required"
 
     count, timestamp, verdict = sweeps[0]
-    if verdict.upper() != "NEW":
+    if not _ACCEPTED_VERDICT_RE.match(verdict):
         return False, (
-            f"Dedup-sweep verdict {verdict!r} never creates an issue (issue #2097): a DUPLICATE-OF or "
-            "ABSORBED-BY repair records a recurrence comment on the existing family issue instead"
+            f"Dedup-sweep verdict {verdict!r} never creates an issue (issue #2097): only NEW or "
+            "DUPLICATE-OF #<N> does -- an ABSORBED-BY repair files as DUPLICATE-OF its mechanism's "
+            "extend issue"
         )
     try:
         _datetime.datetime.strptime(timestamp, _TIMESTAMP_FORMAT)

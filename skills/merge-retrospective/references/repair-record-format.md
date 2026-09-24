@@ -7,7 +7,7 @@ structure itself and when this reference applies).
 Each entry's own `N.` prefix is this cycle's 1-based index, assigned
 during Steps 2-4 and held only in memory -- a `missing-deterministic-gate`
 entry's index is reused verbatim in a new family issue's title (the
-lowest member's index) or in a recurrence comment's key (Step 5);
+lowest member's index) or a duplicate record's title (Step 5);
 nothing about the index is written anywhere before Step 5's own
 first body write. That first write is not necessarily the only one: each
 `Filed as:` line below is added to the same body afterwards, once its own
@@ -28,10 +28,10 @@ filing is confirmed.
   repair (Step 5 already limits gate proposals to that category); omit
   the line entirely for the other two categories rather than writing
   "N/A".
-- `Filed as:` names the family gate-proposal issue Step 5 recorded this
-  repair on -- the issue it created (NEW, or a CLUSTER it belongs to) or
-  the existing one it posted a recurrence comment on (DUPLICATE-OF,
-  ABSORBED-BY). Several repairs can name the same number. Present only
+- `Filed as:` names the gate-proposal issue Step 5 created for this
+  repair -- the family issue (NEW, or a CLUSTER it belongs to), or the
+  standalone record it closed as a duplicate of an existing family issue
+  (DUPLICATE-OF, ABSORBED-BY). CLUSTER members share one number. Present only
   for a `missing-deterministic-gate` repair,
   and only after that filing is confirmed by re-fetch (Step 5's error
   handling below); a repair still missing this line after a run means its

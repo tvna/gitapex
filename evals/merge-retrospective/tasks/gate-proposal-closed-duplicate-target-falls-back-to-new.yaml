@@ -1,6 +1,6 @@
 id: merge-retrospective-gate-proposal-closed-duplicate-target-falls-back-to-new
 name: A DUPLICATE-OF Verdict Naming A Closed Issue Falls Back To NEW
-description: The review returns DUPLICATE-OF an issue that re-fetching shows is already closed. Verification outside the dispatch rejects the verdict, so no recurrence comment goes on the closed issue and the repair files through the NEW flow.
+description: The review returns DUPLICATE-OF an issue that re-fetching shows is already closed. Verification outside the dispatch rejects the verdict, so no record is closed as a duplicate of the closed issue and the repair files through the NEW flow.
 tags:
   - quality
   - gate-proposal
@@ -32,4 +32,4 @@ expected:
     - "Filed as: #705"
   output_not_contains:
     - "Filed as: #1500"
-    - "Recurrence: retro #681 repair 1"
+    - "verdict DUPLICATE-OF #1500"

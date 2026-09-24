@@ -83,12 +83,23 @@ _ACM_DIVIDER_ROW = "|---|---|---|---|---|"
 # (not a bare digit-shape regex, which would accept month 13).
 _DEDUP_SWEEP_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
-# The only verdict a created issue can truthfully carry is `NEW` (issue
-# #2097): a DUPLICATE-OF or ABSORBED-BY repair records a recurrence
-# comment on an existing family issue instead of creating one, and
-# `RECLASSIFY`/`ALREADY-SHIPPED` never file, so none of them has a line
-# shape here.
-_DEDUP_SWEEP_VERDICT_RE = _re.compile(r"^NEW\Z")
+# The only verdicts a created issue can truthfully carry: `NEW` (a new
+# family issue), or `DUPLICATE-OF #<N>` (issue #2097: a repair recorded
+# on an existing family issue gets its own standalone issue, immediately
+# closed as a duplicate of #N -- the GitHub-native relation the
+# escalation count is derived from). `ABSORBED-BY` lands as a
+# `DUPLICATE-OF` the mechanism's `extend` issue once that issue exists,
+# and `RECLASSIFY`/`ALREADY-SHIPPED` never file, so none of them has a
+# line shape here.
+_DEDUP_SWEEP_VERDICT_RE = _re.compile(r"^(?:NEW|DUPLICATE-OF #[1-9]\d*)\Z")
+
+# Reads the generator-made sweep line back out of a filed body. Parallel
+# to the hook's own recognizer; only a body with exactly one such line
+# names a duplicate target.
+_DEDUP_SWEEP_LINE_RE = _re.compile(
+    r"^Dedup-sweep: \d+ open gate-proposal issues at \S+; verdict (NEW|DUPLICATE-OF #([1-9]\d*))$",
+    _re.MULTILINE,
+)
 
 # The label a family issue gets once `count_family_occurrences` reaches
 # `ESCALATION_THRESHOLD` (issue #2097). Like `GATE_PROPOSAL_LABEL`, a
@@ -99,24 +110,6 @@ GATE_PROPOSAL_ESCALATED_LABEL = "gate-proposal-escalated"
 # 3 is the owner-selected threshold in issue #2097, counting the original
 # filing: a third occurrence of one family is the next work item.
 ESCALATION_THRESHOLD = 3
-
-# One recurrence record per comment, on its own line, keyed on the
-# retrospective issue and repair index so a resumed run can tell whether
-# its own record already landed. Parallel copy (and sync test) as above.
-RECURRENCE_LINE_RE = _re.compile(r"^Recurrence: retro #(\d+) repair (\d+)[ \t]*$", _re.MULTILINE)
-
-# The `author_association` values GitHub reports for an account with
-# write access to the repository. Only records written by such an account
-# count toward escalation: anyone with write access could add the label
-# directly anyway, so trusting them adds no power, while text from anyone
-# else -- a comment, an issue body they own -- proves nothing. GitHub sets
-# this field; it cannot be forged from text (issue #2097). Parallel copy
-# (and sync test) as above.
-WRITE_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
-
-# Same shape the consolidation scan reads (parallel copy, sync-tested).
-CONSOLIDATES_LINE_RE = _re.compile(r"^Consolidates:[ \t]*(#\d+(?:,[ \t]*#\d+)*)[ \t]*$", _re.MULTILINE)
-_ISSUE_REF_RE = _re.compile(r"#(\d+)")
 
 # An ssot gate id, as `.gitapex/ssot.json` spells them (lowercase words
 # joined by hyphens). Anything else is refused rather than interpolated
@@ -130,8 +123,8 @@ def build_dedup_sweep_line(open_count: int, timestamp: str, verdict: str = "NEW"
     `open_count` is the live count of open `gate-proposal` issues observed
     by the sweep; `timestamp` is when the sweep ran, UTC
     `YYYY-MM-DDTHH:MM:SSZ`; `verdict` is the Step 4b verdict this filing
-    records, and only `NEW` ever creates an issue. Raises `ValueError` when `open_count` is
-    not a non-negative `int` (`bool` excluded explicitly --
+    records: `NEW` or `DUPLICATE-OF #<N>`. Raises `ValueError` when
+    `open_count` is not a non-negative `int` (`bool` excluded explicitly --
     `isinstance(True, int)` is `True`, and a boolean count is the same
     contract violation `build_gate_proposal_title`'s own 1-based-index
     check already fails loudly on), when `timestamp` is not a real
@@ -150,7 +143,7 @@ def build_dedup_sweep_line(open_count: int, timestamp: str, verdict: str = "NEW"
     except ValueError:
         raise ValueError(f"timestamp must be ISO-8601 UTC YYYY-MM-DDTHH:MM:SSZ, got {timestamp!r}") from None
     if not isinstance(verdict, str) or not _DEDUP_SWEEP_VERDICT_RE.match(verdict):
-        raise ValueError(f"verdict must be NEW, got {verdict!r}")
+        raise ValueError(f"verdict must be NEW or DUPLICATE-OF #<N>, got {verdict!r}")
     return f"Dedup-sweep: {open_count} open gate-proposal issues at {timestamp}; verdict {verdict}"
 
 
@@ -336,113 +329,34 @@ def build_absorption_family_title(gate_id: str) -> str:
     return f"gate-proposal: extend {gate_id}"
 
 
-def build_recurrence_comment(
-    retrospective_issue_number: int,
-    repair_index: int,
-    row: FamilyRow,
-) -> str:
-    """Return the comment body that records one repair on an existing
-    family issue (DUPLICATE-OF #N or ABSORBED-BY, issue #2097).
+def duplicate_target(body: str) -> int | None:
+    """Return #N when `body` carries exactly one generator-made
+    `Dedup-sweep: ...; verdict DUPLICATE-OF #N` line, else `None`.
 
-    A comment is append-only, so two concurrent retrospective runs each
-    add their own record and neither can overwrite the other -- the
-    guarantee issue #1806 gave the old create-then-close standalone
-    issue. The first line is the resume key `parse_recurrence_keys`
-    reads; the repair's own ACM row follows verbatim.
-    """
-    # A bool or non-positive value would print a key RECURRENCE_LINE_RE
-    # can never parse back, so a resumed run would re-post and the
-    # recurrence would never count toward escalation.
-    for name, value in (("retrospective_issue_number", retrospective_issue_number), ("repair_index", repair_index)):
-        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-            raise ValueError(f"{name} must be a 1-based positive integer, got {value!r}")
-    return "\n".join(
-        [
-            f"Recurrence: retro #{retrospective_issue_number} repair {repair_index}",
-            "",
-            _ACM_HEADER_ROW,
-            _ACM_DIVIDER_ROW,
-            _acm_data_row(row),
-            "",
-            f"Refs #{retrospective_issue_number}",
-        ]
-    )
+    Only meaningful for an issue that also carries `GATE_PROPOSAL_LABEL`:
+    GitHub drops label changes from anyone without push access, so a
+    labelled issue was filed by this procedure (or someone with push
+    access), and its body was built by `build_gate_proposal_acm_body`,
+    whose free-text cells cannot start a second sweep line."""
+    matches = list(_DEDUP_SWEEP_LINE_RE.finditer((body or "").replace("\r\n", "\n")))
+    if len(matches) != 1 or matches[0].group(2) is None:
+        return None
+    return int(matches[0].group(2))
 
 
-def _normalize_newlines(text: str | None) -> str:
-    """GitHub stores web-UI edits with CRLF line endings, and the record
-    regexes anchor on `$` after optional spaces only, so an unnormalized
-    `\r` would hide a real record line."""
-    return (text or "").replace("\r\n", "\n").replace("\r", "\n")
-
-
-def _strip_fenced_blocks(text: str) -> str:
-    """Blank every line inside a ``` or ~~~ fenced block, so a record line
-    pasted into a code block as an example (or as quoted attacker text) is
-    never read as a real record."""
-    out: list[str] = []
-    fence = ""
-    for line in text.split("\n"):
-        stripped = line.lstrip(" \t")
-        marker = stripped[:3]
-        if not fence and marker in ("```", "~~~"):
-            fence = marker
-            out.append("")
-            continue
-        if fence:
-            if stripped.startswith(fence):
-                fence = ""
-            out.append("")
-            continue
-        out.append(line)
-    return "\n".join(out)
-
-
-def parse_recurrence_keys(comment_bodies: Iterable[str]) -> set[tuple[int, int]]:
-    """Return the distinct `(retrospective issue, repair index)` keys the
-    given comments record, ignoring any line inside a fenced block. A key
-    recorded twice (a resumed run that re-posted) counts once."""
-    keys: set[tuple[int, int]] = set()
-    for body in comment_bodies:
-        for match in RECURRENCE_LINE_RE.finditer(_strip_fenced_blocks(_normalize_newlines(body))):
-            keys.add((int(match.group(1)), int(match.group(2))))
-    return keys
-
-
-class RecurrenceComment(NamedTuple):
-    """One comment on a family issue: its body and its `author_association`,
-    exactly as the GitHub API returned them."""
-
-    body: str
-    author_association: str
-
-
-def count_family_occurrences(
-    family_body: str,
-    family_author_association: str,
-    comments: Iterable[RecurrenceComment],
-    own_keys: Iterable[tuple[int, int]] = (),
-) -> int:
+def count_family_occurrences(duplicate_titles: Iterable[str]) -> int:
     """Return how many repairs one family issue records: 1 for its own
-    original filing, plus each distinct `Consolidates:` source, plus each
-    distinct recurrence key (issue #2097, owner decision: the original
-    filing counts toward the threshold).
+    original filing plus one per distinct title among the issues closed
+    as its duplicates (issue #2097, owner decision: the original filing
+    counts toward the threshold).
 
-    Only records a write-access account wrote count (`WRITE_ASSOCIATIONS`):
-    `Consolidates:` sources only when the family issue itself was opened by
-    one (so only write-access accounts can edit that body), and recurrence
-    keys only from comments by one, plus `own_keys` (this run's own post).
-    Everything else is text anyone could have written. An uncounted
-    legitimate record fails safe -- no label -- rather than open.
-    """
-    keys = parse_recurrence_keys(
-        comment.body for comment in comments if comment.author_association in WRITE_ASSOCIATIONS
-    ) | set(own_keys)
-    consolidated: set[int] = set()
-    if family_author_association in WRITE_ASSOCIATIONS:
-        for line_match in CONSOLIDATES_LINE_RE.finditer(_normalize_newlines(family_body)):
-            consolidated.update(int(ref) for ref in _ISSUE_REF_RE.findall(line_match.group(1)))
-    return 1 + len(consolidated) + len(keys)
+    The caller passes only issues that carry `GATE_PROPOSAL_LABEL`, are
+    closed with `state_reason: duplicate`, and name this family as their
+    duplicate target -- all three set by push- or triage-gated actions,
+    none read from free text anyone can write. Titles are
+    `build_gate_proposal_title` output, keyed on retrospective and repair
+    index, so a repair filed twice by concurrent runs counts once."""
+    return 1 + len({title.strip() for title in duplicate_titles if title and title.strip()})
 
 
 def needs_escalation(occurrence_count: int) -> bool:

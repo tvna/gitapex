@@ -1,6 +1,6 @@
 id: merge-retrospective-gate-proposal-absorbed-by-generic-mechanism
-name: A Repair A Declared Generic Mechanism Can Express Is Absorbed, Not Filed Alone
-description: An untested except arm is a repair mutation testing can express. The ABSORBED-BY verdict names an active ssot gate that declares generic_mechanism true, so no per-repair issue is filed. A recurrence comment goes on the mechanism's own extend family issue, and the entry names both the mechanism and that issue.
+name: A Repair A Declared Generic Mechanism Can Express Is Absorbed Into Its Extend Issue
+description: An untested except arm is a repair mutation testing can express. The ABSORBED-BY verdict names an active ssot gate that declares generic_mechanism true, so the repair is recorded as a duplicate of the mechanism's own extend family issue, not as a new family, and the entry names the mechanism.
 tags:
   - quality
   - gate-proposal
@@ -21,15 +21,22 @@ inputs:
 
     `build_absorption_family_title` returns
     `gate-proposal: extend defeat-test-mutation-coverage`. An exact-title
-    search finds one open issue, #700, whose body carries an ACM. You
-    post the recurrence comment (`Recurrence: retro #631 repair 1`), and
-    re-listing confirms it.
+    search finds one open issue, #700, labelled `gate-proposal`, whose
+    body carries an ACM. The sweep counted 45 open gate-proposal issues
+    at 2026-09-24T12:00:00Z.
+
+    You create this repair's record,
+    `gate-proposal: retro #631 repair 1: Untested except arm`, labelled
+    `gate-proposal`, with a body ending in `verdict DUPLICATE-OF #700`.
+    Re-fetching confirms #701. Closing #701 with
+    `state_reason: duplicate` and `duplicate_of: 700` succeeds and
+    re-fetches as closed as a duplicate.
 
     No operator is available to respond. Write the retrospective body.
 expected:
   output_contains:
     - "Absorbed by: `defeat-test-mutation-coverage`"
-    - "Filed as: #700"
-    - "Recurrence: retro #631 repair 1"
+    - "Filed as: #701"
+    - "#700"
   output_not_contains:
-    - "gate-proposal: retro #631 repair 1"
+    - "verdict ABSORBED-BY"

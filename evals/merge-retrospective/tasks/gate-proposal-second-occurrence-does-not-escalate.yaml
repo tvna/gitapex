@@ -1,6 +1,6 @@
 id: merge-retrospective-gate-proposal-second-occurrence-does-not-escalate
-name: A Second Occurrence Records A Recurrence Without Escalating
-description: A family issue records only its original filing. A new matching repair brings its occurrence count to two, below the threshold, so the repair gets a recurrence comment, the family gets no escalation label, and nothing new is filed.
+name: A Second Occurrence Records A Duplicate Without Escalating
+description: A family issue records only its original filing. A new matching repair brings its occurrence count to two, below the threshold, so the repair gets a closed duplicate record, the family gets no escalation label, and no new family issue is filed.
 tags:
   - quality
   - gate-proposal
@@ -14,19 +14,22 @@ inputs:
     One missing-deterministic-gate repair occurred: a hardcoded list of
     skill names in a test missed a newly added skill. The Step 4b review
     returned DUPLICATE-OF #830, which you confirmed is open and labelled
-    `gate-proposal`. Its body has no `Consolidates:` line, and it has no
-    comments.
+    `gate-proposal`.
 
-    You post this run's own comment (`Recurrence: retro #671 repair 1`),
-    and re-listing confirms it. `count_family_occurrences` returns 2,
+    You create this repair's record,
+    `gate-proposal: retro #671 repair 1: Hardcoded skill list in a test`,
+    with the `gate-proposal` label and a body ending in
+    `verdict DUPLICATE-OF #830`; re-fetching confirms #672. Closing #672
+    as a duplicate of #830 succeeds and re-fetches as closed as a
+    duplicate. It is the only closed gate-proposal issue whose
+    `duplicate_target` is 830, so `count_family_occurrences` returns 2,
     and `needs_escalation(2)` is false.
 
     No operator is available to respond. Write the retrospective body and
-    list every write you made to #830, naming each by its exact content.
+    list every write you made, naming each issue it touched.
 expected:
   output_contains:
-    - "Filed as: #830"
-    - "Recurrence: retro #671 repair 1"
+    - "Filed as: #672"
+    - "#830"
   output_not_contains:
-    - "gate-proposal: retro #671 repair 1"
     - "gate-proposal-escalated"

@@ -65,23 +65,21 @@ retrospective body:
   through the Step 5 flow, one ACM row per member, titled by the
   lowest member index. A CLUSTER whose members mix NEW with
   DUPLICATE-OF #N records every member on #N instead.
-- **DUPLICATE-OF #N**: post one recurrence comment on #N. Nothing is
-  created and nothing is closed.
+- **DUPLICATE-OF #N**: file one standalone record and close it as a
+  duplicate of #N.
 - **ABSORBED-BY `<gate-id>`**: search open issues for the exact title
   `gate-proposal: extend <gate-id>`. If none exists, create it through
-  the NEW flow with this repair's row; if one exists, post a recurrence
-  comment on it. The retrospective entry adds `Absorbed by: <gate-id>`.
+  the NEW flow with this repair's row; if one exists, record this repair
+  as DUPLICATE-OF it. The retrospective entry adds `Absorbed by: <gate-id>`.
 - **ALREADY-SHIPPED**: files nothing. The retrospective entry records
   `Covered by: <gate-id>` instead of a `Filed as:` line.
 
-A recurrence comment is append-only, so two concurrent retrospective
-runs recording on the same family issue cannot overwrite each other.
-It replaces the old create-then-close standalone issue as the
-non-conflicting write. After posting one, re-fetch the family issue's
-body and comments and count its occurrences (the script's
-`count_family_occurrences`: the original filing, each `Consolidates:`
-source, and each distinct recurrence key, counting only records written
-by an account with write access -- see the filing-mechanics reference). At `ESCALATION_THRESHOLD`
+Each record is its own issue, so two concurrent retrospective runs
+recording on the same family issue cannot overwrite each other. After
+closing one, count the family's occurrences (the script's
+`count_family_occurrences`: the original filing plus each distinct
+title among the closed gate-proposal issues marked as its duplicates --
+see the filing-mechanics reference). At `ESCALATION_THRESHOLD`
 (3) or more, add the `gate-proposal-escalated` label (re-fetch the
 current labels and write their union; create the label first if it is
 missing). The family issue is then the next work item. File nothing
