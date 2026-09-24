@@ -616,6 +616,26 @@ def test_find_unlisted_duplicates_ignores_closed_or_unknown_targets() -> None:
     assert unlisted == {}
 
 
+def test_crlf_consolidates_and_recurrence_lines_still_parse() -> None:
+    # GitHub stores web-UI edits with CRLF line endings.
+    assert csd.extract_consolidates_issue_numbers("intro\r\nConsolidates: #1, #2\r\nmore") == [1, 2]
+    assert csd.count_family_occurrences("Consolidates: #1\r", ["Recurrence: retro #5 repair 1\r\nbody"]) == 3
+
+
+def test_main_fetches_comments_when_the_count_field_is_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    record = {"number": 400, "body": "", "labels": []}
+    _patch_lists(monkeypatch, [record], [])
+    fetched: list[int] = []
+
+    def fake_comments(owner: str, repo: str, number: int, token: str) -> list[str]:
+        fetched.append(number)
+        return []
+
+    monkeypatch.setattr(csd, "fetch_issue_comment_bodies", fake_comments)
+    assert csd.main(["--owner", "tvna", "--repo", "gitapex"]) == 0
+    assert fetched == [400]
+
+
 def test_find_unlisted_duplicates_flags_umbrella_with_no_consolidates_line() -> None:
     assert csd.find_unlisted_duplicates({50}, {}, {7: 50}) == {50: [7]}
 

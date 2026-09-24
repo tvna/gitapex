@@ -178,7 +178,7 @@ discipline -- ground it in the actual code before writing it.
 4. **Classify each repair** using the taxonomy above. State the
    classification explicitly; do not leave it implicit in prose. A
    `missing-deterministic-gate` repair keeps its Step 2 index ready for
-   Step 5's filed-issue title below -- still nothing written yet. Also
+   Step 5's title or recurrence key below -- still nothing written yet. Also
    check for recurrence (see above) for Step 5's `Recurrence note:`.
 
    **`review-worked-as-designed` tag** (per `docs/adr/0004-reduce-verification-to-one-fresh-review-per-diff.md`, which adopts direction (a) of the review decided at https://github.com/tvna/gitapex/issues/1807). A

@@ -112,7 +112,7 @@ _ISSUE_REF_RE = _re.compile(r"#(\d+)")
 # An ssot gate id, as `.gitapex/ssot.json` spells them (lowercase words
 # joined by hyphens). Anything else is refused rather than interpolated
 # into an exact-match title.
-_GATE_ID_RE = _re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+_GATE_ID_RE = _re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 
 
 def build_dedup_sweep_line(open_count: int, timestamp: str, verdict: str = "NEW") -> str:
@@ -341,8 +341,12 @@ def build_recurrence_comment(
     issue. The first line is the resume key `parse_recurrence_keys`
     reads; the repair's own ACM row follows verbatim.
     """
-    if repair_index < 1:
-        raise ValueError(f"repair_index must be a 1-based positive integer, got {repair_index!r}")
+    # A bool or non-positive value would print a key RECURRENCE_LINE_RE
+    # can never parse back, so a resumed run would re-post and the
+    # recurrence would never count toward escalation.
+    for name, value in (("retrospective_issue_number", retrospective_issue_number), ("repair_index", repair_index)):
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError(f"{name} must be a 1-based positive integer, got {value!r}")
     return "\n".join(
         [
             f"Recurrence: retro #{retrospective_issue_number} repair {repair_index}",
@@ -356,13 +360,20 @@ def build_recurrence_comment(
     )
 
 
+def _normalize_newlines(text: str | None) -> str:
+    """GitHub stores web-UI edits with CRLF line endings, and the record
+    regexes anchor on `$` after optional spaces only, so an unnormalized
+    `\r` would hide a real record line."""
+    return (text or "").replace("\r\n", "\n").replace("\r", "\n")
+
+
 def parse_recurrence_keys(comment_bodies: Iterable[str]) -> set[tuple[int, int]]:
     """Return the distinct `(retrospective issue, repair index)` keys the
     given comments record. A key recorded twice (a resumed run that
     re-posted) counts once."""
     keys: set[tuple[int, int]] = set()
     for body in comment_bodies:
-        for match in RECURRENCE_LINE_RE.finditer(body or ""):
+        for match in RECURRENCE_LINE_RE.finditer(_normalize_newlines(body)):
             keys.add((int(match.group(1)), int(match.group(2))))
     return keys
 
@@ -373,7 +384,7 @@ def count_family_occurrences(family_body: str, comment_bodies: Iterable[str]) ->
     distinct recurrence key (issue #2097, owner decision: the original
     filing counts toward the threshold)."""
     consolidated: set[int] = set()
-    for line_match in CONSOLIDATES_LINE_RE.finditer(family_body or ""):
+    for line_match in CONSOLIDATES_LINE_RE.finditer(_normalize_newlines(family_body)):
         consolidated.update(int(ref) for ref in _ISSUE_REF_RE.findall(line_match.group(1)))
     return 1 + len(consolidated) + len(parse_recurrence_keys(comment_bodies))
 

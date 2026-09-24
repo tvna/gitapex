@@ -434,7 +434,20 @@ def test_absorption_title_is_one_per_mechanism() -> None:
     assert title == "gate-proposal: extend defeat-test-mutation-coverage"
 
 
-@pytest.mark.parametrize("gate_id", ["", "Defeat-Test", "a b", "a--b", "-a", "a-", "x\ngate-proposal: extend y", None])
+@pytest.mark.parametrize(
+    "gate_id",
+    [
+        "",
+        "Defeat-Test",
+        "a b",
+        "a--b",
+        "-a",
+        "a-",
+        "x\ngate-proposal: extend y",
+        "defeat-test-mutation-coverage\n",
+        None,
+    ],
+)
 def test_absorption_title_rejects_non_ssot_ids(gate_id: object) -> None:
     with pytest.raises(ValueError, match="gate_id"):
         builder.build_absorption_family_title(gate_id)
@@ -474,6 +487,30 @@ def test_acm_data_row_maps_columns_and_defaults_risk() -> None:
 def test_recurrence_comment_rejects_non_positive_index(repair_index: int) -> None:
     with pytest.raises(ValueError, match="repair_index"):
         builder.build_recurrence_comment(2100, repair_index, _row("x"))
+
+
+@pytest.mark.parametrize(
+    ("retro", "index", "name"),
+    [
+        (0, 1, "retrospective_issue_number"),
+        (-1, 1, "retrospective_issue_number"),
+        (True, 1, "retrospective_issue_number"),
+        (5, True, "repair_index"),
+        (5, "1", "repair_index"),
+    ],
+)
+def test_recurrence_comment_rejects_keys_its_parser_cannot_read(retro: object, index: object, name: str) -> None:
+    # Each of these would print a key RECURRENCE_LINE_RE never parses back.
+    with pytest.raises(ValueError, match=name):
+        builder.build_recurrence_comment(retro, index, _row("x"))
+
+
+def test_crlf_record_lines_still_count() -> None:
+    # GitHub stores web-UI edits with CRLF line endings.
+    comment = builder.build_recurrence_comment(7, 2, _row("x")).replace("\n", "\r\n")
+    assert builder.parse_recurrence_keys([comment]) == {(7, 2)}
+    assert builder.count_family_occurrences("intro\r\nConsolidates: #1, #2\r\nmore", [comment]) == 1 + 2 + 1
+    assert builder.count_family_occurrences("Consolidates: #1\r", []) == 2
 
 
 def test_defeat_free_text_cannot_forge_a_recurrence_key() -> None:

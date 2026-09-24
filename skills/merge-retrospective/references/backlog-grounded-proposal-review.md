@@ -57,8 +57,9 @@ to check, never a result to trust:
 
 ## 4b.3 Act on the verdict
 
-Every repair ends up recorded on exactly one family issue, and every
-repair keeps its own entry in the retrospective body:
+Every repair except an ALREADY-SHIPPED one ends up recorded on exactly
+one family issue, and every repair keeps its own entry in the
+retrospective body:
 
 - **NEW**, alone or as a verified CLUSTER: create one family issue
   through the Step 5 flow, one ACM row per member, titled by the
@@ -70,7 +71,8 @@ repair keeps its own entry in the retrospective body:
   `gate-proposal: extend <gate-id>`. If none exists, create it through
   the NEW flow with this repair's row; if one exists, post a recurrence
   comment on it. The retrospective entry adds `Absorbed by: <gate-id>`.
-- **ALREADY-SHIPPED**: files nothing.
+- **ALREADY-SHIPPED**: files nothing. The retrospective entry records
+  `Covered by: <gate-id>` instead of a `Filed as:` line.
 
 A recurrence comment is append-only, so two concurrent retrospective
 runs recording on the same family issue cannot overwrite each other.

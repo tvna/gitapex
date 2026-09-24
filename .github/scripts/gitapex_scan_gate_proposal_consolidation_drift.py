@@ -159,6 +159,13 @@ query($owner: String!, $repo: String!, $number: Int!) {
 # ---------------------------------------------------------------------------
 
 
+def _normalize_newlines(text: str | None) -> str:
+    """GitHub stores web-UI edits with CRLF line endings; both record
+    regexes anchor on `$` after optional spaces only, so an unnormalized
+    `\r` would hide a real line (issue #2097)."""
+    return (text or "").replace("\r\n", "\n").replace("\r", "\n")
+
+
 def extract_consolidates_issue_numbers(body: str) -> list[int]:
     """Return the issue numbers named across every `Consolidates: #a, #b,
     ...` line in `body`, in first-seen order with duplicates removed, or
@@ -169,7 +176,7 @@ def extract_consolidates_issue_numbers(body: str) -> list[int]:
     must not leave that line's own references unchecked."""
     numbers: list[int] = []
     seen: set[int] = set()
-    for line_match in _CONSOLIDATES_LINE_RE.finditer(body):
+    for line_match in _CONSOLIDATES_LINE_RE.finditer(_normalize_newlines(body)):
         for ref in _ISSUE_REF_RE.findall(line_match.group(1)):
             number = int(ref)
             if number not in seen:
@@ -265,7 +272,7 @@ def count_family_occurrences(family_body: str, comment_bodies: list[str]) -> int
     keys = {
         (int(match.group(1)), int(match.group(2)))
         for body in comment_bodies
-        for match in RECURRENCE_LINE_RE.finditer(body or "")
+        for match in RECURRENCE_LINE_RE.finditer(_normalize_newlines(body))
     }
     return 1 + len(extract_consolidates_issue_numbers(family_body)) + len(keys)
 
@@ -519,7 +526,7 @@ def main(argv: list[str] | None = None) -> int:
         comment_bodies_by_number = {
             record["number"]: fetch_issue_comment_bodies(args.owner, args.repo, record["number"], token)
             for record in open_records
-            if record.get("comments")
+            if record.get("comments", 1) != 0
         }
     except GitHubApiError as error:
         print(f"error: {error}", file=sys.stderr)

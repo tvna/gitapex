@@ -172,11 +172,21 @@ def test_lowercase_new_verdict_still_allows() -> None:
     assert passed is True
 
 
-def test_a_second_non_new_sweep_line_is_ambiguous() -> None:
-    body = _body(3) + "\nDedup-sweep: 3 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict ABSORBED-BY x\n"
-    passed, message = _evaluate(body, [_issues(3)])
+@pytest.mark.parametrize("second_verdict", ["ABSORBED-BY x", "RECLASSIFY", "ALREADY-SHIPPED x", "DUPLICATE-OF#12"])
+def test_a_second_non_new_sweep_line_is_ambiguous(second_verdict: str) -> None:
+    # Any verdict shape counts, so a hand-added second line cannot hide
+    # beside a valid NEW line.
+    line = f"Dedup-sweep: 3 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict {second_verdict}"
+    passed, message = _evaluate(_body(3) + "\n" + line + "\n", [_issues(3)])
     assert passed is False
     assert "ambiguous" in message
+
+
+@pytest.mark.parametrize("verdict", ["RECLASSIFY", "DUPLICATE-OF#12", "NEW plus trailing text"])
+def test_any_non_new_verdict_text_denies(verdict: str) -> None:
+    passed, message = _evaluate(_body(3, verdict=verdict), [_issues(3)])
+    assert passed is False
+    assert "never creates an issue" in message
 
 
 def test_missing_token_denies_fail_closed() -> None:

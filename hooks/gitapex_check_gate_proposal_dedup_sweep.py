@@ -22,7 +22,7 @@ The only accepted verdict is `NEW` (issue #2097). A `DUPLICATE-OF #<N>`
 or `ABSORBED-BY <gate-id>` repair records an append-only recurrence
 comment on the existing family issue instead of creating a standalone
 issue, so a creation carrying either verdict is a stale procedure and is
-denied. Both shapes are still recognized as sweep lines, so a second,
+denied. Any verdict text is recognized as a sweep line, so a second,
 non-NEW line next to a NEW one trips the ambiguity check rather than
 going unseen. The count-match is the freshness proof.
 
@@ -141,7 +141,7 @@ _INDENTED_CODE_RE = re.compile(r"^(?:[ ]{4}|\t).*$", re.MULTILINE)
 
 _SWEEP_RE = re.compile(
     r"^[ \t]*Dedup-sweep:[ \t]*(\d+)[ \t]+open[ \t]+gate-proposal[ \t]+issues[ \t]+at[ \t]+(\S+)"
-    r"[ \t]*;[ \t]*verdict[ \t]+(NEW|DUPLICATE-OF[ \t]+#\d+|ABSORBED-BY[ \t]+\S+)[ \t]*$",
+    r"[ \t]*;[ \t]*verdict[ \t]+(\S(?:[^\r\n]*\S)?)[ \t]*$",
     re.IGNORECASE | re.MULTILINE,
 )
 

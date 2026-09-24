@@ -100,15 +100,26 @@ assume otherwise: neither one proves the filing is real, so both fall
 through to the same re-file path rather than one silently trusting an
 inconclusive check. A `Filed as:` line that does not re-verify this way
 is treated exactly like an unconfirmed write: proceed to (re-)file that
-repair through the flows above, as if the line were absent, rather than
-trusting its mere presence. The exact-title search and the recurrence
+repair, as if the line were absent, rather than trusting its mere
+presence.
+
+Step 4b verdicts and CLUSTER membership live only in memory, so a
+resumed run has neither. Before re-filing a repair that lacks a
+confirmed line, look for its existing record first: an open
+`gate-proposal` issue whose body carries `Refs #<this retrospective>`
+and an ACM row whose Criterion is this repair's own label (a family
+issue created before the interruption), or a comment carrying this
+repair's own recurrence key. If one is found, record `Filed as:` for it
+and stop. Only when none is found, re-run Step 4b for the repairs still
+unrecorded, then file them through the flows above. The exact-title search and the recurrence
 key check are the backstops against a duplicate either way.
 
 ## Close condition
 
 Close once every `missing-deterministic-gate` repair from this cycle
-carries a confirmed `Filed as:` line (zero such repairs is the trivial
-case). This follows the same attended/unattended rule the fast-close
+carries a confirmed `Filed as:` line, except one tagged
+`review-worked-as-designed` or one carrying `Covered by:` (an
+ALREADY-SHIPPED verdict); zero such repairs is the trivial case. This follows the same attended/unattended rule the fast-close
 path (`references/zero-repair-fast-close.md`) already uses, now extended
 to every close this step performs, not only the zero-repair case: when
 an operator is present to respond, preview the exact drafted body -- the
