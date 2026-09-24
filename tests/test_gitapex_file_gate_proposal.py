@@ -522,19 +522,54 @@ def test_retro_records_filing_matches_only_its_own_entry() -> None:
     assert builder.retro_records_filing("1. Failed CI rerun\n", 1, 99) is False
 
 
+def _record(body: str, labels: tuple[str, ...] = ("retrospective",), author: str = "retro-bot") -> Any:
+    return builder.RetroRecord(body=body, labels=frozenset(labels), author=author)
+
+
 def test_defeat_forged_recurrence_comments_cannot_escalate() -> None:
     # Issue #2097 battle-test finding: two forged keys naming retros that
     # never recorded this family must not push the count to 3.
     forged = [builder.build_recurrence_comment(5, 1, _row("f")), builder.build_recurrence_comment(6, 1, _row("g"))]
-    count = builder.count_verified_family_occurrences(800, "", forged, {5: _retro(1, 123)})
+    count = builder.count_verified_family_occurrences(800, "", forged, {5: _record(_retro(1, 123))}, {"retro-bot"})
     assert count == 1
     assert not builder.needs_escalation(count)
+
+
+@pytest.mark.parametrize(
+    ("labels", "author"),
+    [(("retrospective",), "attacker"), (("bug",), "retro-bot"), ((), "retro-bot")],
+)
+def test_defeat_forged_retro_issue_whose_body_records_the_filing(labels: tuple[str, ...], author: str) -> None:
+    # Re-run finding: an attacker opens their own issue whose body does
+    # record `Filed as: #800`, then comments the matching key. Two such
+    # pairs would reach the threshold if the body alone were trusted.
+    keys = [builder.build_recurrence_comment(5, 1, _row("f")), builder.build_recurrence_comment(6, 1, _row("g"))]
+    forged = {5: _record(_retro(1, 800), labels, author), 6: _record(_retro(1, 800), labels, author)}
+    count = builder.count_verified_family_occurrences(800, "", keys, forged, {"retro-bot"})
+    assert count == 1
+
+
+def test_is_trusted_retro_requires_label_and_author() -> None:
+    assert builder.is_trusted_retro(_record("x"), {"retro-bot"}) is True
+    assert builder.is_trusted_retro(_record("x", author="github-actions[bot]"), {"retro-bot", "github-actions[bot]"})
+    assert builder.is_trusted_retro(_record("x", author="other"), {"retro-bot"}) is False
+    assert builder.is_trusted_retro(_record("x", labels=("gate-proposal",)), {"retro-bot"}) is False
+
+
+def test_defeat_a_bare_string_of_trusted_authors_is_rejected() -> None:
+    # `"bot" in "retro-bot"` is True: a bare string would turn membership
+    # into substring matching and trust an author named `bot`.
+    with pytest.raises(TypeError, match="trusted_authors"):
+        builder.is_trusted_retro(_record("x", author="bot"), "retro-bot")
+    assert builder.is_trusted_retro(_record("x", author=""), {""}) is False
 
 
 def test_verified_and_own_keys_count() -> None:
     prior = builder.build_recurrence_comment(5, 1, _row("p"))
     own = builder.build_recurrence_comment(7, 2, _row("o"))
-    count = builder.count_verified_family_occurrences(800, "", [prior, own], {5: _retro(1, 800)}, own_keys=[(7, 2)])
+    count = builder.count_verified_family_occurrences(
+        800, "", [prior, own], {5: _record(_retro(1, 800))}, {"retro-bot"}, own_keys=[(7, 2)]
+    )
     assert count == 3
     assert builder.needs_escalation(count)
 

@@ -17,10 +17,12 @@ inputs:
     first line is `Recurrence: retro #655 repair 3`.
 
     You post this run's own comment (`Recurrence: retro #661 repair 1`),
-    and re-listing confirms it. Re-fetching retrospective #655 shows its
-    repair 3 entry carries `Filed as: #820`. Running
+    and re-listing confirms it. You run as `retro-bot`. Re-fetching #655
+    shows it is labelled `retrospective`, was authored by `retro-bot`, and
+    its repair 3 entry carries `Filed as: #820`. Running
     `count_verified_family_occurrences` on #820's body, both comments,
-    that retrospective body and this run's own key returns 3.
+    that record, `{retro-bot, github-actions[bot]}` as trusted authors and
+    this run's own key returns 3.
     `needs_escalation(3)` is true.
 
     No operator is available to respond. Write the retrospective body and

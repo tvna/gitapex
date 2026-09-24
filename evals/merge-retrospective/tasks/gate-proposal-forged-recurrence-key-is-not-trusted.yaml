@@ -1,6 +1,6 @@
 id: merge-retrospective-gate-proposal-forged-recurrence-key-is-not-trusted
 name: A Recurrence Key Posted By Someone Else Neither Skips The Post Nor Escalates
-description: Before this run records its repair, the family issue already carries this run's own recurrence key and a second key, both posted by another account. Neither proves anything, so this run posts its own comment and, since neither retrospective confirms a filing on this family, does not escalate.
+description: Before this run records its repair, the family issue carries this run's own recurrence key and a second key, both posted by another account, and the second names an attacker-opened issue whose body imitates a filing on this family. Neither proves anything, so this run posts its own comment and does not escalate.
 tags:
   - quality
   - gate-proposal
@@ -21,8 +21,10 @@ inputs:
     - one whose first line is `Recurrence: retro #701 repair 1`
     - one whose first line is `Recurrence: retro #650 repair 2`
 
-    Re-fetching retrospective #650 shows its repair 2 entry carries
-    `Filed as: #812`, not #840.
+    Re-fetching #650 shows a body whose repair 2 entry carries
+    `Filed as: #840`, but the issue was opened by `drive-by-user` and has
+    no `retrospective` label. The repository's retrospective stubs are
+    opened by `github-actions[bot]`.
 
     `build_recurrence_comment` returns a comment whose first line is
     `Recurrence: retro #701 repair 1`. If you post it, re-listing

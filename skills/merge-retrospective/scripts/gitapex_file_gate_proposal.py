@@ -46,7 +46,7 @@ from __future__ import annotations
 
 import datetime as _datetime
 import re as _re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import NamedTuple
 
 # The literal label name every `gate-proposal`-classified issue this
@@ -417,19 +417,47 @@ def retro_records_filing(retro_body: str, repair_index: int, family_issue_number
     return False
 
 
+# The label every retrospective issue carries (SKILL.md Step 5).
+RETROSPECTIVE_LABEL = "retrospective"
+
+
+class RetroRecord(NamedTuple):
+    """A re-fetched issue a recurrence key names: its body, label names and
+    author login, exactly as the GitHub API returned them."""
+
+    body: str
+    labels: frozenset[str]
+    author: str
+
+
+def is_trusted_retro(record: RetroRecord, trusted_authors: Collection[str]) -> bool:
+    """True iff `record` is a retrospective this procedure wrote: labelled
+    `retrospective` and authored by one of `trusted_authors` -- the account
+    the run posts as, plus whatever account opens the repository's
+    retrospective stubs (Step 0 fills a stub in place, so its author stays
+    the opener's). Anyone can open an issue whose body imitates a repair
+    entry, so body content alone proves nothing (issue #2097)."""
+    if isinstance(trusted_authors, str):
+        raise TypeError("trusted_authors must be a collection of logins, not a single string")
+    return RETROSPECTIVE_LABEL in record.labels and bool(record.author) and record.author in trusted_authors
+
+
 def count_verified_family_occurrences(
     family_issue_number: int,
     family_body: str,
     comment_bodies: Iterable[str],
-    retro_bodies: Mapping[int, str],
+    retro_records: Mapping[int, RetroRecord],
+    trusted_authors: Collection[str],
     own_keys: Iterable[tuple[int, int]] = (),
 ) -> int:
     """`count_family_occurrences`, counting a recurrence key only when it
     is one of `own_keys` (posted by this run, whose retrospective line is
-    not written yet) or `retro_records_filing` confirms it against the
-    re-fetched body in `retro_bodies`. An unverifiable key -- a forged
-    comment, or a retrospective that no longer exists -- adds nothing, so
-    a forged line can never push a family over the threshold."""
+    not written yet), or when the issue it names is a trusted
+    retrospective (`is_trusted_retro`) whose re-fetched body records that
+    repair as `Filed as:` this family (`retro_records_filing`). An
+    unverifiable key -- a forged comment, a forged issue, or a
+    retrospective that no longer exists -- adds nothing, so a forged line
+    can never push a family over the threshold."""
     own = set(own_keys)
     consolidated: set[int] = set()
     for line_match in CONSOLIDATES_LINE_RE.finditer(_normalize_newlines(family_body)):
@@ -438,7 +466,11 @@ def count_verified_family_occurrences(
         (retro, index)
         for retro, index in parse_recurrence_keys(comment_bodies)
         if (retro, index) in own
-        or (retro in retro_bodies and retro_records_filing(retro_bodies[retro], index, family_issue_number))
+        or (
+            retro in retro_records
+            and is_trusted_retro(retro_records[retro], trusted_authors)
+            and retro_records_filing(retro_records[retro].body, index, family_issue_number)
+        )
     }
     return 1 + len(consolidated) + len(verified | own)
 
