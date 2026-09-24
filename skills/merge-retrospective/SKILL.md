@@ -68,6 +68,7 @@ N. [one-line label] <what happened and how it was fixed, in prose>
    Proposed gate: <durable gate text -- only for "missing deterministic gate">
    Filed as: #<issue number> -- present once Step 5 confirms the filed issue exists
    Absorbed by: `<ssot gate id>` <only for an ABSORBED-BY verdict>
+   Covered by: `<ssot gate id>` <only for ALREADY-SHIPPED, in place of Filed as>
    Tag: review-worked-as-designed <only when Step 4's own bar is met -- see below>
    Recurrence note: <only present when repairs share a recurring thesis>
 ```
