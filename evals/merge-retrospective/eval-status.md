@@ -6,7 +6,7 @@ compliance, not gap-closure. Only `claude-sonnet-4.6` has been evaluated;
 cross-model behavior is currently unmeasured.
 
 As of issue #312/#328 (a held-out fixture corpus, following the
-`evaluating-skill-quality/split.md` precedent), the suite has **41
+`evaluating-skill-quality/split.md` precedent), the suite has **42
 committed task files**: 25 across the 12:7:6 train/selection/test split
 (see `evals/merge-retrospective/split.md` for the full equivalence-class
 table and blind-spot pass -- issue #1621's own class 11 added 3 of the
@@ -24,16 +24,17 @@ adversarial-review pass (a resumed run must re-verify a pre-existing
 `Filed as:` line by re-fetch before trusting it, rather than treating its
 mere presence in an externally-editable issue body as proof of a
 completed filing -- `battle-testing-a-skill`'s dimension 13 finding,
-fixed in the same PR that found it). Issue #2097 added 10 more
+fixed in the same PR that found it). Issue #2097 added 11 more
 not-yet-split-assigned `gate-proposal-*` fixtures for per-family filing:
 a verified cluster files one family issue; a duplicate posts a
 recurrence comment instead of creating and closing an issue; concurrent
 runs keep both records; an ABSORBED-BY repair lands on its mechanism's
-`extend` issue; an undeclared ABSORBED-BY id falls back to NEW; a third
+`extend` issue; an ABSORBED-BY id that is undeclared or missing from the registry falls
+back to NEW; a third
 occurrence escalates; a second does not; a closed DUPLICATE-OF target
 falls back to NEW; a CLUSTER naming two different fixes is split; a
 recurrence key posted by another account is not trusted. That brings
-the not-yet-split set to 16. The former Step 0 carry-forward check (added to
+the not-yet-split set to 17. The former Step 0 carry-forward check (added to
 `SKILL.md`, Refs #108) had committed eval coverage from two of the 20
 split fixtures (`carried-forward-gate-unimplemented-train.yaml`,
 `carried-forward-gate-implemented-test.yaml`), exercising a prior

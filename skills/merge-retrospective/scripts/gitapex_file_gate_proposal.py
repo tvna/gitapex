@@ -46,7 +46,7 @@ from __future__ import annotations
 
 import datetime as _datetime
 import re as _re
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from typing import NamedTuple
 
 # The literal label name every `gate-proposal`-classified issue this
@@ -389,90 +389,44 @@ def count_family_occurrences(family_body: str, comment_bodies: Iterable[str]) ->
     return 1 + len(consolidated) + len(parse_recurrence_keys(comment_bodies))
 
 
-# A retrospective body's full repair entry starts `N. [label] ...` at
-# column 0; its `Filed as: #M` line follows, indented, before the next
-# entry. The up-front index-only list reuses the same `N.` prefix but
-# never carries a `Filed as:` line, so it can never verify a key.
-_REPAIR_ENTRY_START_RE = _re.compile(r"^(\d+)\.[ \t]", _re.MULTILINE)
-_FILED_AS_RE = _re.compile(r"^[ \t]*Filed as:[ \t]*#(\d+)[ \t]*$", _re.MULTILINE)
-
-
-def retro_records_filing(retro_body: str, repair_index: int, family_issue_number: int) -> bool:
-    """True iff `retro_body` has a repair entry numbered `repair_index`
-    whose own `Filed as:` line names `family_issue_number`.
-
-    A recurrence comment is externally authored text: anyone who can
-    comment can post a `Recurrence: retro #R repair K` line. Its key
-    counts only once retrospective #R's own body, re-fetched, confirms
-    repair K was recorded on this family -- the same re-fetch discipline
-    Step 5 already applies to a `Filed as:` line (issue #2097)."""
-    text = _normalize_newlines(retro_body)
-    starts = list(_REPAIR_ENTRY_START_RE.finditer(text))
-    for position, start in enumerate(starts):
-        if int(start.group(1)) != repair_index:
-            continue
-        end = starts[position + 1].start() if position + 1 < len(starts) else len(text)
-        if any(int(m.group(1)) == family_issue_number for m in _FILED_AS_RE.finditer(text, start.start(), end)):
-            return True
-    return False
-
-
-# The label every retrospective issue carries (SKILL.md Step 5).
-RETROSPECTIVE_LABEL = "retrospective"
-
-
-class RetroRecord(NamedTuple):
-    """A re-fetched issue a recurrence key names: its body, label names and
-    author login, exactly as the GitHub API returned them."""
+class RecurrenceComment(NamedTuple):
+    """One comment on a family issue: its body and its author login, exactly
+    as the GitHub API returned them."""
 
     body: str
-    labels: frozenset[str]
     author: str
 
 
-def is_trusted_retro(record: RetroRecord, trusted_authors: Collection[str]) -> bool:
-    """True iff `record` is a retrospective this procedure wrote: labelled
-    `retrospective` and authored by one of `trusted_authors` -- the account
-    the run posts as, plus whatever account opens the repository's
-    retrospective stubs (Step 0 fills a stub in place, so its author stays
-    the opener's). Anyone can open an issue whose body imitates a repair
-    entry, so body content alone proves nothing (issue #2097)."""
-    if isinstance(trusted_authors, str):
-        raise TypeError("trusted_authors must be a collection of logins, not a single string")
-    return RETROSPECTIVE_LABEL in record.labels and bool(record.author) and record.author in trusted_authors
-
-
 def count_verified_family_occurrences(
-    family_issue_number: int,
     family_body: str,
-    comment_bodies: Iterable[str],
-    retro_records: Mapping[int, RetroRecord],
+    comments: Iterable[RecurrenceComment],
     trusted_authors: Collection[str],
     own_keys: Iterable[tuple[int, int]] = (),
 ) -> int:
-    """`count_family_occurrences`, counting a recurrence key only when it
-    is one of `own_keys` (posted by this run, whose retrospective line is
-    not written yet), or when the issue it names is a trusted
-    retrospective (`is_trusted_retro`) whose re-fetched body records that
-    repair as `Filed as:` this family (`retro_records_filing`). An
-    unverifiable key -- a forged comment, a forged issue, or a
-    retrospective that no longer exists -- adds nothing, so a forged line
-    can never push a family over the threshold."""
-    own = set(own_keys)
+    """`count_family_occurrences`, counting a recurrence key only when the
+    comment carrying it was authored by one of `trusted_authors` -- the
+    accounts that run this procedure -- or when it is one of `own_keys`
+    (posted by this run).
+
+    Body text proves nothing: anyone who can comment can post a
+    recurrence-shaped line, open an issue imitating a retrospective, or get
+    a multi-line quote carrying a `Filed as:` line into a real
+    retrospective's prose. A comment's author is recorded by GitHub and
+    cannot be forged from text, so it is the one signal a key is trusted on
+    (issue #2097). An untrusted key adds nothing; a legitimate key posted
+    under an account missing from `trusted_authors` is undercounted, which
+    fails safe (no label) rather than open.
+    """
+    if isinstance(trusted_authors, str):
+        # `"bot" in "retro-bot"` is True: a bare string would turn
+        # membership into substring matching.
+        raise TypeError("trusted_authors must be a collection of logins, not a single string")
+    trusted_bodies = [comment.body for comment in comments if comment.author and comment.author in trusted_authors]
+    keys = parse_recurrence_keys(trusted_bodies) | set(own_keys)
     consolidated: set[int] = set()
     for line_match in CONSOLIDATES_LINE_RE.finditer(_normalize_newlines(family_body)):
         consolidated.update(int(ref) for ref in _ISSUE_REF_RE.findall(line_match.group(1)))
-    verified = {
-        (retro, index)
-        for retro, index in parse_recurrence_keys(comment_bodies)
-        if (retro, index) in own
-        or (
-            retro in retro_records
-            and is_trusted_retro(retro_records[retro], trusted_authors)
-            and retro_records_filing(retro_records[retro].body, index, family_issue_number)
-        )
-    }
-    return 1 + len(consolidated) + len(verified | own)
+    return 1 + len(consolidated) + len(keys)
 
 
 def needs_escalation(occurrence_count: int) -> bool:

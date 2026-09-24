@@ -61,16 +61,13 @@ run posts as (`mcp__github__get_me`) -- a prior run of this procedure.
 The same line from any other author proves nothing; post anyway.
 Otherwise post the comment with `mcp__github__add_issue_comment` and
 re-list the comments to confirm it landed. Then apply 4b.3's escalation
-rule: re-fetch the body and comments, re-fetch every issue the other
-recurrence keys name (body, labels and author), and compute
-`count_verified_family_occurrences` with this run's own key as
-`own_keys`. Pass as `trusted_authors` the account this run posts as,
-plus the account the repository's retrospective-stub opener runs as
-(this repository's own: `github-actions[bot]`), since Step 0 fills a
-stub in place. A key counts only when its issue is labelled
-`retrospective`, was authored by one of those accounts, and records
-that repair as `Filed as:` this family -- anyone can open an issue
-whose body imitates a repair entry. If `needs_escalation` holds
+rule: re-fetch the body and every comment with its author login, and
+compute `count_verified_family_occurrences` with this run's own key as
+`own_keys` and, as `trusted_authors`, every account that runs this
+procedure (at least the one this run posts as). A key counts only when
+the comment carrying it was authored by one of those accounts: comment
+text, the issue a key names, and even a quote inside a real
+retrospective can all be forged, but a comment's author cannot. If `needs_escalation` holds
 and the issue lacks `GATE_PROPOSAL_ESCALATED_LABEL`, write the union
 of its current labels and that label.
 
