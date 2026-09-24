@@ -52,3 +52,20 @@ def test_gate_proposal_label_stays_in_sync_between_the_two_copies() -> None:
         ".github/scripts/gitapex_scan_retrospective_gate_drift.py's GATE_PROPOSAL_LABEL "
         "values have drifted apart -- update both together (issue #1406)"
     )
+
+
+# Issue #2097: the escalation label, threshold, and the two record-line
+# regexes the family counter reads have a third, CI-side copy in the
+# consolidation scan -- same install-time reason as the label above.
+CONSOLIDATION_COPY = REPO_ROOT / ".github" / "scripts" / "gitapex_scan_gate_proposal_consolidation_drift.py"
+
+
+def test_family_record_constants_stay_in_sync() -> None:
+    skill_module = _load_module(SKILL_COPY, "_retro_gate_label_sync__skill_family")
+    scan_module = _load_module(CONSOLIDATION_COPY, "_retro_gate_label_sync__scan_family")
+    assert skill_module.GATE_PROPOSAL_ESCALATED_LABEL == scan_module.GATE_PROPOSAL_ESCALATED_LABEL
+    assert skill_module.ESCALATION_THRESHOLD == scan_module.ESCALATION_THRESHOLD
+    assert skill_module.RECURRENCE_LINE_RE.pattern == scan_module.RECURRENCE_LINE_RE.pattern
+    assert skill_module.RECURRENCE_LINE_RE.flags == scan_module.RECURRENCE_LINE_RE.flags
+    assert skill_module.CONSOLIDATES_LINE_RE.pattern == scan_module._CONSOLIDATES_LINE_RE.pattern
+    assert skill_module.CONSOLIDATES_LINE_RE.flags == scan_module._CONSOLIDATES_LINE_RE.flags

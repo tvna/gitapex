@@ -589,3 +589,145 @@ def test_main_exits_one_on_github_api_error_during_graphql_fetch(monkeypatch: py
 
     monkeypatch.setattr(csd, "fetch_issue_duplicate_state", raise_api_error)
     assert csd.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Issue #2097: reverse direction and escalation consistency
+# ---------------------------------------------------------------------------
+
+
+def test_find_unlisted_duplicates_flags_the_1800_2089_shape() -> None:
+    # #1800 is open and lists five sources; #2089 was closed as its
+    # duplicate but never appended to the Consolidates: line.
+    unlisted = csd.find_unlisted_duplicates(
+        open_numbers={1800},
+        referenced_numbers_by_umbrella={1800: [1801, 1802, 1803, 1804, 1805]},
+        duplicate_targets={1801: 1800, 2089: 1800},
+    )
+    assert unlisted == {1800: [2089]}
+
+
+def test_find_unlisted_duplicates_ignores_closed_or_unknown_targets() -> None:
+    unlisted = csd.find_unlisted_duplicates(
+        open_numbers={1800},
+        referenced_numbers_by_umbrella={},
+        duplicate_targets={10: 999, 11: None},
+    )
+    assert unlisted == {}
+
+
+def test_find_unlisted_duplicates_flags_umbrella_with_no_consolidates_line() -> None:
+    assert csd.find_unlisted_duplicates({50}, {}, {7: 50}) == {50: [7]}
+
+
+def _record(number: int, body: str = "", labels: list[str] | None = None, comments: int = 0) -> dict[str, Any]:
+    return {"number": number, "body": body, "labels": [{"name": n} for n in labels or []], "comments": comments}
+
+
+def test_count_family_occurrences_matches_builder_semantics() -> None:
+    comments = ["Recurrence: retro #5 repair 1\n...", "Recurrence: retro #5 repair 1", "Recurrence: retro #6 repair 2"]
+    assert csd.count_family_occurrences("Consolidates: #1, #2", comments) == 1 + 2 + 2
+
+
+def test_find_missing_escalations_flags_unlabelled_family_at_threshold() -> None:
+    records = [_record(100), _record(101, labels=["gate-proposal", "gate-proposal-escalated"]), _record(102)]
+    comments = {
+        100: ["Recurrence: retro #1 repair 1", "Recurrence: retro #2 repair 1"],
+        101: ["Recurrence: retro #1 repair 1", "Recurrence: retro #2 repair 1"],
+        102: ["Recurrence: retro #1 repair 1"],
+    }
+    assert csd.find_missing_escalations(records, comments) == {100: 3}
+
+
+def test_find_missing_escalations_does_not_flag_label_below_threshold() -> None:
+    assert csd.find_missing_escalations([_record(5, labels=["gate-proposal-escalated"])], {}) == {}
+
+
+def test_format_family_drift_report_empty_when_clean() -> None:
+    assert csd.format_family_drift_report({}, {}) == ""
+
+
+def test_format_family_drift_report_names_every_finding() -> None:
+    report = csd.format_family_drift_report({1800: [2089]}, {100: 3})
+    assert "#1800 is missing closed duplicate(s) from its Consolidates: line: #2089" in report
+    assert "#100 records 3 occurrences (threshold 3) but lacks the 'gate-proposal-escalated' label" in report
+    assert report.endswith("FAIL: 2 family-record finding(s).")
+
+
+def test_fetch_issue_comment_bodies_pages_to_exhaustion() -> None:
+    pages = [[{"body": f"c{i}"} for i in range(100)], [{"body": None}, {"body": "last"}]]
+    seen: list[str] = []
+
+    def opener(request: urllib.request.Request) -> Response:
+        seen.append(request.full_url)
+        return Response(200, json.dumps(pages[len(seen) - 1]))
+
+    bodies = csd.fetch_issue_comment_bodies("tvna", "gitapex", 1800, "tok", opener=opener, sleeper=lambda _: None)
+    assert len(bodies) == 102
+    assert bodies[-2:] == ["", "last"]
+    assert seen[1].endswith("/issues/1800/comments?per_page=100&page=2")
+
+
+def test_fetch_issue_comment_bodies_raises_on_non_object_page() -> None:
+    def opener(request: urllib.request.Request) -> Response:
+        return Response(200, json.dumps(["not an object"]))
+
+    with pytest.raises(csd.GitHubApiError, match="non-list or non-object"):
+        csd.fetch_issue_comment_bodies("tvna", "gitapex", 1, "tok", opener=opener, sleeper=lambda _: None)
+
+
+def _patch_lists(
+    monkeypatch: pytest.MonkeyPatch, open_records: list[dict[str, Any]], closed: list[dict[str, Any]]
+) -> None:
+    def fake_list(owner: str, repo: str, label: str, token: str, **kwargs: Any) -> list[dict[str, Any]]:
+        return open_records if kwargs.get("state") == "open" else closed
+
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(csd.gate_drift, "label_exists", lambda *a, **k: True)
+    monkeypatch.setattr(csd.gate_drift, "list_labelled_issue_records", fake_list)
+
+
+def test_main_fails_on_unlisted_closed_duplicate(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _patch_lists(
+        monkeypatch,
+        [_umbrella_record(1800, [1801])],
+        [{"number": 1801, "state_reason": "duplicate"}, {"number": 2089, "state_reason": "duplicate"}],
+    )
+    monkeypatch.setattr(csd, "fetch_issue_duplicate_state", lambda owner, repo, number, token: _verified_state(1800))
+    exit_code = csd.main(["--owner", "tvna", "--repo", "gitapex"])
+    stdout = capsys.readouterr().out
+    assert exit_code == 1
+    assert "#1800 is missing closed duplicate(s) from its Consolidates: line: #2089" in stdout
+
+
+def test_main_fails_on_missing_escalation_and_skips_comment_free_issues(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _patch_lists(monkeypatch, [_record(300, comments=2), _record(301)], [])
+    fetched: list[int] = []
+
+    def fake_comments(owner: str, repo: str, number: int, token: str) -> list[str]:
+        fetched.append(number)
+        return ["Recurrence: retro #1 repair 1", "Recurrence: retro #2 repair 3"]
+
+    monkeypatch.setattr(csd, "fetch_issue_comment_bodies", fake_comments)
+    exit_code = csd.main(["--owner", "tvna", "--repo", "gitapex"])
+    assert exit_code == 1
+    assert fetched == [300]
+    assert "#300 records 3 occurrences" in capsys.readouterr().out
+
+
+def test_main_passes_when_family_records_are_consistent(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_lists(
+        monkeypatch,
+        [_record(300, labels=["gate-proposal-escalated"], comments=2)],
+        [{"number": 9, "state_reason": "completed"}],
+    )
+    monkeypatch.setattr(
+        csd,
+        "fetch_issue_comment_bodies",
+        lambda *a, **k: ["Recurrence: retro #1 repair 1", "Recurrence: retro #2 repair 3"],
+    )
+    assert csd.main(["--owner", "tvna", "--repo", "gitapex"]) == 0

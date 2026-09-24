@@ -15,6 +15,20 @@ body carries a `Consolidates: #a, #b, ...` line, it verifies each
 referenced issue number is CLOSED with `state_reason: duplicate` AND
 GraphQL `Issue.duplicateOf.number` pointing back to that same umbrella.
 
+Issue #2097 adds two family-record checks over the same label:
+
+- Reverse direction: every CLOSED gate-proposal issue closed as a
+  duplicate of an OPEN gate-proposal issue must be listed on that issue's
+  `Consolidates:` line. #2089, closed as a duplicate of #1800 but never
+  appended to it, is the shape this catches -- the forward check above
+  only ever reads the numbers a line already names.
+- Escalation consistency: an OPEN gate-proposal issue whose occurrence
+  count (1 + `Consolidates:` sources + distinct `Recurrence: retro #R
+  repair K` comment keys) reached `ESCALATION_THRESHOLD` must carry
+  `GATE_PROPOSAL_ESCALATED_LABEL`. Disclosed limit: anyone who can
+  comment can post a recurrence-shaped line, so the count proves record
+  shape, not authorship.
+
 Primary-source grounding for the GraphQL dependency (issue #1653's own
 research, not re-derived here): GitHub's REST API documents no read-side
 field naming which issue a closed issue is a duplicate of (only
@@ -73,7 +87,9 @@ Exit codes:
        Consolidates: line at all is not a violation.
     1  At least one referenced issue is still open, closed for a
        different reason, closed as a duplicate of a different issue, or
-       could not be resolved at all, or the `gate-proposal` label itself
+       could not be resolved at all, or a closed duplicate is missing from
+       its open umbrella's Consolidates: line, or a family reached the
+       escalation threshold without its label, or the `gate-proposal` label itself
        does not exist, or a GitHub API error prevented the check from
        completing (never silently reported as "zero issues found").
 """
@@ -105,6 +121,17 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 # (found by an adversarial review pass against this script's own diff).
 _CONSOLIDATES_LINE_RE = re.compile(r"^Consolidates:[ \t]*(#\d+(?:,[ \t]*#\d+)*)[ \t]*$", re.MULTILINE)
 _ISSUE_REF_RE = re.compile(r"#(\d+)")
+
+# Issue #2097: independent copies of the literals
+# skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py defines
+# (a cross-tree import would break at install time -- see
+# gitapex_scan_retrospective_gate_drift.py's own GATE_PROPOSAL_LABEL note),
+# kept equal by tests/test_gitapex_retro_gate_label_sync.py.
+GATE_PROPOSAL_ESCALATED_LABEL = "gate-proposal-escalated"
+ESCALATION_THRESHOLD = 3
+RECURRENCE_LINE_RE = re.compile(r"^Recurrence: retro #(\d+) repair (\d+)[ \t]*$", re.MULTILINE)
+
+_COMMENTS_PER_PAGE = 100
 
 # GraphQL is the only documented way to read "which issue is this closed
 # as a duplicate of" -- see module docstring. `owner`/`repo`/`number` are
@@ -211,6 +238,75 @@ def find_consolidation_violations(
     return violations_by_umbrella
 
 
+def find_unlisted_duplicates(
+    open_numbers: set[int],
+    referenced_numbers_by_umbrella: dict[int, list[int]],
+    duplicate_targets: dict[int, int | None],
+) -> dict[int, list[int]]:
+    """Reverse direction (issue #2097): return `{umbrella: [closed
+    duplicates missing from its Consolidates: line]}` for every closed
+    issue `duplicate_targets` says was closed as a duplicate of an OPEN
+    gate-proposal issue that does not list it -- the #1800/#2089 shape,
+    where a best-effort append was lost. A duplicate of a closed or
+    non-gate-proposal issue is outside this check's scope."""
+    unlisted: dict[int, list[int]] = {}
+    for number, target in duplicate_targets.items():
+        if target is None or target not in open_numbers:
+            continue
+        if number not in referenced_numbers_by_umbrella.get(target, []):
+            unlisted.setdefault(target, []).append(number)
+    return unlisted
+
+
+def count_family_occurrences(family_body: str, comment_bodies: list[str]) -> int:
+    """Independent copy of the skill builder's own counter (see
+    `RECURRENCE_LINE_RE`'s comment): 1 for the original filing, plus each
+    distinct `Consolidates:` source, plus each distinct recurrence key."""
+    keys = {
+        (int(match.group(1)), int(match.group(2)))
+        for body in comment_bodies
+        for match in RECURRENCE_LINE_RE.finditer(body or "")
+    }
+    return 1 + len(extract_consolidates_issue_numbers(family_body)) + len(keys)
+
+
+def find_missing_escalations(
+    open_records: list[dict[str, Any]],
+    comment_bodies_by_number: dict[int, list[str]],
+) -> dict[int, int]:
+    """Return `{family issue: occurrence count}` for every OPEN
+    gate-proposal issue whose count reached `ESCALATION_THRESHOLD` but
+    which does not carry `GATE_PROPOSAL_ESCALATED_LABEL` (issue #2097).
+    The reverse case -- the label on an issue under the threshold -- is
+    not flagged: a human may escalate a family on their own judgment."""
+    missing: dict[int, int] = {}
+    for record in open_records:
+        number = record["number"]
+        count = count_family_occurrences(record.get("body") or "", comment_bodies_by_number.get(number, []))
+        if count < ESCALATION_THRESHOLD:
+            continue
+        label_names = {label.get("name") for label in record.get("labels") or [] if isinstance(label, dict)}
+        if GATE_PROPOSAL_ESCALATED_LABEL not in label_names:
+            missing[number] = count
+    return missing
+
+
+def format_family_drift_report(unlisted: dict[int, list[int]], missing_escalations: dict[int, int]) -> str:
+    """Report lines for the two issue #2097 checks; empty when both pass."""
+    lines: list[str] = []
+    for umbrella_number in sorted(unlisted):
+        missing = ", ".join(f"#{n}" for n in sorted(unlisted[umbrella_number]))
+        lines.append(f"  #{umbrella_number} is missing closed duplicate(s) from its Consolidates: line: {missing}")
+    for number in sorted(missing_escalations):
+        lines.append(
+            f"  #{number} records {missing_escalations[number]} occurrences (threshold {ESCALATION_THRESHOLD}) "
+            f"but lacks the '{GATE_PROPOSAL_ESCALATED_LABEL}' label"
+        )
+    if lines:
+        lines.append(f"FAIL: {len(lines)} family-record finding(s).")
+    return "\n".join(lines)
+
+
 def format_consolidation_drift_report(violations_by_umbrella: dict[int, list[int]], label: str) -> str:
     """Human-readable report for this check, printed to stdout and
     captured in the CI step summary."""
@@ -286,6 +382,34 @@ def fetch_issue_duplicate_state(
             "duplicate_of_number": duplicate_of_number,
         }
     raise GitHubApiError(f"GraphQL query for issue #{number} failed: HTTP {_gitapex_github_http.format_code(code)}")
+
+
+def fetch_issue_comment_bodies(
+    owner: str,
+    repo: str,
+    number: int,
+    token: str,
+    opener: Callable[[urllib.request.Request], Any] = _gitapex_github_http.default_opener,
+    sleeper: Callable[[float], None] | None = None,
+) -> list[str]:
+    """REST-fetch every comment body on issue `number`, paging to
+    exhaustion. Raises `GitHubApiError` on a failed page rather than
+    returning a partial list that would undercount occurrences."""
+    sleeper = sleeper if sleeper is not None else time.sleep
+    bodies: list[str] = []
+    page = 1
+    while True:
+        url = (
+            f"https://api.github.com/repos/{owner}/{repo}/issues/{number}/comments"
+            f"?per_page={_COMMENTS_PER_PAGE}&page={page}"
+        )
+        items = _gitapex_github_http.fetch_json_page(url, token, opener, sleeper)
+        if not isinstance(items, list) or not all(isinstance(item, dict) for item in items):
+            raise GitHubApiError(f"comments for issue #{number} returned a non-list or non-object page")
+        bodies.extend(str(item.get("body") or "") for item in items)
+        if len(items) < _COMMENTS_PER_PAGE:
+            return bodies
+        page += 1
 
 
 # ---------------------------------------------------------------------------
@@ -377,13 +501,39 @@ def main(argv: list[str] | None = None) -> int:
             number: fetch_issue_duplicate_state(args.owner, args.repo, number, token)
             for number in sorted(all_referenced_numbers)
         }
+
+        # Issue #2097, reverse direction: a closed duplicate pointing at an
+        # open umbrella must appear on that umbrella's Consolidates: line.
+        closed_records = gate_drift.list_labelled_issue_records(
+            args.owner, args.repo, args.label, token, state="closed"
+        )
+        duplicate_targets: dict[int, int | None] = {}
+        for record in closed_records:
+            if record.get("state_reason") != "duplicate":
+                continue
+            state = fetch_issue_duplicate_state(args.owner, args.repo, record["number"], token)
+            duplicate_targets[record["number"]] = state.get("duplicate_of_number") if state else None
+
+        # Issue #2097, escalation: only issues with comments can carry a
+        # recurrence record, so the rest skip the extra request.
+        comment_bodies_by_number = {
+            record["number"]: fetch_issue_comment_bodies(args.owner, args.repo, record["number"], token)
+            for record in open_records
+            if record.get("comments")
+        }
     except GitHubApiError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
     violations_by_umbrella = find_consolidation_violations(referenced_numbers_by_umbrella, referenced_states)
+    open_numbers = {record["number"] for record in open_records}
+    unlisted = find_unlisted_duplicates(open_numbers, referenced_numbers_by_umbrella, duplicate_targets)
+    missing_escalations = find_missing_escalations(open_records, comment_bodies_by_number)
     print(format_consolidation_drift_report(violations_by_umbrella, args.label))
-    return 1 if violations_by_umbrella else 0
+    family_report = format_family_drift_report(unlisted, missing_escalations)
+    if family_report:
+        print(family_report)
+    return 1 if violations_by_umbrella or unlisted or missing_escalations else 0
 
 
 if __name__ == "__main__":
