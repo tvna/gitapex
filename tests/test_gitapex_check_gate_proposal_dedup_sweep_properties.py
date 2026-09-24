@@ -96,3 +96,28 @@ def test_arbitrary_text_never_raises_and_is_deterministic(text: str) -> None:
     second = checker.find_sweep_lines(text)
     assert first == second
     assert isinstance(first, list)
+
+
+_ACM_PREFIX = (
+    "| Criterion | Interpretation | Planned ops | Proof method | Residual risk |\n"
+    "|---|---|---|---|---|\n"
+    "| x | y | z | proof | none |\n\nRefs #1\n\n"
+)
+
+
+@_PROPERTIES
+@given(count=_COUNTS, timestamp=_TIMESTAMPS, verdict=_VERDICTS)
+def test_evaluate_accepts_exactly_new_and_duplicate_of(count: int, timestamp: str, verdict: str) -> None:
+    """Issue #2097: `evaluate`'s verdict check passes NEW and
+    DUPLICATE-OF #<N> (reaching the token check next) and denies every
+    other generated verdict, ABSORBED-BY included. An empty token keeps
+    this network-free: the verdict check runs before the token check."""
+    passed, message = checker.evaluate(
+        "tvna", "gitapex", "create", ["gate-proposal"], _ACM_PREFIX + _sweep_line(count, timestamp, verdict), ""
+    )
+    assert passed is False
+    if verdict.startswith("ABSORBED-BY"):
+        assert "never creates an issue" in message
+    else:
+        assert "never creates an issue" not in message
+        assert "GH_TOKEN" in message
