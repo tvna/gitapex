@@ -1,0 +1,32 @@
+id: merge-retrospective-gate-proposal-third-occurrence-escalates-family
+name: A Third Occurrence Escalates The Family Instead Of Filing Anything New
+description: A family issue already records its original filing and one recurrence. A new matching repair is recorded as a recurrence, which brings the occurrence count to three, so the family gets the gate-proposal-escalated label and nothing new is filed.
+tags:
+  - quality
+  - gate-proposal
+  - escalation
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #660 ("feat: add audit log") merged into
+    main. You created retrospective #661.
+
+    One missing-deterministic-gate repair occurred: a docs page stated a
+    stale count of hooks. The Step 4b review returned DUPLICATE-OF #820,
+    which you confirmed is open and labelled `gate-proposal` only. Its
+    body has no `Consolidates:` line. It already has one comment whose
+    first line is `Recurrence: retro #655 repair 3`.
+
+    You post this run's own comment (`Recurrence: retro #661 repair 1`),
+    and re-listing confirms it. Re-fetching #820 and running
+    `count_family_occurrences` on its body and both comments returns 3.
+    `needs_escalation(3)` is true.
+
+    No operator is available to respond. Write the retrospective body and
+    state what, if anything, you did to #820 beyond the comment.
+expected:
+  output_contains:
+    - "gate-proposal-escalated"
+    - "Filed as: #820"
+    - "Recurrence: retro #661 repair 1"
+  output_not_contains:
+    - "gate-proposal: retro #661 repair 1"

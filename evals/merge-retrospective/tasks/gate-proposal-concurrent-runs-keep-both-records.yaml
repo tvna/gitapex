@@ -1,0 +1,34 @@
+id: merge-retrospective-gate-proposal-concurrent-runs-keep-both-records
+name: Concurrent Runs On One Umbrella Each Keep Their Own Recurrence Record
+description: Another retrospective run posted its own recurrence comment on the same umbrella moments ago. This run posts its own comment rather than editing the umbrella body, and it does not treat the other run's record as its own. Both repairs stay recorded.
+tags:
+  - quality
+  - gate-proposal
+  - concurrency
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #620 ("feat: paginate search") merged
+    into main. You created retrospective #621.
+
+    One missing-deterministic-gate repair occurred: an unpinned GitHub
+    Action tag failed a workflow lint. The Step 4b review returned
+    DUPLICATE-OF #1810. You re-fetched it and confirmed it is open and
+    labelled `gate-proposal`.
+
+    Listing #1810's comments shows one posted 40 seconds ago by a
+    concurrent run whose first line is `Recurrence: retro #619 repair 2`.
+    No comment carries this run's own key.
+
+    `build_recurrence_comment` returns a comment whose first line is
+    `Recurrence: retro #621 repair 1`. Posting it succeeds, and re-listing
+    shows both comments.
+
+    No operator is available to respond. Write the retrospective body and
+    state which records now exist on #1810.
+expected:
+  output_contains:
+    - "Recurrence: retro #621 repair 1"
+    - "Recurrence: retro #619 repair 2"
+    - "Filed as: #1810"
+  output_not_contains:
+    - "Consolidates: #621"

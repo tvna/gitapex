@@ -1,0 +1,32 @@
+id: merge-retrospective-gate-proposal-second-occurrence-does-not-escalate
+name: A Second Occurrence Records A Recurrence Without Escalating
+description: A family issue records only its original filing. A new matching repair brings its occurrence count to two, below the threshold, so the repair gets a recurrence comment, the family gets no escalation label, and nothing new is filed.
+tags:
+  - quality
+  - gate-proposal
+  - escalation
+  - restraint
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #670 ("fix: guard empty config") merged
+    into main. You created retrospective #671.
+
+    One missing-deterministic-gate repair occurred: a hardcoded list of
+    skill names in a test missed a newly added skill. The Step 4b review
+    returned DUPLICATE-OF #830, which you confirmed is open and labelled
+    `gate-proposal`. Its body has no `Consolidates:` line, and it has no
+    comments.
+
+    You post this run's own comment (`Recurrence: retro #671 repair 1`),
+    and re-listing confirms it. `count_family_occurrences` then returns 2,
+    and `needs_escalation(2)` is false.
+
+    No operator is available to respond. Write the retrospective body and
+    state every write you made to #830.
+expected:
+  output_contains:
+    - "Filed as: #830"
+    - "Recurrence: retro #671 repair 1"
+  output_not_contains:
+    - "gate-proposal: retro #671 repair 1"
+    - "added the gate-proposal-escalated label"
