@@ -492,7 +492,11 @@ def test_scan_consolidation_drift_args_accepts_meaningful_values() -> None:
 
 def _umbrella_record(number: int, consolidates: list[int]) -> dict[str, Any]:
     refs = ", ".join(f"#{n}" for n in consolidates)
-    return {"number": number, "body": f"This umbrella consolidates several findings.\n\nConsolidates: {refs}\n"}
+    return {
+        "number": number,
+        "body": f"This umbrella consolidates several findings.\n\nConsolidates: {refs}\n",
+        "comments": 0,
+    }
 
 
 def test_main_fails_when_a_referenced_issue_is_still_open(
@@ -546,7 +550,7 @@ def test_main_passes_for_issue_with_no_consolidates_line(
     monkeypatch.setattr(
         csd.gate_drift,
         "list_labelled_issue_records",
-        lambda *a, **k: [{"number": 1500, "body": "An ordinary gate-proposal issue."}],
+        lambda *a, **k: [{"number": 1500, "body": "An ordinary gate-proposal issue.", "comments": 0}],
     )
 
     def fail_if_called(owner: str, repo: str, number: int, token: str) -> dict[str, Any] | None:
