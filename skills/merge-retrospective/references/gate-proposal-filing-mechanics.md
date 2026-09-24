@@ -63,10 +63,11 @@ is closed as a duplicate before recording it as filed. Each record is
 its own issue, so concurrent runs never write the same object.
 
 Then apply 4b.3's escalation rule. List closed issues labelled
-`GATE_PROPOSAL_LABEL`, every page, and keep those opened by the account
-this run posts as (`mcp__github__get_me`) whose body's
-`duplicate_target` is N; re-fetch each kept issue and drop any whose
-`state_reason` is not `duplicate`. Pass the kept titles to
+`GATE_PROPOSAL_LABEL`, every page, re-fetch each candidate, and pass the
+re-fetched objects with N and the account this run posts as
+(`mcp__github__get_me`) to `family_duplicate_titles`. It keeps only
+issues closed as duplicates, labelled, opened by that account, whose
+body's `duplicate_target` is N. Pass its titles to
 `count_family_occurrences`. Only push- or triage-gated state counts: the
 label (GitHub drops label changes from anyone without push access), the
 duplicate closure, and the generator-made sweep line of an issue this

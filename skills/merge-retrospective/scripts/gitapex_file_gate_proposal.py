@@ -47,7 +47,7 @@ from __future__ import annotations
 import datetime as _datetime
 import re as _re
 from collections.abc import Iterable, Sequence
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 # The literal label name every `gate-proposal`-classified issue this
 # design files carries (Decision 6). Exact-match string -- do not deviate;
@@ -342,6 +342,34 @@ def duplicate_target(body: str) -> int | None:
     if len(matches) != 1 or matches[0].group(2) is None:
         return None
     return int(matches[0].group(2))
+
+
+def family_duplicate_titles(issues: Iterable[dict[str, Any]], family_number: int, account_login: str) -> list[str]:
+    """Return the titles of the records `count_family_occurrences` may
+    count for family issue `family_number`, from re-fetched REST issue
+    objects: closed with `state_reason: duplicate`, labelled
+    `GATE_PROPOSAL_LABEL`, opened by `account_login` (the account this
+    procedure posts as -- an issue's author can rewrite its body at any
+    time), and whose body's `duplicate_target` is `family_number`.
+    Anything else, including a malformed object, is left out."""
+    if not account_login:
+        raise ValueError("account_login must name the account this procedure posts as")
+    titles: list[str] = []
+    for issue in issues:
+        if not isinstance(issue, dict):
+            continue
+        user = issue.get("user")
+        label_names = {label.get("name") if isinstance(label, dict) else label for label in issue.get("labels") or []}
+        if (
+            issue.get("state") == "closed"
+            and issue.get("state_reason") == "duplicate"
+            and isinstance(user, dict)
+            and user.get("login") == account_login
+            and GATE_PROPOSAL_LABEL in label_names
+            and duplicate_target(str(issue.get("body") or "")) == family_number
+        ):
+            titles.append(str(issue.get("title") or ""))
+    return titles
 
 
 def count_family_occurrences(duplicate_titles: Iterable[str]) -> int:

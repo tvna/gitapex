@@ -513,6 +513,41 @@ def test_defeat_free_text_cannot_forge_a_duplicate_target() -> None:
     assert builder.duplicate_target(_duplicate_body(1571, label=forged)) == 1571
 
 
+def _issue(number: int, **overrides: Any) -> dict[str, Any]:
+    issue: dict[str, Any] = {
+        "number": number,
+        "title": f"t{number}",
+        "state": "closed",
+        "state_reason": "duplicate",
+        "user": {"login": "retro-bot"},
+        "labels": [{"name": "gate-proposal"}],
+        "body": _duplicate_body(840),
+    }
+    issue.update(overrides)
+    return issue
+
+
+def test_family_duplicate_titles_keeps_only_records_this_account_filed() -> None:
+    issues = [
+        _issue(1),
+        _issue(2, labels=["gate-proposal"]),  # labels as plain strings
+        _issue(3, user={"login": "drive-by-user"}),  # author-edited body
+        _issue(4, labels=[]),
+        _issue(5, state_reason="completed"),
+        _issue(6, state="open"),
+        _issue(7, body=_duplicate_body(999)),
+        _issue(8, user=None),
+        _issue(9, body=None),
+        "not an issue",
+    ]
+    assert builder.family_duplicate_titles(issues, 840, "retro-bot") == ["t1", "t2"]
+
+
+def test_family_duplicate_titles_requires_an_account() -> None:
+    with pytest.raises(ValueError, match="account_login"):
+        builder.family_duplicate_titles([_issue(1)], 840, "")
+
+
 def test_count_family_occurrences_counts_original_and_distinct_titles() -> None:
     titles = [
         builder.build_gate_proposal_title(20, 1, "a"),

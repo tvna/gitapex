@@ -222,8 +222,9 @@ discipline -- ground it in the actual code before writing it.
    choice is Step 0's own re-verified dedup search above, and every
    gate-proposal creation is separately gated by the `Dedup-sweep:`
    PreToolUse hook (`hooks/gitapex_check_gate_proposal_dedup_sweep.py`),
-   which denies any `gate-proposal` creation that is not a `NEW` verdict
-   carrying a fresh, live-verified backlog-sweep count.
+   which denies any `gate-proposal` creation whose verdict is not `NEW`
+   or `DUPLICATE-OF #<N>`, or that lacks a fresh, live-verified
+   backlog-sweep count.
    - **Template and title take precedence over this skill's own
      defaults.** If the repo has an issue template (for example
      `.github/ISSUE_TEMPLATE/`, a root `ISSUE_TEMPLATE.md`, or a
