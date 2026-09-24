@@ -1,23 +1,43 @@
 # Gate-Proposal Filing Mechanics
 
-Step 5's own detail for filing each `missing-deterministic-gate` repair
-as its own standalone issue, plus the failure/resume and close-condition
-rules that govern it.
+Step 5's own detail for recording each `missing-deterministic-gate`
+repair on its family issue, per the Step 4b.3 verdict, plus the
+failure/resume and close-condition rules that govern it.
 
-## Filing each missing-deterministic-gate repair as its own standalone issue
+## Contents
 
-In index order, call
-`skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py`
-(pure, network-free -- see Prerequisite) with that repair's index,
-one-line label, Classification rationale, Proposed gate text, any
-residual risk already noted in this repair's own prose (or none),
-this retrospective issue's own number, and the Step 4b sweep's
-open-issue count, timestamp, and verdict for this repair, to get
-back a deterministic title, an Acceptance Criteria Map body with
-the generator-made `Dedup-sweep:` line (never hand-typed), and
-the `gate-proposal` label constant -- the script itself never
-calls `issue_write` or `issue_read`. Then, as direct
-`mcp__github__*` tool calls:
+- [Building every title, body and comment](#building-every-title-body-and-comment)
+- [Creating a family issue](#creating-a-family-issue)
+- [Recording a recurrence](#recording-a-recurrence)
+- [Recording the result in the retrospective body](#recording-the-result-in-the-retrospective-body)
+- [A failed or unconfirmed filing blocks that repair's line, not the rest of the cycle -- and blocks closing](#a-failed-or-unconfirmed-filing-blocks-that-repairs-line-not-the-rest-of-the-cycle----and-blocks-closing)
+- [Close condition](#close-condition)
+
+## Building every title, body and comment
+
+`skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py` is
+pure and network-free (see Prerequisite): it computes strings and never
+calls `issue_write` or `issue_read`. Each repair supplies its own
+`FamilyRow`: one-line label, Classification rationale, Proposed gate
+text, and any residual risk already noted in its prose (or none).
+
+- **A new family issue** (NEW, or a verified CLUSTER of NEW members):
+  `build_gate_proposal_title` with this retrospective's number and the
+  lowest member index; `build_gate_proposal_family_acm_body` with every
+  member's row, in index order, plus the Step 4b sweep's open-issue
+  count and timestamp. The body ends with the generator-made
+  `Dedup-sweep: ...; verdict NEW` line (never hand-typed), and the label
+  is `GATE_PROPOSAL_LABEL`.
+- **A mechanism's family issue** (ABSORBED-BY with no open issue yet):
+  the same body builder, titled by `build_absorption_family_title`.
+- **A recurrence record** (DUPLICATE-OF #N, or ABSORBED-BY onto an
+  existing mechanism issue): `build_recurrence_comment` with this
+  retrospective's number, the repair's index, and its row. Its first
+  line, `Recurrence: retro #R repair K`, is the resume key.
+
+## Creating a family issue
+
+As direct `mcp__github__*` tool calls:
 
 - Search for an issue with that **exact** title, never substring.
 - **No match:** create it with the script's own title, body, and
@@ -31,48 +51,58 @@ calls `issue_write` or `issue_read`. Then, as direct
   discipline as Step 0's own ambiguous-stub-match handling.
   Never guess which one is authoritative, and never file a third.
 
-Once a filing is confirmed (created-and-verified, or already
-existed), record `Filed as: #<issue number>` immediately alongside
-that repair's own `Status: missing-deterministic-gate` line in this
-retrospective issue's body -- add it there; never remove or replace
-the `Status:` line itself. `issue_write` has no native append
-primitive: this "add" is always a whole-body rewrite, so re-fetch
-this retrospective issue's own current body immediately before
-this write and merge only this repair's own `Filed as:` line into
-it, never reusing an earlier read -- a concurrent run recording a
-different repair's own `Filed as:` line in the same body window
-would otherwise be silently overwritten by a write built from a
-stale copy. A DUPLICATE-OF #N filing closes
-immediately after its create (`state_reason: duplicate`,
-referencing #N); the 4b.3 umbrella append stays best-effort,
-never the record itself.
+## Recording a recurrence
+
+List the family issue's comments first. If one already carries this
+repair's `Recurrence: retro #R repair K` line, a prior run posted it:
+skip the post. Otherwise post the comment with
+`mcp__github__add_issue_comment` and re-list the comments to confirm it
+landed. Then apply 4b.3's escalation rule: re-fetch the body and
+comments, compute `count_family_occurrences`, and if `needs_escalation`
+holds and the issue lacks `GATE_PROPOSAL_ESCALATED_LABEL`, write the
+union of its current labels and that label.
+
+## Recording the result in the retrospective body
+
+Once a repair's record is confirmed (created-and-verified, matched, or
+comment confirmed), record `Filed as: #<issue number>` immediately
+alongside that repair's own `Status: missing-deterministic-gate` line in
+this retrospective issue's body, plus `Absorbed by:` for an ABSORBED-BY
+repair -- add them there; never remove or replace the `Status:` line
+itself. `issue_write` has no native append primitive: this "add" is
+always a whole-body rewrite, so re-fetch this retrospective issue's own
+current body immediately before this write and merge only this repair's
+own lines into it, never reusing an earlier read -- a concurrent run
+recording a different repair's own `Filed as:` line in the same body
+window would otherwise be silently overwritten by a write built from a
+stale copy.
 
 ## A failed or unconfirmed filing blocks that repair's line, not the rest of the cycle -- and blocks closing
 
 If the script cannot compute a value for a repair (a required
-classification field is missing), if the create call itself fails, or if
-a write cannot be confirmed by re-fetch (treat an unconfirmed write as a
-failure, the same as an outright one) -- skip only that repair's
-`Filed as:` line and continue with the rest. Never close the retrospective
-issue while any `missing-deterministic-gate` repair from this cycle
-still lacks a confirmed `Filed as:` line. A later, resumed run retries
-only the repairs still missing one -- but a `Filed as: #<N>` line
-already present in this retrospective issue's own body is itself
-untrusted state, not proof: the body is externally editable between runs
-(a careless edit, or a hostile one), so re-fetch issue `#<N>` and
-confirm it still exists with the `gate-proposal` label and this
-repair's exact title before skipping it, under the same re-fetch
-discipline this step already requires. A re-fetch that cannot complete
-at all (a network/API error) is not the same finding as a completed
-re-fetch that comes back mismatched or absent, but is handled
-identically -- named separately here only so a reader does not assume
-otherwise: neither one proves the filing is real, so both fall through
-to the same re-file path rather than one silently trusting an
+classification field is missing), if the create or comment call itself
+fails, or if a write cannot be confirmed by re-fetch (treat an
+unconfirmed write as a failure, the same as an outright one) -- skip
+only that repair's `Filed as:` line and continue with the rest. Never
+close the retrospective issue while any `missing-deterministic-gate`
+repair from this cycle still lacks a confirmed `Filed as:` line. A
+later, resumed run retries only the repairs still missing one -- but a
+`Filed as: #<N>` line already present in this retrospective issue's own
+body is itself untrusted state, not proof: the body is externally
+editable between runs (a careless edit, or a hostile one), so re-fetch
+issue `#<N>` and confirm it still exists with the `gate-proposal` label
+and either carries this repair's row in its own ACM table or a comment
+with this repair's recurrence key, before skipping it. A re-fetch that
+cannot complete at all (a network/API error) is not the same finding as
+a completed re-fetch that comes back mismatched or absent, but is
+handled identically -- named separately here only so a reader does not
+assume otherwise: neither one proves the filing is real, so both fall
+through to the same re-file path rather than one silently trusting an
 inconclusive check. A `Filed as:` line that does not re-verify this way
 is treated exactly like an unconfirmed write: proceed to (re-)file that
-repair through the exact-title search and create-or-match flow above, as
-if the line were absent, rather than trusting its mere presence. The
-exact-title search above is the backstop against a duplicate either way.
+repair through the flows above, as if the line were absent, rather than
+trusting its mere presence. The exact-title search and the recurrence
+key check are the backstops against a duplicate either way.
 
 ## Close condition
 

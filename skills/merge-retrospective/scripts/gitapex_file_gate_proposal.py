@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Build the deterministic title and Acceptance Criteria Map body for a
-`missing-deterministic-gate` retrospective repair's own standalone
+`missing-deterministic-gate` retrospective repair's family
 `gate-proposal`-labelled issue.
 
 Design doc: docs/superpowers/specs/2026-08-29-flat-gate-proposal-issues-design.md
@@ -96,6 +96,8 @@ _DEDUP_SWEEP_VERDICT_RE = _re.compile(r"^NEW\Z")
 # .github/scripts/gitapex_scan_gate_proposal_consolidation_drift.py, kept
 # in sync by tests/test_gitapex_retro_gate_label_sync.py.
 GATE_PROPOSAL_ESCALATED_LABEL = "gate-proposal-escalated"
+# 3 is the owner-selected threshold in issue #2097, counting the original
+# filing: a third occurrence of one family is the next work item.
 ESCALATION_THRESHOLD = 3
 
 # One recurrence record per comment, on its own line, keyed on the
