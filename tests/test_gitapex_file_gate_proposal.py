@@ -450,6 +450,26 @@ def test_recurrence_comment_leads_with_its_resume_key() -> None:
     assert builder.parse_recurrence_keys([comment]) == {(2100, 3)}
 
 
+def test_recurrence_comment_exact_shape() -> None:
+    row = builder.FamilyRow("lbl", "why", "gate", None)
+    assert builder.build_recurrence_comment(12, 1, row) == "\n".join(
+        [
+            "Recurrence: retro #12 repair 1",
+            "",
+            builder._ACM_HEADER_ROW,
+            builder._ACM_DIVIDER_ROW,
+            builder._acm_data_row(row),
+            "",
+            "Refs #12",
+        ]
+    )
+
+
+def test_acm_data_row_maps_columns_and_defaults_risk() -> None:
+    row = builder._acm_data_row(builder.FamilyRow("lbl", "why", "gate", "  "))
+    assert row == f"| lbl | why | gate | {builder._PROOF_METHOD} | none identified |"
+
+
 @pytest.mark.parametrize("repair_index", [0, -1])
 def test_recurrence_comment_rejects_non_positive_index(repair_index: int) -> None:
     with pytest.raises(ValueError, match="repair_index"):
