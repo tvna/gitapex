@@ -145,15 +145,18 @@ _INDENTED_CODE_RE = re.compile(r"^(?:[ ]{4}|\t).*$", re.MULTILINE)
 
 _ACCEPTED_VERDICT_RE = re.compile(r"^(?:(?i:NEW)|DUPLICATE-OF #[1-9]\d*)$")
 
-# Issue #2097: a DUPLICATE-OF creation must also carry exactly one line in
-# the generator's exact shape -- the same pattern, read over the same
-# unstripped body, as `duplicate_target` in
-# skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py (an
-# independent copy: the hooks tree cannot import the skill tree). So a
-# DUPLICATE-OF filing this hook allows is never a record the skill's
-# escalation count silently drops.
-_EXACT_DUPLICATE_LINE_RE = re.compile(
-    r"^Dedup-sweep: \d+ open gate-proposal issues at \S+; verdict DUPLICATE-OF #[1-9]\d*$", re.MULTILINE
+# Issue #2097: a DUPLICATE-OF creation must also satisfy the skill's own
+# reader. `duplicate_target` in
+# skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py counts
+# every exact-shape sweep line, of any verdict, over the unstripped body and
+# names a target only when there is exactly one. This is an independent
+# copy of its pattern (the hooks tree cannot import the skill tree), kept
+# byte-equal by tests/test_gitapex_dedup_sweep_generator_hook_agreement.py,
+# so a DUPLICATE-OF filing this hook allows is never a record the skill's
+# escalation count drops or counts toward another family.
+_EXACT_SWEEP_LINE_RE = re.compile(
+    r"^Dedup-sweep: \d+ open gate-proposal issues at \S+; verdict (NEW|DUPLICATE-OF #([1-9]\d*))$",
+    re.MULTILINE,
 )
 
 _SWEEP_RE = re.compile(
@@ -351,11 +354,12 @@ def evaluate(
             "extend issue"
         )
     if verdict.upper().startswith("DUPLICATE-OF"):
-        exact = _EXACT_DUPLICATE_LINE_RE.findall((body or "").replace("\r\n", "\n").replace("\r", "\n"))
+        raw = (body or "").replace("\r\n", "\n").replace("\r", "\n")
+        exact = [match.group(0) for match in _EXACT_SWEEP_LINE_RE.finditer(raw)]
         # The one exact line must also be the very sweep line checked above
         # (outside any fence, same verdict), so the target the skill reads
         # back is the target this filing declares.
-        visible = _EXACT_DUPLICATE_LINE_RE.findall(_strip_fences(body))
+        visible = [match.group(0) for match in _EXACT_SWEEP_LINE_RE.finditer(_strip_fences(body))]
         if len(exact) != 1 or visible != exact or not exact[0].endswith(f"; verdict {verdict}"):
             return False, (
                 "a DUPLICATE-OF filing needs exactly one Dedup-sweep line in the generator's exact shape, "

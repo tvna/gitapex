@@ -57,8 +57,9 @@ to check, never a result to trust:
 
 ## 4b.3 Act on the verdict
 
-Every repair except an ALREADY-SHIPPED one ends up recorded on exactly
-one family issue, and every repair keeps its own entry in the
+Every repair that reaches Step 5 (not ALREADY-SHIPPED, not tagged
+`review-worked-as-designed`, not reclassified) ends up recorded on
+exactly one family issue, and every repair keeps its own entry in the
 retrospective body:
 
 - **NEW**, alone or as a verified CLUSTER: create one family issue

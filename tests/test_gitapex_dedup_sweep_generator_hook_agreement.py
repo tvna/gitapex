@@ -111,3 +111,23 @@ def test_hook_denies_a_fenced_exact_line_naming_another_target() -> None:
     passed, message = checker.evaluate("tvna", "gitapex", "create", ["gate-proposal"], body, "")
     assert passed is False
     assert "naming the same target" in message
+
+
+def test_hook_reader_pattern_is_the_builder_reader_pattern() -> None:
+    # Issue #2097: independent reviews found three shapes where the hook
+    # and duplicate_target read sweep lines differently; one shared pattern
+    # removes the class.
+    builder = _load_builder()
+    assert checker._EXACT_SWEEP_LINE_RE.pattern == builder._DEDUP_SWEEP_LINE_RE.pattern
+    assert checker._EXACT_SWEEP_LINE_RE.flags == builder._DEDUP_SWEEP_LINE_RE.flags
+
+
+def test_hook_denies_a_fenced_exact_new_line_beside_a_duplicate_line() -> None:
+    # Independent-review round 4 finding F1: a fenced exact NEW line makes
+    # duplicate_target see two lines and name no target.
+    line = "Dedup-sweep: 5 open gate-proposal issues at 2026-09-24T00:00:00Z; verdict {}"
+    body = "```\n" + line.format("NEW") + "\n```\n" + line.format("DUPLICATE-OF #42") + "\n"
+    assert _load_builder().duplicate_target(body) is None
+    passed, message = checker.evaluate("tvna", "gitapex", "create", ["gate-proposal"], body, "")
+    assert passed is False
+    assert "naming the same target" in message
