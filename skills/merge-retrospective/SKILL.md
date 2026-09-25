@@ -1,6 +1,6 @@
 ---
 name: merge-retrospective
-description: Use when a pull request has just merged, before closing the turn -- enumerates every repair between PR open and merge, classifies each as a missing deterministic gate, an unclear agent instruction, or an external/human decision that cannot be automated, files each missing-deterministic-gate repair as its own standalone gate-proposal issue, and records the outcome in a retrospective issue before closing it.
+description: Use when a pull request has just merged, before closing the turn -- enumerates every repair between PR open and merge, classifies each as a missing deterministic gate, an unclear agent instruction, or an external/human decision that cannot be automated, files missing-deterministic-gate repairs as gate proposals per family (absorbing ones a declared generic mechanism covers, escalating a family that recurs three times), and records the outcome in a retrospective issue before closing it.
 compatibility: "Depends on a connected GitHub MCP server (mcp__github__* tools) for Steps 0, 2, 4b, 5, and 7; falls back to the repo's own REST API wrapper where absent (see Prerequisite)."
 ---
 
@@ -67,6 +67,8 @@ N. [one-line label] <what happened and how it was fixed, in prose>
    Status: `<machine-readable slug>`
    Proposed gate: <durable gate text -- only for "missing deterministic gate">
    Filed as: #<issue number> -- present once Step 5 confirms the filed issue exists
+   Absorbed by: `<ssot gate id>` <only for an ABSORBED-BY verdict>
+   Covered by: `<ssot gate id>` <only for ALREADY-SHIPPED, in place of Filed as>
    Tag: review-worked-as-designed <only when Step 4's own bar is met -- see below>
    Recurrence note: <only present when repairs share a recurring thesis>
 ```
@@ -138,14 +140,13 @@ discipline -- ground it in the actual code before writing it.
        same as a repository with no stub-opening CI script at all.
        Residual risk: two fully concurrent runs can both observe "No
        match" and each create their own retrospective issue -- GitHub's
-       issue-creation endpoint has no atomic create-if-absent primitive.
-       Same race class 4b.3 discloses for a DUPLICATE-OF gate-proposal
-       filing; unlike that path, a duplicate retrospective issue has no
-       dedicated close-as-duplicate step, so a human noticing two issues
-       for one PR is this residual's own backstop.
+       issue-creation endpoint has no atomic create-if-absent primitive,
+       and a duplicate retrospective issue has no dedicated
+       close-as-duplicate step, so a human noticing two issues for one PR
+       is this residual's own backstop.
 1. **Nothing to sweep.** A routine cycle has no carry-forward check to run
-   here: every `missing-deterministic-gate` finding is filed as its own
-   standalone issue the moment Step 5 classifies and confirms it, so there
+   here: every `missing-deterministic-gate` finding lands on its family
+   issue the moment Step 5 classifies and confirms it, so there
    is no separate backlog of prior proposals to re-verify in this step.
    The pre-existing legacy backlog of unresolved gate proposals from
    before this mechanism existed stays explicitly out of scope for this
@@ -178,7 +179,7 @@ discipline -- ground it in the actual code before writing it.
 4. **Classify each repair** using the taxonomy above. State the
    classification explicitly; do not leave it implicit in prose. A
    `missing-deterministic-gate` repair keeps its Step 2 index ready for
-   Step 5's filed-issue title below -- still nothing written yet. Also
+   Step 5's title below -- still nothing written yet. Also
    check for recurrence (see above) for Step 5's `Recurrence note:`.
 
    **`review-worked-as-designed` tag** (per `docs/adr/0004-reduce-verification-to-one-fresh-review-per-diff.md`, which adopts direction (a) of the review decided at https://github.com/tvna/gitapex/issues/1807). A
@@ -220,11 +221,11 @@ discipline -- ground it in the actual code before writing it.
    backing, not a human preview, standing between it and a duplicate or
    ungrounded write: the retrospective issue's own create-vs-update
    choice is Step 0's own re-verified dedup search above, and every
-   `missing-deterministic-gate` repair's own standalone gate-proposal
-   issue is separately gated by the `Dedup-sweep:` PreToolUse hook
-   (`hooks/gitapex_check_gate_proposal_dedup_sweep.py`), which denies
-   any `gate-proposal` creation whose body carries no fresh,
-   live-verified backlog-sweep count.
+   gate-proposal creation is separately gated by the `Dedup-sweep:`
+   PreToolUse hook (`hooks/gitapex_check_gate_proposal_dedup_sweep.py`),
+   which denies any `gate-proposal` creation whose verdict is not `NEW`
+   or `DUPLICATE-OF #<N>`, or that lacks a fresh, live-verified
+   backlog-sweep count.
    - **Template and title take precedence over this skill's own
      defaults.** If the repo has an issue template (for example
      `.github/ISSUE_TEMPLATE/`, a root `ISSUE_TEMPLATE.md`, or a
@@ -242,8 +243,7 @@ discipline -- ground it in the actual code before writing it.
      label first via the repo's own label-management path if it does
      not yet exist), plus the repository's own secondary lifecycle label
      if one exists, per the Repair record format section above. A
-     `missing-deterministic-gate` repair's own standalone filed issue
-     below carries a different, independent label, `gate-proposal`
+     family issue below carries a different, independent label, `gate-proposal`
      (never `retrospective`) -- the two label vocabularies never mix.
      Create `gate-proposal` first via that same label-management path
      when it does not yet exist, for the same reason `retrospective` is
@@ -261,22 +261,23 @@ discipline -- ground it in the actual code before writing it.
      useful context, not a required deliverable. Neither category gets
      a standalone issue or a script call -- they stay recorded inline
      exactly as here, unchanged.
-    - **File each `missing-deterministic-gate` repair as its own
-      standalone issue -- except one tagged `review-worked-as-designed`
-      (Step 4 above).** A tagged repair is still recorded in the
-      retrospective body in full, exactly like any other repair, but
-      never gets its own gate-proposal issue and never carries a
-      `Filed as:` line -- its `review-worked-as-designed` tag is itself
-      the disclosed reason no issue follows. Every other
-      `missing-deterministic-gate` repair files via
+    - **File each `missing-deterministic-gate` repair onto its family
+      issue, per its Step 4b verdict -- except one tagged
+      `review-worked-as-designed` (Step 4 above).** A tagged repair is
+      still recorded in the retrospective body in full, but never
+      reaches a gate-proposal and never carries a `Filed as:` line --
+      its tag is itself the disclosed reason. Every other repair lands
+      on exactly one family issue: a verified CLUSTER of `NEW` repairs
+      creates one issue with one ACM row per member, while
+      `DUPLICATE-OF #N` files a standalone record closed as a duplicate
+      of that family issue, which escalates at three occurrences, and
+      `ABSORBED-BY` does the same against the mechanism's open `extend`
+      issue, creating that issue instead when none is open. Either way, record
+      `Filed as: #<issue number>` alongside the repair's own `Status:` line. Run
       `skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py`
-      plus a direct `mcp__github__*` exact-title search/create-or-match
-      flow, then records `Filed as: #<issue number>` alongside that
-      repair's own `Status:` line -- see
-      `references/gate-proposal-filing-mechanics.md` for the full
-      mechanics (the script call, the no-match/one-match/more-than-one-
-      match branches, and the re-fetch-before-write discipline), the
-      failed-or-unconfirmed-filing resume rule, and the close condition.
+      for every title and body -- see
+      `references/gate-proposal-filing-mechanics.md` for the mechanics,
+      the resume rule, and the close condition.
    - **Zero-repair fast-close.** When Step 2 finds no repairs at all,
      file a single-paragraph issue body instead of the full shape above
      -- see `references/zero-repair-fast-close.md` for the exact body --
@@ -317,16 +318,15 @@ discipline -- ground it in the actual code before writing it.
   unclassified. A `Recurrence note` is additive only, never a fourth
   category or a substitute for `Classification`/`Status`.
 - Do not implement the durable gates proposed here in the same cycle --
-  propose them (inline in the retrospective issue body, and in each
-  missing-deterministic-gate repair's own standalone filed issue) and
-  stop; implementation is separate follow-on work each filed issue
-  tracks on its own.
-- Do not collapse multiple repairs into one vague summary line -- each
-  repair gets its own entry, even sharing a root cause (a recurrence
-  note surfaces that, never merged entries).
-- The rule above extends to Step 5's own standalone filings: filing a
-  gate-proposal issue is proposing, never implementing, in the cycle
-  that files it.
+  propose them (inline in the retrospective issue body, and on each
+  repair's family issue) and stop; implementation is separate
+  follow-on work each family issue tracks on its own. Filing, absorbing
+  or escalating is proposing, never implementing.
+- Do not collapse multiple repairs into one vague summary line -- the
+  retrospective body keeps one entry per repair, even sharing a root
+  cause (a recurrence note surfaces that, never merged entries), and a
+  family keeps one ACM row or duplicate record per repair.
+  Issues are per family; records are per repair.
 
 ## Worked example
 

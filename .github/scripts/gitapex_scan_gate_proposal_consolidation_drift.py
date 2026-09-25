@@ -15,6 +15,17 @@ body carries a `Consolidates: #a, #b, ...` line, it verifies each
 referenced issue number is CLOSED with `state_reason: duplicate` AND
 GraphQL `Issue.duplicateOf.number` pointing back to that same umbrella.
 
+Issue #2097 adds an escalation-consistency check over the same label: an
+OPEN gate-proposal issue whose occurrence count reached
+`ESCALATION_THRESHOLD` must carry `GATE_PROPOSAL_ESCALATED_LABEL`. The
+count is 1 (the original filing) plus the distinct titles of CLOSED
+gate-proposal issues whose GraphQL `duplicateOf` is that issue -- every
+input set by a push- or triage-gated action (label, duplicate closure),
+none read from free text, so text from anyone else cannot turn this
+check red. A recurrence is recorded as exactly such a closed duplicate,
+not as a `Consolidates:` append, so a closed duplicate missing from its
+target's `Consolidates:` line (#2089 and #1800) is not a violation.
+
 Primary-source grounding for the GraphQL dependency (issue #1653's own
 research, not re-derived here): GitHub's REST API documents no read-side
 field naming which issue a closed issue is a duplicate of (only
@@ -73,7 +84,8 @@ Exit codes:
        Consolidates: line at all is not a violation.
     1  At least one referenced issue is still open, closed for a
        different reason, closed as a duplicate of a different issue, or
-       could not be resolved at all, or the `gate-proposal` label itself
+       could not be resolved at all, or a family reached the escalation
+       threshold without its label, or the `gate-proposal` label itself
        does not exist, or a GitHub API error prevented the check from
        completing (never silently reported as "zero issues found").
 """
@@ -105,6 +117,14 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 # (found by an adversarial review pass against this script's own diff).
 _CONSOLIDATES_LINE_RE = re.compile(r"^Consolidates:[ \t]*(#\d+(?:,[ \t]*#\d+)*)[ \t]*$", re.MULTILINE)
 _ISSUE_REF_RE = re.compile(r"#(\d+)")
+
+# Issue #2097: independent copies of the literals
+# skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py defines
+# (a cross-tree import would break at install time -- see
+# gitapex_scan_retrospective_gate_drift.py's own GATE_PROPOSAL_LABEL note),
+# kept equal by tests/test_gitapex_retro_gate_label_sync.py.
+GATE_PROPOSAL_ESCALATED_LABEL = "gate-proposal-escalated"
+ESCALATION_THRESHOLD = 3
 
 # GraphQL is the only documented way to read "which issue is this closed
 # as a duplicate of" -- see module docstring. `owner`/`repo`/`number` are
@@ -209,6 +229,56 @@ def find_consolidation_violations(
         if violating:
             violations_by_umbrella[umbrella_number] = violating
     return violations_by_umbrella
+
+
+def count_family_occurrences(duplicate_titles: list[str]) -> int:
+    """Independent copy of the skill builder's own counter: 1 for the
+    original filing plus one per distinct title among the closed
+    gate-proposal issues marked as this family's duplicates, so a repair
+    filed twice by concurrent runs counts once."""
+    return 1 + len({title.strip() for title in duplicate_titles if title and title.strip()})
+
+
+def find_missing_escalations(
+    open_records: list[dict[str, Any]],
+    closed_records: list[dict[str, Any]],
+    duplicate_targets: dict[int, int | None],
+) -> dict[int, int]:
+    """Return `{family issue: occurrence count}` for every OPEN
+    gate-proposal issue whose count reached `ESCALATION_THRESHOLD` but
+    which does not carry `GATE_PROPOSAL_ESCALATED_LABEL` (issue #2097).
+    `duplicate_targets` maps a closed issue to its GraphQL `duplicateOf`
+    number. The reverse case -- the label on an issue under the
+    threshold -- is not flagged: a human may escalate a family on their
+    own judgment."""
+    titles_by_family: dict[int, list[str]] = {}
+    for record in closed_records:
+        target = duplicate_targets.get(record["number"])
+        if target is not None:
+            titles_by_family.setdefault(target, []).append(str(record.get("title") or ""))
+    missing: dict[int, int] = {}
+    for record in open_records:
+        number = record["number"]
+        count = count_family_occurrences(titles_by_family.get(number, []))
+        if count < ESCALATION_THRESHOLD:
+            continue
+        label_names = {label.get("name") for label in record.get("labels") or [] if isinstance(label, dict)}
+        if GATE_PROPOSAL_ESCALATED_LABEL not in label_names:
+            missing[number] = count
+    return missing
+
+
+def format_escalation_drift_report(missing_escalations: dict[int, int]) -> str:
+    """Report lines for the issue #2097 escalation check; empty when it
+    passes."""
+    lines = [
+        f"  #{number} records {missing_escalations[number]} occurrences (threshold {ESCALATION_THRESHOLD}) "
+        f"but lacks the '{GATE_PROPOSAL_ESCALATED_LABEL}' label"
+        for number in sorted(missing_escalations)
+    ]
+    if lines:
+        lines.append(f"FAIL: {len(lines)} family issue(s) reached the escalation threshold unlabelled.")
+    return "\n".join(lines)
 
 
 def format_consolidation_drift_report(violations_by_umbrella: dict[int, list[int]], label: str) -> str:
@@ -377,13 +447,33 @@ def main(argv: list[str] | None = None) -> int:
             number: fetch_issue_duplicate_state(args.owner, args.repo, number, token)
             for number in sorted(all_referenced_numbers)
         }
+
+        # Issue #2097, escalation: a recurrence is a closed gate-proposal
+        # issue whose GraphQL duplicateOf names its family issue.
+        closed_records = gate_drift.list_labelled_issue_records(
+            args.owner, args.repo, args.label, token, state="closed"
+        )
+        duplicate_targets: dict[int, int | None] = {}
+        for record in closed_records:
+            if record.get("state_reason") != "duplicate":
+                continue
+            state = fetch_issue_duplicate_state(args.owner, args.repo, record["number"], token)
+            if state is None or not record.get("title"):
+                # Listed a moment ago, now unresolvable or untitled: counting
+                # it as no record would lower an escalation count silently.
+                raise GitHubApiError(f"closed duplicate #{record['number']} could not be resolved for counting")
+            duplicate_targets[record["number"]] = state.get("duplicate_of_number")
     except GitHubApiError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
 
     violations_by_umbrella = find_consolidation_violations(referenced_numbers_by_umbrella, referenced_states)
+    missing_escalations = find_missing_escalations(open_records, closed_records, duplicate_targets)
     print(format_consolidation_drift_report(violations_by_umbrella, args.label))
-    return 1 if violations_by_umbrella else 0
+    escalation_report = format_escalation_drift_report(missing_escalations)
+    if escalation_report:
+        print(escalation_report)
+    return 1 if violations_by_umbrella or missing_escalations else 0
 
 
 if __name__ == "__main__":

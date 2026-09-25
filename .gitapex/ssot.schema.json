@@ -190,6 +190,10 @@
           "enum": ["not-yet-reviewed", "reviewed-none-found"],
           "description": "Whether this gate's known-bypass surface has been reviewed at all, independent of what was found. Backfilled to 'not-yet-reviewed' for every currently-registered gate as part of issue #1231: a mechanical, zero-judgment default, not a claim that no gate has been reviewed for bypasses in some other, undocumented sense. Deliberately excludes 'reviewed-found-listed-below' (issue #1232, adversarial review): that value would name a known_bypasses array that is not yet a field in this schema at all, so a schema-valid gate could claim its bypasses are listed with nowhere for them to actually be -- a misleading claim additionalProperties: false cannot catch on its own. Re-add the value in the same change that adds known_bypasses and a regression test proving both ship together, not before."
         },
+        "generic_mechanism": {
+          "type": "boolean",
+          "description": "Issue #2097: true declares this gate a generic mechanism merge-retrospective's Step 4b may name in an ABSORBED-BY <gate-id> verdict -- a repair the mechanism could express with a new row, operator or fixture is recorded on the mechanism's own 'gate-proposal: extend <gate-id>' family issue instead of getting its own gate-proposal. Absent means false. Only an 'active' gate may declare it (gitapex_scan_ssot_schema.py's find_generic_mechanism_drift)."
+        },
         "preconditions": {
           "type": "object",
           "additionalProperties": false,

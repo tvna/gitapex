@@ -73,13 +73,16 @@ adds the new call site, rather than reusing this definition silently.
    the swept `gate-proposal` backlog, never one dispatch per repair --
    see `skills/merge-retrospective/references/backlog-grounded-proposal-review.md`'s
    own 4b.2 for the full procedure. Returns, per repair, exactly one
-   verdict (`NEW` / `DUPLICATE-OF #N` / `ALREADY-SHIPPED <gate id>` /
-   `RECLASSIFY <reason>`), plus a batch-level `CLUSTER` grouping when
-   several repairs describe one fix. Read-only, like entry 4 above: this
-   dispatch returns verdicts only, never acting on them itself -- the
+   verdict (`NEW` / `DUPLICATE-OF #N` / `ABSORBED-BY <gate id>` /
+   `ALREADY-SHIPPED <gate id>` / `RECLASSIFY <reason>`), plus a
+   batch-level `CLUSTER` grouping when several repairs describe one fix.
+   `ABSORBED-BY` names an `active` `ssot.json` gate declaring
+   `generic_mechanism: true` that could express the repair with a new
+   row, operator or fixture (issue #2097). Read-only, like entry 4 above:
+   this dispatch returns verdicts only, never acting on them itself -- the
    calling skill verifies each verdict outside the dispatch (re-fetching
-   the named issue, re-checking the `ssot.json` entry) before treating it
-   as settled.
+   the named issue, re-checking the `ssot.json` entry and its
+   `generic_mechanism` declaration) before treating it as settled.
 
 ## What this dispatch does and does not do
 

@@ -1,0 +1,35 @@
+id: merge-retrospective-gate-proposal-closed-duplicate-target-falls-back-to-new
+name: A DUPLICATE-OF Verdict Naming A Closed Issue Falls Back To NEW
+description: The review returns DUPLICATE-OF an issue that re-fetching shows is already closed. Verification outside the dispatch rejects the verdict, so no record is closed as a duplicate of the closed issue and the repair files through the NEW flow.
+tags:
+  - quality
+  - gate-proposal
+  - restraint
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #680 ("fix: escape shell args") merged
+    into main. You created retrospective #681.
+
+    One missing-deterministic-gate repair occurred: an unquoted variable
+    in a CI shell step broke on a path with a space. A shellcheck step
+    would have caught it.
+
+    The Step 4b review returned DUPLICATE-OF #1500. Re-fetching #1500
+    shows it is labelled `gate-proposal` but its state is `closed`
+    (completed three weeks ago). The sweep counted 44 open gate-proposal
+    issues at 2026-09-24T13:00:00Z.
+
+    If you file through the NEW flow, `gitapex_file_gate_proposal.py`
+    returns the title
+    `gate-proposal: retro #681 repair 1: Unquoted shell variable`. No
+    issue has that title. Creating it and re-fetching confirms #705.
+
+    No operator is available to respond. Write the retrospective body and
+    state every write you made.
+expected:
+  output_contains:
+    - "gate-proposal: retro #681 repair 1"
+    - "Filed as: #705"
+  output_not_contains:
+    - "Filed as: #1500"
+    - "verdict DUPLICATE-OF #1500"

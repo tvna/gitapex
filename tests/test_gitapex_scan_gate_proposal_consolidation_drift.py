@@ -589,3 +589,114 @@ def test_main_exits_one_on_github_api_error_during_graphql_fetch(monkeypatch: py
 
     monkeypatch.setattr(csd, "fetch_issue_duplicate_state", raise_api_error)
     assert csd.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Issue #2097: escalation consistency
+# ---------------------------------------------------------------------------
+
+
+def _record(number: int, labels: list[str] | None = None, body: str = "") -> dict[str, Any]:
+    return {"number": number, "body": body, "labels": [{"name": n} for n in labels or []]}
+
+
+def _closed(number: int, title: str, state_reason: str = "duplicate") -> dict[str, Any]:
+    return {"number": number, "title": title, "state_reason": state_reason}
+
+
+def test_count_family_occurrences_matches_builder_semantics() -> None:
+    assert csd.count_family_occurrences(["t1", "t1 ", "t2", ""]) == 1 + 2
+    assert csd.count_family_occurrences([]) == 1
+
+
+def test_find_missing_escalations_flags_unlabelled_family_at_threshold() -> None:
+    open_records = [_record(100), _record(101, labels=["gate-proposal", "gate-proposal-escalated"]), _record(102)]
+    closed = [_closed(1, "a"), _closed(2, "b"), _closed(3, "a"), _closed(4, "b"), _closed(5, "c")]
+    targets: dict[int, int | None] = {1: 100, 2: 100, 3: 101, 4: 101, 5: 102}
+    assert csd.find_missing_escalations(open_records, closed, targets) == {100: 3}
+
+
+def test_find_missing_escalations_counts_a_concurrent_double_filing_once() -> None:
+    closed = [_closed(1, "same"), _closed(2, "same")]
+    assert csd.find_missing_escalations([_record(100)], closed, {1: 100, 2: 100}) == {}
+
+
+def test_defeat_text_cannot_turn_the_scan_red() -> None:
+    # Battle-test rounds 1-5: every text-based record was forged. A body
+    # or comment naming recurrences, and closed issues that are not
+    # marked duplicates of this family, count for nothing.
+    open_records = [_record(100, body="Consolidates: #1, #2\nRecurrence: retro #5 repair 1")]
+    closed = [_closed(1, "a"), _closed(2, "b"), _closed(3, "c", state_reason="completed")]
+    assert csd.find_missing_escalations(open_records, closed, {1: 999, 2: None}) == {}
+
+
+def test_find_missing_escalations_does_not_flag_label_below_threshold() -> None:
+    assert csd.find_missing_escalations([_record(5, labels=["gate-proposal-escalated"])], [], {}) == {}
+
+
+def test_format_escalation_drift_report_empty_when_clean() -> None:
+    assert csd.format_escalation_drift_report({}) == ""
+
+
+def test_format_escalation_drift_report_names_every_finding() -> None:
+    report = csd.format_escalation_drift_report({100: 3, 7: 4})
+    lines = report.split("\n")
+    assert lines[0] == "  #7 records 4 occurrences (threshold 3) but lacks the 'gate-proposal-escalated' label"
+    assert lines[1].startswith("  #100 records 3 occurrences")
+    assert lines[-1] == "FAIL: 2 family issue(s) reached the escalation threshold unlabelled."
+
+
+def _patch_lists(
+    monkeypatch: pytest.MonkeyPatch, open_records: list[dict[str, Any]], closed: list[dict[str, Any]]
+) -> None:
+    def fake_list(owner: str, repo: str, label: str, token: str, **kwargs: Any) -> list[dict[str, Any]]:
+        return open_records if kwargs.get("state") == "open" else closed
+
+    monkeypatch.setenv("GITHUB_TOKEN", "tok")
+    monkeypatch.setattr(csd.gate_drift, "label_exists", lambda *a, **k: True)
+    monkeypatch.setattr(csd.gate_drift, "list_labelled_issue_records", fake_list)
+
+
+def test_main_fails_on_missing_escalation_and_queries_only_duplicates(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    closed = [_closed(1, "a"), _closed(2, "b"), _closed(3, "c", state_reason="completed")]
+    _patch_lists(monkeypatch, [_record(300)], closed)
+    queried: list[int] = []
+
+    def fake_state(owner: str, repo: str, number: int, token: str) -> dict[str, Any] | None:
+        queried.append(number)
+        return _verified_state(300)
+
+    monkeypatch.setattr(csd, "fetch_issue_duplicate_state", fake_state)
+    exit_code = csd.main(["--owner", "tvna", "--repo", "gitapex"])
+    assert exit_code == 1
+    assert queried == [1, 2]
+    assert "#300 records 3 occurrences" in capsys.readouterr().out
+
+
+def test_main_passes_when_a_closed_duplicate_is_missing_from_consolidates(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The #1800/#2089 shape: under issue #2097 the duplicate relation is
+    # itself the record, so no Consolidates: append is owed.
+    _patch_lists(monkeypatch, [_umbrella_record(1800, [1801])], [_closed(1801, "a"), _closed(2089, "b")])
+    monkeypatch.setattr(csd, "fetch_issue_duplicate_state", lambda owner, repo, number, token: _verified_state(1800))
+    assert csd.main(["--owner", "tvna", "--repo", "gitapex"]) == 1  # 3 occurrences, unlabelled
+    labelled = _umbrella_record(1800, [1801]) | {"labels": [{"name": "gate-proposal-escalated"}]}
+    _patch_lists(monkeypatch, [labelled], [_closed(1801, "a"), _closed(2089, "b")])
+    assert csd.main(["--owner", "tvna", "--repo", "gitapex"]) == 0
+
+
+def test_main_fails_loudly_on_an_unresolvable_duplicate(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # Dropping it would lower an escalation count silently (dimension 15).
+    _patch_lists(monkeypatch, [_record(300)], [_closed(1, "a"), _closed(2, "b")])
+    monkeypatch.setattr(csd, "fetch_issue_duplicate_state", lambda *a, **k: None)
+    assert csd.main(["--owner", "tvna", "--repo", "gitapex"]) == 1
+    assert "closed duplicate #1 could not be resolved" in capsys.readouterr().err
+
+
+def test_main_fails_loudly_on_an_untitled_duplicate(monkeypatch: pytest.MonkeyPatch) -> None:
+    _patch_lists(monkeypatch, [_record(300)], [_closed(1, "")])
+    monkeypatch.setattr(csd, "fetch_issue_duplicate_state", lambda *a, **k: _verified_state(300))
+    assert csd.main(["--owner", "tvna", "--repo", "gitapex"]) == 1

@@ -1,0 +1,40 @@
+id: merge-retrospective-gate-proposal-concurrent-runs-keep-both-records
+name: Concurrent Runs On One Umbrella Each Keep Their Own Duplicate Record
+description: Another retrospective run closed its own duplicate record against the same umbrella moments ago. This run files and closes its own record rather than editing the umbrella body or treating the other run's record as its own. Both repairs stay recorded.
+tags:
+  - quality
+  - gate-proposal
+  - concurrency
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #620 ("feat: paginate search") merged
+    into main. You created retrospective #621.
+
+    One missing-deterministic-gate repair occurred: an unpinned GitHub
+    Action tag failed a workflow lint. The Step 4b review returned
+    DUPLICATE-OF #1810. You re-fetched it and confirmed it is open and
+    labelled `gate-proposal`.
+
+    Forty seconds ago a concurrent run, posting as the same account as
+    you, closed #1815,
+    `gate-proposal: retro #619 repair 2: Unpinned action tag`, as a
+    duplicate of #1810. No issue has this run's own title,
+    `gate-proposal: retro #621 repair 1: Unpinned action tag in CI`.
+
+    Creating this run's record with the `gate-proposal` label and a body
+    ending in `verdict DUPLICATE-OF #1810` confirms #1816 on re-fetch.
+    Closing #1816 with `state_reason: duplicate` and `duplicate_of: 1810`
+    succeeds and re-fetches as closed as a duplicate.
+    `family_duplicate_titles` then returns the titles of #1815 and #1816,
+    and `count_family_occurrences` returns 3.
+
+    No operator is available to respond. Write the retrospective body and
+    state which records of #1810 now exist.
+expected:
+  output_contains:
+    - "Filed as: #1816"
+    - "#1815"
+    - "gate-proposal-escalated"
+  output_not_contains:
+    - "Consolidates: #1816"
+    - "Filed as: #1815"

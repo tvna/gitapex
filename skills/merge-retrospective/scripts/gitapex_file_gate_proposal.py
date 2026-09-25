@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Build the deterministic title and Acceptance Criteria Map body for a
-`missing-deterministic-gate` retrospective repair's own standalone
+`missing-deterministic-gate` retrospective repair's family
 `gate-proposal`-labelled issue.
 
 Design doc: docs/superpowers/specs/2026-08-29-flat-gate-proposal-issues-design.md
@@ -46,6 +46,8 @@ from __future__ import annotations
 
 import datetime as _datetime
 import re as _re
+from collections.abc import Iterable, Sequence
+from typing import Any, NamedTuple
 
 # The literal label name every `gate-proposal`-classified issue this
 # design files carries (Decision 6). Exact-match string -- do not deviate;
@@ -81,11 +83,38 @@ _ACM_DIVIDER_ROW = "|---|---|---|---|---|"
 # (not a bare digit-shape regex, which would accept month 13).
 _DEDUP_SWEEP_TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
-# The only verdicts a filed standalone can truthfully carry: a fresh
-# proposal (`NEW`), or a duplicate that still files standalone before
-# closing (issue #1806 row 3) naming its umbrella. `RECLASSIFY` and
-# `ALREADY-SHIPPED` never file, so they have no line shape here.
-_DEDUP_SWEEP_VERDICT_RE = _re.compile(r"^(?:NEW|DUPLICATE-OF #\d+)$")
+# The only verdicts a created issue can truthfully carry: `NEW` (a new
+# family issue), or `DUPLICATE-OF #<N>` (issue #2097: a repair recorded
+# on an existing family issue gets its own standalone issue, immediately
+# closed as a duplicate of #N -- the GitHub-native relation the
+# escalation count is derived from). `ABSORBED-BY` lands as a
+# `DUPLICATE-OF` the mechanism's `extend` issue once that issue exists,
+# and `RECLASSIFY`/`ALREADY-SHIPPED` never file, so none of them has a
+# line shape here.
+_DEDUP_SWEEP_VERDICT_RE = _re.compile(r"^(?:NEW|DUPLICATE-OF #[1-9]\d*)\Z")
+
+# Reads the generator-made sweep line back out of a filed body. Parallel
+# to the hook's own recognizer; only a body with exactly one such line
+# names a duplicate target.
+_DEDUP_SWEEP_LINE_RE = _re.compile(
+    r"^Dedup-sweep: \d+ open gate-proposal issues at \S+; verdict (NEW|DUPLICATE-OF #([1-9]\d*))$",
+    _re.MULTILINE,
+)
+
+# The label a family issue gets once `count_family_occurrences` reaches
+# `ESCALATION_THRESHOLD` (issue #2097). Like `GATE_PROPOSAL_LABEL`, a
+# parallel copy lives in
+# .github/scripts/gitapex_scan_gate_proposal_consolidation_drift.py, kept
+# in sync by tests/test_gitapex_retro_gate_label_sync.py.
+GATE_PROPOSAL_ESCALATED_LABEL = "gate-proposal-escalated"
+# 3 is the owner-selected threshold in issue #2097, counting the original
+# filing: a third occurrence of one family is the next work item.
+ESCALATION_THRESHOLD = 3
+
+# An ssot gate id, as `.gitapex/ssot.json` spells them (lowercase words
+# joined by hyphens). Anything else is refused rather than interpolated
+# into an exact-match title.
+_GATE_ID_RE = _re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 
 
 def build_dedup_sweep_line(open_count: int, timestamp: str, verdict: str = "NEW") -> str:
@@ -94,8 +123,8 @@ def build_dedup_sweep_line(open_count: int, timestamp: str, verdict: str = "NEW"
     `open_count` is the live count of open `gate-proposal` issues observed
     by the sweep; `timestamp` is when the sweep ran, UTC
     `YYYY-MM-DDTHH:MM:SSZ`; `verdict` is the Step 4b verdict this filing
-    records (`NEW` by default). Raises `ValueError` when `open_count` is
-    not a non-negative `int` (`bool` excluded explicitly --
+    records: `NEW` or `DUPLICATE-OF #<N>`. Raises `ValueError` when
+    `open_count` is not a non-negative `int` (`bool` excluded explicitly --
     `isinstance(True, int)` is `True`, and a boolean count is the same
     contract violation `build_gate_proposal_title`'s own 1-based-index
     check already fails loudly on), when `timestamp` is not a real
@@ -177,20 +206,23 @@ def _sanitize_cell(value: str) -> str:
     return collapsed.replace("\\", "\\\\").replace("|", "\\|").strip()
 
 
-def build_gate_proposal_acm_body(
-    retrospective_issue_number: int,
-    repair_label: str,
-    classification_rationale: str,
-    proposed_gate_text: str,
-    residual_risk: str | None,
-    *,
-    dedup_sweep_open_count: int,
-    dedup_sweep_timestamp: str,
-    dedup_sweep_verdict: str = "NEW",
-) -> str:
-    """Return the fully-populated Acceptance Criteria Map body for one
-    `missing-deterministic-gate` repair (Decision 4), mapped directly from
-    fields the repair's own classification pass already produced:
+class FamilyRow(NamedTuple):
+    """One repair's own fields, as its classification pass produced them.
+    A family issue carries one ACM row per member repair (issue #2097), so
+    a cluster never collapses two repairs into one summary row.
+
+    A `NamedTuple`, not a dataclass: sibling tests load this module by
+    file path without registering it in `sys.modules`, which `@dataclass`
+    needs and `NamedTuple` does not."""
+
+    repair_label: str
+    classification_rationale: str
+    proposed_gate_text: str
+    residual_risk: str | None
+
+
+def _acm_data_row(row: FamilyRow) -> str:
+    """Map one repair onto the Decision 4 columns:
 
     - Criterion      = `repair_label` (the repair's own one-line label)
     - Interpretation = `classification_rationale`
@@ -200,6 +232,27 @@ def build_gate_proposal_acm_body(
     - Residual risk  = `residual_risk`, or `_RESIDUAL_RISK_NONE_IDENTIFIED`
       when the repair's own text named none (empty, `None`, or
       whitespace-only)
+    """
+    stripped_risk = (row.residual_risk or "").strip()
+    residual_risk_text = stripped_risk if stripped_risk else _RESIDUAL_RISK_NONE_IDENTIFIED
+    criterion_cell = _sanitize_cell(row.repair_label)
+    interpretation_cell = _sanitize_cell(row.classification_rationale)
+    planned_ops_cell = _sanitize_cell(row.proposed_gate_text)
+    residual_risk_cell = _sanitize_cell(residual_risk_text)
+    return f"| {criterion_cell} | {interpretation_cell} | {planned_ops_cell} | {_PROOF_METHOD} | {residual_risk_cell} |"
+
+
+def build_gate_proposal_family_acm_body(
+    retrospective_issue_number: int,
+    rows: Sequence[FamilyRow],
+    *,
+    dedup_sweep_open_count: int,
+    dedup_sweep_timestamp: str,
+    dedup_sweep_verdict: str = "NEW",
+) -> str:
+    """Return the Acceptance Criteria Map body for one family issue: every
+    member repair of a verified CLUSTER (or a lone NEW repair) gets its
+    own row, in the order given (issue #2097, row 1).
 
     The produced body carries a real ACM table, not a `tracking` waiver:
     per Decision 4, a filed issue is genuine, actionable future work, so
@@ -211,23 +264,17 @@ def build_gate_proposal_acm_body(
     `has_acm_disclosure` directly and asserts it passes on this
     function's own output). A trailing `Refs #<retrospective-issue-number>`
     line supplies the back-link Decision 1/Architecture require.
+
+    Raises `ValueError` on an empty `rows`: a family issue with no member
+    repair has nothing to propose.
     """
-    # function-body-test-coverage: WAIVED: covered by tests/test_gitapex_dedup_sweep_generator_hook_agreement.py
-    # (same diff, commit 422cdfe) via builder.build_gate_proposal_acm_body -- a differently-named integration
-    # test file this gate's own tests/test_{stem}.py naming convention does not scan.
-    stripped_risk = (residual_risk or "").strip()
-    residual_risk_text = stripped_risk if stripped_risk else _RESIDUAL_RISK_NONE_IDENTIFIED
-    criterion_cell = _sanitize_cell(repair_label)
-    interpretation_cell = _sanitize_cell(classification_rationale)
-    planned_ops_cell = _sanitize_cell(proposed_gate_text)
-    residual_risk_cell = _sanitize_cell(residual_risk_text)
-    data_row = (
-        f"| {criterion_cell} | {interpretation_cell} | {planned_ops_cell} | {_PROOF_METHOD} | {residual_risk_cell} |"
-    )
+    if not rows:
+        raise ValueError("rows must name at least one member repair")
     # The sweep line trails the body (never interleaved with the table) so
-    # rows 0-2 keep fixed positions for existing readers. Free-text fields
-    # cannot forge one: `_sanitize_cell` collapses their newlines to
-    # spaces, so no second `Dedup-sweep:` line can ever start inside them.
+    # the header and first data row keep fixed positions for existing
+    # readers. Free-text fields cannot forge one: `_sanitize_cell`
+    # collapses their newlines to spaces, so no second `Dedup-sweep:` line
+    # can ever start inside them.
     sweep_line = build_dedup_sweep_line(
         open_count=dedup_sweep_open_count, timestamp=dedup_sweep_timestamp, verdict=dedup_sweep_verdict
     )
@@ -235,10 +282,112 @@ def build_gate_proposal_acm_body(
         [
             _ACM_HEADER_ROW,
             _ACM_DIVIDER_ROW,
-            data_row,
+            *(_acm_data_row(row) for row in rows),
             "",
             f"Refs #{retrospective_issue_number}",
             "",
             sweep_line,
         ]
     )
+
+
+def build_gate_proposal_acm_body(
+    retrospective_issue_number: int,
+    repair_label: str,
+    classification_rationale: str,
+    proposed_gate_text: str,
+    residual_risk: str | None,
+    *,
+    dedup_sweep_open_count: int,
+    dedup_sweep_timestamp: str,
+    dedup_sweep_verdict: str = "NEW",
+) -> str:
+    """Return the Acceptance Criteria Map body for a single-member family
+    -- `build_gate_proposal_family_acm_body` with exactly one row."""
+    # function-body-test-coverage: WAIVED: covered by tests/test_gitapex_dedup_sweep_generator_hook_agreement.py
+    # (same diff, commit 422cdfe) via builder.build_gate_proposal_acm_body -- a differently-named integration
+    # test file this gate's own tests/test_{stem}.py naming convention does not scan.
+    return build_gate_proposal_family_acm_body(
+        retrospective_issue_number,
+        [FamilyRow(repair_label, classification_rationale, proposed_gate_text, residual_risk)],
+        dedup_sweep_open_count=dedup_sweep_open_count,
+        dedup_sweep_timestamp=dedup_sweep_timestamp,
+        dedup_sweep_verdict=dedup_sweep_verdict,
+    )
+
+
+def build_absorption_family_title(gate_id: str) -> str:
+    """Return the exact title of the one family issue that collects
+    follow-up rows for a generic mechanism (ABSORBED-BY, issue #2097).
+
+    One title per mechanism, so the exact-title search finds the same
+    issue on every run and absorbed repairs never multiply issues. Raises
+    `ValueError` when `gate_id` is not an ssot-shaped id.
+    """
+    if not isinstance(gate_id, str) or not _GATE_ID_RE.match(gate_id):
+        raise ValueError(f"gate_id must be an ssot gate id (lowercase, hyphen-joined), got {gate_id!r}")
+    return f"gate-proposal: extend {gate_id}"
+
+
+def duplicate_target(body: str) -> int | None:
+    """Return #N when `body` carries exactly one generator-made
+    `Dedup-sweep: ...; verdict DUPLICATE-OF #N` line, else `None`.
+
+    Only meaningful for an issue that carries `GATE_PROPOSAL_LABEL` and
+    was opened by the account this procedure posts as: an issue's author
+    can rewrite its body at any time, so only a body this procedure
+    wrote, via `build_gate_proposal_acm_body` (whose free-text cells
+    cannot start a second sweep line), names a trustworthy target."""
+    matches = list(_DEDUP_SWEEP_LINE_RE.finditer((body or "").replace("\r\n", "\n").replace("\r", "\n")))
+    if len(matches) != 1 or matches[0].group(2) is None:
+        return None
+    return int(matches[0].group(2))
+
+
+def family_duplicate_titles(issues: Iterable[dict[str, Any]], family_number: int, account_login: str) -> list[str]:
+    """Return the titles of the records `count_family_occurrences` may
+    count for family issue `family_number`, from re-fetched REST issue
+    objects: closed with `state_reason: duplicate`, labelled
+    `GATE_PROPOSAL_LABEL`, opened by `account_login` (the account this
+    procedure posts as -- an issue's author can rewrite its body at any
+    time), and whose body's `duplicate_target` is `family_number`.
+    Anything else, including a malformed object, is left out."""
+    if not account_login:
+        raise ValueError("account_login must name the account this procedure posts as")
+    titles: list[str] = []
+    for issue in issues:
+        if not isinstance(issue, dict):
+            continue
+        user = issue.get("user")
+        label_names = {label.get("name") if isinstance(label, dict) else label for label in issue.get("labels") or []}
+        if (
+            issue.get("state") == "closed"
+            and issue.get("state_reason") == "duplicate"
+            and isinstance(user, dict)
+            and user.get("login") == account_login
+            and GATE_PROPOSAL_LABEL in label_names
+            and duplicate_target(str(issue.get("body") or "")) == family_number
+        ):
+            titles.append(str(issue.get("title") or ""))
+    return titles
+
+
+def count_family_occurrences(duplicate_titles: Iterable[str]) -> int:
+    """Return how many repairs one family issue records: 1 for its own
+    original filing plus one per distinct title among the issues closed
+    as its duplicates (issue #2097, owner decision: the original filing
+    counts toward the threshold).
+
+    The caller passes only issues that carry `GATE_PROPOSAL_LABEL`, are
+    closed with `state_reason: duplicate`, and name this family as their
+    duplicate target -- all three set by push- or triage-gated actions,
+    none read from free text anyone can write. Titles are
+    `build_gate_proposal_title` output, keyed on retrospective and repair
+    index, so a repair filed twice by concurrent runs counts once."""
+    return 1 + len({title.strip() for title in duplicate_titles if title and title.strip()})
+
+
+def needs_escalation(occurrence_count: int) -> bool:
+    """True once a family has recurred often enough to be the next work
+    item rather than one more recorded recurrence."""
+    return occurrence_count >= ESCALATION_THRESHOLD

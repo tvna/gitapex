@@ -18,15 +18,17 @@ generated only by
 re-fetch of the open `gate-proposal` population. Denies when the line is
 absent, ambiguous (two or more), malformed, or stale.
 
-Accepted verdicts are `NEW` and `DUPLICATE-OF #<N>`: a deliberate,
-narrow superset of the issue's literal `verdict NEW` shape. Row 3 of that
-same issue requires a `DUPLICATE-OF` repair to still create its
-standalone issue through the Step 5 flow -- a flow whose body this hook
-already grades -- so a hook accepting only `verdict NEW` would deny
-exactly the concurrent-safe duplicate path the issue mandates. The
-count-match (not the verdict word) is the freshness proof either way;
+Accepted verdicts are `NEW` and `DUPLICATE-OF #<N>` (issue #2097). A
+`NEW` creation is a family issue; a `DUPLICATE-OF #<N>` creation is the
+standalone record of one recurrence, which the calling skill closes as a
+duplicate of #N right after -- the GitHub-native relation the escalation
+count is derived from. Any other verdict (`ABSORBED-BY <gate-id>`, which
+lands as a `DUPLICATE-OF` its mechanism's `extend` issue, or free text)
+is denied. Any verdict text is recognized as a sweep line, so a second
+line next to an accepted one trips the ambiguity check rather than going
+unseen. The count-match (not the verdict word) is the freshness proof;
 which `#<N>` a duplicate names is verified by the calling skill
-(re-fetching #N, per row 2), never by this hook.
+(re-fetching #N), never by this hook.
 
 Scope notes, named rather than left implicit:
 
@@ -141,9 +143,25 @@ _INLINE_CODE_RE = re.compile(r"`[^`\n]*`")
 # at column 0, so stripping indented lines can only deny, never allow.
 _INDENTED_CODE_RE = re.compile(r"^(?:[ ]{4}|\t).*$", re.MULTILINE)
 
+_ACCEPTED_VERDICT_RE = re.compile(r"^(?:(?i:NEW)|DUPLICATE-OF #[1-9]\d*)$")
+
+# Issue #2097: a DUPLICATE-OF creation must also satisfy the skill's own
+# reader. `duplicate_target` in
+# skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py counts
+# every exact-shape sweep line, of any verdict, over the unstripped body and
+# names a target only when there is exactly one. This is an independent
+# copy of its pattern (the hooks tree cannot import the skill tree), kept
+# byte-equal by tests/test_gitapex_dedup_sweep_generator_hook_agreement.py,
+# so a DUPLICATE-OF filing this hook allows is never a record the skill's
+# escalation count drops or counts toward another family.
+_EXACT_SWEEP_LINE_RE = re.compile(
+    r"^Dedup-sweep: \d+ open gate-proposal issues at \S+; verdict (NEW|DUPLICATE-OF #([1-9]\d*))$",
+    re.MULTILINE,
+)
+
 _SWEEP_RE = re.compile(
     r"^[ \t]*Dedup-sweep:[ \t]*(\d+)[ \t]+open[ \t]+gate-proposal[ \t]+issues[ \t]+at[ \t]+(\S+)"
-    r"[ \t]*;[ \t]*verdict[ \t]+(NEW|DUPLICATE-OF[ \t]+#\d+)[ \t]*$",
+    r"[ \t]*;[ \t]*verdict[ \t]+(\S(?:[^\r\n]*\S)?)[ \t]*$",
     re.IGNORECASE | re.MULTILINE,
 )
 
@@ -322,13 +340,33 @@ def evaluate(
     if not sweeps:
         return False, (
             "this gate-proposal filing carries no 'Dedup-sweep: <N> open gate-proposal issues at "
-            "<ISO-8601>; verdict NEW' proof line -- run the Step 4b backlog sweep and generate the "
+            "<ISO-8601>; verdict NEW|DUPLICATE-OF #<N>' proof line -- run the Step 4b backlog sweep and generate the "
             "line via skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py, never hand-typed"
         )
     if len(sweeps) > 1:
         return False, f"ambiguous filing: {len(sweeps)} Dedup-sweep lines found, exactly one is required"
 
-    count, timestamp, _verdict = sweeps[0]
+    count, timestamp, verdict = sweeps[0]
+    if not _ACCEPTED_VERDICT_RE.match(verdict):
+        return False, (
+            f"Dedup-sweep verdict {verdict!r} never creates an issue (issue #2097): only NEW or "
+            "DUPLICATE-OF #<N> does -- an ABSORBED-BY repair files as DUPLICATE-OF its mechanism's "
+            "extend issue"
+        )
+    if verdict.upper().startswith("DUPLICATE-OF"):
+        raw = (body or "").replace("\r\n", "\n").replace("\r", "\n")
+        exact = [match.group(0) for match in _EXACT_SWEEP_LINE_RE.finditer(raw)]
+        # The one exact line must also be the very sweep line checked above
+        # (outside any fence, same verdict), so the target the skill reads
+        # back is the target this filing declares.
+        visible = [match.group(0) for match in _EXACT_SWEEP_LINE_RE.finditer(_strip_fences(body))]
+        if len(exact) != 1 or visible != exact or not exact[0].endswith(f"; verdict {verdict}"):
+            return False, (
+                "a DUPLICATE-OF filing needs exactly one Dedup-sweep line in the generator's exact shape, "
+                f"outside any code block and naming the same target (found {len(exact)}), so the skill's "
+                "escalation count reads back the target this filing declares -- generate it via "
+                "skills/merge-retrospective/scripts/gitapex_file_gate_proposal.py"
+            )
     try:
         _datetime.datetime.strptime(timestamp, _TIMESTAMP_FORMAT)
     except (ValueError, TypeError):
