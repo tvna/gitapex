@@ -1,0 +1,71 @@
+{
+  "date": "2026-08-29",
+  "issue": "https://github.com/tvna/gitapex/issues/1046",
+  "commit": "a045f8b967ae042d8c3e8f5829ccf5d2e81520d1",
+  "record_contract": "e-validation",
+  "purpose": "Issue #1046's own (E) requirement: an empirical with-rule-vs-without-rule comparison on a real bundled script, demonstrating (or honestly disclosing the absence of) a measurable effect of applying dimension-7's comment-categorization/context-economy rubric, on both an execute-only task and a read-as-reference task.",
+  "target_script": {
+    "path": "skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py",
+    "selection_rationale": "Picked from PR #596's own 12 touched files (\"refactor(scripts): trim changelog narration from bundled script comments\", closes #595). PR #596's own Facts state check_skill_shape.py alone accounted for ~85% of the comment volume it surveyed, but that file has since grown to 6155 lines (confirmed live via `wc -l` against origin/main) -- too large for a tractable single-fixture (E) comparison. gitapex_score_contract.py (510 lines on main, second-largest PR #596 touched file after check_skill_shape.py) is a real, self-contained, moderately-sized script whose own module docstring mixes durable rationale with changelog narration (issue #628, #858, #618 citations), and is thematically apt: it is the very scorer used to grade this record's own trial outputs below."
+  },
+  "variants": {
+    "current_style": {
+      "description": "gitapex_score_contract.py exactly as committed on main at the commit above -- unmodified.",
+      "artifact": "artifacts/gitapex_score_contract-current-style.py",
+      "lines": 510,
+      "bytes": 24652
+    },
+    "restyled": {
+      "description": "Same file, comments/docstrings only rewritten to apply dimension-7's rubric: durable rationale (why the near-check needs both a window and a blank-line condition; why icontains is a separate opt-in key) is kept, changelog narration (which issue found what, when, confirmed how) is trimmed or dropped. Verified zero non-comment/non-docstring/non-help-text code changed: `ast.dump()` of both files with docstrings stripped is identical outside string-literal content (the only differences land inside docstrings or argparse `help=` text, confirmed by inspecting the first diverging span, not merely by generated-file trust).",
+      "artifact": "artifacts/gitapex_score_contract-restyled.py",
+      "lines": 460,
+      "bytes": 20998,
+      "size_reduction": "3654 bytes / 14.8% smaller than current_style, entirely from comment/docstring trimming (no logic removed)."
+    }
+  },
+  "tasks": [
+    {
+      "id": "execute-only",
+      "prompt_summary": "Given only the target script's text, add a new near_ratio(text, entries) function that reuses the module's existing _near_satisfied helper (not re-derive its logic) and raises ValueError on empty input. Reply with only the function code.",
+      "assertions_file": "artifacts/execute-task-assertions.json",
+      "assertions": {
+        "output_contains": ["_near_satisfied", "def near_ratio"],
+        "output_not_contains": ["text.find(", "for substring in"]
+      }
+    },
+    {
+      "id": "read-as-reference",
+      "prompt_summary": "Given only the target script's text (as reference, no code execution), explain in 2-4 sentences why the output_contains_near check's character-window condition alone would not be sufficient without the blank-line condition.",
+      "assertions_file": "artifacts/read-as-reference-task-assertions.json",
+      "assertions": {
+        "output_contains": ["blank", "window"],
+        "output_not_contains": ["#628", "#858", "#618"]
+      },
+      "assertion_rationale": "output_not_contains guards against a specific distraction-driven confabulation risk: current_style's icontains paragraph cites issue #628/#618, and the cross-consumer paragraph cites #858 -- neither is about the near-check's blank-line rationale. A response that drags one of those numbers into its near-check explanation would indicate the changelog narration bled across into an unrelated explanation, a concrete way comment-narration overload could measurably hurt a read-as-reference task."
+    }
+  ],
+  "trials_per_condition": 1,
+  "models": {
+    "default": "claude-sonnet-5"
+  },
+  "dispatch_mechanism": "Agent tool (general-purpose subagent type), one fresh subagent per (task, variant) combination -- 4 total, dispatched in parallel in one message. Each prompt was fully self-contained (the target script's own text embedded verbatim, no other context) and explicitly instructed the subagent not to use any tool (Read/Grep/Bash/WebFetch/etc.) and not to look at repository files even if the code was recognized. All 4 dispatches confirmed zero tool_uses in their own usage report, corroborating the instruction held. This is NOT the same dispatch mechanism Task 2's own scorer-gated-keep-gate.yml CI run uses (a hermetic evals/scripts/gitapex_run_eval_suite.py --tools \"\" subprocess) -- ANTHROPIC_API_KEY is not set in this development session's own environment (confirmed via direct check), consistent with the repository owner's prior confirmation (PR #1333) that Task 2/3 execution runs CI-side, not in a development session; the Agent tool was used instead as the session's own available 'fresh agent' mechanism, per this record's own known_gaps below.",
+  "scorer": "skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py, run locally against each of the 4 captured responses (artifacts/*-response.md) with each task's own assertions file above -- `gitapex_score_contract.py --assertions <file> --output <response>`.",
+  "results": {
+    "execute-only": {
+      "current_style_score": 1.0,
+      "restyled_score": 1.0
+    },
+    "read-as-reference": {
+      "current_style_score": 1.0,
+      "restyled_score": 1.0
+    }
+  },
+  "headline_pattern": "No correctness difference was observed between current_style and restyled comments on either task at this single-trial sample size: all 4 dispatches scored 1.000000, each correctly reusing _near_satisfied without re-deriving its logic (execute-only) and correctly identifying the blank-line condition's structural role against character-window-alone false positives, without drifting into an unrelated issue-number citation (read-as-reference). This is a genuine null result on the correctness axis, not a failure to detect a real effect that should have been found -- gitapex_score_contract.py at 510 lines is far smaller than the check_skill_shape.py PR #596 itself flagged as the dominant comment-volume outlier (6155 lines on current main), and a single strong-tier trial reading a 510-line module correctly extracted the durable rationale either way. The measurable, reproducible difference this record DOES support is context economy, dimension-7's own second axis: the restyled variant is 3654 bytes / 14.8% smaller (510 -> 460 lines) purely from separating durable rationale from changelog narration, with zero logic change (confirmed via an AST diff with docstrings stripped) and zero correctness cost on either task measured here -- the same shape gitapex_score_contract.py's own pruning_compare() function exists to reward (correctness tied, cost strictly lower).",
+  "known_gaps": [
+    "trials_per_condition=1 for all 4 (task, variant) pairs -- no repeat-run variance data; a single sample tying on correctness is not proof a weaker tier, a different model, or a repeated sample would tie the same way. Consistent with this directory's own established disclosed limit for single-trial informational records (see the 2026-08-17-issue-1142-description-conciseness record in this same directory).",
+    "dispatch mechanism is this session's own Agent tool (general-purpose subagent), not the isolated `claude -p` subprocess or the hermetic evals/scripts/gitapex_run_eval_suite.py --tools \"\" harness this directory's other records and Task 2's own CI dispatch use. Each subagent was explicitly instructed not to use any tool and not to look at repository files, and all 4 confirmed zero tool_uses in their own usage report -- but this is instruction-following-based isolation, not the hermetic --tools \"\" contract's structural guarantee (a subagent that ignored the instruction could in principle have read the real, unmodified repository file for either arm, which would silently collapse the current_style/restyled distinction for that one arm without being detectable from the response text alone).",
+    "substring-scorer only, same limit gitapex_score_contract.py's own docstring and this directory's other records already disclose: confirms each response's expected tokens appear or don't, not a full manual read of response quality beyond what each response's own artifact file shows. In this run's specific case, both responses to each task were also read in full by this record's author and independently judged correct, not solely trusted to the substring score.",
+    "one script, one repository, one model tier (claude-sonnet-5, the session's own configured model, not independently re-derived or pinned via a --model flag) -- a single comparison on one script is a small sample, per the ACM's own stated residual risk; this record's headline_pattern states the correctness tie and the context-economy delta as this run's own finding, not a general claim about dimension-7's comment rubric across all bundled scripts.",
+    "the restyled variant is this record's own construction (not an actual committed PR diff) -- it demonstrates what applying dimension-7's rubric to this file WOULD look like and what effect that has, but landing it as a real edit to skills/scorer-gated-skill-edits/scripts/gitapex_score_contract.py is out of this issue's own scope (issue #1046 gates and validates the rubric, per its own Non-goals -- it does not restyle every bundled script in the repository)."
+  ]
+}
