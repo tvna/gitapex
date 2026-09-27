@@ -1553,3 +1553,48 @@ def test_resolves_to_sibling_skill_matches_sibling_scanners_own_implementation(t
         assert drift._resolves_to_sibling_skill(name, skills_dir) == sibling_scanner._resolves_to_sibling_skill(
             name, skills_dir
         ), name
+
+
+# Issue #2097: generic_mechanism declarations
+
+
+def _generic_instance(status: str, value: object = True) -> dict[str, typing.Any]:
+    instance: dict[str, typing.Any] = copy.deepcopy(_VALID_INSTANCE)
+    instance["gates"][0]["status"] = status
+    instance["gates"][0]["generic_mechanism"] = value
+    return instance
+
+
+def test_generic_mechanism_on_active_gate_has_no_drift(tmp_path):
+    instance_path = _write_instance(tmp_path, _generic_instance("active"))
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, _skills_dir(tmp_path)) == []
+
+
+@pytest.mark.parametrize("status", ["experimental", "deprecated"])
+def test_generic_mechanism_on_non_active_gate_is_flagged(tmp_path, status):
+    instance_path = _write_instance(tmp_path, _generic_instance(status))
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, _skills_dir(tmp_path))
+    assert findings == [
+        f"generic-mechanism-drift: example-gate: generic_mechanism is true but status is {status!r}, not 'active'"
+    ]
+
+
+def test_generic_mechanism_false_on_deprecated_gate_is_not_flagged(tmp_path):
+    instance_path = _write_instance(tmp_path, _generic_instance("deprecated", value=False))
+    assert drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, _skills_dir(tmp_path)) == []
+
+
+def test_generic_mechanism_must_be_boolean(tmp_path):
+    instance_path = _write_instance(tmp_path, _generic_instance("active", value="yes"))
+    findings = drift.find_drift(instance_path, drift.SCHEMA_PATH, REPO_ROOT, _skills_dir(tmp_path))
+    assert any("generic_mechanism" in f for f in findings)
+
+
+def test_find_generic_mechanism_drift_skips_unparsed_registry():
+    assert drift.find_generic_mechanism_drift(None) == []
+
+
+def test_real_registry_declares_the_two_generic_mechanisms():
+    registry = json.loads((REPO_ROOT / ".gitapex" / "ssot.json").read_text())
+    declared = sorted(gate["id"] for gate in registry["gates"] if gate.get("generic_mechanism"))
+    assert declared == ["defeat-test-mutation-coverage", "detection-logic-property-coverage"]

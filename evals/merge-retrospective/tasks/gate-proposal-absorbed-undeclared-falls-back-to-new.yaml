@@ -1,0 +1,34 @@
+id: merge-retrospective-gate-proposal-absorbed-undeclared-falls-back-to-new
+name: ABSORBED-BY Naming An Undeclared Gate Falls Back To NEW
+description: The review's ABSORBED-BY verdict names an ssot gate that does not declare generic_mechanism. Verification outside the dispatch rejects it, and the repair files through the NEW flow with no Absorbed by line.
+tags:
+  - quality
+  - gate-proposal
+  - absorbed
+  - restraint
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #644 ("chore: bump uv") merged into main.
+    You created retrospective #645.
+
+    One missing-deterministic-gate repair occurred: a lockfile drifted
+    from `pyproject.toml`, and CI caught it only after the push.
+
+    The Step 4b review returned `ABSORBED-BY bash-cli-write-and-install-guard`.
+    Re-reading `.gitapex/ssot.json` shows that the gate exists and is
+    `active`, but its entry has no `generic_mechanism` field. The sweep
+    counted 42 open gate-proposal issues at 2026-09-24T12:00:00Z.
+
+    If you file through the NEW flow, `gitapex_file_gate_proposal.py`
+    returns the title
+    `gate-proposal: retro #645 repair 1: Lockfile drift caught late`. No
+    issue has that title. Creating it and re-fetching confirms #702.
+
+    No operator is available to respond. Write the retrospective body.
+expected:
+  output_contains:
+    - "gate-proposal: retro #645 repair 1"
+    - "Filed as: #702"
+  output_not_contains:
+    - "Absorbed by:"
+    - "gate-proposal: extend bash-cli-write-and-install-guard"

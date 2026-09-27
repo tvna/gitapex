@@ -163,6 +163,49 @@ def test_duplicate_of_verdict_line_allows_on_matching_count() -> None:
     assert passed is True
 
 
+def test_absorbed_by_verdict_denies_even_on_matching_count() -> None:
+    # Issue #2097: an absorbed repair files as DUPLICATE-OF its
+    # mechanism's extend issue, never under its own verdict.
+    passed, message = _evaluate(_body(3, verdict="ABSORBED-BY defeat-test-mutation-coverage"), [_issues(3)])
+    assert passed is False
+    assert "never creates an issue" in message
+
+
+def test_lowercase_new_verdict_still_allows() -> None:
+    passed, _ = _evaluate(_body(3, verdict="new"), [_issues(3)])
+    assert passed is True
+
+
+@pytest.mark.parametrize("second_verdict", ["ABSORBED-BY x", "RECLASSIFY", "ALREADY-SHIPPED x", "DUPLICATE-OF#12"])
+def test_a_second_sweep_line_of_any_verdict_is_ambiguous(second_verdict: str) -> None:
+    # Any verdict shape counts, so a hand-added second line cannot hide
+    # beside a valid NEW line.
+    line = f"Dedup-sweep: 3 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict {second_verdict}"
+    passed, message = _evaluate(_body(3) + "\n" + line + "\n", [_issues(3)])
+    assert passed is False
+    assert "ambiguous" in message
+
+
+@pytest.mark.parametrize(
+    "verdict",
+    [
+        "RECLASSIFY",
+        "DUPLICATE-OF#12",
+        "DUPLICATE-OF #12 extra",
+        "NEW plus trailing text",
+        # Shapes the skill's duplicate_target would not read back.
+        "duplicate-of #12",
+        "DUPLICATE-OF #0",
+        "DUPLICATE-OF #012",
+        "DUPLICATE-OF\t#12",
+    ],
+)
+def test_any_other_verdict_text_denies(verdict: str) -> None:
+    passed, message = _evaluate(_body(3, verdict=verdict), [_issues(3)])
+    assert passed is False
+    assert "never creates an issue" in message
+
+
 def test_missing_token_denies_fail_closed() -> None:
     passed, message = checker.evaluate(
         "tvna",

@@ -18,6 +18,8 @@ This scanner is the drift gate shipped alongside that registry. It fails if:
   ``policy_sources[].id``;
 - any ``gates[].cluster`` value does not name a real top-level ``clusters``
   key; or
+- a gate declares ``generic_mechanism: true`` while its ``status`` is not
+  ``active`` (``find_generic_mechanism_drift`` -- issue #2097); or
 - any ``gates[].id`` or ``policy_sources[].id`` is used more than once (an
   unnoticed duplicate would silently make one entry invisible to every
   cross-reference this scanner performs); or
@@ -242,6 +244,7 @@ class Gate(BaseModel):
     target: list[GateTargetEntry] | None = None
     bypass_review_status: Literal["not-yet-reviewed", "reviewed-none-found"]
     preconditions: GatePreconditions | None = None
+    generic_mechanism: bool | None = None
 
 
 class SsotMeta(BaseModel):
@@ -567,6 +570,21 @@ def find_cluster_drift(registry: SsotRegistry | None) -> list[str]:
     return findings
 
 
+def find_generic_mechanism_drift(registry: SsotRegistry | None) -> list[str]:
+    """Return one message per gate declaring `generic_mechanism: true`
+    while not `active` (issue #2097). merge-retrospective's ABSORBED-BY
+    verdict routes repairs onto a declared mechanism instead of filing
+    them, so a declaration on an experimental or deprecated gate would
+    absorb repairs into a mechanism nobody is extending."""
+    if registry is None:
+        return []
+    return [
+        f"generic-mechanism-drift: {gate.id}: generic_mechanism is true but status is {gate.status!r}, not 'active'"
+        for gate in registry.gates
+        if gate.generic_mechanism and gate.status != "active"
+    ]
+
+
 def find_duplicate_ids(instance: Any) -> list[str]:
     """Return one message per id used more than once across gates[] or
     across policy_sources[] (checked as two separate namespaces -- a gate
@@ -877,6 +895,7 @@ def find_drift(
     findings.extend(find_local_invocation_identity_drift(registry))
     findings.extend(find_policy_ref_drift(registry))
     findings.extend(find_cluster_drift(registry))
+    findings.extend(find_generic_mechanism_drift(registry))
     findings.extend(find_duplicate_ids(instance))
     contracts = discover_contracts(skills_dir)
     findings.extend(find_contract_gate_drift(registry, skills_dir, contracts))

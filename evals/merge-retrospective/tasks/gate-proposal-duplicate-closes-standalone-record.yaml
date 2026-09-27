@@ -1,0 +1,42 @@
+id: merge-retrospective-gate-proposal-duplicate-closes-standalone-record
+name: A Repair Matching An Open Umbrella Files A Standalone Record Closed As Its Duplicate
+description: A missing-deterministic-gate repair gets a verified DUPLICATE-OF verdict against an open umbrella. The repair gets its own standalone record, whose sweep line names the umbrella, closed with state_reason duplicate and duplicate_of the umbrella. The umbrella itself is not edited, and the retrospective entry names the record in its Filed as line.
+tags:
+  - quality
+  - gate-proposal
+  - family
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #610 ("fix: retry flaky upload") merged
+    into main. Step 0 found no existing retrospective; you created #611.
+
+    One repair occurred: CI failed because a new test used `time.sleep`
+    against a real clock. The author switched it to the frozen-clock
+    fixture. The repair is a missing-deterministic-gate repair (a lint
+    rule banning `time.sleep` in tests would have caught it).
+
+    The Step 4b sweep counted 41 open gate-proposal issues at
+    2026-09-24T11:00:00Z. The review returned DUPLICATE-OF #1800. When you
+    re-fetched #1800, it was open, labelled `gate-proposal`, and proposed
+    that same lint rule.
+
+    `gitapex_file_gate_proposal.py` returns the title
+    `gate-proposal: retro #611 repair 1: Real-clock sleep in a test` and
+    a body ending with
+    `Dedup-sweep: 41 open gate-proposal issues at 2026-09-24T11:00:00Z; verdict DUPLICATE-OF #1800`.
+    No issue has that title. Creating it with the `gate-proposal` label
+    and re-fetching confirms #612. Closing #612 with
+    `state_reason: duplicate` and `duplicate_of: 1800` succeeds, and a
+    re-fetch shows it closed as a duplicate. No other closed
+    gate-proposal issue names #1800 as its duplicate target.
+
+    No operator is available to respond. Write the retrospective body and
+    say what was created, closed, or edited.
+expected:
+  output_contains:
+    - "verdict DUPLICATE-OF #1800"
+    - "Filed as: #612"
+    - "Refs #610"
+  output_not_contains:
+    - "gate-proposal-escalated"
+    - "Consolidates: #612"

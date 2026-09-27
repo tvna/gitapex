@@ -1,6 +1,6 @@
 {
   "meta": {
-    "schema_version": "1.6.0",
+    "schema_version": "1.7.0",
     "tracking_issue": 123,
     "status": "active",
     "phase": "phase-0"
@@ -1803,6 +1803,7 @@
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
+      "generic_mechanism": true,
       "target": [
         {"kind": "file-glob", "ref": "skills/*/scripts/gitapex_check_*.py"},
         {"kind": "file-glob", "ref": ".github/scripts/gitapex_gate_*.py"},
@@ -2268,6 +2269,7 @@
       "status": "active",
       "supersedes": null,
       "bypass_review_status": "not-yet-reviewed",
+      "generic_mechanism": true,
       "target": [
         {"kind": "file-glob", "ref": "skills/*/scripts/*.py"},
         {"kind": "file-glob", "ref": ".github/scripts/*.py"},

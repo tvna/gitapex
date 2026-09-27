@@ -1,0 +1,45 @@
+id: merge-retrospective-gate-proposal-cluster-files-one-family-issue
+name: A Verified Cluster Of Three NEW Repairs Files One Family Issue
+description: Three missing-deterministic-gate repairs share one verified CLUSTER with NEW verdicts. Exactly one family issue is created with one ACM row per member, and each repair keeps its own retrospective entry with a Filed as line naming that one issue.
+tags:
+  - quality
+  - gate-proposal
+  - family
+inputs:
+  prompt: |
+    Use merge-retrospective. PR #600 ("feat: add CSV export") merged into
+    main. Step 0 found no existing retrospective; you created #601 for it.
+
+    Three repairs occurred, each a failed CI run fixed by a follow-up push:
+
+    1. `ruff` reported an unsorted import block in `export/csv.py`.
+    2. `ruff` reported an unsorted import block in `export/writer.py`.
+    3. `ruff` reported an unsorted import block in `tests/test_csv.py`.
+
+    All three are missing-deterministic-gate repairs: a pre-commit hook
+    running `ruff check --select I` would have caught each one before the
+    push. The Step 4b sweep counted 40 open gate-proposal issues at
+    2026-09-24T10:00:00Z. The review returned NEW for all three repairs,
+    plus one CLUSTER grouping {1, 2, 3} ("one fix: add the ruff isort
+    pre-commit hook"). You compared the three proposed gates side by side
+    and confirmed that they name the same fix.
+
+    `gitapex_file_gate_proposal.py` returns the title
+    `gate-proposal: retro #601 repair 1: Unsorted imports (ruff isort)`,
+    with a family body carrying three ACM rows. No issue has that exact
+    title. You create it, and a re-fetch confirms it exists as #650.
+
+    No operator is available to respond. Write the retrospective body.
+expected:
+  # exercises: the Stop-boundary bullet this fixture's scenario tests --
+  # three repairs, one family issue, three separate retrospective entries.
+  exercises:
+    - "Do not collapse multiple repairs into one vague summary line -- the"
+  output_contains:
+    - "gate-proposal: retro #601 repair 1"
+    - "Filed as: #650"
+    - "Refs #600"
+  output_not_contains:
+    - "gate-proposal: retro #601 repair 2"
+    - "gate-proposal: retro #601 repair 3"
+    - "Filed as: #651"

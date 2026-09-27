@@ -18,6 +18,9 @@ Worked example: an issue labeled `bug` titled "Crash on empty input,"
 whose body includes a stack trace, scores **Defect**. A same-repo issue
 labeled `enhancement` titled "Add dark mode" scores **Enhancement**.
 
+A `gate-proposal-escalated` label (a gate needed three or more times,
+per `merge-retrospective`) also scores **Defect**: the failure recurs.
+
 ## Staleness
 
 Time since the item's *last human activity* -- a comment, a commit on its

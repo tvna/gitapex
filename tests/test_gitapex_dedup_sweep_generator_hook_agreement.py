@@ -61,3 +61,73 @@ def test_full_generated_body_carries_exactly_one_hook_visible_line() -> None:
         dedup_sweep_timestamp="2026-09-05T11:00:00Z",
     )
     assert len(checker.find_sweep_lines(body)) == 1
+
+
+def test_every_hook_accepted_duplicate_line_names_a_target_the_reader_reads() -> None:
+    # Issue #2097: a filing the hook allows must never be a record the
+    # skill's duplicate_target drops, or the skill undercounts escalation.
+    builder = _load_builder()
+    for verdict in ("DUPLICATE-OF #1571", "DUPLICATE-OF #7"):
+        line = f"Dedup-sweep: 3 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict {verdict}"
+        assert checker._ACCEPTED_VERDICT_RE.match(verdict)
+        assert builder.duplicate_target("body\n\n" + line + "\n") == int(verdict.split("#")[1])
+    for verdict in ("duplicate-of #12", "DUPLICATE-OF #0", "DUPLICATE-OF #012", "DUPLICATE-OF\t#12"):
+        assert not checker._ACCEPTED_VERDICT_RE.match(verdict)
+
+
+def test_hook_denies_duplicate_lines_the_reader_would_drop() -> None:
+    # Independent-review finding F1 (issue #2097): each variant passes the
+    # loose sweep-line recognizer but not duplicate_target, so the hook
+    # must deny it rather than let the skill undercount escalation.
+    builder = _load_builder()
+    line = "Dedup-sweep: 3 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict DUPLICATE-OF #5"
+    fenced_example = "```\n" + line + "\n```\n"
+    variants = [
+        "  " + line,
+        line.replace("open gate", "open  gate"),
+        line + " ",
+        line.replace("Dedup-sweep", "dedup-sweep"),
+        fenced_example + line,
+    ]
+    for variant in variants:
+        body = "| a | b |\n\n" + variant + "\n"
+        assert builder.duplicate_target(body) is None
+        passed, message = checker.evaluate("tvna", "gitapex", "create", ["gate-proposal"], body, "")
+        assert passed is False
+        assert "exact shape" in message
+    exact_body = "| a | b |\n\n" + line + "\n"
+    assert builder.duplicate_target(exact_body) == 5
+    passed, message = checker.evaluate("tvna", "gitapex", "create", ["gate-proposal"], exact_body, "")
+    assert "exact shape" not in message
+
+
+def test_hook_denies_a_fenced_exact_line_naming_another_target() -> None:
+    # Independent-review round 2 finding B (issue #2097): a visible,
+    # non-exact DUPLICATE-OF #12 line plus a fenced exact line naming #99
+    # would let the skill count the record toward #99.
+    line = "Dedup-sweep: 3 open gate-proposal issues at 2026-09-05T11:00:00Z; verdict DUPLICATE-OF #{}"
+    body = "```\n" + line.format(99) + "\n```\n" + line.format(12).replace("Dedup-sweep:", "Dedup-sweep: ") + "\n"
+    assert _load_builder().duplicate_target(body) == 99
+    passed, message = checker.evaluate("tvna", "gitapex", "create", ["gate-proposal"], body, "")
+    assert passed is False
+    assert "naming the same target" in message
+
+
+def test_hook_reader_pattern_is_the_builder_reader_pattern() -> None:
+    # Issue #2097: independent reviews found three shapes where the hook
+    # and duplicate_target read sweep lines differently; one shared pattern
+    # removes the class.
+    builder = _load_builder()
+    assert checker._EXACT_SWEEP_LINE_RE.pattern == builder._DEDUP_SWEEP_LINE_RE.pattern
+    assert checker._EXACT_SWEEP_LINE_RE.flags == builder._DEDUP_SWEEP_LINE_RE.flags
+
+
+def test_hook_denies_a_fenced_exact_new_line_beside_a_duplicate_line() -> None:
+    # Independent-review round 4 finding F1: a fenced exact NEW line makes
+    # duplicate_target see two lines and name no target.
+    line = "Dedup-sweep: 5 open gate-proposal issues at 2026-09-24T00:00:00Z; verdict {}"
+    body = "```\n" + line.format("NEW") + "\n```\n" + line.format("DUPLICATE-OF #42") + "\n"
+    assert _load_builder().duplicate_target(body) is None
+    passed, message = checker.evaluate("tvna", "gitapex", "create", ["gate-proposal"], body, "")
+    assert passed is False
+    assert "naming the same target" in message
