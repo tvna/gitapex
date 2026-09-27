@@ -78,7 +78,7 @@ dev = [
 # verified live with oracle + opencode runs on 2026-09-05); re-measure
 # before raising, same discipline as the ruff/radon/xenon pins above.
 harbor = [
-    "harbor==0.22.0",
+    "harbor==0.23.0",
 ]
 
 [tool.uv]
