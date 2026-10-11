@@ -246,7 +246,7 @@ jobs:
       # `matrix.model` instances and fail every run past the first to finish).
       - name: Upload results for model ${{ matrix.model }}
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: eval-matrix-results-${{ matrix.model }}
           path: results/${{ matrix.model }}/
@@ -416,7 +416,7 @@ jobs:
       # suffix against.
       - name: Upload HF Gemma 4 results
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: eval-matrix-hf-gemma4-results
           path: results/
